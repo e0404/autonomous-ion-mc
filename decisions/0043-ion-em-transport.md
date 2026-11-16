@@ -898,3 +898,24 @@ shadow evaluation had disclosed the outcome of the seeded sample of the evidence
 re-running it would not be fresh evidence; that family is consumed and a new family 20627200 + 100·part + case is
 declared and frozen for the 116 evidence and repeat bundles (smokes unchanged). Nothing scientific changes; nothing
 graded as evidence; I3 stays FAIL. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; amendment I3-FU-1 outcome — option (c), declared uncertainty; amends §1 "Uncertainty
+statement" and §5 "Supported domains").** Step 2 of the amendment graded the TOPAS acceptance reference once at code_sha
+48b41981 (committed `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json`): `pattern = INCONCLUSIVE` by the
+pre-declared rule (the oxygen 2.4 MeV/u point failed the same-slab emulation check twice), pattern before that rule MIXED,
+controls and premises passed. Rule 2a selects the default, option (c). **Declared uncertainty (replaces the provisional
+0.5 % C/O budget of §1):** ionmc's analytic C/O electronic stopping in water lies below the revised ICRU 73 table (libdEdx
+ICRU73_NEW, lineage identity with the 2009 revision OPEN) by band means of 8.6/12.2 % (C/O) at 2–5 MeV/u, 4.3/7.5 % at
+5–10, 1.8/3.9 % at 10–20 and 0.3/0.8 % at 20–50 MeV/u, and by at most 0.05 % (C) / 0.1 % (O) in band mean above 50 MeV/u;
+the CSDA-range agreement with the table is within 0.26 % (C) / 0.39 % (O); row I3 FAILED and is not re-graded. The
+acceptance reference (TOPAS 4.3 / Geant4 11.4.2, opt4 EM-only) differs from ionmc by band means of +3.5/+5.0 % (C/O) at
+2–5 MeV/u, +1.4/+2.2 % at 5–10, +0.6/+1.0 % at 10–20 and +0.1/+0.3 % at 20–50 MeV/u (one-step thin-slab mean energy loss;
+0.2 % method systematic; the oxygen 2.4 MeV/u point invalid after its repeat), i.e. it lies between ionmc and the table and
+nearer to ionmc. **Capability statement (§5):** below 20 MeV/u (C: the last ≈ 0.4 mm of range at 290 MeV/u; O: the last
+≈ 0.3 mm at 350 MeV/u) ionmc's C/O stopping is lower than the revised ICRU 73 table by up to 12 % and than the acceptance
+reference by up to 5 % (band means); the declared domains of §5 are unchanged (their lower ends 80 / 100 MeV/u lie far
+above the affected bands, which every beam traverses only at the end of its range); this is a declared model limitation,
+not an excludable domain. No model change is made under this decision; option (b) (tabulated or re-parameterised
+low-energy C/O stopping) stays available to a later task with its own amendment, licence review and fresh held-out
+evidence. Integration of V3-008 with this gating FAIL declared is a material scope reduction reserved to the operator
+(Appendix A intervention). Not a clinical claim.

@@ -2596,3 +2596,52 @@ repeats, and fast-forwarded the branch back to accc8f2. The repeat records are a
 entries) and committed; the evaluator is run again at the next commit with the same `--code-sha`; its document replaces
 `i3fu2_result.json`. The band aggregates of the pre-repeat document were displayed to the orchestrator as the pre-declared
 procedure requires (the repeat rule acts on a recorded gate failure); no other data were inspected. Not a clinical claim.
+
+### Dated results note — I3-FU-1 step 2 graded at code_sha 48b41981 with the repeat: INCONCLUSIVE by the pre-declared rule; pattern before that rule MIXED (2026-11-16, orchestrator)
+
+**Result (committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json`, sha256 497d2d8e…; evaluator run
+by the host-runner at e3cac6fa through the sealed launcher with `--code-sha 48b41981`, signed record
+RUN-20261116T203950Z-df7c5df4, exit 0, output-manifest sha256 cdb896a6…, committed under `host-records/`; 58 evidence runs
+and the 3 repeat runs authenticated: signed reference-runner records, chronology after both pins, manifest bindings, log
+markers).** `pattern = INCONCLUSIVE`, `conclusive = false`, single reason "an evidence point is invalid without a valid
+repeat": the oxygen 2.4 MeV/u point failed the same-slab emulation check a second time on its repeat triple (|e₁| = 0.17 %
+against 0.15 %; "second failure of the point"); the other 21 points are valid; both premises pass; both controls pass
+(helium model-consistent within 0.1 %; fluctuations-off difference 0.01 %, markers discriminate); the classification is
+robust to the doubled systematic and invariant under the alternative energy convention. `pattern_before_controls = MIXED`.
+Band aggregates (means of the fine-step point values, rounded to 0.1 pp; TOPAS opt4 EM-only thin-slab mean energy loss vs
+the ionmc default Bethe model r_M, vs ICRU73_NEW r_I, and the table-vs-model separation s):
+
+| ion | band (MeV/u) | n | r_M (TOPAS/ionmc − 1) | r_I (TOPAS/ICRU73_NEW − 1) | s (ICRU73_NEW/ionmc − 1) | class |
+|---|---|---|---|---|---|---|
+| 12C | [2,5) | 2 | +3.5 % | −5.7 % | +9.8 % | N |
+| 12C | [5,10) | 2 | +1.4 % | −3.8 % | +5.4 % | N |
+| 12C | [10,20) | 2 | +0.6 % | −1.3 % | +1.9 % | N (U at the doubled systematic) |
+| 12C | [20,50] | 3 | +0.1 % | −0.2 % | +0.3 % | U |
+| 16O | [2,5) | 1 | +5.0 % | −7.7 % | +13.7 % | N (3 MeV/u only; the 2.4 MeV/u point invalid) |
+| 16O | [5,10) | 2 | +2.2 % | −6.5 % | +9.4 % | N |
+| 16O | [10,20) | 2 | +1.0 % | −3.1 % | +4.2 % | N |
+| 16O | [20,50] | 3 | +0.3 % | −0.5 % | +0.8 % | U |
+
+Reading (interpretive, not a grade): the acceptance reference carries stopping between ionmc and the revised ICRU 73 table
+and nearer to ionmc — about a quarter to a third of the table's excess over ionmc in every band below 20 MeV/u (C 0.36 /
+0.26 / 0.32, O 0.36 / 0.23 / 0.24 of s) — so it is neither "ICRU-like" nor "model-like" (class N everywhere below 20 MeV/u);
+the step-2 classification would have read MIXED had the oxygen 2.4 MeV/u point not failed its gate twice. The emulation
+residual of that point (0.17 %, 0.18 % on the first attempt) exceeds the 0.15 % tolerance by a margin comparable to the
+tolerance's own derivation (P13); it is recorded as a failure of the pre-declared gate, not explained away. Step 2 was
+graded once (the repeat rule is part of that grading); nothing is re-graded. Not a clinical claim.
+
+#### Step 3 — decision (2026-11-16, orchestrator; pre-declared rule 2a applied; recorded before any further action)
+
+Rule 2a: `pattern = INCONCLUSIVE` → "step 3 decides on step 1 and P12 alone; default (c)". The step-1 result (hypothesis
+WITHDRAWN on the oxygen ≥ 50 MeV/u band mean; the C/O deficit is not a single-term rescaling of the model's low-energy
+terms; z-scan attributes only the [10,20) band, to a z²-like shape) and P12 (correcting the deficit toward the table would
+raise the peak-to-entrance ratio by ≈ 1.8–2.8 % at the standard points, away from TOPAS) give no scientific ground to
+depart from the default; the MIXED pattern before the repeat rule, and the measured position of the acceptance reference
+between the two references and nearer to ionmc, point the same way (a tabulated source would move ionmc past TOPAS in every
+band below 20 MeV/u). **Decision: option (c) — declared uncertainty, no model change.** Row I3 stays FAIL and is not
+re-graded; decision 0043 §1 (uncertainty statement) and §5 (supported domains / capability statement) gain the declared
+low-energy C/O stopping uncertainty with the committed step-1 values and the committed step-2 aggregates; nothing is
+consumed; no deviation from the indicated option, so no further review of the choice beyond this commit's. The Appendix-A
+intervention (EXPERIMENT.md category 4, Authorization; material scope reduction reserved to the operator) is filed with the
+values of the committed results after this commit has passed review; integration of PR #84 waits for the answer. Not a
+clinical claim.

@@ -1,204 +1,204 @@
 {
- "amendment": "I3-FU-1 step 2 (revision 15)",
+ "amendment": "I3-FU-1 step 2 (revision 17)",
  "bands": {
   "carbon": {
    "[10,20)": {
-    "class": "none",
-    "max_abs_consistency_residual": null,
-    "max_abs_emulation_residual": null,
-    "max_abs_emulation_residual_f2_report_only": null,
-    "max_abs_extrapolation_difference_report_only": null,
+    "class": "N",
+    "max_abs_consistency_residual": 0.00026278445110072823,
+    "max_abs_emulation_residual": 0.00015481645179571402,
+    "max_abs_emulation_residual_f2_report_only": 0.00010027425946423918,
+    "max_abs_extrapolation_difference_report_only": 0.0004811852369912559,
     "max_abs_model_residual": 4.663734238722715e-05,
     "max_abs_predicted_difference": 0.0003249847509190218,
-    "max_abs_thickness_difference": null,
-    "mean_r_I": null,
-    "mean_r_M": null,
-    "mean_s": null,
-    "n": 0,
-    "se_b": null,
-    "sigma_b": null,
-    "x_b": null
+    "max_abs_thickness_difference": 0.00058776920201975,
+    "mean_r_I": -0.013,
+    "mean_r_M": 0.006,
+    "mean_s": 0.019,
+    "n": 2,
+    "se_b": 0.00010079832338131518,
+    "sigma_b": 0.002002538464548555,
+    "x_b": 0.006
    },
    "[2,5)": {
-    "class": "none",
-    "max_abs_consistency_residual": null,
-    "max_abs_emulation_residual": null,
-    "max_abs_emulation_residual_f2_report_only": null,
-    "max_abs_extrapolation_difference_report_only": null,
+    "class": "N",
+    "max_abs_consistency_residual": 0.000635064850449174,
+    "max_abs_emulation_residual": 0.0011169908448895871,
+    "max_abs_emulation_residual_f2_report_only": 0.0009716852280474697,
+    "max_abs_extrapolation_difference_report_only": 0.0016632603529605633,
     "max_abs_model_residual": 0.000240615349136626,
     "max_abs_predicted_difference": 0.0023075110066488325,
-    "max_abs_thickness_difference": null,
-    "mean_r_I": null,
-    "mean_r_M": null,
-    "mean_s": null,
-    "n": 0,
-    "se_b": null,
-    "sigma_b": null,
-    "x_b": null
+    "max_abs_thickness_difference": 0.0029425758570980065,
+    "mean_r_I": -0.057,
+    "mean_r_M": 0.035,
+    "mean_s": 0.098,
+    "n": 2,
+    "se_b": 0.00012423715440765671,
+    "sigma_b": 0.002003855002373004,
+    "x_b": 0.01
    },
    "[20,50]": {
-    "class": "none",
-    "max_abs_consistency_residual": null,
-    "max_abs_emulation_residual": null,
-    "max_abs_emulation_residual_f2_report_only": null,
-    "max_abs_extrapolation_difference_report_only": null,
+    "class": "U",
+    "max_abs_consistency_residual": 0.00027321677555658397,
+    "max_abs_emulation_residual": 0.00029980914792870905,
+    "max_abs_emulation_residual_f2_report_only": 0.00022964154879501208,
+    "max_abs_extrapolation_difference_report_only": 0.0012530893595985577,
     "max_abs_model_residual": 1.2265074728734504e-05,
     "max_abs_predicted_difference": 7.213567577801783e-05,
-    "max_abs_thickness_difference": null,
-    "mean_r_I": null,
-    "mean_r_M": null,
-    "mean_s": null,
-    "n": 0,
-    "se_b": null,
-    "sigma_b": null,
-    "x_b": null
+    "max_abs_thickness_difference": 0.0003453524513346018,
+    "mean_r_I": -0.002,
+    "mean_r_M": 0.001,
+    "mean_s": 0.003,
+    "n": 3,
+    "se_b": 7.456163549567822e-05,
+    "sigma_b": 0.0020013893767799884,
+    "x_b": 0.001
    },
    "[5,10)": {
-    "class": "none",
-    "max_abs_consistency_residual": null,
-    "max_abs_emulation_residual": null,
-    "max_abs_emulation_residual_f2_report_only": null,
-    "max_abs_extrapolation_difference_report_only": null,
+    "class": "N",
+    "max_abs_consistency_residual": 0.00011876233661634039,
+    "max_abs_emulation_residual": 0.0005526843942726956,
+    "max_abs_emulation_residual_f2_report_only": 0.0004707545631381649,
+    "max_abs_extrapolation_difference_report_only": 0.0002363660719664172,
     "max_abs_model_residual": 0.00012157250518307672,
     "max_abs_predicted_difference": 0.0010045088662329338,
-    "max_abs_thickness_difference": null,
-    "mean_r_I": null,
-    "mean_r_M": null,
-    "mean_s": null,
-    "n": 0,
-    "se_b": null,
-    "sigma_b": null,
-    "x_b": null
+    "max_abs_thickness_difference": 0.0011232712028492742,
+    "mean_r_I": -0.038,
+    "mean_r_M": 0.014,
+    "mean_s": 0.054,
+    "n": 2,
+    "se_b": 0.0001100709088330636,
+    "sigma_b": 0.002003026611149072,
+    "x_b": 0.01
    }
   },
   "oxygen": {
    "[10,20)": {
-    "class": "none",
-    "max_abs_consistency_residual": null,
-    "max_abs_emulation_residual": null,
-    "max_abs_emulation_residual_f2_report_only": null,
-    "max_abs_extrapolation_difference_report_only": null,
+    "class": "N",
+    "max_abs_consistency_residual": 3.69606846457593e-05,
+    "max_abs_emulation_residual": 0.0002905682565677026,
+    "max_abs_emulation_residual_f2_report_only": 0.00027416136696056803,
+    "max_abs_extrapolation_difference_report_only": 0.00040186330079205676,
     "max_abs_model_residual": 8.930686712519724e-05,
     "max_abs_predicted_difference": 0.0006748305049926184,
-    "max_abs_thickness_difference": null,
-    "mean_r_I": null,
-    "mean_r_M": null,
-    "mean_s": null,
-    "n": 0,
-    "se_b": null,
-    "sigma_b": null,
-    "x_b": null
+    "max_abs_thickness_difference": 0.0006378698203468591,
+    "mean_r_I": -0.031,
+    "mean_r_M": 0.01,
+    "mean_s": 0.042,
+    "n": 2,
+    "se_b": 9.008498144904402e-05,
+    "sigma_b": 0.002002027797979507,
+    "x_b": 0.01
    },
    "[2,5)": {
-    "class": "none",
-    "max_abs_consistency_residual": null,
-    "max_abs_emulation_residual": null,
-    "max_abs_emulation_residual_f2_report_only": null,
-    "max_abs_extrapolation_difference_report_only": null,
+    "class": "N",
+    "max_abs_consistency_residual": 0.0008262343523663951,
+    "max_abs_emulation_residual": 0.0017369909485724921,
+    "max_abs_emulation_residual_f2_report_only": 0.0013896522356235952,
+    "max_abs_extrapolation_difference_report_only": 0.002392716124880824,
     "max_abs_model_residual": 0.00032703839512186067,
     "max_abs_predicted_difference": 0.0033084085063976865,
-    "max_abs_thickness_difference": null,
-    "mean_r_I": null,
-    "mean_r_M": null,
-    "mean_s": null,
-    "n": 0,
-    "se_b": null,
-    "sigma_b": null,
-    "x_b": null
+    "max_abs_thickness_difference": 0.0041346428587640816,
+    "mean_r_I": -0.077,
+    "mean_r_M": 0.05,
+    "mean_s": 0.137,
+    "n": 1,
+    "se_b": 0.0001660351644283986,
+    "sigma_b": 0.002006880085064069,
+    "x_b": 0.01
    },
    "[20,50]": {
-    "class": "none",
-    "max_abs_consistency_residual": null,
-    "max_abs_emulation_residual": null,
-    "max_abs_emulation_residual_f2_report_only": null,
-    "max_abs_extrapolation_difference_report_only": null,
+    "class": "U",
+    "max_abs_consistency_residual": 0.00033235768855699455,
+    "max_abs_emulation_residual": 0.00034837983029833985,
+    "max_abs_emulation_residual_f2_report_only": 0.00022909202617027447,
+    "max_abs_extrapolation_difference_report_only": 0.0009055136360009985,
     "max_abs_model_residual": 2.9238242709543124e-05,
     "max_abs_predicted_difference": 0.00018811062202739315,
-    "max_abs_thickness_difference": null,
-    "mean_r_I": null,
-    "mean_r_M": null,
-    "mean_s": null,
-    "n": 0,
-    "se_b": null,
-    "sigma_b": null,
-    "x_b": null
+    "max_abs_thickness_difference": 0.0005204683105843877,
+    "mean_r_I": -0.005,
+    "mean_r_M": 0.003,
+    "mean_s": 0.008,
+    "n": 3,
+    "se_b": 6.560081576485577e-05,
+    "sigma_b": 0.002001075577540492,
+    "x_b": 0.003
    },
    "[5,10)": {
-    "class": "none",
-    "max_abs_consistency_residual": null,
-    "max_abs_emulation_residual": null,
-    "max_abs_emulation_residual_f2_report_only": null,
-    "max_abs_extrapolation_difference_report_only": null,
+    "class": "N",
+    "max_abs_consistency_residual": 0.0001866966460655206,
+    "max_abs_emulation_residual": 0.0007538079886453275,
+    "max_abs_emulation_residual_f2_report_only": 0.0006812123403467929,
+    "max_abs_extrapolation_difference_report_only": 0.0005390256605047501,
     "max_abs_model_residual": 0.00019261144306770205,
     "max_abs_predicted_difference": 0.001699250705735178,
-    "max_abs_thickness_difference": null,
-    "mean_r_I": null,
-    "mean_r_M": null,
-    "mean_s": null,
-    "n": 0,
-    "se_b": null,
-    "sigma_b": null,
-    "x_b": null
+    "max_abs_thickness_difference": 0.0018734561019413398,
+    "mean_r_I": -0.065,
+    "mean_r_M": 0.022,
+    "mean_s": 0.094,
+    "n": 2,
+    "se_b": 0.00010161360698202613,
+    "sigma_b": 0.0020025796676097305,
+    "x_b": 0.01
    }
   }
  },
  "claim": "diagnostic; no gate; no validation claim",
  "classes_sigma_doubled": {
   "carbon": {
-   "[10,20)": "none",
-   "[2,5)": "none",
-   "[20,50]": "none",
-   "[5,10)": "none"
+   "[10,20)": "U",
+   "[2,5)": "N",
+   "[20,50]": "U",
+   "[5,10)": "N"
   },
   "oxygen": {
-   "[10,20)": "none",
-   "[2,5)": "none",
-   "[20,50]": "none",
-   "[5,10)": "none"
+   "[10,20)": "N",
+   "[2,5)": "N",
+   "[20,50]": "U",
+   "[5,10)": "N"
   }
  },
- "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+ "code_sha": "48b419810ba5de2a98f9e99ad1cf127763648d13",
  "conclusive": false,
  "controls": {
-  "controls_pass": false,
+  "controls_pass": true,
   "fluctuations_off": {
    "markers_discriminate": true,
-   "max_abs_difference": null,
-   "pass": false
+   "max_abs_difference": 0.00010715635324354267,
+   "pass": true
   },
   "helium": {
-   "max_abs_r_m": null,
-   "pass": false
+   "max_abs_r_m": 0.001,
+   "pass": true
   }
  },
  "convention_sensitivity": {
   "classes_alt": {
    "carbon": {
-    "[10,20)": "none",
-    "[2,5)": "none",
-    "[20,50]": "none",
-    "[5,10)": "none"
+    "[10,20)": "N",
+    "[2,5)": "N",
+    "[20,50]": "U",
+    "[5,10)": "N"
    },
    "oxygen": {
-    "[10,20)": "none",
-    "[2,5)": "none",
-    "[20,50]": "none",
-    "[5,10)": "none"
+    "[10,20)": "N",
+    "[2,5)": "N",
+    "[20,50]": "U",
+    "[5,10)": "N"
    }
   },
   "invariant": true,
   "max_abs_delta_r_i_per_band": {
    "carbon": {
-    "[10,20)": null,
-    "[2,5)": null,
-    "[20,50]": null,
-    "[5,10)": null
+    "[10,20)": 0.0,
+    "[2,5)": 0.0,
+    "[20,50]": 0.0,
+    "[5,10)": 0.0
    },
    "oxygen": {
-    "[10,20)": null,
-    "[2,5)": null,
-    "[20,50]": null,
-    "[5,10)": null
+    "[10,20)": 0.0,
+    "[2,5)": 0.0,
+    "[20,50]": 0.0,
+    "[5,10)": 0.0
    }
   },
   "pattern_alt": "MIXED"
@@ -211,93 +211,12 @@
   "traversing_primaries": 50
  },
  "inconclusive_reasons": [
-  "a control failed or is incomplete",
   "an evidence point is invalid without a valid repeat"
  ],
  "invalid_points": {
-  "carbon case 13": "invalid run; no repeat",
-  "carbon case 14": "invalid run; no repeat",
-  "carbon case 15": "invalid run; no repeat",
-  "carbon case 16": "invalid run; no repeat",
-  "carbon case 17": "invalid run; no repeat",
-  "carbon case 18": "invalid run; no repeat",
-  "carbon case 19": "invalid run; no repeat",
-  "carbon case 20": "invalid run; no repeat",
-  "carbon case 21": "invalid run; no repeat",
-  "carbon fluctuations-off case 13": "invalid run; no repeat",
-  "carbon fluctuations-off case 21": "invalid run; no repeat",
-  "he case 17": "invalid run; no repeat",
-  "he case 21": "invalid run; no repeat",
-  "oxygen case 13": "invalid run; no repeat",
-  "oxygen case 14": "invalid run; no repeat",
-  "oxygen case 15": "invalid run; no repeat",
-  "oxygen case 16": "invalid run; no repeat",
-  "oxygen case 17": "invalid run; no repeat",
-  "oxygen case 18": "invalid run; no repeat",
-  "oxygen case 19": "invalid run; no repeat",
-  "oxygen case 20": "invalid run; no repeat",
-  "oxygen case 21": "invalid run; no repeat"
+  "oxygen case 13": "same-slab emulation check |e1| > 0.0015 (second failure of the point)"
  },
- "invalid_runs": {
-  "i3fu2-carbon-water-10mevu-case17-part0": "stderr is not empty",
-  "i3fu2-carbon-water-10mevu-case17-part1": "stderr is not empty",
-  "i3fu2-carbon-water-10mevu-case17-part6": "stderr is not empty",
-  "i3fu2-carbon-water-15mevu-case18-part0": "stderr is not empty",
-  "i3fu2-carbon-water-15mevu-case18-part1": "stderr is not empty",
-  "i3fu2-carbon-water-15mevu-case18-part6": "stderr is not empty",
-  "i3fu2-carbon-water-20mevu-case19-part0": "stderr is not empty",
-  "i3fu2-carbon-water-20mevu-case19-part1": "stderr is not empty",
-  "i3fu2-carbon-water-20mevu-case19-part6": "stderr is not empty",
-  "i3fu2-carbon-water-2p4mevu-case13-part0": "stderr is not empty",
-  "i3fu2-carbon-water-2p4mevu-case13-part1": "stderr is not empty",
-  "i3fu2-carbon-water-2p4mevu-case13-part5": "stderr is not empty",
-  "i3fu2-carbon-water-2p4mevu-case13-part6": "stderr is not empty",
-  "i3fu2-carbon-water-30mevu-case20-part0": "stderr is not empty",
-  "i3fu2-carbon-water-30mevu-case20-part1": "stderr is not empty",
-  "i3fu2-carbon-water-30mevu-case20-part6": "stderr is not empty",
-  "i3fu2-carbon-water-3mevu-case14-part0": "stderr is not empty",
-  "i3fu2-carbon-water-3mevu-case14-part1": "stderr is not empty",
-  "i3fu2-carbon-water-3mevu-case14-part6": "stderr is not empty",
-  "i3fu2-carbon-water-50mevu-case21-part0": "stderr is not empty",
-  "i3fu2-carbon-water-50mevu-case21-part1": "stderr is not empty",
-  "i3fu2-carbon-water-50mevu-case21-part5": "stderr is not empty",
-  "i3fu2-carbon-water-50mevu-case21-part6": "stderr is not empty",
-  "i3fu2-carbon-water-5mevu-case15-part0": "stderr is not empty",
-  "i3fu2-carbon-water-5mevu-case15-part1": "stderr is not empty",
-  "i3fu2-carbon-water-5mevu-case15-part6": "stderr is not empty",
-  "i3fu2-carbon-water-7mevu-case16-part0": "stderr is not empty",
-  "i3fu2-carbon-water-7mevu-case16-part1": "stderr is not empty",
-  "i3fu2-carbon-water-7mevu-case16-part6": "stderr is not empty",
-  "i3fu2-he-water-10mevu-case17-part4": "stderr is not empty",
-  "i3fu2-he-water-50mevu-case21-part4": "stderr is not empty",
-  "i3fu2-oxygen-water-10mevu-case17-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-10mevu-case17-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-10mevu-case17-part7": "stderr is not empty",
-  "i3fu2-oxygen-water-15mevu-case18-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-15mevu-case18-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-15mevu-case18-part7": "stderr is not empty",
-  "i3fu2-oxygen-water-20mevu-case19-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-20mevu-case19-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-20mevu-case19-part7": "stderr is not empty",
-  "i3fu2-oxygen-water-2p4mevu-case13-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-2p4mevu-case13-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-2p4mevu-case13-part7": "stderr is not empty",
-  "i3fu2-oxygen-water-30mevu-case20-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-30mevu-case20-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-30mevu-case20-part7": "stderr is not empty",
-  "i3fu2-oxygen-water-3mevu-case14-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-3mevu-case14-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-3mevu-case14-part7": "stderr is not empty",
-  "i3fu2-oxygen-water-50mevu-case21-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-50mevu-case21-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-50mevu-case21-part7": "stderr is not empty",
-  "i3fu2-oxygen-water-5mevu-case15-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-5mevu-case15-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-5mevu-case15-part7": "stderr is not empty",
-  "i3fu2-oxygen-water-7mevu-case16-part2": "stderr is not empty",
-  "i3fu2-oxygen-water-7mevu-case16-part3": "stderr is not empty",
-  "i3fu2-oxygen-water-7mevu-case16-part7": "stderr is not empty"
- },
+ "invalid_runs": {},
  "method": {
   "consistency_tolerance_reported_only": 0.003,
   "emulation_tolerance": 0.0015,
@@ -348,144 +267,150 @@
  "pattern_sigma_doubled": "MIXED",
  "provenance": {
   "archive_sha256": "b941a0c30793daddc4d119a2cc664bfbdd430554c3a4788be04e97ff6fcc0863",
-  "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+  "code_sha": "48b419810ba5de2a98f9e99ad1cf127763648d13",
   "committed_inputs": {
    "infrastructure/keys/trusted_attestation_keys.json": "6eb14657048b12e2e23fa1df87af2f0a2ec0c3adde2b993dba9d5454045c29f4",
    "uv.lock": "0d7e79d3b88fd95f7b59d717efa27d6bfb9b78a435fb2ccc5b991e4347d37299",
-   "validation/plans/v3-008-acceptance.md": "434bc47f4c40d7deb7621d19785b142d18e7a2bdc188d26291a07ae1db1bf9ae",
-   "validation/reference_cases/topas/i3fu2-frozen-manifest.json": "d9b2dd205921bdd0cff7481293b9cfee6daf57d73df03ca534b8665424f2f0ee",
+   "validation/plans/v3-008-acceptance.md": "5a14d4b51837f3c5390c20b1a303f5a1acf694dabad54903b62fb202471ad1ee",
+   "validation/reference_cases/topas/i3fu2-frozen-manifest.json": "690ff0bf1fddedfec8c4190dab30aa0b1e686589f80b3f0e2679ec295dea4db7",
    "validation/results/stopping/v3-008-i3fu1/environment-seal.json": "4166366856656e669c7cd4aabbfec3c679203d90af3e9eca24dd1b1eb87991c9",
-   "validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json": "9c8a2c0d070dcba8e2b6d7892109cf8a9751facea8972609589a8e906acb069f",
-   "validation/results/stopping/v3-008-i3fu2/i3fu2-review.json": "ea0963052fd79c74a525faf2d8471509fc7f8da7e1cd590ccaa087d684565f4c",
+   "validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json": "cc403ed090f2f0a6b5e35f273a325fa0311eaff14cc25ad39496182ff93befb7",
+   "validation/results/stopping/v3-008-i3fu2/i3fu2-review.json": "75668d6f61ffc0405d924674be57e31e5eab8fb1a372fa50eb4cd10ff3ebbceb",
    "validation/results/stopping/v3-008-i3fu2/log-markers.json": "c079f5fb1e38063864759c61e0aeb9ce2ad505ba4915141a07012414f725511a",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-029223f2ecece35783c0-b86967be/artifacts.json": "87cbd8d7e813bc23392659bfc83283d108e25f4b7b11fecb8273cf40554bd238",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-029223f2ecece35783c0-b86967be/record.json": "716b01c5e42cc1c69212dc5f3fdae51132d47e647ce775d8efbb1a21feaff71f",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0306201118e9acf9a2ae-e9d02f01/artifacts.json": "00b9d1ac8f4ec12b287c5d22b1a2eb64933d45cbb1a62ddca25242f6cab42ed4",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0306201118e9acf9a2ae-e9d02f01/record.json": "b8ab145a44b62888347bf62ad434b4e91962fdfe5c7d269e279a951c6e5f4b89",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-043ae3c71ac7e4894ffa-a89cc697/artifacts.json": "b7390a545781555e512510d5274f86337fab6f4ec14579bb7676c7e530d6eb2a",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-043ae3c71ac7e4894ffa-a89cc697/record.json": "2323c618c5ee70ecc66a04ac41a561c02d38ae97d30626d0252d67afe2fad6b5",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-072c369aeef97a26eaa4-ec2d5071/artifacts.json": "1d9223c5d98415d468693e7019a487b30a3b606e46186d695442b2666bd19ff5",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-072c369aeef97a26eaa4-ec2d5071/record.json": "768b7fe74789d860dafb16b5dcc503c0435a7ded0af4c2e635a06f4da7efba3a",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0bc7ed78645b7ef87810-5957ab62/artifacts.json": "00501f00aa704898d37f26d118e8c7811588fdaedf485693ea3a30df5b6cae21",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0bc7ed78645b7ef87810-5957ab62/record.json": "706b36bac40bbce4155a1137cea7c44f18ef632a2d41117aeec048d6abaa2a12",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0f40f66d441e0a5cd69a-5a5c683e/artifacts.json": "0fde9e96c43f5dc1dcf2f53e34a43569d11e77ae32c5697f44a5e2b416b104b4",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0f40f66d441e0a5cd69a-5a5c683e/record.json": "45fdba4f3decad10bf5e9c343072a62b4428674a5990395ac5c237428b402385",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-187552a90c8c42a8d21b-9477c6a0/artifacts.json": "a8de7b7bd30ba84147201b6794d7ca55e596ec8cb306b420e48e0d9a38068c76",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-187552a90c8c42a8d21b-9477c6a0/record.json": "e60c22fca7d1dcffc28706f64a820d4981de470ee6191b2d9a0071611e09a27b",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-1dd631254d272df2fca9-6a76a0d1/artifacts.json": "aff9f6ee2e6e98cf2327fc98c71cdc0e8ed9b3d3095a33489b3071c4b02ed0ee",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-1dd631254d272df2fca9-6a76a0d1/record.json": "061ddc49c8dd47459460ad1ad3ace0e70c0357635b2e2dc89425852f5a7c7185",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2077de164180376c8f98-e89b6485/artifacts.json": "3dbd68afa39b548bed533e97a553d6af800e9117943ed9db244f0a49ebf905ce",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2077de164180376c8f98-e89b6485/record.json": "bfab34ece082a7c30db488d0c50f0c21aec7f6bf689d13657c752317e8643e45",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-20c87d6c9e4bfd5f5d86-283c9a0a/artifacts.json": "d82f43dd07c7f4103a0bfec8836ededfb31cf5b401b5b42e677c05745ff887c2",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-20c87d6c9e4bfd5f5d86-283c9a0a/record.json": "941ee63c6339fada7bab5bafe3585bddf59fb16f468f3c92f4469ceb412fdae3",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-21c4367261b90c0dd57f-056caccb/artifacts.json": "42115ec8d654477d59d38acc492def99a3df126c9e23230d5427fabfa0b0f450",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-21c4367261b90c0dd57f-056caccb/record.json": "b143829ae329a9475f81949768414107d392c7d02e72038214f144011f8dc3c9",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-29af088b7c0af2cff673-447e7773/artifacts.json": "75768792a6a39e745c75bdf12c55459f9e95196d9c8600f5c658cc35d5db46cc",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-29af088b7c0af2cff673-447e7773/record.json": "35c0eef1c85ed75f45532e6ed75d281859026c4c2bd5485d66a2543e8cbff4c4",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2b3aa055be1a9d0f4e1e-a884047e/artifacts.json": "4c7f7d01b169248fbcdb6d42d623fab445e6da4909de25d688bbd34423f7d17a",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2b3aa055be1a9d0f4e1e-a884047e/record.json": "1b6815e4d48ca2f588cbb11023cb28e33d1ac738dcfa5da02e6a0858bc2b20f8",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2dc3efbae7a953ab605f-d7583d6c/artifacts.json": "be1e7da8a893962c4f5b62bde6f312013a4ea1781270fa70cb98e7aba290bb8b",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2dc3efbae7a953ab605f-d7583d6c/record.json": "e1f627295131b161657301e118c481bc427762cd704fe3ce0e85581020179275",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2dcda2a8853ef5b76392-36b5c8ca/artifacts.json": "54dcce2ef9ea1718e91558419faff5e44d3b9c68c5dbe9e99f2233cc2953aa3d",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2dcda2a8853ef5b76392-36b5c8ca/record.json": "13a31ec7f9bfd96e04739451443371342f5077f422634897a59b0b5f07192e34",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-35241e7d3eb09508aef8-9fe7dc5a/artifacts.json": "d2fa35c66a507a94fd766d0f007612ecb12d474c69cb4f9aeadb59458252c458",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-35241e7d3eb09508aef8-9fe7dc5a/record.json": "5637e926c0530a9a67a3d1432418dfd1896700c9e3053cb37f38f90c827c6d5b",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-44ad28e342e4a7d69929-35d785cc/artifacts.json": "8bbf9de5a537a070c56a088a433ad4f88fb7fdd96819af7b80d15975e2b64fb7",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-44ad28e342e4a7d69929-35d785cc/record.json": "d8da23fbe4938be5cac0fec408d7c98723a25ede9d9203ea6b2d09aa93c4744e",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-46ed789d388d2200d314-03053f4b/artifacts.json": "b0df6667ae9aa2f41d956a80e0e25cae4f375627f9667c151965ce80f18c51d3",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-46ed789d388d2200d314-03053f4b/record.json": "4bc11df606aff8a9c32b85da8f9ea885b661c32bc9d69a5a4785eb520d7cef3e",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4ac1dab6d747f9d1e807-9627ff05/artifacts.json": "4e403dda71e695121ebfecae4321a89759ca0fc46bfd03818f0bd17f47a721a8",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4ac1dab6d747f9d1e807-9627ff05/record.json": "8559f7f29435caabcaa10b999f788130e6fc8f2967221402a522bcb61fce0710",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4ea48384681641b9bd21-571b1011/artifacts.json": "7dd199de950ea628c12188867d10d8be5e0aa09090ae63211fa215fbcfa9c3b7",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4ea48384681641b9bd21-571b1011/record.json": "f297183424132b8b10818b438e5052ac479a37b662aba4b46d471a651b2c345f",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-51eeb8dda58938bc4758-0fc0450c/artifacts.json": "1209841c3a89bfc9c385825d0342c4b7baedaa9e6a0836b01ce72ad29adb9df0",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-51eeb8dda58938bc4758-0fc0450c/record.json": "398493ceff488763f3edf162509cd866c4e24b6a71b16661e8207801e90fced5",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5243418ea4fbafec8403-7be4a80a/artifacts.json": "4c8f7b38c52242d5cd16dfbf0d40374bc2ac27cb68c059014c8984fdc9e2134c",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5243418ea4fbafec8403-7be4a80a/record.json": "ec51316839f51ac4d36c7b63e299d0b4bb74ab9a8727e9aaae9111629dae7348",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-545eb832c5723e1616d4-0e2c0f7e/artifacts.json": "b4c1273752b2d3c05bab287fbfdfce2d1273e071474d261034f2b857d376c524",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-545eb832c5723e1616d4-0e2c0f7e/record.json": "0cd9dca685a3859f61432343abaa50110a69eb7f560be009edc8243dc207a6f9",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-588ebc6aeb4bc199d9f4-f013833d/artifacts.json": "05824c0318411128acf6202703ecda992db40b4a8a5c464ade98d8be216a91df",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-588ebc6aeb4bc199d9f4-f013833d/record.json": "4534a36cd04e2f417c5cf16711ab5c5239f7cd74606932b9d4f84b0ffee49adc",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5e624897e37fa612a23f-da2b1b54/artifacts.json": "bd9afb8e286e8fa9b49cd67245e8074cc32e4cef4f68c139121f8e6eed22145c",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5e624897e37fa612a23f-da2b1b54/record.json": "a411c69624bf5804476448047a65b90351e7f0cd72e5ce8043653e481dfd2eb7",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-60aa0d8a7ce185f4d665-1d51a3ef/artifacts.json": "e21ca7e93c03aa541156fa7a78428ed3551139eb7f60c7f10c54380fcb20454a",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-60aa0d8a7ce185f4d665-1d51a3ef/record.json": "971c21df05dc9e124582748f198ea38f039eb21f0b7317c19e75aba9688360d0",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-640d82528bc8c48db2fb-0f78ffc9/artifacts.json": "7add919e05e0246f6912978ab5560bec84daab55a9bc1176175adaa58972027b",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-640d82528bc8c48db2fb-0f78ffc9/record.json": "7f62d412bc953bad7a4f230e9311f76e51d1a087bc99b19827482db84036971f",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-650a08699cb34fa97cb2-de72571a/artifacts.json": "80d47a33b91d2e044ef6b7ab42a0358ba954ee0d891d056c3244180e741c2166",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-650a08699cb34fa97cb2-de72571a/record.json": "f83f89e7f1bcc1d73a4b06550ca20411bef8d4beb95c38961b619d11c281ed1d",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-68f33b2223496cacf37e-8c1758af/artifacts.json": "44773961f9108f8df5c9aebd2f3ace0f8cbac9b3842e45b2f9007c4508915c2d",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-68f33b2223496cacf37e-8c1758af/record.json": "2fd644144b28569a6ee10574a662bae3e0e6e7285ff68409d269e32e4e07f8d7",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6908ade6ecf51de5f5ac-11c4db26/artifacts.json": "920d03c33606bbed7f65def51d913acb5d67191c7c8a513fa0d8d532b0557634",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6908ade6ecf51de5f5ac-11c4db26/record.json": "ef1d9bf8f788e8aa477ac6049b5f497be2882b0ac39439c2225377935437e57a",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6d3f8303474c37fd4b7b-01814953/artifacts.json": "9a781480302ad18a28b5146e0bb2145b8de11f61f6ae08f66e2f99d9cdf6b99f",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6d3f8303474c37fd4b7b-01814953/record.json": "c63ee3771315a6645b2dc0543b252980092e4f9cfabaf58277845171b158c07f",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6ebb8a7d82cf97b682b0-4d476a43/artifacts.json": "4ef6829b444182630f9da5ec772ebb41f4b86c217a592800ff4cfa737936c456",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6ebb8a7d82cf97b682b0-4d476a43/record.json": "35a8c836ff86b3f6c7f99cc8f1b1f112297abd89ecd82b5e6c3b3fa46238c383",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-73d6a352d6e9ee8ddcce-257935ac/artifacts.json": "d0ae89c74de28180974977d2439b2e6ae68ed59b36dce51eefdfac1c562d6801",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-73d6a352d6e9ee8ddcce-257935ac/record.json": "2c5a7fb213f642eb78fd75a630a3c7f3428be9c0466dc9a4fdec260c765d9403",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-75a4d906ce5d916bf540-f7dd4c7a/artifacts.json": "852ff6d3efbc9bb722a5715b0983011ae4e2dc188bf64350e9ba438ee74f26a1",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-75a4d906ce5d916bf540-f7dd4c7a/record.json": "0e7742693d31a7d030c60788fd01050f990b0ef716a21c3f0c0db205a1e169b6",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7b0f0e207f3cfcc6bf9b-4692f7f1/artifacts.json": "50b78a785ea50d7b0680b783bb71b4a450738ae3e46fad7c3274258479f2d730",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7b0f0e207f3cfcc6bf9b-4692f7f1/record.json": "5e68f2112c582c1dd1d26b98a21e26baffef71f160ebf0cfb15a52dd2ff62463",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7e5290964aae718ac546-b08641e3/artifacts.json": "89e0e717c9cae8f5a45107e8fb43bb133205652747e78623f7a92eaf1aeb658e",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7e5290964aae718ac546-b08641e3/record.json": "ca1fbadc8a94fbc8afd8f4cc2eb9df68fd928af79f16ee35c52c7aa9ed4d7fa9",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-807612ac731b12f03cb5-81231ee5/artifacts.json": "d893ba0e7227d384bcc44d7a1f2f256b00e8af1f70192522ea8cbdd00d24ab18",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-807612ac731b12f03cb5-81231ee5/record.json": "a2e62e459e427bb8c9d3ea9b663fbb96677a03471b2a5bada6e7987d04b6ab52",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-8449321af09235a335f2-d0204790/artifacts.json": "ba1d478b133130de24fe325364893543450d44b2c14dbf9195c950471cccd3c1",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-8449321af09235a335f2-d0204790/record.json": "8fadc1b9272f371809874305275c6bac6052a3e04c3e7de983e765919e7f46cf",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-8c1c6ef4133d7f9dcc65-355cc708/artifacts.json": "e208bf983f00e3fd2fbc2758fd1966b0bbc5d6bcdcfcbf2bed386c23cc5d87c9",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-8c1c6ef4133d7f9dcc65-355cc708/record.json": "d2dc65e6eda672fda1fc0149413a65168f74e84a9d2a7ca5b5033ee2558ee811",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-8d54b3e56c332d0f9bfa-25cfe465/artifacts.json": "b07191089c5dafe53d0359036e13da0653002788189dae72827acb4345d6692c",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-8d54b3e56c332d0f9bfa-25cfe465/record.json": "7b6e6995f5325fba1c0d8f0424acd5bfb2ca712cecb2e43557c36d79432a02cd",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-90d40d39a1e7fe7ea8b6-963c9675/artifacts.json": "f2bcb192b205d45a428ebf20fe5cdeb39e3567d139b8cf4c0b74a9f834ff0fa1",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-90d40d39a1e7fe7ea8b6-963c9675/record.json": "adf3492ef5a1566300e99a137b5241c92d447a37f5eb3755c5e8374dfd2a652a",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-960980cbb9af3f0c8974-3816ac23/artifacts.json": "31a1c5c4813ff4a36a09c26f2f44306b76f141a8db02b7ab36be7573ba8f6bd0",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-960980cbb9af3f0c8974-3816ac23/record.json": "67838823f09c283616c44d6ac72cc1a85d09e5e21298599c79e5c359352407cb",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-968515be8ebbc3fd69fc-d8c3a77c/artifacts.json": "ca803291adcb7978c7b333d24410ef73a4bd05c938ee73ebc8b7520877bc7667",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-968515be8ebbc3fd69fc-d8c3a77c/record.json": "e54c09e6baf8c67887b0e90fafaef6bd8d1ab752bae8be40da12b035ae4d8d44",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-9d56a791025f5faacfb0-b2be8f46/artifacts.json": "e70e000de9160ce0d99baf8adc66a690a6eafeda3ed7dca4bc52ad6cb6a8ae4f",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-9d56a791025f5faacfb0-b2be8f46/record.json": "366310dce52024dbc364570d69aeafb142d56142126fa7acfb7b4ec3bf454044",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a76be128cad27e8e0f67-b1a42935/artifacts.json": "efc3eb447d052579e701ab5d2524b3f99bea7baab42b1a374f0f623bda684b97",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a76be128cad27e8e0f67-b1a42935/record.json": "c7b4621c3af8dff039fdc17793826bd03d9a70b0a85c0194a515ec7d41ff9e5d",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a884e88f5a22fb861b92-c07d1cf4/artifacts.json": "dfaad6a3274eff05aee3b8f03db40423bba1ccce67d92354bd66db3afb315be8",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a884e88f5a22fb861b92-c07d1cf4/record.json": "fb154b6770c1a20e01fba4d57fa6edd2188ec23db0884651db23312cf7d97333",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-aa3f5426c81e9099740a-c47b7d78/artifacts.json": "42a95cb4719a5cbf4e857c55299dbe2235f6e2e68d52e940cf50e2802c108868",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-aa3f5426c81e9099740a-c47b7d78/record.json": "fb239358abbca47b694c9712342f9374e571eb745833ab3e8ec63b4a02b9f9f2",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b10287ffc5927292bf59-1ddd9b95/artifacts.json": "887fb648359d3740c58267db3e8bfce3b6e4c4ee4ecaa97d1bd3c8947bad6da9",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b10287ffc5927292bf59-1ddd9b95/record.json": "7152588c3db103cd61f904e9c32662f2caf3823dffd5dd951ededd4f6a5a1239",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b5d9c2064837764017c2-9e3c93a8/artifacts.json": "35f682229aa5c428f873de879d36b5379ab34525c24eb282ae6220b1fc6738c1",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b5d9c2064837764017c2-9e3c93a8/record.json": "a7fd8c9f78f4c625bf1bdf6a9b291ff3d9c5bdbdefc7cfe8c64aa13879ceae20",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b8b277f32a640166cd6d-c08ecc32/artifacts.json": "05e012b22eaa0c33014150b8381f652919dacf76c390bcef56295a872b7d85c7",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b8b277f32a640166cd6d-c08ecc32/record.json": "8cc87cccbd9eb768204a9da68856ce6aa8696736ac7b055e3614b3f7178613bc",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-bae79d87bee451cea72d-7fd898ef/artifacts.json": "5bcc6f5490948b7aacc35851a517ea83ccbb2fc1a8b952bc824340b6a4216976",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-bae79d87bee451cea72d-7fd898ef/record.json": "436dce2fc452a72ec5462b14eedf802d641b34c74b89394d8fb545819f446ccf",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c23b0cbf6fb3e4a0ed18-09b56821/artifacts.json": "ff28e604576dcba62421312fca426a723146c0e3a5b5dd0ac4e110448f05c06b",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c23b0cbf6fb3e4a0ed18-09b56821/record.json": "76365dc3313d6da23f04353b8db19007eca20913d049649e57f1b0bf607ee994",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c3ad459c84298a6843aa-b223e2e1/artifacts.json": "acc98e61b4ceb1374695952d59847e36d64c61c0044101b1ecd9b1f3ecde8e7a",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c3ad459c84298a6843aa-b223e2e1/record.json": "1a29338be020121dcc133cd287ea537fef69fcccb242249fbe7344502a01ea6e",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c4549ffbbceebebdb854-9f1dab21/artifacts.json": "f5f070008e79efa1b3622f50cfe01c51fe2ad8a37deac77860840d35bb72a18b",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c4549ffbbceebebdb854-9f1dab21/record.json": "c168566ed5b9be8edb17a88f609c9600a9b99c03f082d81ad80f5f632abe9c79",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-dac7825f1f04fbf0fcaf-30f0c86f/artifacts.json": "d8a03741345857b474447064749e0731f3de3c62d161e29adcc47a1f35cc1277",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-dac7825f1f04fbf0fcaf-30f0c86f/record.json": "dd26273a4d2d46cbb5e7ce81efcb0eda4352bec40f423b2ac7b2b3f98dc3378c",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ecf87c5579de6d2c787b-c192f099/artifacts.json": "972d3ca962e58ca0ead7e9e7afd424480b69f8422a2ced6bf19ff038cbfed228",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ecf87c5579de6d2c787b-c192f099/record.json": "a893992cea3432cf39a0f17523aea19e88a80ad2e650d8f22ce4575598400b44",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efb143b59ff25d434f49-cf0916b7/artifacts.json": "45a4de258813d48e0f7cee3bf547df1c09c28d18b60bd0f6f9c7b1ef71e653b4",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efb143b59ff25d434f49-cf0916b7/record.json": "d0bc53235f6b5488ef4e7dfccab5819eaad095171114383b1f1ceb6403b8876c",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1a0770920779870d332-45342c2e/artifacts.json": "7578624e32aead49df9b10521a7ba306e0f16159fcbc41da7d5ff420c4214633",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1a0770920779870d332-45342c2e/record.json": "fb62f13463a40e5f3843fcc9326ec20496554fe67d2657df34733a4382773eea",
-   "validation/results/stopping/v3-008-i3fu2/topas-runs/index.json": "30d3a5257095430f8b6b3d629bbb73c467c391af35f498fc0bdb523b8ec20507",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-0254f3fa182628ec877d-f7f384a1/artifacts.json": "0cfa197b9b72c310d6f06a589a7ed0d9f1e823c4ea1461767f867797a400711c",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-0254f3fa182628ec877d-f7f384a1/record.json": "fc943b5ad8890e100f4c64c1129734eb6ea00892874625c89b7a91c477244e4a",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-28cdfa0dbdb00c06ffce-a6cc47dc/artifacts.json": "44395f73a1d3626a7b5e96cd3635905616ec346d60bac615ac6ba7cb7d788ec7",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-28cdfa0dbdb00c06ffce-a6cc47dc/record.json": "8724054cba43c61a82c47924efdd87e2e3cf6e0285a490b23f857487daceb070",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-382ca30c01b354aa6f38-78c9bd23/artifacts.json": "ffca52b1faf958a62d666d426a90cbdf5755546b9faeeea075c9679e2d095ba1",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-382ca30c01b354aa6f38-78c9bd23/record.json": "23abb2a6ccecc64a73ea075f4a7f2f6778560decd40bbb9590e8f461e076bcf2",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-630235343ca8303d1f82-a859e12e/artifacts.json": "29f77e8b2a2d5b6f2e62d54c0bef1e72270d794cb40ea7c98831015b4f5dbcec",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-630235343ca8303d1f82-a859e12e/record.json": "04a3957f714956f2c68c6cb56808b9d180f1c68dd46e63a4365c56757147e2f4",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-c41909fecb9f7d09bd4c-f12dda89/artifacts.json": "473e594316ae11a3866828aa9e61006db18d3453842e5aa9b6ded5cf0539ffe0",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-c41909fecb9f7d09bd4c-f12dda89/record.json": "9edb6e3c791756382c0793dc0b55468651cf88e26e46d8b1a8e9c61c58d80979",
-   "validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json": "d380d352ac4bb41f73407933025564fc71759071b549fb9a26daebe3285d4ee6"
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-01317dd73ff59413a9cb-209f9cb6/artifacts.json": "f047c1b920f6f3cbb82a7470db2550bf1130fb310743425e3d4f6adee4452e6a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-01317dd73ff59413a9cb-209f9cb6/record.json": "41f78755ddc1489f605e5617126a5ef082c6e8aca8829b5a1255790bedb23de5",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-034071647483ca9425e0-a12323cb/artifacts.json": "800f03bc5c33d972361f8c00ffde9ad056d567113ca2c6347b83c35dd5be8278",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-034071647483ca9425e0-a12323cb/record.json": "4ab98b00c2dcdd18ac31c146eb474495ea04cb1507caa16a5c5cf08cb75b5c82",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0346041be5033120ddb5-a903c0cd/artifacts.json": "7cfa755d65c12e6f5cb3f2d830fb75c0875808a8f745e79e91c0a882e78df309",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0346041be5033120ddb5-a903c0cd/record.json": "01da80d1cd084a155ae43d54be8adfbf8cd732fe6477173a9bd1ef1be91bee88",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-10d71ac91908800cbf78-2aca6057/artifacts.json": "1e8f41b67d0ff7d61441945bdc5698c35db64d60116acaad84d2f66304729b81",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-10d71ac91908800cbf78-2aca6057/record.json": "e80cd27466ebd109c2795a3f3adcd3cff2231e45109f701204415b887605028b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-15e4ddb01abf08b1b23a-964ab83c/artifacts.json": "30b4ef132e08db0982a3fea7b446f72cdff1d8f85dcd6a482b55e38b3f38f416",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-15e4ddb01abf08b1b23a-964ab83c/record.json": "802abe20b605ae9bc3327a643f4216f005c6b106e523322b036c703ffbbfc4c7",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-18157832db84118715c8-e8571d9d/artifacts.json": "272089968affb1cc8c40507f46127de303bf312973548ef1e9c34c8ec42ab72e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-18157832db84118715c8-e8571d9d/record.json": "a732cbb2568293e9d051d82a6a777c5931b399053bb14c7ff58f64ce9e4a19c2",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-193a067c6fd14ce30818-cf6ab82d/artifacts.json": "2a6ec9d3977e9b4a56c636a53c40ddefbe12a162f5d7bea193eebbbbba01154d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-193a067c6fd14ce30818-cf6ab82d/record.json": "7b2cbb75969469272661034fcb29a771e554052e8ed5c11affe9a3d17daf9486",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-1d6fd42a074e7a9419d9-fbde1413/artifacts.json": "0fd22ebb53f67c42df607fa6cd5e1389569f87f295678f11364cdf72550b3943",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-1d6fd42a074e7a9419d9-fbde1413/record.json": "0f05362bff5de243b503bc1bbdf0d956e48306183e6d0667cebfcfd01689b42d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-26519ef6e924c922295f-a2bfea3e/artifacts.json": "7d707195a439a4f7e6dedac119070a0599e6aab6a20764c6daefef8cc9507d6b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-26519ef6e924c922295f-a2bfea3e/record.json": "49ae873a87cfeba5bb6f0cfb7d413bcfcdbb14ddfb90c92fa70ffa967f047441",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2fdf9194535a90964a5a-4c8986ca/artifacts.json": "e4936b2ec5a5b6c56bba59f7730ba1d24371cdad2e69eddab696698197923034",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2fdf9194535a90964a5a-4c8986ca/record.json": "fbbcadbecbfafea63f9039faf68b8a699cecb7c78d83a096606cf476456eb407",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-334780dc287e397ed197-7dc9ba17/artifacts.json": "2d032ff612ba38317327b2b0f71b5355cc77e9e1f6438c0820dd517e44b4e456",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-334780dc287e397ed197-7dc9ba17/record.json": "cb0ecf27db5e4db096b7623c38b95106533eef0e953521a6344fd4be1872a8e0",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-33e91682b1affa26cc7d-d4bc0d31/artifacts.json": "66c8adc2f57f04b8f45ebf65d328095816e4ce1613ac0ba1aab997efa56aa775",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-33e91682b1affa26cc7d-d4bc0d31/record.json": "cb74c4174b033fc38554c6babf7858b4acaf852afab80292bb1c40c8f6b10fce",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-35421bbb7ad02e182cd6-de2e490b/artifacts.json": "11423eca6f801e5adb5fe069a73d33c344cbfe52404ed52742a69f2f9666e3a8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-35421bbb7ad02e182cd6-de2e490b/record.json": "5dcbae35f56d44ac76a1da5fb94055f105fe7f79230e77ff05ede01f74c36528",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4340e118cc50d146ca3d-db49b62f/artifacts.json": "4c09d0aaf6c3e1a9087c239a708dfcb447a211b3246d2c595887001fb61cb726",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4340e118cc50d146ca3d-db49b62f/record.json": "3ccfce177fec229d00d74a5ed65b0d35c4395d58c5263502863c294490260820",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-44e48724722d710e2179-ac59dc0a/artifacts.json": "cb0aba40209ee3005d5e45a2176c150c898dd0c2f28adc5c565f728da83ec3c8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-44e48724722d710e2179-ac59dc0a/record.json": "353ae09941e2b2ebfbb634a2f5617c3370e880c820812be80349e581349ea4d1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4679e19c41ba80e336e4-477a8a37/artifacts.json": "9864c96dc33685b3d995562d80c995a46ec43b98c3d31effcf926bc5aaf2fea0",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4679e19c41ba80e336e4-477a8a37/record.json": "dae04fa7bb2bd0c363b678d186c20f7aef4e04cf92ab32470eaab3212c07137f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4a49cd6fffa4c83aec1e-04b33c65/artifacts.json": "0a68d9a855dd7d59eedf8a5378302989a523138e61d5d156c19e7310b0ad0805",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4a49cd6fffa4c83aec1e-04b33c65/record.json": "c641a75844f1fd47d99c301e74016c4bae5a3e95db63fc263cca9deb628fc23a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-507379546467fe79e8b9-c5ab816c/artifacts.json": "6a12fb67af4819bb8e595cad6609476e07210d8fd41f472cfb1ebb15eb5ffd00",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-507379546467fe79e8b9-c5ab816c/record.json": "afd32214e954d3294795c66959b726fa58106a4bc286428e4ddba7480bd8ca86",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-566037c93d07ee627c7c-a2d06b3e/artifacts.json": "3a655fa596947ff9fa5f129d7e98853ab6734503e256e568571e4d8739011703",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-566037c93d07ee627c7c-a2d06b3e/record.json": "e40ad9696120b3ba5b76c839d9492ff9cdacea27e2cc0a7e11ac57442ae91bb4",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57c4b395040b52bfd7dc-dfc51c71/artifacts.json": "a062c6485554113046758e98d00210646d1731329e52d35c6272e8f98aa0ff22",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57c4b395040b52bfd7dc-dfc51c71/record.json": "d79fdd1567a739b768009bcd72450f760d32019551e51554342ad4c49b374315",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57cc1c1ccbf63a5ed987-fd5b590c/artifacts.json": "adb3a59589fe7eeba635ace7f61df146df0f08a0e5cb7c409dd8142a1696c176",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57cc1c1ccbf63a5ed987-fd5b590c/record.json": "ea26d725cce09df5310053050abdeb35ce41d1ce0fbc21e99b086e347fb8b8ca",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5a7cb95751edf90a6b4d-858a3e30/artifacts.json": "6c8a3467379f0ad8787426e81fa53b9f45b5106256c422bb309a216942a7295d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5a7cb95751edf90a6b4d-858a3e30/record.json": "3e0d9b86eefcd3f871307c02663326577fd866660e38701a5d2884b1d2b8f6f6",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6001cd9b87600f47b472-71338ceb/artifacts.json": "0c645dde97a2c77b4a7687f5c3a715f422212bec9ebf71749071055e1435730b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6001cd9b87600f47b472-71338ceb/record.json": "a99fc7bc21778fdca99d7dd94caf17638f8f558d4b6c950af083fa5d45802d31",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6064c334796ae2785442-b3a1450b/artifacts.json": "ecd6e82f4ae02a74982888322e7b20c5755de862081d9007fb37288bce45fb44",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6064c334796ae2785442-b3a1450b/record.json": "807605ad8750d9d0c92eff023e50402d5d5b28c21e7fedb1f898eb7709ba7499",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-62330be48505d81acc17-75b64304/artifacts.json": "81e2946b83a45a78c1a34a9b01fefae0a2db2e5ef297e009b42198314ebf6554",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-62330be48505d81acc17-75b64304/record.json": "81266d998e56927eada140eee041608571942b7574aba67d8b954746e6b0d424",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-69fce8cfff75542c1dd8-2cc5081b/artifacts.json": "e5656c5d85e18fa8967a1642a551394df60597f18fd3a0a90a791428acc8a5a9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-69fce8cfff75542c1dd8-2cc5081b/record.json": "14e5e3a70561094cedb23545ead4506a18c41c8442db90f292ca5daaecc5c177",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7b7e1e2da70df86c1c03-385b9a3c/artifacts.json": "9be85fb89aff20529e6fdad588eee230eeb3f894df56f76dc31b18c0ac7a1ea9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7b7e1e2da70df86c1c03-385b9a3c/record.json": "12986130ed0eba9d2cc9f21ae5dbedf080ee45585071fc0e08ee16ec942009ae",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7c8733c503f3d7d02e84-8c4071e8/artifacts.json": "f413a90d4b0a14d0dc2512e571c85b8a3a13281dadbbb074a1dccfefc6a059b8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7c8733c503f3d7d02e84-8c4071e8/record.json": "4cf2aed820304a0628d983085a7ea1c9289aa987b6a046c371c70c164885911e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-80d9b0b5ce76781cf9c0-7726786e/artifacts.json": "5b2131fe64694e3a6c3467bedb8f01e44ed1286ce3f037235c978cef78beef0d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-80d9b0b5ce76781cf9c0-7726786e/record.json": "1798c531119af40dcce6e7032b66912abe476c55e9ede52d938e2701b737cb41",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-827b9b8015b2dbc7af21-e4fd35b9/artifacts.json": "763f8f4e3da30ca944b07e4f7f74e3453dcba0006952922ed09faeeef625426e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-827b9b8015b2dbc7af21-e4fd35b9/record.json": "fab55355a1e178679550a6d8884d9a911f1074c4ff615e33e5dcab302716275e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-874d0671caa1f081ec1e-342eca3d/artifacts.json": "dbabfc27a5aa0832123b89eb360b6157667c3c33ab9845482a0b290813fc89d1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-874d0671caa1f081ec1e-342eca3d/record.json": "152811fb30e9db84abf6104d497b2af609749e759aa4a5e0704cc91fa21e11ce",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-921d9e36498d33a9c405-f40cd16a/artifacts.json": "75b5719844eaea67d752c017263bf8f333a124febebdce7858b3d47c2a5e7e7d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-921d9e36498d33a9c405-f40cd16a/record.json": "ef5cb83a80e60a624ae90c230b94ed7b078c051bcfcdf77e8bc5bdfafd8235c4",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-947615e93039c09758dc-4e6270dd/artifacts.json": "600cabb41284d7f8b4728f8bb3ba5c2e81091dcf7f021ac6716584f8a1c4bf21",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-947615e93039c09758dc-4e6270dd/record.json": "20b223c918624cef94d5af00e8b342969d9c965623bf8c25cc380d7de2256dc7",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-966d7e75cd12d21cb800-11c1619b/artifacts.json": "d3f5a4116469a553b310dbd223ffd3e269e8c6ec88e639e2f6a10000459991cb",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-966d7e75cd12d21cb800-11c1619b/record.json": "1fc4a6dc95be27b4a62dc4e10a73006a0983f46b585c39b31c905161a57a5e12",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-96d8d2e37de1c70dfdc0-01c609a8/artifacts.json": "30b8c46f7b3562b6ded7fe304396454d4fff56f821088156729df8cf72008a61",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-96d8d2e37de1c70dfdc0-01c609a8/record.json": "012fe9d25ea7a3819f519a17365139716007715fc916dd0cc08e0efa592fa91b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-9766ce7c9331477f0669-08e1ceb3/artifacts.json": "69b2eddce1a8818f3009b87b380b4cca3c77efbc65d7cd522abe7aa0d6ff19d1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-9766ce7c9331477f0669-08e1ceb3/record.json": "85ffbfa3b1abdfe3969ae8fe920f282941ab3dfb840ef2e5247f4ecd63da52a1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a33cdfedf26584329104-7b2ce079/artifacts.json": "c74c26fa30e50622fc59f91ce861cac2b236facdb5e1e2f36072502b5ebb1582",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a33cdfedf26584329104-7b2ce079/record.json": "9ac037214520f97810f0bb252acaccb174771117e5643d4258ff6d69eb261ed3",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a659830ddc4fc264d546-bcbaf245/artifacts.json": "14f7247f12740b0d29f6d8049ef86e6f224883bf9d92622355c855b057f0ba35",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a659830ddc4fc264d546-bcbaf245/record.json": "d0f2c447fa14b8281f4c21ca190fce51584be61701abd03fc4dce5e26f58da6f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b00a05e95a1281b5aada-ebee5c76/artifacts.json": "38992a3062db1603f4a4921d3e6a73704c1f4f630eab4e31149b05d677a05a07",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b00a05e95a1281b5aada-ebee5c76/record.json": "303ca935d89d616e88bdfc751ef6a155a3fe26861a190680f4902bbe4d944de3",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b11bd33b39b88fe89c46-af47290f/artifacts.json": "f6d838c40eb3029a173600c45980d5eeb465ea56ef534df454d0612d92be4ecf",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b11bd33b39b88fe89c46-af47290f/record.json": "6e66a025e14ca2e5eb9c0a43bffcd9b963be605bfa0f2ea5461ad686b533f7aa",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c223850b2b9d77ff7c9e-a4d4a830/artifacts.json": "937b082cee501ee3f88c1da5a6c1060778154909062053b82b9f594848481a51",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c223850b2b9d77ff7c9e-a4d4a830/record.json": "3cad55ff62cee1d63dff41f2dea4889a2da74b3884e392bdcbe640ee22959133",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c688c491b5546e0dbca0-1ef4c4da/artifacts.json": "efa7c5f53c59f18e271081ceb202b71a2b8099069b04f636e86b65314756f895",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c688c491b5546e0dbca0-1ef4c4da/record.json": "b6e6591b3aa31207084972d3d9d1e081bf9066be800ed2a3b5faef46ed16790e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c79507ec342938ca9105-27e8733c/artifacts.json": "fac27f840d114d58fb8fe32d43f859a9b30fdeb5905a3289d259d7d6de5d6309",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c79507ec342938ca9105-27e8733c/record.json": "e1d6884d71cd69b81f3653f31eb15549f771ca14327f52cf43b39f32f70fa56e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-cb95ace3daa213279ea0-a500faab/artifacts.json": "81403ca4c8a12f18881b99417fd07858a94547053a3d5798453cbd51af8c43a8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-cb95ace3daa213279ea0-a500faab/record.json": "7eadc290a1840ae580e2fcba6a826108e861b72ea3784084c6404740259c196b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ce9226a5bbfb16eb869e-4f9da79f/artifacts.json": "38caf9786439fc68f84856a60772edc4e92741ad1d319b9ea85c39fa6f5c71d9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ce9226a5bbfb16eb869e-4f9da79f/record.json": "2b56bb7fe8fad0534cffe724f21904a6177cc396d3973acaa917d38a0e793a3a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ced4ce8940e55ef92f13-ae4fb860/artifacts.json": "0d5cac670117b53c0aa98e18e08d64ff75f384698bdc3329d281a71aa5531d9f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ced4ce8940e55ef92f13-ae4fb860/record.json": "7da0ad7e1d3e96f8d97c14a88c4c764b6286fd9e70737acee8006d6092aed1c0",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d299e02a79e9c3b17687-2a9114e6/artifacts.json": "02df0582ed97ba9a9f5f11674830879c63ecc9607528fa427bb553d1f6c1d5c8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d299e02a79e9c3b17687-2a9114e6/record.json": "293c5037d00cdb2cba93b2c564f0f53faf27412aa37bd79d5f918790f7c68867",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d34b1a6504c7a034d558-92ebdb96/artifacts.json": "81a527cab2e36e73521ee6f512d61f6814d932a59672180a2152bbbad687d4ae",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d34b1a6504c7a034d558-92ebdb96/record.json": "dd6a7a58749e5752b5616b997713cb790e2272ce7ac63cc8c51dd00729a11fb7",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d6528fd2e39314cb9ae2-8fa23bd8/artifacts.json": "682e57ed4ec9b2c2f9ceaec5e2f1f254e7aa517ebf9994632eed617cd4884ccd",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d6528fd2e39314cb9ae2-8fa23bd8/record.json": "d3389620ff9d5795b4bcca3028206e6c1d8f02215403cfdc3652659caf403d6d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d8829979c9380e3bc2de-68e39530/artifacts.json": "25830061738f53c9e096d0d4e34ba2352be10ebdde10fa075b2fab23430eb11f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d8829979c9380e3bc2de-68e39530/record.json": "1b067b30f26ffad9308afe73e1eb184d3b27620f91d7bdbd1435074b0bfc444a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d9f714e0c3be4e33616b-d74e169f/artifacts.json": "1c4cdceb30705434fd4aea8dac3418ad6bd30dfe75d5a99fedb125b9aa2f11ca",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d9f714e0c3be4e33616b-d74e169f/record.json": "76db3d73c03557d18b2bda86cfe06e2944070f787e3d67fd52eb7c1fe8b54ee1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-db297f533c47d3347a6e-6fb63f06/artifacts.json": "352625a1d9fcac179d5c27cada583735aa115fdc79ea29dadcd94026eb41196c",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-db297f533c47d3347a6e-6fb63f06/record.json": "f96c88a3e634413b29a1398cf1d2ef0e34d63d6c9fc94fd443eeb514e6932df9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-dbf0fc324d8559a8e0a9-1ac66258/artifacts.json": "570136da2a150a0062a4d89221511215bd97a62a3b6eacb382e39e9fbedad3c4",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-dbf0fc324d8559a8e0a9-1ac66258/record.json": "f699b7db540469f667faa64c7a5ce3d5e93955ed5cced75ae8a20755dc29621f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-de22a48b412d3c97b054-55229681/artifacts.json": "7faac64c8ad352cb4aefb089f806346c0aaeeab2eb839349008d8b83425ffce4",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-de22a48b412d3c97b054-55229681/record.json": "b7e356dde1e3845bfd90c7511c7aa1242d10f1f7462864e77cc695551c5254a5",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-e2bb5445256b7347ad7e-7ed0ce15/artifacts.json": "04e812bafe59ba2b6d4ceaf07c3c2fdd48bec83552668f7e40bcc6fcf9b26d59",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-e2bb5445256b7347ad7e-7ed0ce15/record.json": "1399e8836d88254278d483c4c568f330a7a7ad785b63955d1198a53759c8c9cb",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ed750548af470ae3f7f2-5424ea56/artifacts.json": "8944ffaf017bb1062eafbd7c5be7c7c74c3a73dbaa0a663012f4e6e115a96d9f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ed750548af470ae3f7f2-5424ea56/record.json": "46d7d7bde7ab6c3148a858ccce2e5a17815a2836150f3db79b4b85d92d64be1d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efcd482b29adb96b30f4-7961a9e2/artifacts.json": "136cee279e75f64eac63448c9f07973898afe11fded01851c8d8f5b4d2d603eb",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efcd482b29adb96b30f4-7961a9e2/record.json": "095b87e606035fc30edfcaf820c2d7ca0abdecc8c9dd4b26f776fd317c28ee48",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f2d24653f9406ecb3d14-b09ae72c/artifacts.json": "5f59246c641bb13737af7e3ad35e437be0ccf71f680a149346e2f88959f039d5",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f2d24653f9406ecb3d14-b09ae72c/record.json": "3ceab9ec2f38aa72b22a6cf36ed0c5daf7b5f3924962333db483f376b62561f9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f56ed9fedb385edb25db-b9053f8f/artifacts.json": "da488248ef0dcd6ae8b3ae8912c9d9e3b2a3865badce0e246c67c123d7890db1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f56ed9fedb385edb25db-b9053f8f/record.json": "11828ffcb30f6b884ac627daec2f1067d4b623740a911d19eb0576bbfae0c36b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f920bc43fe2fa0fe56bd-29e689a6/artifacts.json": "9e5637786b75cb8e79f5325eb265a78b0d032999f3f7f07956df19b92cc2838a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f920bc43fe2fa0fe56bd-29e689a6/record.json": "0df5a64fd43e91960d5c01c1ffdc46bc1080869805f7952a28a7170261bd1fc2",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-fd7d96cd25e2fa3968aa-0452e5f4/artifacts.json": "9ed1edd4aa75ae1e3145b144b256cd05e210fd06674f81566e620506446f0f57",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-fd7d96cd25e2fa3968aa-0452e5f4/record.json": "7f3bff06b3f75dbcd37e13f4b893a3d2c47e59e7af0a04e97ef9f0d5693ae285",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/index.json": "ced952b91275e928a0e1b599fee1a23359566b3e4e47d15f857291e20592119a",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-12512b1e40611ea4ce3b-7205f9a6/artifacts.json": "7ad2e8f06b095c7aac22288c09b86b26ab7e4535bbaa67db98f984adec9afcea",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-12512b1e40611ea4ce3b-7205f9a6/record.json": "4180b47dd32e8624aad21c0aa94e102d6b6ea0111863fdb6fb890946a9b23c0a",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-48838aba24e41c71ff3b-ed673f25/artifacts.json": "9ad01639868e0cf316d35db8fb1a7c70ac675f72c7709f5268da3e71cf6e397d",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-48838aba24e41c71ff3b-ed673f25/record.json": "6a8a5e5b6ac943d7ccdb7baae416b0b4739544451c6428558d3013918c68f450",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-503044447b5ebdfd6345-90796c02/artifacts.json": "3cb75ab9acd1beb5082bec841a2537bd6911734328503d53a5308cbaf62604fa",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-503044447b5ebdfd6345-90796c02/record.json": "043f95c49c1384e71515b5b39ba3c11ba2c3521bfe828bcd0d4372b5ac45c169",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6af6a37172270d50d8d6-ea73954d/artifacts.json": "5dd07a44d1383f83d7e25dc0eb271385f4089c81c72f35c99e4eb4b028fb67d2",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6af6a37172270d50d8d6-ea73954d/record.json": "f364cc91e25ed0d5aa9f14561c0b8b9c83a24e0c2ef18adbae9f847e7104ac96",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-cc2800f7530b94ca4564-92db453f/artifacts.json": "a2866e586674cdc9423040302b7a59064a9c6baf7fdbd6686627b961d1478509",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-cc2800f7530b94ca4564-92db453f/record.json": "1e99a799b27d77d7b8c2cdce28139b2673091b0026c615906bca771d7f740c27",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json": "f974f388103940e77a1d6098e5c8f0455d3b150895d5e12b9b611bafb7fe1e01"
   },
   "environment": {
    "lock": {
@@ -511,7 +436,7 @@
       "git_common_dir": "/workspace/.git",
       "git_toplevel": "/workspace",
       "git_work_tree_env": "/workspace",
-      "head_sha": "9592bcde24bb98d393020655879eacd0dfe8dcb7",
+      "head_sha": "e3cac6fa50dd78a9b5987cd1ca56b7fe99afb8c0",
       "launcher_sha256": "24bd01b6a16bb17072064f4a9d9d16fa5c9d55a483703db70fdfb77cf3f35c48",
       "machinery_ok": true,
       "origin": "validation/scripts/stopping/sealed_launch.py",
@@ -622,7 +547,7 @@
       "target": "validation/scripts/stopping/i3fu2_evaluate.py",
       "target_committed": true,
       "target_path": "/workspace/validation/scripts/stopping/i3fu2_evaluate.py",
-      "target_sha256": "be4515cfddb55c776fdc263769a6c09eab3070000fd95269b8ee9166c825d057"
+      "target_sha256": "49ddc566157e547ac542c9a4cb544be5f47ae4c26f94df719c78a27bd1420a23"
      },
      "machinery_problems": [],
      "meta_path": [
@@ -671,400 +596,418 @@
     "sys_version": "3.12.0 (main, Oct 18 2023, 16:27:16) [GCC 11.4.0]"
    }
   },
-  "evaluator_head_sha": "9592bcde24bb98d393020655879eacd0dfe8dcb7",
+  "evaluator_head_sha": "e3cac6fa50dd78a9b5987cd1ca56b7fe99afb8c0",
   "log_markers": {
    "path": "validation/results/stopping/v3-008-i3fu2/log-markers.json",
    "sha256": "c079f5fb1e38063864759c61e0aeb9ce2ad505ba4915141a07012414f725511a"
   },
   "manifest": {
-   "bundle_set_digest": "fdf4d598da3559cf557ae5e2bd420c32b86cfce934da3d2a854f4d7da8802f98",
+   "bundle_set_digest": "a24c5f40d8eb563a5809d3f333e849e2a906cd89e38fd2018639b4cd3d6d0bc0",
    "path": "validation/reference_cases/topas/i3fu2-frozen-manifest.json",
-   "sha256": "d9b2dd205921bdd0cff7481293b9cfee6daf57d73df03ca534b8665424f2f0ee"
+   "sha256": "690ff0bf1fddedfec8c4190dab30aa0b1e686589f80b3f0e2679ec295dea4db7"
   },
   "member_sha256": {
    "data/raw/ICRU73_NEW.dat": "749768c1c2de475c928cc2c50a354903577139c11debd4b5948b035ca3a3d87e",
    "data/raw/icru73_newEng.dat": "8b5b809f5c0cc4f6018f9faa89e9f73c7b9b81a3c588f98bef556712d4c77dd1"
   },
   "plan_note": {
-   "line": "**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-c801dd374d824eb7a324ffe630ab1103 at 0a915106e32af78f3f02ec807690c4fbe4762bb5; markers review REVIEW-ba7d4c76244d4392a63a8e372a0c569f at 2727578d8a0fb2524da097f6beba03f78397d56e",
+   "line": "**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-77788fd4ea6740f78fdf1fd3d82ee03c at 94b17d30218a9dc5fc3c659a2a15cd4f691aa110; markers review REVIEW-be33eda9d6d34628a5bbbb6544093919 at 054ecbf5b0bf7e6403cb687f67c7558170da8f79",
    "path": "validation/plans/v3-008-acceptance.md"
   },
-  "plan_revision_records": 15,
+  "plan_revision_records": 17,
   "records": "validation/results/stopping/v3-008-i3fu2/topas-runs",
   "review_pins": {
    "evaluator": {
     "attestation": {
      "key_id": "b53b2800f81a4e64",
-     "signed_at_utc": "2026-11-16T18:23:03.979588+00:00",
+     "signed_at_utc": "2026-11-16T19:52:46.964436+00:00",
      "signer": "codex-worker"
     },
-    "finished_at": "2026-11-16T18:23:03.977553+00:00",
-    "head_sha": "0a915106e32af78f3f02ec807690c4fbe4762bb5",
+    "finished_at": "2026-11-16T19:52:46.961486+00:00",
+    "head_sha": "94b17d30218a9dc5fc3c659a2a15cd4f691aa110",
     "path": "validation/results/stopping/v3-008-i3fu2/i3fu2-review.json",
-    "review_id": "REVIEW-c801dd374d824eb7a324ffe630ab1103",
-    "sha256": "ea0963052fd79c74a525faf2d8471509fc7f8da7e1cd590ccaa087d684565f4c"
+    "review_id": "REVIEW-77788fd4ea6740f78fdf1fd3d82ee03c",
+    "sha256": "75668d6f61ffc0405d924674be57e31e5eab8fb1a372fa50eb4cd10ff3ebbceb"
    },
    "markers": {
     "attestation": {
      "key_id": "b53b2800f81a4e64",
-     "signed_at_utc": "2026-11-16T18:40:02.821876+00:00",
+     "signed_at_utc": "2026-11-16T20:07:25.007453+00:00",
      "signer": "codex-worker"
     },
-    "finished_at": "2026-11-16T18:40:02.818814+00:00",
-    "head_sha": "2727578d8a0fb2524da097f6beba03f78397d56e",
+    "finished_at": "2026-11-16T20:07:25.004863+00:00",
+    "head_sha": "054ecbf5b0bf7e6403cb687f67c7558170da8f79",
     "path": "validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json",
-    "review_id": "REVIEW-ba7d4c76244d4392a63a8e372a0c569f",
-    "sha256": "9c8a2c0d070dcba8e2b6d7892109cf8a9751facea8972609589a8e906acb069f"
+    "review_id": "REVIEW-be33eda9d6d34628a5bbbb6544093919",
+    "sha256": "cc403ed090f2f0a6b5e35f273a325fa0311eaff14cc25ad39496182ff93befb7"
    }
   },
   "runs": {
    "i3fu2-carbon-water-10mevu-case17-part0": {
     "histories": 50000,
-    "run_id": "REF-aa3f5426c81e9099740a-c47b7d78",
-    "scored": null,
-    "seed": 20619017
+    "run_id": "REF-69fce8cfff75542c1dd8-2cc5081b",
+    "scored": 50000,
+    "seed": 20627217
    },
    "i3fu2-carbon-water-10mevu-case17-part1": {
     "histories": 50000,
-    "run_id": "REF-ecf87c5579de6d2c787b-c192f099",
-    "scored": null,
-    "seed": 20619117
+    "run_id": "REF-034071647483ca9425e0-a12323cb",
+    "scored": 50000,
+    "seed": 20627317
    },
    "i3fu2-carbon-water-10mevu-case17-part6": {
     "histories": 50000,
-    "run_id": "REF-efb143b59ff25d434f49-cf0916b7",
-    "scored": null,
-    "seed": 20619617
+    "run_id": "REF-18157832db84118715c8-e8571d9d",
+    "scored": 50000,
+    "seed": 20627817
    },
    "i3fu2-carbon-water-15mevu-case18-part0": {
     "histories": 50000,
-    "run_id": "REF-640d82528bc8c48db2fb-0f78ffc9",
-    "scored": null,
-    "seed": 20619018
+    "run_id": "REF-6001cd9b87600f47b472-71338ceb",
+    "scored": 50000,
+    "seed": 20627218
    },
    "i3fu2-carbon-water-15mevu-case18-part1": {
     "histories": 50000,
-    "run_id": "REF-650a08699cb34fa97cb2-de72571a",
-    "scored": null,
-    "seed": 20619118
+    "run_id": "REF-ced4ce8940e55ef92f13-ae4fb860",
+    "scored": 50000,
+    "seed": 20627318
    },
    "i3fu2-carbon-water-15mevu-case18-part6": {
     "histories": 50000,
-    "run_id": "REF-2b3aa055be1a9d0f4e1e-a884047e",
-    "scored": null,
-    "seed": 20619618
+    "run_id": "REF-4679e19c41ba80e336e4-477a8a37",
+    "scored": 50000,
+    "seed": 20627818
    },
    "i3fu2-carbon-water-20mevu-case19-part0": {
     "histories": 50000,
-    "run_id": "REF-545eb832c5723e1616d4-0e2c0f7e",
-    "scored": null,
-    "seed": 20619019
+    "run_id": "REF-507379546467fe79e8b9-c5ab816c",
+    "scored": 50000,
+    "seed": 20627219
    },
    "i3fu2-carbon-water-20mevu-case19-part1": {
     "histories": 50000,
-    "run_id": "REF-187552a90c8c42a8d21b-9477c6a0",
-    "scored": null,
-    "seed": 20619119
+    "run_id": "REF-d34b1a6504c7a034d558-92ebdb96",
+    "scored": 50000,
+    "seed": 20627319
    },
    "i3fu2-carbon-water-20mevu-case19-part6": {
     "histories": 50000,
-    "run_id": "REF-f1a0770920779870d332-45342c2e",
-    "scored": null,
-    "seed": 20619619
+    "run_id": "REF-efcd482b29adb96b30f4-7961a9e2",
+    "scored": 50000,
+    "seed": 20627819
    },
    "i3fu2-carbon-water-2p4mevu-case13-part0": {
     "histories": 50000,
-    "run_id": "REF-c4549ffbbceebebdb854-9f1dab21",
-    "scored": null,
-    "seed": 20619013
+    "run_id": "REF-921d9e36498d33a9c405-f40cd16a",
+    "scored": 50000,
+    "seed": 20627213
    },
    "i3fu2-carbon-water-2p4mevu-case13-part1": {
     "histories": 50000,
-    "run_id": "REF-7e5290964aae718ac546-b08641e3",
-    "scored": null,
-    "seed": 20619113
+    "run_id": "REF-874d0671caa1f081ec1e-342eca3d",
+    "scored": 50000,
+    "seed": 20627313
    },
    "i3fu2-carbon-water-2p4mevu-case13-part5": {
     "histories": 50000,
-    "run_id": "REF-21c4367261b90c0dd57f-056caccb",
-    "scored": null,
-    "seed": 20619513
+    "run_id": "REF-e2bb5445256b7347ad7e-7ed0ce15",
+    "scored": 50000,
+    "seed": 20627713
    },
    "i3fu2-carbon-water-2p4mevu-case13-part6": {
     "histories": 50000,
-    "run_id": "REF-043ae3c71ac7e4894ffa-a89cc697",
-    "scored": null,
-    "seed": 20619613
+    "run_id": "REF-d8829979c9380e3bc2de-68e39530",
+    "scored": 50000,
+    "seed": 20627813
    },
    "i3fu2-carbon-water-30mevu-case20-part0": {
     "histories": 50000,
-    "run_id": "REF-5243418ea4fbafec8403-7be4a80a",
-    "scored": null,
-    "seed": 20619020
+    "run_id": "REF-9766ce7c9331477f0669-08e1ceb3",
+    "scored": 50000,
+    "seed": 20627220
    },
    "i3fu2-carbon-water-30mevu-case20-part1": {
     "histories": 50000,
-    "run_id": "REF-73d6a352d6e9ee8ddcce-257935ac",
-    "scored": null,
-    "seed": 20619120
+    "run_id": "REF-d9f714e0c3be4e33616b-d74e169f",
+    "scored": 50000,
+    "seed": 20627320
    },
    "i3fu2-carbon-water-30mevu-case20-part6": {
     "histories": 50000,
-    "run_id": "REF-029223f2ecece35783c0-b86967be",
-    "scored": null,
-    "seed": 20619620
+    "run_id": "REF-a659830ddc4fc264d546-bcbaf245",
+    "scored": 50000,
+    "seed": 20627820
    },
    "i3fu2-carbon-water-3mevu-case14-part0": {
     "histories": 50000,
-    "run_id": "REF-2077de164180376c8f98-e89b6485",
-    "scored": null,
-    "seed": 20619014
+    "run_id": "REF-cb95ace3daa213279ea0-a500faab",
+    "scored": 50000,
+    "seed": 20627214
    },
    "i3fu2-carbon-water-3mevu-case14-part1": {
     "histories": 50000,
-    "run_id": "REF-1dd631254d272df2fca9-6a76a0d1",
-    "scored": null,
-    "seed": 20619114
+    "run_id": "REF-b11bd33b39b88fe89c46-af47290f",
+    "scored": 50000,
+    "seed": 20627314
    },
    "i3fu2-carbon-water-3mevu-case14-part6": {
     "histories": 50000,
-    "run_id": "REF-4ac1dab6d747f9d1e807-9627ff05",
-    "scored": null,
-    "seed": 20619614
+    "run_id": "REF-966d7e75cd12d21cb800-11c1619b",
+    "scored": 50000,
+    "seed": 20627814
    },
    "i3fu2-carbon-water-50mevu-case21-part0": {
     "histories": 50000,
-    "run_id": "REF-2dcda2a8853ef5b76392-36b5c8ca",
-    "scored": null,
-    "seed": 20619021
+    "run_id": "REF-ce9226a5bbfb16eb869e-4f9da79f",
+    "scored": 50000,
+    "seed": 20627221
    },
    "i3fu2-carbon-water-50mevu-case21-part1": {
     "histories": 50000,
-    "run_id": "REF-072c369aeef97a26eaa4-ec2d5071",
-    "scored": null,
-    "seed": 20619121
+    "run_id": "REF-0346041be5033120ddb5-a903c0cd",
+    "scored": 50000,
+    "seed": 20627321
    },
    "i3fu2-carbon-water-50mevu-case21-part5": {
     "histories": 50000,
-    "run_id": "REF-29af088b7c0af2cff673-447e7773",
-    "scored": null,
-    "seed": 20619521
+    "run_id": "REF-dbf0fc324d8559a8e0a9-1ac66258",
+    "scored": 50000,
+    "seed": 20627721
    },
    "i3fu2-carbon-water-50mevu-case21-part6": {
     "histories": 50000,
-    "run_id": "REF-35241e7d3eb09508aef8-9fe7dc5a",
-    "scored": null,
-    "seed": 20619621
+    "run_id": "REF-15e4ddb01abf08b1b23a-964ab83c",
+    "scored": 50000,
+    "seed": 20627821
    },
    "i3fu2-carbon-water-5mevu-case15-part0": {
     "histories": 50000,
-    "run_id": "REF-6d3f8303474c37fd4b7b-01814953",
-    "scored": null,
-    "seed": 20619015
+    "run_id": "REF-566037c93d07ee627c7c-a2d06b3e",
+    "scored": 50000,
+    "seed": 20627215
    },
    "i3fu2-carbon-water-5mevu-case15-part1": {
     "histories": 50000,
-    "run_id": "REF-5e624897e37fa612a23f-da2b1b54",
-    "scored": null,
-    "seed": 20619115
+    "run_id": "REF-2fdf9194535a90964a5a-4c8986ca",
+    "scored": 50000,
+    "seed": 20627315
    },
    "i3fu2-carbon-water-5mevu-case15-part6": {
     "histories": 50000,
-    "run_id": "REF-4ea48384681641b9bd21-571b1011",
-    "scored": null,
-    "seed": 20619615
+    "run_id": "REF-26519ef6e924c922295f-a2bfea3e",
+    "scored": 50000,
+    "seed": 20627815
    },
    "i3fu2-carbon-water-7mevu-case16-part0": {
     "histories": 50000,
-    "run_id": "REF-0f40f66d441e0a5cd69a-5a5c683e",
-    "scored": null,
-    "seed": 20619016
+    "run_id": "REF-ed750548af470ae3f7f2-5424ea56",
+    "scored": 50000,
+    "seed": 20627216
    },
    "i3fu2-carbon-water-7mevu-case16-part1": {
     "histories": 50000,
-    "run_id": "REF-20c87d6c9e4bfd5f5d86-283c9a0a",
-    "scored": null,
-    "seed": 20619116
+    "run_id": "REF-96d8d2e37de1c70dfdc0-01c609a8",
+    "scored": 50000,
+    "seed": 20627316
    },
    "i3fu2-carbon-water-7mevu-case16-part6": {
     "histories": 50000,
-    "run_id": "REF-b10287ffc5927292bf59-1ddd9b95",
-    "scored": null,
-    "seed": 20619616
+    "run_id": "REF-de22a48b412d3c97b054-55229681",
+    "scored": 50000,
+    "seed": 20627816
    },
    "i3fu2-he-water-10mevu-case17-part4": {
     "histories": 50000,
-    "run_id": "REF-2dc3efbae7a953ab605f-d7583d6c",
-    "scored": null,
-    "seed": 20619417
+    "run_id": "REF-d6528fd2e39314cb9ae2-8fa23bd8",
+    "scored": 50000,
+    "seed": 20627617
    },
    "i3fu2-he-water-50mevu-case21-part4": {
     "histories": 50000,
-    "run_id": "REF-8d54b3e56c332d0f9bfa-25cfe465",
-    "scored": null,
-    "seed": 20619421
+    "run_id": "REF-80d9b0b5ce76781cf9c0-7726786e",
+    "scored": 50000,
+    "seed": 20627621
    },
    "i3fu2-oxygen-water-10mevu-case17-part2": {
     "histories": 50000,
-    "run_id": "REF-75a4d906ce5d916bf540-f7dd4c7a",
-    "scored": null,
-    "seed": 20619217
+    "run_id": "REF-c223850b2b9d77ff7c9e-a4d4a830",
+    "scored": 50000,
+    "seed": 20627417
    },
    "i3fu2-oxygen-water-10mevu-case17-part3": {
     "histories": 50000,
-    "run_id": "REF-68f33b2223496cacf37e-8c1758af",
-    "scored": null,
-    "seed": 20619317
+    "run_id": "REF-4a49cd6fffa4c83aec1e-04b33c65",
+    "scored": 50000,
+    "seed": 20627517
    },
    "i3fu2-oxygen-water-10mevu-case17-part7": {
     "histories": 50000,
-    "run_id": "REF-8c1c6ef4133d7f9dcc65-355cc708",
-    "scored": null,
-    "seed": 20619717
+    "run_id": "REF-1d6fd42a074e7a9419d9-fbde1413",
+    "scored": 50000,
+    "seed": 20627917
    },
    "i3fu2-oxygen-water-15mevu-case18-part2": {
     "histories": 50000,
-    "run_id": "REF-44ad28e342e4a7d69929-35d785cc",
-    "scored": null,
-    "seed": 20619218
+    "run_id": "REF-7b7e1e2da70df86c1c03-385b9a3c",
+    "scored": 50000,
+    "seed": 20627418
    },
    "i3fu2-oxygen-water-15mevu-case18-part3": {
     "histories": 50000,
-    "run_id": "REF-51eeb8dda58938bc4758-0fc0450c",
-    "scored": null,
-    "seed": 20619318
+    "run_id": "REF-57c4b395040b52bfd7dc-dfc51c71",
+    "scored": 50000,
+    "seed": 20627518
    },
    "i3fu2-oxygen-water-15mevu-case18-part7": {
     "histories": 50000,
-    "run_id": "REF-a884e88f5a22fb861b92-c07d1cf4",
-    "scored": null,
-    "seed": 20619718
+    "run_id": "REF-7c8733c503f3d7d02e84-8c4071e8",
+    "scored": 50000,
+    "seed": 20627918
    },
    "i3fu2-oxygen-water-20mevu-case19-part2": {
     "histories": 50000,
-    "run_id": "REF-7b0f0e207f3cfcc6bf9b-4692f7f1",
-    "scored": null,
-    "seed": 20619219
+    "run_id": "REF-193a067c6fd14ce30818-cf6ab82d",
+    "scored": 50000,
+    "seed": 20627419
    },
    "i3fu2-oxygen-water-20mevu-case19-part3": {
     "histories": 50000,
-    "run_id": "REF-968515be8ebbc3fd69fc-d8c3a77c",
-    "scored": null,
-    "seed": 20619319
+    "run_id": "REF-c79507ec342938ca9105-27e8733c",
+    "scored": 50000,
+    "seed": 20627519
    },
    "i3fu2-oxygen-water-20mevu-case19-part7": {
     "histories": 50000,
-    "run_id": "REF-60aa0d8a7ce185f4d665-1d51a3ef",
-    "scored": null,
-    "seed": 20619719
+    "run_id": "REF-33e91682b1affa26cc7d-d4bc0d31",
+    "scored": 50000,
+    "seed": 20627919
+   },
+   "i3fu2-oxygen-water-2p4mevu-case13-part10": {
+    "histories": 50000,
+    "run_id": "REF-947615e93039c09758dc-4e6270dd",
+    "scored": 50000,
+    "seed": 20628213
+   },
+   "i3fu2-oxygen-water-2p4mevu-case13-part11": {
+    "histories": 50000,
+    "run_id": "REF-57cc1c1ccbf63a5ed987-fd5b590c",
+    "scored": 50000,
+    "seed": 20628313
+   },
+   "i3fu2-oxygen-water-2p4mevu-case13-part15": {
+    "histories": 50000,
+    "run_id": "REF-f920bc43fe2fa0fe56bd-29e689a6",
+    "scored": 50000,
+    "seed": 20628713
    },
    "i3fu2-oxygen-water-2p4mevu-case13-part2": {
     "histories": 50000,
-    "run_id": "REF-90d40d39a1e7fe7ea8b6-963c9675",
-    "scored": null,
-    "seed": 20619213
+    "run_id": "REF-5a7cb95751edf90a6b4d-858a3e30",
+    "scored": 50000,
+    "seed": 20627413
    },
    "i3fu2-oxygen-water-2p4mevu-case13-part3": {
     "histories": 50000,
-    "run_id": "REF-a76be128cad27e8e0f67-b1a42935",
-    "scored": null,
-    "seed": 20619313
+    "run_id": "REF-b00a05e95a1281b5aada-ebee5c76",
+    "scored": 50000,
+    "seed": 20627513
    },
    "i3fu2-oxygen-water-2p4mevu-case13-part7": {
     "histories": 50000,
-    "run_id": "REF-807612ac731b12f03cb5-81231ee5",
-    "scored": null,
-    "seed": 20619713
+    "run_id": "REF-4340e118cc50d146ca3d-db49b62f",
+    "scored": 50000,
+    "seed": 20627913
    },
    "i3fu2-oxygen-water-30mevu-case20-part2": {
     "histories": 50000,
-    "run_id": "REF-0306201118e9acf9a2ae-e9d02f01",
-    "scored": null,
-    "seed": 20619220
+    "run_id": "REF-d299e02a79e9c3b17687-2a9114e6",
+    "scored": 50000,
+    "seed": 20627420
    },
    "i3fu2-oxygen-water-30mevu-case20-part3": {
     "histories": 50000,
-    "run_id": "REF-960980cbb9af3f0c8974-3816ac23",
-    "scored": null,
-    "seed": 20619320
+    "run_id": "REF-01317dd73ff59413a9cb-209f9cb6",
+    "scored": 50000,
+    "seed": 20627520
    },
    "i3fu2-oxygen-water-30mevu-case20-part7": {
     "histories": 50000,
-    "run_id": "REF-6ebb8a7d82cf97b682b0-4d476a43",
-    "scored": null,
-    "seed": 20619720
+    "run_id": "REF-c688c491b5546e0dbca0-1ef4c4da",
+    "scored": 50000,
+    "seed": 20627920
    },
    "i3fu2-oxygen-water-3mevu-case14-part2": {
     "histories": 50000,
-    "run_id": "REF-588ebc6aeb4bc199d9f4-f013833d",
-    "scored": null,
-    "seed": 20619214
+    "run_id": "REF-a33cdfedf26584329104-7b2ce079",
+    "scored": 50000,
+    "seed": 20627414
    },
    "i3fu2-oxygen-water-3mevu-case14-part3": {
     "histories": 50000,
-    "run_id": "REF-b8b277f32a640166cd6d-c08ecc32",
-    "scored": null,
-    "seed": 20619314
+    "run_id": "REF-35421bbb7ad02e182cd6-de2e490b",
+    "scored": 50000,
+    "seed": 20627514
    },
    "i3fu2-oxygen-water-3mevu-case14-part7": {
     "histories": 50000,
-    "run_id": "REF-bae79d87bee451cea72d-7fd898ef",
-    "scored": null,
-    "seed": 20619714
+    "run_id": "REF-f56ed9fedb385edb25db-b9053f8f",
+    "scored": 50000,
+    "seed": 20627914
    },
    "i3fu2-oxygen-water-50mevu-case21-part2": {
     "histories": 50000,
-    "run_id": "REF-8449321af09235a335f2-d0204790",
-    "scored": null,
-    "seed": 20619221
+    "run_id": "REF-62330be48505d81acc17-75b64304",
+    "scored": 50000,
+    "seed": 20627421
    },
    "i3fu2-oxygen-water-50mevu-case21-part3": {
     "histories": 50000,
-    "run_id": "REF-b5d9c2064837764017c2-9e3c93a8",
-    "scored": null,
-    "seed": 20619321
+    "run_id": "REF-827b9b8015b2dbc7af21-e4fd35b9",
+    "scored": 50000,
+    "seed": 20627521
    },
    "i3fu2-oxygen-water-50mevu-case21-part7": {
     "histories": 50000,
-    "run_id": "REF-6908ade6ecf51de5f5ac-11c4db26",
-    "scored": null,
-    "seed": 20619721
+    "run_id": "REF-10d71ac91908800cbf78-2aca6057",
+    "scored": 50000,
+    "seed": 20627921
    },
    "i3fu2-oxygen-water-5mevu-case15-part2": {
     "histories": 50000,
-    "run_id": "REF-c23b0cbf6fb3e4a0ed18-09b56821",
-    "scored": null,
-    "seed": 20619215
+    "run_id": "REF-fd7d96cd25e2fa3968aa-0452e5f4",
+    "scored": 50000,
+    "seed": 20627415
    },
    "i3fu2-oxygen-water-5mevu-case15-part3": {
     "histories": 50000,
-    "run_id": "REF-c3ad459c84298a6843aa-b223e2e1",
-    "scored": null,
-    "seed": 20619315
+    "run_id": "REF-f2d24653f9406ecb3d14-b09ae72c",
+    "scored": 50000,
+    "seed": 20627515
    },
    "i3fu2-oxygen-water-5mevu-case15-part7": {
     "histories": 50000,
-    "run_id": "REF-dac7825f1f04fbf0fcaf-30f0c86f",
-    "scored": null,
-    "seed": 20619715
+    "run_id": "REF-44e48724722d710e2179-ac59dc0a",
+    "scored": 50000,
+    "seed": 20627915
    },
    "i3fu2-oxygen-water-7mevu-case16-part2": {
     "histories": 50000,
-    "run_id": "REF-0bc7ed78645b7ef87810-5957ab62",
-    "scored": null,
-    "seed": 20619216
+    "run_id": "REF-6064c334796ae2785442-b3a1450b",
+    "scored": 50000,
+    "seed": 20627416
    },
    "i3fu2-oxygen-water-7mevu-case16-part3": {
     "histories": 50000,
-    "run_id": "REF-46ed789d388d2200d314-03053f4b",
-    "scored": null,
-    "seed": 20619316
+    "run_id": "REF-db297f533c47d3347a6e-6fb63f06",
+    "scored": 50000,
+    "seed": 20627516
    },
    "i3fu2-oxygen-water-7mevu-case16-part7": {
     "histories": 50000,
-    "run_id": "REF-9d56a791025f5faacfb0-b2be8f46",
-    "scored": null,
-    "seed": 20619716
+    "run_id": "REF-334780dc287e397ed197-7dc9ba17",
+    "scored": 50000,
+    "seed": 20627916
    }
   },
   "sealed_sources": {
@@ -1096,40 +1039,40 @@
    "validation/scripts/ion_em/ss_wrapper_template.py": "a989aa237564e4591f15451706b0bbf29860672f18d3244caa58700bc03422a8",
    "validation/scripts/stopping/compare_icru73.py": "2dc16272a32a30cdf93a91bc006af8b436b529ead5fa465bccf5351159d6f1e8",
    "validation/scripts/stopping/env_seal.py": "c05501da207024b36dea916007cf2f25b40ff1285c6c45f8acc031dd857231f7",
-   "validation/scripts/stopping/gen_i3fu2_bundles.py": "d478be6fe561fcf61b9c3731df898133ea9012aa965342d94e16ce758cfdfd22",
-   "validation/scripts/stopping/i3fu2_evaluate.py": "be4515cfddb55c776fdc263769a6c09eab3070000fd95269b8ee9166c825d057",
+   "validation/scripts/stopping/gen_i3fu2_bundles.py": "5f0113f5fd632a3c94c3d25d240de8f17c69e1808337b8876271312be785d0d5",
+   "validation/scripts/stopping/i3fu2_evaluate.py": "49ddc566157e547ac542c9a4cb544be5f47ae4c26f94df719c78a27bd1420a23",
    "validation/scripts/stopping/sealed_launch.py": "24bd01b6a16bb17072064f4a9d9d16fa5c9d55a483703db70fdfb77cf3f35c48"
   },
   "smoke_records": "validation/results/stopping/v3-008-i3fu2/topas-smokes",
   "smokes": {
    "i3fu2-smoke-carbon-water-10mevu": {
-    "code_sha": "35b2ef5699da47e7e1b3ddd0fd4b3a3a7ac3adae",
-    "run_id": "REF-382ca30c01b354aa6f38-78c9bd23",
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-48838aba24e41c71ff3b-ed673f25",
     "seed": 20600440
    },
    "i3fu2-smoke-carbon-water-10mevu-fluct-off": {
-    "code_sha": "35b2ef5699da47e7e1b3ddd0fd4b3a3a7ac3adae",
-    "run_id": "REF-630235343ca8303d1f82-a859e12e",
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-12512b1e40611ea4ce3b-7205f9a6",
     "seed": 20600441
    },
    "i3fu2-smoke-carbon-water-2p4mevu-finesteps": {
-    "code_sha": "35b2ef5699da47e7e1b3ddd0fd4b3a3a7ac3adae",
-    "run_id": "REF-0254f3fa182628ec877d-f7f384a1",
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-6af6a37172270d50d8d6-ea73954d",
     "seed": 20600445
    },
    "i3fu2-smoke-carbon-water-2p4mevu-steps": {
-    "code_sha": "35b2ef5699da47e7e1b3ddd0fd4b3a3a7ac3adae",
-    "run_id": "REF-c41909fecb9f7d09bd4c-f12dda89",
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-cc2800f7530b94ca4564-92db453f",
     "seed": 20600443
    },
    "i3fu2-smoke-carbon-water-50mevu-steps": {
-    "code_sha": "35b2ef5699da47e7e1b3ddd0fd4b3a3a7ac3adae",
-    "run_id": "REF-28cdfa0dbdb00c06ffce-a6cc47dc",
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-503044447b5ebdfd6345-90796c02",
     "seed": 20600444
    }
   },
   "trust_file": {
-   "head_sha": "9592bcde24bb98d393020655879eacd0dfe8dcb7",
+   "head_sha": "e3cac6fa50dd78a9b5987cd1ca56b7fe99afb8c0",
    "path": "infrastructure/keys/trusted_attestation_keys.json",
    "sha256": "6eb14657048b12e2e23fa1df87af2f0a2ec0c3adde2b993dba9d5454045c29f4"
   },
@@ -1140,7 +1083,11 @@
   }
  },
  "redistribution_note": "Aggregates only: no libdEdx/ICRU 73 or Geant4 table values, no per-energy deviations, ratios or TOPAS energy-loss values (decision 0038); the controls are written as pass/fail and maxima, the thickness and stepping checks as maxima per ion and band, reasons without values.",
- "repeats_used": {},
+ "repeats_used": {
+  "i3fu2-oxygen-water-2p4mevu-case13-part10": "original i3fu2-oxygen-water-2p4mevu-case13-part2 invalid: same-slab emulation check |e1| > 0.0015",
+  "i3fu2-oxygen-water-2p4mevu-case13-part11": "original i3fu2-oxygen-water-2p4mevu-case13-part3 invalid: same-slab emulation check |e1| > 0.0015",
+  "i3fu2-oxygen-water-2p4mevu-case13-part15": "original i3fu2-oxygen-water-2p4mevu-case13-part7 invalid: same-slab emulation check |e1| > 0.0015"
+ },
  "robust": true,
  "rounding_note": "mean_r_M, mean_r_I, mean_s, x_b and controls.helium.max_abs_r_m are written rounded to 0.1 percentage point (3 decimals in relative units); the classes and the pattern were computed from the full-precision values (pre-declared).",
  "schema": "ionmc-i3fu2-result-4",

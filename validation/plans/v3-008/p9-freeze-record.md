@@ -1919,7 +1919,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json` | `1c131b09b2191b8c1c6375554d389ebb7d6bb0db994531bbd324881fd4e519fc` |
+| `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json` | `497d2d8ebda23897e0d2bb3d38fdab52b45b0e849a0a5e3c694b034f560ef7cc` |
 | `validation/results/stopping/v3-008-i3fu2/host-records/RUN-20261116T190358Z-aa434fec.json` | `07a3289e71a2bf34efb844d5158ac76898e86cfb0fb5934c819cf310ff918329` |
 
 
@@ -2092,6 +2092,15 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-16, orchestrator) — evidence records index extended by the three repeat records; entries that changed:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 599027c3… → ced952b9…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step 2 graded at code_sha 48b41981 with the repeat (INCONCLUSIVE by the pre-declared rule; step 3 option (c)): the signed host-run record of the grading evaluator run, bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/host-records/RUN-20261116T203950Z-df7c5df4.json` | `bea39ef9cb261cc028123b8e4393e1301d21aef885f462e986fcbf2991713dd2` |
+
+
+**Dated note (2026-11-16, orchestrator) — the step-2 result document replaced by the grading at 48b41981 (the attempt-1 document is history); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json` 1c131b09… → 497d2d8e…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
