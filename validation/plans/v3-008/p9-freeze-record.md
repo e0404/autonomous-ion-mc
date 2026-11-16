@@ -1521,8 +1521,8 @@ placeholder scorer output was deleted unread.
 | `validation/scripts/stopping/i3_band_diagnostic.py` | `e774c8570f8613858e7a1793b7cc1948658ff3e34100c6a1de0e03a8f22ace35` |
 | `tests/ionmc/test_i3_band_diagnostic.py` | `47024d1e0ce8def63889cc7be79cd9cf72062ff94792d9476ff8b1827e0dffe5` |
 | `validation/scripts/stopping/gen_i3fu2_bundles.py` | `46200570d35f40143902c1dffc7245c39700459c453b0b3a21ae75f87251b17b` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `db4c9727230df8164a10b0acf57b70e0f8e64c1a5ee0bfbc5fd46d504635a06c` |
-| `tests/ionmc/test_i3fu2.py` | `fcf2611a5cf9b113089ed747a0fc3363f7e36df81c77c0af44ef1b70ed037528` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `b705a0a3a69da0bd8437bbc8188bce7413ff5cfee5824f428a004395cc0164bc` |
+| `tests/ionmc/test_i3fu2.py` | `f9c425e99bf70dfe96b679841f987709a2bd2caa8d27df5aafd7f9c97c8b308b` |
 | `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `cb4664944d7f6f25a3b3acd059cdd93834d3b9e92a99f4cee6d579f20cdfd971` |
 
 
@@ -1549,6 +1549,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — revision 6 of amendment I3-FU-1 (Codex REVIEW-8081e0e7 and the SR-3 fourth pass of 2c19caf7): the diagnostics, the environment-seal helper, their tests and the P13 record revised again before any run; rows above carry the revision-6 hashes (earlier hashes in the previous commits of the day); bundles and manifest unchanged (121 bundles).**
 
 **Dated note (2026-11-16, orchestrator) — revision 7 of amendment I3-FU-1 (Codex REVIEW-0b05e7e4 and the SR-3 fifth pass of 62059510): text and constant edits of the evaluator, the environment helper, their tests and the P13 record before any run; rows above carry the revision-7 hashes (earlier hashes in the previous commits of the day); bundles and manifest unchanged (121 bundles).**
+
+**Dated note (2026-11-16, orchestrator) — revision 8 of amendment I3-FU-1 (Codex REVIEW-54dc7554 on eea08d3c): the evaluator's revision constant coupled to the plan by a test; rows above carry the revision-8 hashes; bundles and manifest unchanged (121 bundles).**
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

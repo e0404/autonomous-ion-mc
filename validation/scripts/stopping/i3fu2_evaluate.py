@@ -12,7 +12,7 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 6)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 8)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
 **Launch (Codex REVIEW-8081e0e7 finding 3).** The evaluator must be started as
@@ -431,7 +431,9 @@ FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 6
+AMENDMENT_REVISION = 8  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
+#: the plan's revision records of this amendment (counted in the plan committed at code_sha)
+PLAN_REVISION_RE = re.compile(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", re.M)
 REDISTRIBUTION_NOTE = (
     "Aggregates only: no libdEdx/ICRU 73 or Geant4 table values, no per-energy deviations, "
     "ratios or TOPAS energy-loss values (decision 0038); the controls are written as pass/fail "
@@ -1188,6 +1190,11 @@ def check_pin_attestation(
     }
 
 
+def plan_revision_records(text: str) -> int:
+    """The highest N of the ``**Revision N of amendment I3-FU-1`` records of the plan (0: none)."""
+    return max((int(m) for m in PLAN_REVISION_RE.findall(text)), default=0)
+
+
 def load_pins(
     reader: Any,
     rel_a: str,
@@ -1199,7 +1206,8 @@ def load_pins(
 ) -> tuple[dict, dict[str, str]]:
     """Both review pins and the plan note naming them (see the module docstring)."""
     note = parse_plan_note(reader.read(PLAN_PATH).decode("utf-8"), "HEAD")
-    at_code = parse_plan_note(rio.git_show(reader.repo, code_sha, PLAN_PATH).decode(), code_sha)
+    plan_at_code = rio.git_show(reader.repo, code_sha, PLAN_PATH).decode()
+    at_code = parse_plan_note(plan_at_code, code_sha)
     if at_code != note:
         raise RecordError(f"the review-pin plan note differs between code_sha {code_sha} and HEAD")
     pins: dict[str, dict[str, Any]] = {}
@@ -1238,6 +1246,7 @@ def load_pins(
     for rel, key in ((rel_a, "blob"), (att_a, "att_blob")):
         if rio.git_show(reader.repo, b, rel) != pins["evaluator"][key]:
             raise RecordError(f"{rel} differs between the markers review {b} and HEAD")
+    note = {**note, "plan_revision_records": str(plan_revision_records(plan_at_code))}
     return pins, note
 
 
@@ -2304,6 +2313,7 @@ def evaluate(
                 for name, p in ctx.pins.items()
             },
             "plan_note": {"path": PLAN_PATH, "line": ctx.plan_note["line"]},
+            "plan_revision_records": int(ctx.plan_note["plan_revision_records"]),
             "log_markers": {"path": ctx.markers_rel, "sha256": ctx.markers_sha256},
             "sealed_sources": ctx.sealed,
             "environment": ctx.environment,

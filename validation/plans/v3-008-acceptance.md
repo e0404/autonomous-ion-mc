@@ -1927,9 +1927,9 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   `report_sha256`, a disclosed trust assumption, Codex REVIEW-aa4e7b1b finding 1); both named by the dated plan note
   "I3-FU-1 step-2 review pins" that must be identical at HEAD and at `code_sha`; every evidence run starts after both
   `finished_at`; the smokes (whose logs pin the markers) run at a commit that carries pin A, after pin A's `finished_at`,
-  before pin B exists — order: revision-2 commit W → review (pin A) → commit X with pin A → the four smokes at X → commit Y
+  before pin B exists — order: revision-2 commit W → review (pin A) → commit X with pin A → the smokes (four in revision 2, five since revision 5) at X → commit Y
   with the markers file → review (pin B) → commit Z with pin B and the plan note → evidence runs at Z; **revision 3 (Codex
-  REVIEW-aa4e7b1b finding 3):** all four smokes are authenticated by the evaluator like evidence runs, must have started
+  REVIEW-aa4e7b1b finding 3):** all smokes (five since revision 5) are authenticated by the evaluator like evidence runs, must have started
   after pin A's `finished_at` and finished before pin B's `started_at`, at a code SHA that carries pin A and is an ancestor of
   pin B's head — so parameter acceptance and the one-step premise are established before the evidence chronology, never
   retrospectively; (3) the one-step premise is enforced by the evaluator from the two signed step-count smoke records
@@ -1993,9 +1993,7 @@ iff both ions are I or H in [2,5) and [5,10) and I, H or U in [10,20) → option
 and [5,10) and M, L or U in [10,20) → option (c) (the I3 difference lies between two references and the acceptance reference
 sides with ionmc or below it); **MIXED** (anything else, including N — e.g. "ICRU-like but outside the I window") → option (c)
 (a tabulated source would move ionmc toward TOPAS in some bands and away in others, and any band-selective construction
-chosen after seeing TOPAS would be fitting to TOPAS, §D). **INCONCLUSIVE** (a control fails or is missing, an invalid point
-without a valid repeat, or a U class in [2,5) or [5,10)) is written as the `pattern` by the evaluator itself (Codex finding 2;
-`pattern_before_controls` is kept for transparency) → step 3 decides on step 1 and P12 alone; default (c).
+chosen after seeing TOPAS would be fitting to TOPAS, §D). **INCONCLUSIVE** — written as the `pattern` by the evaluator itself (Codex REVIEW-22f384ed finding 2; `pattern_before_controls` kept for transparency) whenever any of the following holds (complete list, revision 8): a control fails or is missing (He, fluctuation-off incl. non-discriminating markers), an invalid point without a valid repeat or a second failure of a point (validity, the gate e₁, `emulation_domain`), a class U in [2,5) or [5,10), the one-step premise of the step-count smokes not met, the fine-step premise (≥ 15 steps, traversal) not met, the classification not robust to the doubled systematic (0.4 %), or the classification not invariant under the alternative energy-per-nucleon reading → step 3 decides on step 1 and P12 alone; default (c).
 
 #### 3. Step 3 — decision (orchestrator; dated note before any further action)
 The step-2 pattern selects the indicated option; the orchestrator records the choice verbatim with the step-1 and step-2
@@ -2191,3 +2189,14 @@ or (ii)") is now marked superseded in place or rewritten, the written-maxima lis
 sensitivity qualified (q²-carried ρ acts like Δλ; threshold |Δλ| ≈ 0.1; Ziegler-vs-Barkas estimate ≤ 0.01); SR-3-5 4 → an
 extreme r_fine makes the point INVALID (`emulation_domain`) instead of raising; SR-3-5 5 (uniform b_fine ≈ −0.05 % left in
 r_fine) → noted, inside the 0.1 % term. Not a clinical claim.
+
+**Revision 8 of amendment I3-FU-1 (2026-11-16, orchestrator; after Codex REVIEW-54dc7554 on eea08d3c (changes required:
+three important, one minor); before any run).** Dispositions: Codex 1 (review provenance; fourth repeat) and Codex 2
+(start-up/import machinery; third repeat) → unchanged, infrastructure-bound (see revisions 5–7); the orchestrator records
+that the independent-review loop cannot converge on these two items without a signing review service and an
+authenticated launcher, which are outside the repository's means (an operator-side server restart would be required for
+a signing service), and will seek the operator's decision by intervention if the next round confirms that only these
+two findings remain; Codex 3 (plan inconsistencies) → "four smokes" sentences amended to "five since revision 5", and the
+INCONCLUSIVE definition of rule 2a completed to the evaluator's full list (premises, robustness, convention invariance);
+Codex 4 (revision constant one behind) → the evaluator's `AMENDMENT_REVISION` is coupled to the plan by a test that reads
+the highest revision record of this amendment (now 8). Not a clinical claim.

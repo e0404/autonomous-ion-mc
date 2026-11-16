@@ -1651,7 +1651,8 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
         att = pins[name]["attestation"]
         assert att["signed_at_utc"] == signed and att["validation_id"].startswith("VAL-syn-")
     assert doc["amendment"] == f"I3-FU-1 step 2 (revision {ev.AMENDMENT_REVISION})"
-    assert ev.AMENDMENT_REVISION == 6 and "I3-FU-1 step 2 (revision 6)" in (ev.__doc__ or "")
+    assert f"I3-FU-1 step 2 (revision {ev.AMENDMENT_REVISION})" in (ev.__doc__ or "")
+    assert prov["plan_revision_records"] == 0  # the synthetic plan holds no revision record
     conv = doc["convention_sensitivity"]
     assert conv["invariant"] is True and conv["pattern_alt"] == "ICRU"
     assert conv["classes_alt"] == {ion: _cls(doc, ion) for ion in ("carbon", "oxygen")}
@@ -2516,3 +2517,12 @@ def test_extreme_r_fine_is_an_emulation_domain_failure() -> None:
     assert not pt.valid and pt.reason == f"{ev.EMULATION_DOMAIN_REASON}; no repeat"
     assert ev.EMULATION_DOMAIN_REASON == "emulation_domain"
     assert pt.emulation_residual() is None and pt.emulation_residual_f2() is None
+
+
+def test_amendment_revision_matches_the_plan() -> None:
+    """The evaluator's AMENDMENT_REVISION equals the highest "**Revision N of amendment
+    I3-FU-1" record of the acceptance plan: a plan revision without a matching constant fails."""
+    plan = (ROOT / "validation" / "plans" / "v3-008-acceptance.md").read_text(encoding="utf-8")
+    found = [int(n) for n in re.findall(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", plan, re.M)]
+    assert found and max(found) == ev.AMENDMENT_REVISION == ev.plan_revision_records(plan)
+    assert ev.plan_revision_records("no records") == 0
