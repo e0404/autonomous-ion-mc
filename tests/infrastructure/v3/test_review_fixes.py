@@ -332,12 +332,14 @@ def test_review_uses_snapshot_when_live_source_is_restored(
 ):
     import json
 
-    from infrastructure.experiment_v3 import review
+    from infrastructure.experiment_v3 import attest, review
     from infrastructure.experiment_v3.common import write_json
 
     root, wt = registered
     sha = git(wt, "rev-parse", "HEAD")
     monkeypatch.setattr(review, "ROOT", root)
+    # execute signs the record (V3-INFRA-006): never touch the service key dir.
+    monkeypatch.setattr(attest, "key_dir", lambda: tmp_path / "keys")
     state = tmp_path / "protected"
     rid = "REVIEW-race"
     dest = state / "reviews" / rid
@@ -389,3 +391,4 @@ def test_review_uses_snapshot_when_live_source_is_restored(
     assert len(seen) == 1 and source.read_bytes() == original
     assert review.require_review("V3-TEST", wt, sha, state=state) == rid
     assert json.loads((dest / "report.json").read_text())["head_sha"] == sha
+    assert review.inspect(rid, state=state)["attestation"]["signer"] == "codex-worker"

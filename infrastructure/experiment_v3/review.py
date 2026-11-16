@@ -1,4 +1,9 @@
-"""Protected, exact-commit Codex reviews. No caller-supplied approval records."""
+"""Protected, exact-commit Codex reviews. No caller-supplied approval records.
+
+Since V3-INFRA-006 every finished review is also stored as a signed record
+(``<state>/reviews/<REVIEW-id>/record.json``, signer "codex-worker", see
+build_record and infrastructure/validation/review_records.py).
+"""
 
 import argparse
 import json
@@ -45,8 +50,36 @@ SCHEMA = {
 }
 
 
+# V3-INFRA-006: signer of the review records and their payload schema.
+REVIEW_SIGNER = "codex-worker"
+RECORD_SCHEMA_VERSION = 1
+# job.json fields that are process bookkeeping, not part of the review record.
+_JOB_ONLY = ("worktree", "pid", "record_error")
+
+
 def review_root(state=STATE):
     return Path(state) / "reviews"
+
+
+def build_record(job, report=None):
+    """Review record payload (unsigned) for a finished job.
+
+    The fields are those inspect has always returned (job.json without the
+    worktree path and worker pid, plus the parsed report when a report hash
+    is recorded) and ``schema_version``. The timestamps are the service's own
+    (started_at from start, finished_at from execute).
+    """
+    record = {k: v for k, v in job.items() if k not in _JOB_ONLY}
+    record["schema_version"] = RECORD_SCHEMA_VERSION
+    if job.get("report_sha256"):
+        record["report"] = report
+    return record
+
+
+def _load_report(dest, job):
+    if file_hash(dest / "report.json") != job["report_sha256"]:
+        raise ValueError("Review report hash mismatch")
+    return json.loads((dest / "report.json").read_text())
 
 
 def validate_report(report, sha):
@@ -238,19 +271,51 @@ unresolved findings. If you cannot inspect the diff, return changes_required.
     except Exception as exc:
         job.update(status="failed", error=str(exc)[:500])
     job["finished_at"] = now()
+    try:
+        from infrastructure.experiment_v3 import attest
+
+        report = _load_report(dest, job) if job.get("report_sha256") else None
+        signed = attest.sign_with_service_key(build_record(job, report), REVIEW_SIGNER)
+        write_json(dest / "record.json", signed)
+    except Exception as exc:
+        # The review outcome stands; inspect reports it with attestation null.
+        job["record_error"] = str(exc)[:500]
     write_json(dest / "job.json", job)
     return job
 
 
 def inspect(rid, *, state=STATE):
+    """Return the review record; the signed record.json when one exists.
+
+    A signed record is returned unchanged (so it can be verified as returned)
+    after checking that its signature is intact (signer codex-worker), that it
+    matches job.json and that report.json still has the recorded hash; any
+    mismatch raises ValueError. Whether its key is trusted is decided by the
+    consumer (infrastructure/validation/review_records.py). A review finished
+    before V3-INFRA-006 (no record.json) is returned as before, with
+    ``attestation: None``.
+    """
     dest = review_root(state) / identifier(rid)
     job = json.loads((dest / "job.json").read_text())
-    result = {k: v for k, v in job.items() if k not in ("worktree", "pid")}
-    if job.get("report_sha256"):
-        if file_hash(dest / "report.json") != job["report_sha256"]:
-            raise ValueError("Review report hash mismatch")
-        result["report"] = json.loads((dest / "report.json").read_text())
-    return result
+    report = _load_report(dest, job) if job.get("report_sha256") else None
+    if not (dest / "record.json").is_file():
+        result = {k: v for k, v in job.items() if k not in ("worktree", "pid")}
+        if job.get("report_sha256"):
+            result["report"] = report
+        result["attestation"] = None
+        return result
+    from infrastructure.experiment_v3 import attest
+
+    record = json.loads((dest / "record.json").read_text())
+    if not isinstance(record, dict):
+        raise ValueError("Review record is not an object")
+    status, reason = attest.classify_record(record, {}, REVIEW_SIGNER)
+    if status == "invalid" or not isinstance(record.get("attestation"), dict):
+        raise ValueError(f"Review record attestation invalid: {reason}")
+    payload = {k: v for k, v in record.items() if k != "attestation"}
+    if payload != build_record(job, report):
+        raise ValueError("Review record does not match the review job")
+    return record
 
 
 def require_review(task_id, worktree, base_sha, *, state=STATE):

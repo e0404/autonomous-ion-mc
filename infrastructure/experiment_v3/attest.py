@@ -30,10 +30,11 @@ SCHEMA = "ionmc-attestation-1"
 ALG = "ed25519"
 # Every service that may sign. The local-validation gate requires trusted keys
 # for validation-manager and host-runner (local_validation.REQUIRED_SIGNERS);
-# reference-runner (V3-INFRA-004, REF-... reference-run records) is optional
-# in the trust file until its key is published, and records it signed are
-# "unverified" while its list is absent or empty.
-SIGNERS = ("validation-manager", "host-runner", "reference-runner")
+# reference-runner (V3-INFRA-004, REF-... reference-run records) and
+# codex-worker (V3-INFRA-006, REVIEW-... review records) are optional in the
+# trust file until their keys are published, and records they signed are
+# "unverified" while their lists are absent or empty.
+SIGNERS = ("validation-manager", "host-runner", "reference-runner", "codex-worker")
 
 # ---------------------------------------------------------------- Ed25519 --
 
