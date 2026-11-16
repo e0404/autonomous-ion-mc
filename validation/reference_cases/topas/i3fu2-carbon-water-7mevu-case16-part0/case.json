@@ -31,6 +31,7 @@
     "a": 12,
     "e0_per_u_mev": 7.0,
     "slab_mm": 0.0121,
+    "thickness_factor": 0.03,
     "kind": "evidence",
     "fluctuations": true
   }

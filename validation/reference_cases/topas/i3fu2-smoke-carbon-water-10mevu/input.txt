@@ -1,4 +1,4 @@
-# Native OpenTOPAS 4.3 input. I3-FU-1 step 2 EXECUTION SMOKE (parameter acceptance, scorer outputs; not evidence): case 17 configuration (carbon 10 MeV/u, slab t = 0.0227 mm), rehearsal seed 20600440. Diagnostic; no validation claim.
+# Native OpenTOPAS 4.3 input. I3-FU-1 step 2 EXECUTION SMOKE (parameter acceptance, scorer outputs; not evidence): case 17 configuration (carbon 10 MeV/u, slab t = 0.0227 mm), fluctuations on, rehearsal seed 20600440. Diagnostic; no validation claim.
 i:Ts/NumberOfThreads = 1
 i:Ts/Seed = 20600440
 b:Ts/PauseBeforeQuit = "False"

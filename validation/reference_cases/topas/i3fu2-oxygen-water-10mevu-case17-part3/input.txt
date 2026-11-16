@@ -1,4 +1,4 @@
-# Native OpenTOPAS 4.3 input. V3-008 amendment I3-FU-1 step 2 (thin-slab mean energy loss), case 17 (oxygen 10 MeV/u), part 3 (slab t/2 = 0.0087 mm, energy-loss fluctuations on; seed = 20619000 + 100*part + case = 20619317). Diagnostic; no validation claim.
+# Native OpenTOPAS 4.3 input. V3-008 amendment I3-FU-1 step 2 (thin-slab mean energy loss), case 17 (oxygen 10 MeV/u), part 3 (slab 1.6t = 0.02784 mm, energy-loss fluctuations on; seed = 20619000 + 100*part + case = 20619317). Diagnostic; no validation claim.
 i:Ts/NumberOfThreads = 1
 i:Ts/Seed = 20619317
 b:Ts/PauseBeforeQuit = "False"
@@ -9,7 +9,7 @@ i:Ts/MaxStepNumber = 10000000
 # Run verbosity 2: production-cut couple table in the log; printout only.
 i:Ts/RunVerbosity = 2
 
-# Geometry: 120 x 120 x 0.0087 mm G4_WATER slab (z 0..0.0087 mm), entrance face at z = 0, beam axis = +z through the face centre; vacuum world.
+# Geometry: 120 x 120 x 0.02784 mm G4_WATER slab (z 0..0.02784 mm), entrance face at z = 0, beam axis = +z through the face centre; vacuum world.
 s:Ge/World/Material = "Vacuum"
 d:Ge/World/HLX = 20 cm
 d:Ge/World/HLY = 20 cm
@@ -19,8 +19,8 @@ s:Ge/Water/Type = "TsBox"
 s:Ge/Water/Material = "G4_WATER"
 d:Ge/Water/HLX = 60 mm
 d:Ge/Water/HLY = 60 mm
-d:Ge/Water/HLZ = 0.00435 mm
-d:Ge/Water/TransZ = 0.00435 mm
+d:Ge/Water/HLZ = 0.01392 mm
+d:Ge/Water/TransZ = 0.01392 mm
 s:Ge/Source/Parent = "World"
 s:Ge/Source/Type = "Group"
 d:Ge/Source/TransZ = -0.001 mm

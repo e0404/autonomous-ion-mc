@@ -3,7 +3,7 @@
 Usage::
 
     uv run python validation/scripts/stopping/i3_band_diagnostic.py --archive PATH \
-        --output-dir DIR --code-sha SHA
+        --output-dir DIR --code-sha SHA --expect-i3 ROW_I3_JSON
 
 Purpose (amendment I3-FU-1): attribute the row I3 FAIL (``compare_icru73.py``) by looking at
 how the ionmc-vs-table stopping deviation is distributed over energy bands and over the ion
@@ -19,21 +19,32 @@ Content of ``icru73_band_diagnostic.json``:
 * ``ions``: for every ion Z = 1-10 in liquid water (target 276) and every band
   [2, 5), [5, 10), [10, 20), [20, 50), [50, 1000] MeV/u, only ``n_points``, ``band_per_u_mev`` and
   ``mean_relative_deviation`` = mean over the band's table grid points of S_model/S_table - 1,
-  with the default :class:`BetheOptions` at ``water(78.0)``. No band max/min/RMS is written (with
+  with the default :class:`BetheOptions` at ``water(78.0)``, ROUNDED to 0.1 percentage point
+  (``round(d, 3)`` in relative units; see "Rounding" below). No band max/min/RMS is written (with
   2-4 points per band they would, with the mean, expose per-energy deviations); a band with fewer
   than two grid points raises ``ValueError`` (its mean would be a per-energy value). Carbon and
   oxygen additionally carry ``max_abs_relative_deviation_2_to_10`` (2 <= E < 10 MeV/u) and
-  ``max_abs_relative_deviation_ge_10`` (E >= 10 MeV/u to the grid end), the two band maxima the
-  committed row I3 file already publishes; ``--expect-i3 PATH`` checks them against that file
-  (rtol 1e-9; ``RuntimeError`` and no output on mismatch) and records its path and sha256.
+  ``max_abs_relative_deviation_ge_10`` (E >= 10 MeV/u to the grid end) at full precision, the
+  two band maxima the committed row I3 file already publishes; the required ``--expect-i3 PATH``
+  checks them against that file (rtol 1e-9; ``RuntimeError`` and no output on mismatch) and
+  records its path and sha256.
+* ``hypothesis_check`` (amendment I3-FU-1 rule 1a): the recorded C/O hypothesis (``HYPOTHESIS``,
+  ``HYPOTHESIS_HIGH_ABS``) against the rounded band means. CONFIRMED iff, for both ions, every
+  rounded band mean below 50 MeV/u equals the quoted value (equality at 0.1 pp, i.e.
+  |delta| <= 0.05 pp before rounding) and |rounded mean of [50, 1000]| <= the quoted bound;
+  otherwise WITHDRAWN.
 * ``z_scan``: for the bands below 50 MeV/u, single-term least squares without intercept of the
-  band means d_z over Z = 3-10 (the ICRU 73 ion set) against four shapes: ``charge``
+  rounded band means d_z over Z = 3-10 (the ICRU 73 ion set) against four shapes: ``charge``
   f = band mean of 1 - q^2/z^2 (q the model's effective charge, ``pierce_blann_charge``),
   ``barkas_like`` f = z, ``bloch_like`` f = z^2 and the z-independent control ``constant``
   f = 1. Coefficient, residual RMS and the uncentred
-  r^2 = 1 - sum(res^2)/sum(d^2) (the no-intercept convention), a ranking by residual RMS and the
-  ratios d_z/d_6. Z = 1 and 2 are reported separately (``informative_z1_z2``): their table
-  lineage is OPEN.
+  r^2 = 1 - sum(res^2)/sum(d^2) (the no-intercept convention), a ranking by residual RMS, the
+  ratios d_z/d_6 and the rule-1b ``verdict``: with RMS_1 <= RMS_2 the two smallest residual RMS
+  and r^2_1 that of the best shape, ``attributed_to`` = the best shape iff RMS_1 <= 0.5 RMS_2,
+  r^2_1 >= 0.90 and the rounded d_z over Z = 3-10 have one common sign (no zero, no sign change);
+  otherwise ``attributed_to`` = null with the failed conditions in ``reason`` (``rms_ratio``,
+  ``r_squared``, ``sign_change``). Z = 1 and 2 are reported separately (``informative_z1_z2``):
+  their table lineage is OPEN.
 * ``i3b`` (informative, carbon12 and oxygen16): model variants with one correction switched off
   or the Lindhard-Sorensen modes. Only the ``default`` variant carries the table-relative band
   mean (a duplicate of the ``ions`` entry); every variant carries model-only quantities only
@@ -48,8 +59,23 @@ Ions other than the ionmc projectiles (Li-7, Be-9, B-11, N-14, F-19, Ne-20) use 
 approximated as A u - Z m_e (``mass_note``; the recorded model-only sensitivity shows the
 approximation is immaterial here).
 
+Rounding (``rounding_note``): every table-relative band mean in the output (all ions, all bands,
+``informative_z1_z2``, the ``i3b`` default duplicate) is rounded to 0.1 percentage point before
+it is written and before any derived quantity is computed; the z-scan fits, ``shape_ratio_to_z6``,
+``prediction_from_z3_10_fit``, ``hypothesis_check`` and the z-scan verdicts are computed from the
+rounded means only, so nothing in the output depends on an unrounded mean. Reason: on the real
+53-point grid the [10, 20) band holds two points, and the row I3 file already publishes the
+>= 10 MeV/u maximum, which for a monotone deficit sits at the 10 MeV/u point; a full-precision
+[10, 20) mean would then give d(15) = 2 mean - (+-max) and, with the public model, the table value
+at 15 MeV/u, and the z-scan coefficients and d_z/d_6 ratios would expose the C/O means again. At
+0.1 pp the same solve fixes d(15) only to +-0.1 pp, which is the precision already present in Git
+(plan results note of 2026-11-15); the fits are functions of the rounded means and add nothing.
+Cost: the quantisation limits the z-scan in the [20, 50) band, where the deviations are a few
+0.1 pp.
+
 The JSON output contains aggregates and model-only quantities only; no libdEdx/ICRU table
-values, per-energy deviations or ratios are written (field ``redistribution_note``).
+values, per-energy deviations or ratios are written (fields ``redistribution_note`` and
+``rounding_note``).
 """
 
 from __future__ import annotations
@@ -142,6 +168,18 @@ MASS_SENSITIVITY_Z = 7
 I3_MAX_Z = (6, 8)  # the ions whose band maxima the row I3 file already publishes
 E_I3_SPLIT = 10.0  # MeV/u, the row I3 band split
 EXPECT_I3_RTOL = 1e-9
+ROUND_DIGITS = 3  # table-relative band means: 0.1 percentage point (relative units)
+
+# Rule 1a (amendment I3-FU-1): the recorded hypothesis (plan results note of 2026-11-15), band
+# means below 50 MeV/u at 0.1 pp and the bound on |mean| of [50, 1000] MeV/u (relative units).
+HYPOTHESIS: dict[str, dict[str, float]] = {
+    "carbon12": {"2_to_5": -0.086, "5_to_10": -0.043, "10_to_20": -0.018, "20_to_50": -0.003},
+    "oxygen16": {"2_to_5": -0.122, "5_to_10": -0.075, "10_to_20": -0.039, "20_to_50": -0.008},
+}
+HYPOTHESIS_HIGH_ABS: dict[str, float] = {"carbon12": 0.0003, "oxygen16": 0.0006}
+# Rule 1b (amendment I3-FU-1): attribution thresholds of the z-scan.
+ATTRIBUTION_RMS_RATIO = 0.5
+ATTRIBUTION_R_SQUARED = 0.90
 
 I3B_IONS: dict[str, tuple[Projectile, tuple[float, ...]]] = {
     "carbon12": (CARBON12, (80.0, 290.0, 430.0)),
@@ -160,6 +198,18 @@ VARIANTS: dict[str, BetheOptions] = {
 
 STATUS_NOTE = (
     "diagnostic of the row I3 FAIL under amendment I3-FU-1; no gate; row I3 is not re-graded"
+)
+ROUNDING_NOTE = (
+    "every table-relative band mean (ions, informative_z1_z2, i3b default) is rounded to 0.1 "
+    "percentage point (round(d, 3) in relative units) before it is written and before any "
+    "derived quantity is computed; z-scan fits, shape_ratio_to_z6, prediction_from_z3_10_fit, "
+    "hypothesis_check and the z-scan verdicts use the rounded means only, so nothing here "
+    "depends on an unrounded mean. 0.1 pp is the precision already present in Git (plan results "
+    "note of 2026-11-15). Reason: the [10, 20) band holds two grid points and row I3 publishes "
+    "the >= 10 MeV/u maximum (at 10 MeV/u for a monotone deficit), so a full-precision mean would "
+    "give the deviation at the other point; at 0.1 pp it is fixed only to +-0.1 pp. The "
+    "quantisation limits the z-scan in the [20, 50) band (deviations of a few 0.1 pp). The C/O "
+    "band maxima (2-10, >= 10 MeV/u) are at full precision: row I3 already publishes them"
 )
 LINEAGE_NOTE = (
     "table lineage for Z = 1, 2 OPEN: excluded from the z-scan fits (Z = 3-10); band means and "
@@ -182,6 +232,11 @@ def _band_mask(e_u: NDArray[np.float64], band: tuple[float, float]) -> NDArray[n
             "per-energy value"
         )
     return mask
+
+
+def round_deviation(value: float) -> float:
+    """A table-relative band mean rounded to 0.1 percentage point (``-0.0`` written as ``0.0``)."""
+    return round(float(value), ROUND_DIGITS) + 0.0
 
 
 def model_stopping(
@@ -236,13 +291,13 @@ def band_means(
 def ion_bands(
     e_u: NDArray[np.float64], s_model: NDArray[np.float64], s_table: NDArray[np.float64]
 ) -> dict[str, Any]:
-    """Band means of S_model/S_table - 1 (no per-energy values, no band max/min/RMS)."""
+    """Rounded band means of S_model/S_table - 1 (no per-energy values, no band max/min/RMS)."""
     means = band_means(e_u, s_model / s_table - 1.0)
     return {
         _band_key(band): {
             "n_points": means[_band_key(band)][0],
             "band_per_u_mev": list(band),
-            "mean_relative_deviation": means[_band_key(band)][1],
+            "mean_relative_deviation": round_deviation(means[_band_key(band)][1]),
         }
         for band in BANDS
     }
@@ -261,10 +316,40 @@ def fit_shape(d: NDArray[np.float64], f: NDArray[np.float64]) -> dict[str, float
     }
 
 
+def attribution_verdict(
+    d: NDArray[np.float64], fits: dict[str, dict[str, float | None]], ranking: list[str]
+) -> dict[str, Any]:
+    """Rule 1b of amendment I3-FU-1 for one band (``d`` the rounded band means over Z = 3-10).
+
+    With RMS_1 <= RMS_2 the two smallest residual RMS and r^2_1 that of the best shape: attributed
+    to the best shape iff RMS_1 <= 0.5 RMS_2, r^2_1 >= 0.90 and all d_z share one strict sign.
+    """
+    rms_1 = float(fits[ranking[0]]["residual_rms"] or 0.0)
+    rms_2 = float(fits[ranking[1]]["residual_rms"] or 0.0)
+    r2_1 = fits[ranking[0]]["r_squared"]
+    common_sign = bool(np.all(d > 0.0) or np.all(d < 0.0))
+    reason = []
+    if not rms_1 <= ATTRIBUTION_RMS_RATIO * rms_2:
+        reason.append("rms_ratio")
+    if r2_1 is None or not r2_1 >= ATTRIBUTION_R_SQUARED:
+        reason.append("r_squared")
+    if not common_sign:
+        reason.append("sign_change")
+    return {
+        "attributed_to": None if reason else ranking[0],
+        "reason": reason or None,
+        "rms_ratio_1_to_2": rms_1 / rms_2 if rms_2 > 0.0 else None,
+        "common_sign": common_sign,
+    }
+
+
 def z_scan(
     means: dict[int, dict[str, float]], f_charge: dict[int, dict[str, float]]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """z-scan fits over Z = 3-10 per band and the informative Z = 1, 2 entries."""
+    """z-scan fits over Z = 3-10 per band and the informative Z = 1, 2 entries.
+
+    ``means`` must hold the ROUNDED band means (the values written to the output).
+    """
     scan: dict[str, Any] = {}
     informative: dict[str, Any] = {"lineage_note": LINEAGE_NOTE, "bands": {}}
     zs = np.asarray(Z_SCAN_IONS, dtype=np.float64)
@@ -289,6 +374,7 @@ def z_scan(
                 str(z): (means[z][key] / d6 if d6 != 0.0 else None) for z in Z_SCAN_IONS
             },
             "f_charge_band_mean": {str(z): f_charge[z][key] for z in Z_SCAN_IONS},
+            "verdict": attribution_verdict(d, fits, ranking),
         }
         informative["bands"][key] = {
             "band_per_u_mev": list(band),
@@ -307,6 +393,42 @@ def z_scan(
             },
         }
     return scan, informative
+
+
+def hypothesis_check(ions: dict[str, Any]) -> dict[str, Any]:
+    """Rule 1a of amendment I3-FU-1 on the rounded C/O band means of the ``ions`` output."""
+    per_ion: dict[str, Any] = {}
+    confirmed = True
+    for name, quoted in HYPOTHESIS.items():
+        bands = ions[name]["bands"]
+        entry: dict[str, Any] = {}
+        for band, value in quoted.items():
+            committed = bands[f"{band}_MeV_u"]["mean_relative_deviation"]
+            match = committed == value
+            entry[f"{band}_MeV_u"] = {"quoted": value, "committed": committed, "match": match}
+            confirmed &= match
+        high = _band_key(BANDS[-1])
+        committed = bands[high]["mean_relative_deviation"]
+        match = abs(committed) <= HYPOTHESIS_HIGH_ABS[name]
+        entry[high] = {
+            "quoted_abs_bound": HYPOTHESIS_HIGH_ABS[name],
+            "committed": committed,
+            "match": match,
+        }
+        confirmed &= match
+        per_ion[name] = entry
+    return {
+        "rule": (
+            "amendment I3-FU-1 rule 1a: CONFIRMED iff, for carbon12 and oxygen16, every band "
+            "mean of [2,5), [5,10), [10,20), [20,50) MeV/u rounded to 0.1 pp equals the quoted "
+            "value (|delta| <= 0.05 pp before rounding) and |rounded mean of [50,1000]| <= the "
+            "quoted bound (0.03 % C, 0.06 % O); otherwise WITHDRAWN. The bounds are below the "
+            "0.1 pp quantum, so the last condition means a rounded mean of 0 (|mean| < 0.05 pp). "
+            "The quoted >= 50 MeV/u figure was a max-type statement; a mean checks it only partly"
+        ),
+        "per_ion": per_ion,
+        "verdict": "CONFIRMED" if confirmed else "WITHDRAWN",
+    }
 
 
 def i3b_ion(
@@ -340,7 +462,7 @@ def i3b_ion(
         if name == "default":
             dev = band_means(e_u, s_v / s_table - 1.0)
             for key, band_out in bands.items():
-                band_out["mean_relative_deviation"] = dev[key][1]
+                band_out["mean_relative_deviation"] = round_deviation(dev[key][1])
         out[name] = {
             "options": _options_dict(o),
             "bands": bands,
@@ -413,8 +535,8 @@ def run(
     i3b: dict[str, Any] = {
         "note": (
             "informative; table-relative band means for the default variant only (duplicate of "
-            "the ions entry); all variants carry model-only quantities (CSDA-range shift vs the "
-            "default model from BetheStoppingSource tables, 1-500 MeV/u, 200 points/decade; "
+            "the rounded ions entry); all variants carry model-only quantities (CSDA-range shift "
+            "vs the default model from BetheStoppingSource tables, 1-500 MeV/u, 200 points/decade; "
             "band-mean stopping ratio r_v to the default model). Variant-vs-table band means are "
             "not written: eight of them at full precision would let the per-energy table values "
             "of a band with <= 8 grid points be solved for; the variant-vs-table mean is "
@@ -445,19 +567,29 @@ def run(
         "status_note": STATUS_NOTE,
         "reference": "libdEdx ICRU73_NEW, target 276 (liquid water), Z = 1-10",
         "redistribution_note": REDISTRIBUTION_NOTE,
+        "rounding_note": ROUNDING_NOTE,
         "i_value_note": I_VALUE_NOTE,
         "bands": {
             _band_key(b): {"band_per_u_mev": list(b), "upper_closed": b == BANDS[-1]} for b in BANDS
         },
         "ions": ions,
+        "hypothesis_check": hypothesis_check(ions),
         "z_scan": {
             "ions_z": [Z_SCAN_IONS[0], Z_SCAN_IONS[-1]],
             "method": (
                 "per band, least squares d_z = c f(z) without intercept over Z = 3-10; d_z the "
-                "band mean of S_model/S_table - 1; charge: f = band mean of 1 - q^2/z^2 "
-                "(model effective charge); barkas_like: f = z; bloch_like: f = z^2; "
+                "band mean of S_model/S_table - 1 rounded to 0.1 pp; charge: f = band mean of "
+                "1 - q^2/z^2 (model effective charge); barkas_like: f = z; bloch_like: f = z^2; "
                 "constant: f = 1 (z-independent control); "
                 "r_squared uncentred (1 - sum res^2 / sum d^2); ranking by residual RMS"
+            ),
+            "verdict_rule": (
+                "amendment I3-FU-1 rule 1b: with RMS_1 <= RMS_2 the two smallest residual RMS and "
+                "r^2_1 that of the best shape, attributed_to = best iff RMS_1 <= 0.5 RMS_2, "
+                "r^2_1 >= 0.90 and the rounded d_z over Z = 3-10 have one common sign (no zero, "
+                "no sign change); otherwise attributed_to = null (no single-term scaling "
+                "explains the z-dependence in this band) with reason in {rms_ratio, r_squared, "
+                "sign_change}. Interpretive, not a grade"
             ),
             "bands": scan,
         },
@@ -531,13 +663,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--expect-i3",
-        default=None,
+        required=True,
         help="row I3 JSON (compare_icru73.py); the C/O band maxima must match it (rtol 1e-9)",
     )
     args = parser.parse_args()
     result = run(Path(args.archive), args.code_sha)
-    if args.expect_i3 is not None:
-        result["provenance"]["expect_i3"] = check_expect_i3(result, Path(args.expect_i3))
+    result["provenance"]["expect_i3"] = check_expect_i3(result, Path(args.expect_i3))
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     path = out / "icru73_band_diagnostic.json"

@@ -16,7 +16,7 @@
     "EDep: EnergyDeposit in Water, 1x1x1 bin; Report Sum, Standard_Deviation; csv"
   ],
   "units": "phase space: cm; direction cosines; kinetic energy MeV (total per ion); EDep: MeV, run total (divide by histories)",
-  "rationale": "V3-008 amendment I3-FU-1 step 2 execution smoke: parameter acceptance (Ph/Verbosity, the phase-space and energy-deposit scorers), output layout; carbon 10 MeV/u slab t = 0.0227 mm, rehearsal seed 20600440 (20600441 reserved for one re-smoke); energies never used; not evidence; diagnostic, no validation claim",
+  "rationale": "V3-008 amendment I3-FU-1 step 2 execution smoke: parameter acceptance (Ph/Verbosity, the phase-space and energy-deposit scorers), output layout; carbon 10 MeV/u slab t = 0.0227 mm, fluctuations on, rehearsal seed 20600440 (20600442 reserved for one re-smoke); energies never used; not evidence; diagnostic, no validation claim",
   "expected_outputs": [
     "ss_exit.header",
     "ss_exit.phsp",
@@ -31,6 +31,7 @@
     "a": 12,
     "e0_per_u_mev": 10.0,
     "slab_mm": 0.0227,
+    "thickness_factor": 0.03,
     "kind": "smoke",
     "fluctuations": true
   }

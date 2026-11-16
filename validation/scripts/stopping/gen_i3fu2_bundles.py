@@ -1,4 +1,4 @@
-"""Generate the V3-008 amendment I3-FU-1 step 2 TOPAS bundles: 28 thin-slab parts + 1 smoke.
+"""Generate the V3-008 amendment I3-FU-1 step 2 TOPAS bundles: 40 + 40 repeat parts + 4 smokes.
 
 Single source of ``validation/reference_cases/topas/i3fu2-*`` and of their frozen manifest
 ``validation/reference_cases/topas/i3fu2-frozen-manifest.json`` (plan
@@ -7,20 +7,38 @@ Single source of ``validation/reference_cases/topas/i3fu2-*`` and of their froze
 no validation claim.
 
 Thin-slab mean energy loss of 12C, 16O (and a 4He control) in G4_WATER at E0 = 2.4-50 MeV/u
-(TOPAS cases 13-21, :data:`CASES`). Parts (:data:`PARTS`): 0 = C slab t, 1 = C slab t/2
-(cases 13, 17, 21), 2 = O slab t, 3 = O slab t/2 (cases 13, 17, 21), 4 = He slab t (cases 17,
-21), 5 = C slab t with energy-loss fluctuations disabled (cases 13, 21); parts 6-9 are reserved
-for one pre-declared repeat (not generated). Seed = 20619000 + 100*part + case (unchanged
-formula). One execution smoke (C 10 MeV/u, slab t, 2000 primaries, rehearsal seed 20600440).
+(TOPAS cases 13-21, :data:`CASES`; amendment I3-FU-1 revision 1). Evidence parts (:data:`PARTS`):
+0 = C slab t, 1 = C slab 1.6t, 2 = O slab t, 3 = O slab 1.6t (all nine cases), 4 = He slab t (cases
+17, 21), 5 = C slab t with energy-loss fluctuations disabled (cases 13, 21): 40 bundles. The
+pre-declared repeat is frozen now: part + 6 (:data:`REPEAT_OFFSET`) for every evidence bundle,
+same configuration (6 = C t, 7 = C 1.6t, 8 = O t, 9 = O 1.6t, 10 = He t, 11 = C fluct. off;
+kind "repeat", run only on the repeat trigger of the amendment): 40 bundles. Parts 12-19
+reserved. Seed = 20619000 + 100*part + case (unchanged formula). Four execution smokes
+(:data:`SMOKES`): C 10 MeV/u, slab t, 2000 primaries at rehearsal seed 20600440 (standard lines)
+and 20600441 (the fluctuation-off line), so that every parameter line of an evidence bundle is
+exercised by a smoke; and two step-count smokes, C 2.4 and 50 MeV/u, slab 1.6t, 50 primaries,
+``i:Ts/TrackingVerbosity = 1`` (seeds 20600443, 20600444), from whose step printout the
+orchestrator counts the ionIoni steps per track inside the slab (expected: one) before the
+evidence runs. 20600442 is reserved by the plan for one re-smoke (not generated).
 
 Slab thickness from ionmc's own default Bethe model (``bethe_mass_stopping`` default options,
 ``water(78.0)``): t_mm = 10 * 0.03 * E0 * A / S(E0) (Delta E / E = 3 % at the entrance energy),
-rounded to 3 significant digits; t/2 = (t / 2) rounded to 3 significant digits. These are
-model-only numbers. The physics lines are those of the TD-EM bundles (g4em-standard_opt4,
-CutForAllParticles 0.05 mm, CutForElectron 1 km, EMRangeMax 10 GeV, ListProcesses), plus the
-printout ``i:Ph/Verbosity = 1``. Scorers: the V5-SS ASCII phase space ``SSExit`` of the primaries
-leaving the far face and an ``EnergyDeposit`` Sum/Standard_Deviation scorer on the slab (cross
-check). ``BeamEnergy`` is the TOTAL kinetic energy (A x MeV/u; P4 convention).
+rounded to 3 significant digits; the second slab is exactly 1.6 x t (``thickness_factor``
+0.048, Delta E / E ~ 4.8 %; the factors are exact so that the zero-thickness extrapolation
+(f2 r1 - f1 r2) / (f2 - f1) of the evaluator removes a bias linear in the thickness). Both slab
+losses exceed Geant4's GenericIon ``linLossLimit`` (2 %) and stay below the ~5.8 % energy loss
+of one step allowed by the GenericIon ionisation step function (0.1, 1 um) (~0.1 R + 1.8 um),
+so that each slab is meant to be crossed in one range-table-branch step (plan revision 1,
+SR-3 finding 1; 4.8 % rather than 6 % keeps this even if TOPAS's stopping were 13 % above
+ionmc's; checked by the step-count smokes). The model
+exit energy of every slab must stay >= 2.0 MeV/u (:func:`exit_energy_per_u`, asserted for every
+bundle). These are model-only numbers. The
+physics lines are those of the TD-EM bundles (g4em-standard_opt4, CutForAllParticles 0.05 mm,
+CutForElectron 1 km, EMRangeMax 10 GeV, ListProcesses), the fluctuation-off line for parts 5
+and 11 and the fluctuation-off smoke, plus the printout ``i:Ph/Verbosity = 1``. Scorers: the
+V5-SS ASCII phase space ``SSExit`` of the primaries leaving the far face and an
+``EnergyDeposit`` Sum/Standard_Deviation scorer on the slab (cross check). ``BeamEnergy`` is
+the TOTAL kinetic energy (A x MeV/u; P4 convention).
 
 Usage::
 
@@ -31,6 +49,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import sys
@@ -69,24 +88,39 @@ IONS: dict[str, tuple[Projectile, int, int, str]] = {
     "oxygen": (OXYGEN16, 8, 16, "GenericIon(8,16)"),
     "he": (ALPHA, 2, 4, "alpha"),
 }
-#: part -> (ion tag, half slab (False = t, True = t/2), energy-loss fluctuations on, cases)
 ALL_CASES = tuple(CASES)
-PARTS: dict[int, tuple[str, bool, bool, tuple[int, ...]]] = {
-    0: ("carbon", False, True, ALL_CASES),
-    1: ("carbon", True, True, (13, 17, 21)),
-    2: ("oxygen", False, True, ALL_CASES),
-    3: ("oxygen", True, True, (13, 17, 21)),
-    4: ("he", False, True, (17, 21)),
-    5: ("carbon", False, False, (13, 21)),
+#: evidence part -> (ion tag, slab index (1: t, 2: 1.6 t), energy-loss fluctuations on, cases)
+PARTS: dict[int, tuple[str, int, bool, tuple[int, ...]]] = {
+    0: ("carbon", 1, True, ALL_CASES),
+    1: ("carbon", 2, True, ALL_CASES),
+    2: ("oxygen", 1, True, ALL_CASES),
+    3: ("oxygen", 2, True, ALL_CASES),
+    4: ("he", 1, True, (17, 21)),
+    5: ("carbon", 1, False, (13, 21)),
 }
-RESERVED_PARTS = (6, 7, 8, 9)  # one pre-declared repeat; not generated
+REPEAT_OFFSET = 6  # repeat part = evidence part + 6 (frozen, same configuration)
+REPEAT_PARTS = tuple(p + REPEAT_OFFSET for p in PARTS)  # 6-11
+RESERVED_PARTS = tuple(range(12, 20))  # not generated
 HISTORIES = 50_000
-DELTA_E_FRACTION = 0.03  # Delta E / E at E0 by the ionmc model
+DELTA_E_FRACTION = 0.03  # Delta E / E at E0 by the ionmc model (slab t)
+#: slab index -> (multiple of t, thickness factor f = Delta E / E by design); exact decimals
+SLABS: dict[int, tuple[Decimal, Decimal]] = {
+    1: (Decimal("1"), Decimal("0.03")),
+    2: (Decimal("1.6"), Decimal("0.048")),
+}
 I_EV_MODEL = 78.0
+E_EXIT_MIN_PER_U = 2.0  # every slab's model exit energy must stay >= this [MeV/u]
+N_RK4_GEN = 50  # RK4 steps of the generator's exit-energy guard (the evaluator uses >= 200)
+#: smoke name -> (seed, evidence part whose configuration it runs, case, histories,
+#: Ts/TrackingVerbosity); the step-count smokes print every step (TrackingVerbosity 1)
+SMOKES: dict[str, tuple[int, int, int, int, int]] = {
+    "i3fu2-smoke-carbon-water-10mevu": (20600440, 0, 17, 2000, 0),
+    "i3fu2-smoke-carbon-water-10mevu-fluct-off": (20600441, 5, 17, 2000, 0),
+    "i3fu2-smoke-carbon-water-2p4mevu-steps": (20600443, 1, 13, 50, 1),
+    "i3fu2-smoke-carbon-water-50mevu-steps": (20600444, 1, 21, 50, 1),
+}
 SMOKE_NAME = "i3fu2-smoke-carbon-water-10mevu"
-SMOKE_SEED = 20600440  # rehearsal seed; 20600441 reserved for one re-smoke
-SMOKE_HISTORIES = 2000
-SMOKE_CASE, SMOKE_PART = 17, 0  # C 10 MeV/u, slab t
+RESERVED_RESMOKE_SEED = 20600442  # plan: one re-smoke if a parameter name is wrong; not generated
 
 #: Physics lines, byte-identical to the TD-EM bundles (e.g. carbon-water-150mevu-r2-idd-em-part0).
 PHYSICS_LINES = [
@@ -140,29 +174,68 @@ def e_tag(case: int) -> str:
     return CASES[case].replace(".", "p")
 
 
+def base_part(part: int) -> int:
+    """Evidence part whose configuration ``part`` (evidence 0-5 or repeat 6-11) runs."""
+    if part in PARTS:
+        return part
+    if part in REPEAT_PARTS:
+        return part - REPEAT_OFFSET
+    raise ValueError(f"part {part} is neither an evidence nor a repeat part")
+
+
 def bundle_name(case: int, part: int) -> str:
-    ion = PARTS[part][0]
+    ion = PARTS[base_part(part)][0]
     return f"{PREFIX}{ion}-water-{e_tag(case)}mevu-case{case:02d}-part{part}"
 
 
 def evidence_keys() -> list[tuple[int, int]]:
-    """(case, part) of the 28 evidence bundles."""
+    """(case, part) of the 40 evidence bundles."""
     return [(c, p) for p, spec in PARTS.items() for c in spec[3]]
+
+
+def repeat_keys() -> list[tuple[int, int]]:
+    """(case, part + 6) of the 40 frozen repeat bundles."""
+    return [(c, p + REPEAT_OFFSET) for c, p in evidence_keys()]
 
 
 def _sig3(x: float) -> float:
     return float(f"{x:.3g}")
 
 
-def slab_mm(ion: str, case: int, half: bool = False) -> float:
-    """Slab thickness [mm] (water, 1.0 g/cm3): Delta E / E = 3 % at E0 by the ionmc default
-    Bethe model (I = 78 eV), 3 significant digits; ``half``: t/2 rounded to 3 significant
-    digits."""
+def slab_mm(ion: str, case: int, multiple: int = 1) -> float:
+    """Slab thickness [mm] (water, 1.0 g/cm3): t with Delta E / E = 3 % at E0 by the ionmc
+    default Bethe model (I = 78 eV), 3 significant digits; slab index ``multiple`` 2: exactly
+    1.6 t (decimal arithmetic)."""
+    if multiple not in SLABS:
+        raise ValueError(f"slab index {multiple} is not 1 or 2")
     proj, _z, a, _p = IONS[ion]
     e0 = float(CASES[case])
     s = float(bethe_mass_stopping(e0, proj, water(I_EV_MODEL))[0])  # MeV cm2/g
-    t = _sig3(10.0 * DELTA_E_FRACTION * e0 * a / s)
-    return _sig3(t / 2.0) if half else t
+    t = Decimal(f"{10.0 * DELTA_E_FRACTION * e0 * a / s:.3g}")
+    return float(SLABS[multiple][0] * t)
+
+
+@functools.cache
+def exit_energy_per_u(ion: str, case: int, multiple: int) -> float:
+    """Model exit energy [MeV/u] of the slab (RK4, :data:`N_RK4_GEN` steps, ionmc default
+    Bethe); guard only (the evaluator's predictions use their own >= 200-step integration)."""
+    proj, _z, a, _p = IONS[ion]
+    mat = water(I_EV_MODEL)
+    h = slab_mm(ion, case, multiple) / 10.0 / N_RK4_GEN  # cm, rho = 1 g/cm3
+
+    def f(e: float) -> float:
+        if e / a <= 1.0:  # far below the guard; keeps the model inside its domain
+            raise ValueError(f"{ion} case {case} x{multiple}: slab leaves the model domain")
+        return -float(bethe_mass_stopping(e / a, proj, mat)[0])
+
+    e = a * float(CASES[case])
+    for _ in range(N_RK4_GEN):
+        k1 = f(e)
+        k2 = f(e + 0.5 * h * k1)
+        k3 = f(e + 0.5 * h * k2)
+        k4 = f(e + h * k3)
+        e += h * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0
+    return e / a
 
 
 def fmt_mm(x: float) -> str:
@@ -179,18 +252,43 @@ def beam_energy(ion: str, case: int) -> str:
     return format((Decimal(a) * Decimal(CASES[case])).normalize(), "f")
 
 
-def build(case: int, part: int, seed: int, histories: int, kind: str) -> tuple[dict[str, Any], str]:
-    """(case.json dict, input.txt text) of one bundle; ``kind`` "evidence" or "smoke"."""
-    ion, half, fluct, _cases = PARTS[part]
+def build(
+    case: int, part: int, seed: int, histories: int, kind: str, tracking: int = 0
+) -> tuple[dict[str, Any], str]:
+    """(case.json dict, input.txt text) of one bundle; ``kind`` "evidence", "repeat" (``part``
+    6-11, the configuration of ``part`` - 6) or "smoke" (``part`` the evidence part whose
+    configuration it runs)."""
+    ion, mult, fluct, _cases = PARTS[base_part(part)]
+    if (kind == "repeat") != (part in REPEAT_PARTS):
+        raise ValueError(f"kind {kind!r} does not fit part {part}")
     _proj, z, a, particle = IONS[ion]
     e0 = CASES[case]
-    t = slab_mm(ion, case, half)
+    t = slab_mm(ion, case, mult)
+    e_exit = exit_energy_per_u(ion, case, mult)
+    if not e_exit >= E_EXIT_MIN_PER_U:
+        raise ValueError(f"{ion} case {case} x{mult}: model exit {e_exit} MeV/u < 2.0 MeV/u")
     hlz = fmt_mm(round(t / 2.0, 6))
     t_txt = fmt_mm(t)
     total = beam_energy(ion, case)
-    slab_word = "t/2" if half else "t"
+    slab_word = "1.6t" if mult == 2 else "t"
     fl_word = "on" if fluct else "OFF"
-    if kind == "evidence":
+    if kind == "repeat":
+        orig = part - REPEAT_OFFSET
+        head = (
+            f"V3-008 amendment I3-FU-1 step 2 FROZEN REPEAT of part {orig} (run only if the "
+            f"original run of this point is invalid), case {case} ({ion} {e0} MeV/u), part {part} "
+            f"(slab {slab_word} = {t_txt} mm, energy-loss fluctuations {fl_word}; seed = "
+            f"20619000 + 100*part + case = {seed})."
+        )
+        rationale = (
+            "V3-008 amendment I3-FU-1 step 2 (plan validation/plans/v3-008-acceptance.md): "
+            f"pre-declared repeat (part {part} = part {orig} + 6, same configuration) of the "
+            f"thin-slab mean energy loss of {ion} at E0 = {e0} MeV/u in G4_WATER, case {case} "
+            f"(slab {slab_word} = {t_txt} mm, fluctuations {fl_word}), seed 20619000 + "
+            f"100*{part} + {case} = {seed}; used only if the original run is invalid; "
+            "diagnostic, no validation claim"
+        )
+    elif kind == "evidence":
         head = (
             f"V3-008 amendment I3-FU-1 step 2 (thin-slab mean energy loss), case {case} "
             f"({ion} {e0} MeV/u), part {part} (slab {slab_word} = {t_txt} mm, energy-loss "
@@ -203,18 +301,33 @@ def build(case: int, part: int, seed: int, histories: int, kind: str) -> tuple[d
             f"{slab_word} = {t_txt} mm, fluctuations {fl_word}), seed 20619000 + 100*{part} + "
             f"{case} = {seed}; diagnostic, no validation claim"
         )
+    elif kind == "smoke" and tracking:
+        head = (
+            "I3-FU-1 step 2 STEP-COUNT SMOKE (TrackingVerbosity 1: count the ionIoni steps per "
+            f"track inside the slab, expected one; not evidence): case {case} configuration ({ion} "
+            f"{e0} MeV/u, slab {slab_word} = {t_txt} mm), rehearsal seed {seed}."
+        )
+        rationale = (
+            "V3-008 amendment I3-FU-1 step 2 step-count smoke: Ts/TrackingVerbosity 1 prints "
+            "every step; the orchestrator counts the ionIoni steps per primary inside the slab "
+            f"(expected one, range-table branch); {ion} {e0} MeV/u slab {slab_word} = {t_txt} mm, "
+            f"fluctuations {fl_word}, rehearsal seed {seed} (20600442 reserved for one "
+            "re-smoke); energies never used; not evidence; diagnostic, no validation claim"
+        )
     elif kind == "smoke":
         head = (
             "I3-FU-1 step 2 EXECUTION SMOKE (parameter acceptance, scorer outputs; not "
             f"evidence): case {case} configuration ({ion} {e0} MeV/u, slab t = {t_txt} mm), "
-            f"rehearsal seed {seed}."
+            f"fluctuations {fl_word}, rehearsal seed {seed}."
         )
         rationale = (
             "V3-008 amendment I3-FU-1 step 2 execution smoke: parameter acceptance "
-            "(Ph/Verbosity, the phase-space and energy-deposit scorers), output layout; "
-            f"{ion} {e0} MeV/u slab t = {t_txt} mm, rehearsal seed {seed} (20600441 reserved "
-            "for one re-smoke); energies never used; not evidence; diagnostic, no validation "
-            "claim"
+            "(Ph/Verbosity"
+            + ("" if fluct else ", the energy-loss-fluctuation switch")
+            + ", the phase-space and energy-deposit scorers), output layout; "
+            f"{ion} {e0} MeV/u slab t = {t_txt} mm, fluctuations {fl_word}, rehearsal seed "
+            f"{seed} (20600442 reserved for one re-smoke); energies never used; not evidence; "
+            "diagnostic, no validation claim"
         )
     else:
         raise ValueError(f"unknown kind {kind!r}")
@@ -227,7 +340,7 @@ def build(case: int, part: int, seed: int, histories: int, kind: str) -> tuple[d
         f"i:Ts/Seed = {seed}",
         'b:Ts/PauseBeforeQuit = "False"',
         'b:Ts/ShowCPUTime = "True"',
-        "i:Ts/TrackingVerbosity = 0",
+        f"i:Ts/TrackingVerbosity = {tracking}",
         "# Step cap raised from the TOPAS default (1e6); any killed track invalidates the run.",
         "i:Ts/MaxStepNumber = 10000000",
         "# Run verbosity 2: production-cut couple table in the log; printout only.",
@@ -296,7 +409,8 @@ def build(case: int, part: int, seed: int, histories: int, kind: str) -> tuple[d
         "beam from z=-0.001 mm along +z at the face centre",
         "geometry": f"G4_WATER slab 120 x 120 x {t_txt} mm (x,y centred on the beam axis; z from "
         f"0 to {t_txt} mm) in a vacuum world 400 x 400 x 800 mm; slab {slab_word}, t from the "
-        "ionmc default Bethe model (78 eV) for Delta E / E = 3 % at E0, 3 significant digits",
+        "ionmc default Bethe model (78 eV) for Delta E / E = 3 % at E0, 3 significant digits"
+        + ("; 1.6t = exactly 1.6 x t" if mult == 2 else ""),
         "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
         "cuts": "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (no delta electrons); "
         "EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7",
@@ -319,6 +433,7 @@ def build(case: int, part: int, seed: int, histories: int, kind: str) -> tuple[d
             "a": a,
             "e0_per_u_mev": float(e0),
             "slab_mm": t,
+            "thickness_factor": float(SLABS[mult][1]),
             "kind": kind,
             "fluctuations": fluct,
         },
@@ -334,23 +449,27 @@ def write(out: Path, name: str, case_doc: dict[str, Any], inp: str) -> None:
 
 
 def generate(out: Path | str, histories: int = HISTORIES) -> list[tuple[str, int]]:
-    """Write the 28 evidence bundles and the smoke under ``out``; return [(name, seed)].
-    ``histories`` (evidence bundles) differs from :data:`HISTORIES` only in tests."""
+    """Write the 40 evidence bundles, the 40 repeat bundles and the four smokes under ``out``;
+    return [(name, seed)]. ``histories`` (evidence and repeat bundles) differs from
+    :data:`HISTORIES` only in tests."""
     out = Path(out)
     made = []
-    for case, part in evidence_keys():
-        seed = topas_seed(case, part)
-        case_doc, inp = build(case, part, seed, histories, "evidence")
-        write(out, bundle_name(case, part), case_doc, inp)
-        made.append((bundle_name(case, part), seed))
-    case_doc, inp = build(SMOKE_CASE, SMOKE_PART, SMOKE_SEED, SMOKE_HISTORIES, "smoke")
-    write(out, SMOKE_NAME, case_doc, inp)
-    made.append((SMOKE_NAME, SMOKE_SEED))
+    for keys, kind in ((evidence_keys(), "evidence"), (repeat_keys(), "repeat")):
+        for case, part in keys:
+            seed = topas_seed(case, part)
+            case_doc, inp = build(case, part, seed, histories, kind)
+            write(out, bundle_name(case, part), case_doc, inp)
+            made.append((bundle_name(case, part), seed))
+    for name, (seed, part, case, hist, tracking) in SMOKES.items():
+        case_doc, inp = build(case, part, seed, hist, "smoke", tracking)
+        write(out, name, case_doc, inp)
+        made.append((name, seed))
     return made
 
 
 def bundle_names() -> list[str]:
-    return sorted([bundle_name(c, p) for c, p in evidence_keys()] + [SMOKE_NAME])
+    keys = evidence_keys() + repeat_keys()
+    return sorted([bundle_name(c, p) for c, p in keys] + list(SMOKES))
 
 
 def manifest_text(out: Path | str) -> str:
