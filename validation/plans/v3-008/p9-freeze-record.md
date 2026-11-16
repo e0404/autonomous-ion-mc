@@ -1601,7 +1601,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` | `853340ad99d7c9ae96af33a109efa0055678369fbd6042bbb043c2a9a07dad4d` |
+| `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` | `75668d6f61ffc0405d924674be57e31e5eab8fb1a372fa50eb4cd10ff3ebbceb` |
 
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-1 result and its signed host-run record (run at 5999f789), the step-2 marker file and the five signed smoke records with their artifact listings, bound as committed:**
@@ -1928,6 +1928,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin A replaced after revision 16 (REVIEW-9d042ed7 of 8d589e29, verbatim, verified); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` ea096305… → 853340ad…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 revision 17 (new evidence seed family 20627200 + 100·part + case; 116 bundles and the manifest regenerated; guard test) rebound; entries that changed:** `tests/ionmc/test_v3_008_seed_families.py` e4e33e66… → b2396006…; `validation/scripts/stopping/gen_i3fu2_bundles.py` d478be6f… → 5f0113f5…; `validation/scripts/stopping/i3fu2_evaluate.py` c67a9723… → 49ddc566…; `tests/ionmc/test_i3fu2.py` b1645748… → 8f86d768…; `validation/reference_cases/topas/i3fu2-frozen-manifest.json` d9b2dd20… → 690ff0bf…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin A replaced after revision 17 (REVIEW-77788fd4 of 94b17d30, verbatim, verified); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` 853340ad… → 75668d6f…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

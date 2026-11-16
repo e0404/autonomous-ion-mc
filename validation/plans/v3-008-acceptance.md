@@ -1946,8 +1946,8 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   5 = C t with fluctuations off (cases 13, 21), 6 = C t fine steps, 7 = O t fine steps (all nine cases; revision 5): 58
   evidence bundles; the pre-declared repeat is FROZEN as parts 8–15 (= part + 8, same configuration; 58 repeat bundles;
   revision 2 had 8–13 for parts 0–5, revision 1 had 6–11, never drawn); parts 16–19 reserved; seeds 20619000 + 100·part +
-  case (formula,
-  ranges and guard test unchanged; frozen manifest `validation/reference_cases/topas/i3fu2-frozen-manifest.json`, generator
+  case [SUPERSEDED by revision 17: that family is consumed; the evidence and repeat bundles use 20627200 + 100·part + case, a new family added to the guard test] (formula,
+  ranges and guard test unchanged at the time of writing; frozen manifest `validation/reference_cases/topas/i3fu2-frozen-manifest.json`, generator
   `gen_i3fu2_bundles.py`). Repeat rule (SR-3 finding 5; made deterministic in revision 2, Codex finding 5 / SR-3 second pass
   finding 4; **binding form of revision 5**, repeats = part + 8 at parts 8–15, parts 16–19 reserved): a validity failure of
   one run is repeated by that run's repeat part only; a failure of the gate e₁ (check (i); revision 6 — the former check
@@ -2540,3 +2540,11 @@ other line unchanged) and the manifest is re-frozen; the five smokes keep their 
 re-run after the new pin A as the chronology requires. `AMENDMENT_REVISION` = 17. The §C seed note is amended in place
 below. Execution chain as before (pin A → smokes with the full pre-check → pin B → pins note → 58 evidence runs → records →
 evaluator → repeats per trigger). Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; I3-FU-1 pin A after revision 17).** Pin A is now the codex-worker-signed, passed
+review REVIEW-77788fd4ea6740f78fdf1fd3d82ee03c of 94b17d30218a9dc5fc3c659a2a15cd4f691aa110 (revision 17; one minor finding,
+the stale seed bullet of the amendment text, marked superseded in this commit; signed 2026-11-16T19:52:46Z; verified
+against the committed trust map), committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json`
+(replacing the superseded pin REVIEW-9d042ed7). The five smokes follow at the commit carrying this note, after this pin's
+signed `finished_at`, the fine-step smoke first, each with the full evaluator-equivalent pre-check; the five smoke runs
+made at b19c0d09 are superseded (never evidence). Not a clinical claim.
