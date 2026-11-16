@@ -18,6 +18,7 @@ real libdEdx, ICRU or TOPAS data are used.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib.util
 import io
@@ -69,6 +70,14 @@ TEST_MARKERS = {
     r"(?P<zunit>fm|Ang|nm|um|mm|cm|m|km)\s",
     "track_header_re": r"^\* G4Track Information:\s+Particle = \S+,\s+Track ID = "
     r"(?P<track>\d+),\s+Parent ID = (?P<parent>\d+)",
+    "step_limiter_marker": r"^Step limiter process: StepLimiter$",
+}
+LIMITER_LINE = "Step limiter process: StepLimiter\n"
+VALID_LAUNCH = {
+    "dont_write_bytecode_flag": 1,
+    "pycache_prefix": "/synthetic/empty-prefix",
+    "pycache_prefix_exists": True,
+    "pycache_prefix_files_at_start": 0,
 }
 
 
@@ -108,6 +117,9 @@ def _bytecode_stub() -> Any:
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(ev.env_seal, "bytecode_check", stub)
         mp.setattr(ev, "_REAL_BYTECODE_CHECK", real, raising=False)
+        # the test interpreter is not launched with -B -X pycache_prefix (unit-tested launch
+        # control in test_i3_band_diagnostic.py and test_launch_record_is_enforced)
+        mp.setattr(ev, "LAUNCH", dict(VALID_LAUNCH))
         yield
 
 
@@ -546,31 +558,82 @@ def test_frozen_charge_stopping_is_exact_at_the_pre_step_energy() -> None:
     assert ev.effective_charge_sq(proj, 2.4) < 36.0
 
 
-def test_planted_algorithm_bias_passes_the_checks() -> None:
-    """TOPAS with the model's one-step bias g(f) on the slab-t / 1.6 t runs and none on the
-    fine-step run passes the emulation check (i) (g_meas = g_model exactly) and the
-    extrapolation check (ii) (|r_0 - r_fine| = |(1 + r0) R_model| <= 3.5e-4); a bias of the
-    opposite sign fails check (i) at the low-energy points (|2 g| > 0.15 %)."""
-    fails = []
+def _emulated_g4_losses(
+    ion: str, case: int, mult: int, rho0: float = 0.0, dlam: float = 0.0
+) -> tuple[float, float]:
+    """Independent emulation of Geant4 (reviewer pass 4): (one-step loss over slab(mult), 20-step
+    linear-branch loss over slab t) with the Geant4 stopping = ionmc's with the base part times
+    (1 + rho0 E0 / E) and the effective charge q^2 (E / E0)^dlam (a different charge slope)."""
+    proj, _z, a, _p = gen.IONS[ion]
+    e0 = float(gen.CASES[case])
+    full, base = ev.model_stopping(proj), ev.base_stopping_per_q2(proj)
+
+    def q2(e: float) -> float:
+        return float(ev.effective_charge_sq(proj, e) * (e / e0) ** dlam)
+
+    def corr(e: float) -> float:
+        return float(full(e) - ev.effective_charge_sq(proj, e) * base(e))
+
+    def base_g4(e: float) -> float:
+        return float(base(e) * (1.0 + rho0 * e0 / e))
+
+    t = gen.slab_mm(ion, case, mult)
+    q2p = q2(e0)
+    table = ev.slab_energy_loss(a * e0, a, t, lambda e: q2p * base_g4(e))
+    mid = max(e0 - table / a / 2.0, e0 / 2.0)
+    one = table + (t / 10.0) * corr(mid)
+    tf, e = gen.slab_mm(ion, case, 1), a * e0
+    step = tf / 10.0 / gen.FINE_DIVISOR
+    for _ in range(gen.FINE_DIVISOR):
+        eu = e / a
+        lt = step * q2(eu) * base_g4(eu)
+        e -= lt + step * corr(max(eu - lt / a / 2.0, eu / 2.0))
+    return one, a * e0 - e
+
+
+def _model(ion: str, case: int) -> dict[str, Any]:
+    return {
+        **ev.stepping_bias(ion, case),
+        "expect": functools.partial(ev.expected_g_meas, ion, case),
+    }
+
+
+@pytest.mark.parametrize("ion", ["carbon", "oxygen"])
+@pytest.mark.parametrize("rho0", [0.0, 0.05, 0.10, 0.15])
+def test_same_slab_gate_is_not_confounded_by_the_stopping_ratio(ion: str, rho0: float) -> None:
+    """Reviewer pass 4 (c): TOPAS built from the emulated one-step and 20-step algorithms with a
+    Geant4 stopping ionmc x (1 + rho0 E0 / E) on the base part (ICRU-like up to +15 %) passes the
+    same-slab gate e1 at C/O 2.4 MeV/u; the report-only e2 is not part of the gate."""
+    case, proj = 13, gen.IONS[ion][0]
+    a, e0 = gen.IONS[ion][2], 2.4
+    de_m = ev.predicted_loss(
+        f"model:{ion}", ev.model_stopping(proj), a, e0, gen.slab_mm(ion, case, 1)
+    )
+    one, fine = _emulated_g4_losses(ion, case, 1, rho0)
+    rs = [{"r_M": one / de_m - 1.0}, {"r_M": 0.0}, {"r_M": fine / de_m - 1.0}]
+    e1 = ev.emulation_residuals(rs, _model(ion, case))[0]
+    assert abs(e1) <= 2e-4 < ev.EMULATION_TOL
+
+
+@pytest.mark.parametrize("ion", ["carbon", "oxygen"])
+@pytest.mark.parametrize("dlam", [0.2, -0.2])
+def test_same_slab_gate_detects_a_wrong_charge_slope(ion: str, dlam: float) -> None:
+    case, proj = 13, gen.IONS[ion][0]
+    a, e0 = gen.IONS[ion][2], 2.4
+    de_m = ev.predicted_loss(
+        f"model:{ion}", ev.model_stopping(proj), a, e0, gen.slab_mm(ion, case, 1)
+    )
+    one, fine = _emulated_g4_losses(ion, case, 1, 0.1, dlam)
+    rs = [{"r_M": one / de_m - 1.0}, {"r_M": 0.0}, {"r_M": fine / de_m - 1.0}]
+    assert abs(ev.emulation_residuals(rs, _model(ion, case))[0]) > ev.EMULATION_TOL
+
+
+def test_fine_step_linear_branch_bias() -> None:
+    """b_fine (20 forward-Euler steps): -0.04 to -0.07 %, negative at every C/O point."""
     for ion in ("carbon", "oxygen"):
-        parts = ev.TRIPLE_PARTS[ion]
         for case in gen.ALL_CASES:
-            m = ev.stepping_bias(ion, case)
-            for r0 in (0.05, -0.04):
-                rs = [(1 + r0) * (1 + m["g1"]) - 1, (1 + r0) * (1 + m["g2"]) - 1, r0]
-                runs = {
-                    gen.bundle_name(case, p): _fake(r=r) for p, r in zip(parts, rs, strict=True)
-                }
-                assert ev.emulation_residual([{"r_M": r} for r in rs], m) < 1e-12
-                d = ev.extrapolation_difference([{"r_M": r} for r in rs])
-                assert d == pytest.approx((1 + r0) * m["r_model"], abs=1e-12)
-                assert abs(d) < 3.5e-4
-                assert ev.resolve_point(runs, case, parts, _ratios, m).valid
-            anti = [{"r_M": 0.05 - m["g1"]}, {"r_M": 0.05 - m["g2"]}, {"r_M": 0.05}]
-            if ev.emulation_residual(anti, m) > ev.EMULATION_TOL:
-                fails.append((ion, case))
-    assert ("carbon", 13) in fails and ("oxygen", 13) in fails and ("oxygen", 15) in fails
-    assert ("carbon", 21) not in fails  # 50 MeV/u: g is negligible either way
+            b = ev.stepping_bias(ion, case)["b_fine"]
+            assert -7e-4 < b < -3.5e-4, (ion, case, b)
 
 
 def test_model_residual_above_limit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -579,7 +642,7 @@ def test_model_residual_above_limit_raises(monkeypatch: pytest.MonkeyPatch) -> N
         ev.stepping_model_check()
 
 
-# --- repeat rule (deterministic; revision 5: the triple) -------------------------------------
+# --- repeat rule (deterministic; revision 5: the triple, gate e1) ----------------------------
 
 
 def _fake(valid: bool = True, reason: str | None = None, r: float = 0.0) -> dict[str, Any]:
@@ -590,20 +653,54 @@ def _ratios(run: dict[str, Any]) -> dict[str, Any]:
     return {"r_M": run["r"]}
 
 
+FIXED_MODEL = {"g1": 0.003, "g2": 0.005, "d_pred": 0.002, "r_model": 0.0,
+               "expect": lambda r_fine: (0.003, 0.005)}  # fmt: skip
+
+
 def test_check_formulas() -> None:
-    m = {"g1": 0.003, "g2": 0.005, "d_pred": 0.002, "r_model": -0.0}
+    m = FIXED_MODEL
     rs = [{"r_M": 0.0531}, {"r_M": 0.05525}, {"r_M": 0.05}]
-    g1 = 1.0531 / 1.05 - 1
-    g2 = 1.05525 / 1.05 - 1
-    assert ev.emulation_residual(rs, m) == pytest.approx(max(abs(g1 - 0.003), abs(g2 - 0.005)))
+    g1, g2 = 1.0531 / 1.05 - 1, 1.05525 / 1.05 - 1
+    assert ev.emulation_residuals(rs, m) == pytest.approx((g1 - 0.003, g2 - 0.005))
+    assert ev.emulation_residual(rs, m) == pytest.approx(abs(g1 - 0.003))
     r0 = (0.048 * 0.0531 - 0.03 * 0.05525) / 0.018
     assert ev.extrapolation_difference(rs) == pytest.approx(r0 - 0.05)
-    assert (ev.EMULATION_TOL, ev.EXTRAPOLATION_TOL) == (0.0015, 0.002)
+    assert ev.EMULATION_TOL == 0.0015
+    g_star = ev.expected_g_meas("oxygen", 13, 0.1)  # g* at the measured loss fraction
+    proj, a = gen.IONS["oxygen"][0], 16
+    t = gen.slab_mm("oxygen", 13, 1) * 1.1
+    exact = ev.slab_energy_loss(a * 2.4, a, t, ev.model_stopping(proj))
+    b_s = ev.fine_algorithm_loss(proj, a, 2.4, t, "oxygen", 20) / exact - 1
+    g_s = ev.algorithm_loss(proj, a, 2.4, t, "oxygen") / exact - 1
+    assert g_star[0] == pytest.approx((1 + g_s) / (1 + b_s) - 1, rel=1e-12)
+
+
+def test_planted_algorithm_losses_pass_the_gate() -> None:
+    """TOPAS = the emulated algorithms with stopping (1 + r0) x ionmc's: |e1| < 1e-5 at every
+    point; the opposite one-step bias fails the gate at the low-energy points."""
+    fails = []
+    for ion in ("carbon", "oxygen"):
+        proj, _z, a, _p = gen.IONS[ion]
+        for case in gen.ALL_CASES:
+            e0, m = float(gen.CASES[case]), _model(ion, case)
+            t = gen.slab_mm(ion, case, 1)
+            de_m = ev.predicted_loss(f"model:{ion}", ev.model_stopping(proj), a, e0, t)
+            for r0 in (0.05, -0.04):
+                one = ev.algorithm_loss(proj, a, e0, t * (1 + r0), ion)
+                fine = ev.fine_algorithm_loss(proj, a, e0, t * (1 + r0), ion, 20)
+                rs = [{"r_M": one / de_m - 1}, {"r_M": 0.0}, {"r_M": fine / de_m - 1}]
+                assert abs(ev.emulation_residuals(rs, m)[0]) < 1e-5, (ion, case, r0)
+            g1 = m["g1"]
+            anti = [{"r_M": 0.05 - g1}, {"r_M": 0.0}, {"r_M": 0.05}]
+            if ev.emulation_residual(anti, m) > ev.EMULATION_TOL:
+                fails.append((ion, case))
+    assert ("carbon", 13) in fails and ("oxygen", 13) in fails and ("oxygen", 15) in fails
+    assert ("carbon", 21) not in fails
 
 
 def test_repeat_rule_unit() -> None:
     n = gen.bundle_name
-    m = {"g1": 0.003, "g2": 0.005, "d_pred": 0.002, "r_model": 0.0}
+    m = FIXED_MODEL
     parts = (0, 1, 6)
     reps = (8, 9, 14)
 
@@ -613,12 +710,12 @@ def test_repeat_rule_unit() -> None:
     def triple(r1: float, r2: float, rf: float, ps: tuple[int, ...] = parts) -> dict[str, Any]:
         return {n(15, p): _fake(r=r) for p, r in zip(ps, (r1, r2, rf), strict=True)}
 
-    ok = triple(0.003, 0.005, 0.0)  # g_meas = g_model; r0 - rfine = R_model = -1/3000
+    ok = triple(0.003, 0.005, 0.0)  # e1 = e2 = 0
     pt = res(ok)
     assert pt.valid and pt.used == {} and pt.emulation_residual() == pytest.approx(0.0, abs=1e-12)
+    assert pt.emulation_residual_f2() == pytest.approx(0.0, abs=1e-12)
     assert pt.extrapolation_difference() == pytest.approx(-1.0 / 3000.0, rel=1e-9)
     assert pt.thickness_difference() == pytest.approx(0.002)
-    assert pt.consistency_residual() == pytest.approx(0.0, abs=1e-12)
     for extra in reps:  # a repeat without a recorded failure
         with pytest.raises(ev.RecordError, match="without a recorded failure"):
             res({**ok, n(15, extra): _fake()})
@@ -632,10 +729,10 @@ def test_repeat_rule_unit() -> None:
         res({**bad, n(15, 14): _fake(r=0.0), n(15, 8): _fake(r=0.003)})
     pt = res({**bad, n(15, 14): _fake(False, "killed")})
     assert not pt.valid and "second failure" in str(pt.reason)
-    pt = res({**bad, n(15, 14): _fake(r=0.004)})  # valid repeat, but the triple fails (i)
+    pt = res({**bad, n(15, 14): _fake(r=0.004)})  # valid repeat, but the triple fails e1
     assert not pt.valid and str(pt.reason).startswith(ev.EMULATION_REASON)
-    # check (i) failure: the WHOLE triple is repeated and replaced
-    emul = triple(0.003, 0.0075, 0.0)  # g_meas(f2) off by 0.0025
+    # gate failure (e1): the WHOLE triple is repeated and replaced
+    emul = triple(0.0055, 0.005, 0.0)  # e1 = 0.0025
     pt = res(emul)
     assert not pt.valid and pt.reason == f"{ev.EMULATION_REASON}; no repeat"
     assert pt.emulation_residual() == pytest.approx(0.0025, rel=1e-6)
@@ -647,15 +744,13 @@ def test_repeat_rule_unit() -> None:
     pt = res(good)
     assert pt.valid and set(pt.used) == {n(15, p) for p in reps}
     assert all(ev.EMULATION_REASON in v for v in pt.used.values())
-    again = {**emul, **triple(0.003, 0.0075, 0.0, reps)}
+    again = {**emul, **triple(0.0055, 0.005, 0.0, reps)}
     pt = res(again)
     assert not pt.valid and "second failure" in str(pt.reason)
-    # check (ii) failure alone: g_meas within 0.12 % of the model but r_0 - r_fine = 0.52 %
-    extrap = triple(0.0042, 0.0038, 0.0)
-    assert ev.emulation_residual([{"r_M": r} for r in (0.0042, 0.0038, 0.0)], m) <= 0.0015
-    pt = res(extrap)
-    assert not pt.valid and pt.reason == f"{ev.EXTRAPOLATION_REASON}; no repeat"
-    assert abs(pt.extrapolation_difference() or 0.0) > ev.EXTRAPOLATION_TOL
+    # e2 and the extrapolation difference are reported only: no failure
+    pt = res(triple(0.003, 0.0125, 0.0))  # e2 = 0.0075, r_0 - r_fine = -0.0167
+    assert pt.valid and pt.emulation_residual_f2() == pytest.approx(0.0075, rel=1e-9)
+    assert abs(pt.extrapolation_difference() or 0.0) > 0.01
     # single-run points (He, fluctuations off)
     with pytest.raises(ev.RecordError, match="missing"):
         res({n(17, 12): _fake()}, 17, (4,))
@@ -1119,6 +1214,29 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     }
 
 
+_PLANTED: dict[tuple[str, int, int, str, float], float] = {}
+
+
+def _planted_loss(info: dict[str, Any], de_m: float, r: float) -> float:
+    """Synthetic TOPAS mean loss: Geant4's emulated algorithms (one-step for slab t / 1.6 t and
+    He, 20-step linear branch for the fine-step runs) with stopping (1 + r) x ionmc's, i.e. on
+    the slab scaled by (1 + r); smokes: the model loss x (1 + r)."""
+    if info["kind"] == "smoke":
+        return de_m * (1.0 + r)
+    ion, case, a = info["ion"], int(info["case"]), int(info["a"])
+    fine = info.get("max_step_um") is not None
+    key = (ion, case, 1 if info["thickness_factor"] == 0.03 else 2, "fine" if fine else "one", r)
+    if key not in _PLANTED:
+        proj = gen.IONS[ion][0]
+        t = float(info["slab_mm"]) * (1.0 + r)
+        e0 = float(info["e0_per_u_mev"])
+        if fine:
+            _PLANTED[key] = ev.fine_algorithm_loss(proj, a, e0, t, ion, gen.FINE_DIVISOR)
+        else:
+            _PLANTED[key] = ev.algorithm_loss(proj, a, e0, t, ion)
+    return _PLANTED[key]
+
+
 def _g(info: dict[str, Any]) -> float:
     """The model's one-step algorithm bias g(f) of this run's slab (planted as TOPAS's)."""
     m = ev.stepping_bias(info["ion"], info["case"])
@@ -1172,16 +1290,16 @@ def _write_run(
     particle = ev.BEAM_PARTICLE[info["ion"]]
     n = int(doc["histories"])
     (odir / "stdout.txt").write_text(
-        stdout if stdout is not None else _stdout(n, particle, bool(info["fluctuations"]))
+        stdout
+        if stdout is not None
+        else _stdout(n, particle, bool(info["fluctuations"]))
+        + (LIMITER_LINE if info.get("max_step_um") is not None else "")
     )
     (odir / "stderr.txt").write_text(stderr)
     for name in ("case.json", "input.txt"):
         shutil.copy(bdir / name, odir / "work" / name)
-    one_step = info["kind"] != "smoke" and info.get("max_step_um") is None
-    g = _g(info) if plant_g and one_step else 0.0  # the fine-step run carries no one-step bias
-    h, rows, tot = _phase_space(
-        doc, base["de_m"][bundle] * (1.0 + r) * (1.0 + g), rng, noise=noise, deficit=deficit
-    )
+    de = _planted_loss(info, base["de_m"][bundle], r) if plant_g else base["de_m"][bundle] * (1 + r)
+    h, rows, tot = _phase_space(doc, de, rng, noise=noise, deficit=deficit)
     (odir / "work" / "ss_exit.header").write_text(h)
     (odir / "work" / "ss_exit.phsp").write_text(rows)
     (odir / "work" / "edep.csv").write_text(_edep(doc, tot))
@@ -1362,8 +1480,8 @@ def _r_he_fail(c: int, p: int) -> float:
 
 
 def _r_fragile(c: int, p: int) -> float:
-    """TOPAS 0.4 % above the table everywhere: I at the declared systematic, N when doubled."""
-    return 0.0 if p == 4 else TABLE_FACTOR * 1.004 - 1.0
+    """TOPAS 0.5 % above the table everywhere: I at the declared systematic, N when doubled."""
+    return 0.0 if p == 4 else TABLE_FACTOR * 1.005 - 1.0
 
 
 def _r_extrapolation(c: int, p: int) -> float:
@@ -1378,7 +1496,7 @@ def _r_extrapolation(c: int, p: int) -> float:
 def _r_inconsistent(c: int, p: int) -> float:
     if p == 4:
         return 0.0
-    return S + (0.01 if (c, p) == (19, 3) else 0.0)  # O 20 MeV/u: Delta_meas off by ~0.01
+    return S + (0.01 if (c, p) == (19, 2) else 0.0)  # O 20 MeV/u slab t off by ~1 %: e1 fails
 
 
 BAD = {"deficit": 1}
@@ -1460,7 +1578,8 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
             assert 3e-5 < v["se_b"] < 3e-4  # 0.4 % row noise, 1000 rows, fine-step points
             assert v["max_abs_consistency_residual"] < 2e-3  # planted g: Delta_meas ~ Delta_pred
             assert v["max_abs_emulation_residual"] < 1e-3  # planted g: g_meas ~ g_model
-            assert v["max_abs_extrapolation_difference"] < 1.5e-3
+            assert v["max_abs_extrapolation_difference_report_only"] < 1.5e-3
+            assert v["max_abs_emulation_residual_f2_report_only"] < 1e-3
             assert 0.0 <= v["max_abs_model_residual"] < 3.5e-4
             assert v["max_abs_predicted_difference"] < 3.5e-3
             if (ion, b) != ("carbon", "[10,20)"):
@@ -1531,7 +1650,21 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
     for name, signed in (("evaluator", ATT_A_SIGNED), ("markers", ATT_B_SIGNED)):
         att = pins[name]["attestation"]
         assert att["signed_at_utc"] == signed and att["validation_id"].startswith("VAL-syn-")
-    assert doc["amendment"] == "I3-FU-1 step 2 (revision 2)"
+    assert doc["amendment"] == f"I3-FU-1 step 2 (revision {ev.AMENDMENT_REVISION})"
+    assert ev.AMENDMENT_REVISION == 5 and "I3-FU-1 step 2 (revision 5)" in (ev.__doc__ or "")
+    conv = doc["convention_sensitivity"]
+    assert conv["invariant"] is True and conv["pattern_alt"] == "ICRU"
+    assert conv["classes_alt"] == {ion: _cls(doc, ion) for ion in ("carbon", "oxygen")}
+    for ion in ("carbon", "oxygen"):
+        for v in conv["max_abs_delta_r_i_per_band"][ion].values():
+            assert v is not None and round(v, 3) == v and v <= 0.001
+    assert "E/A, A = mass number" in doc["method"]["energy_convention"]
+    runtime = prov["environment"]["runtime"]
+    assert runtime["launch"]["launch_ok"] is True
+    assert (
+        prov["environment"]["runtime_after"]["numpy_modules_verified"]
+        >= runtime["numpy_modules_verified"]
+    )
 
 
 def test_model_scenario(results: dict[str, dict[str, Any]]) -> None:
@@ -1577,14 +1710,14 @@ def test_failed_control_is_inconclusive(results: dict[str, dict[str, Any]]) -> N
     assert doc["controls"]["fluctuations_off"]["pass"] is True
 
 
-def test_extrapolation_check_failure_is_inconclusive(results: dict[str, dict[str, Any]]) -> None:
-    """Check (ii) alone: the pair within 0.15 % of the model's g but r_0 - r_fine ~ 0.37 %."""
+def test_extrapolation_difference_is_reported_only(results: dict[str, dict[str, Any]]) -> None:
+    """Reviewer pass 4: r_0 - r_fine (~0.37 % here) and e2 are reported, not gates (they carry
+    the slope of the stopping ratio); the point stays valid and the result conclusive."""
     doc = results["extrapolation"]
-    assert doc["pattern"] == "INCONCLUSIVE" and doc["pattern_before_controls"] == "ICRU"
-    assert doc["invalid_points"] == {"oxygen case 19": f"{ev.EXTRAPOLATION_REASON}; no repeat"}
+    assert doc["pattern"] == "ICRU" and doc["conclusive"] and doc["invalid_points"] == {}
     o = doc["bands"]["oxygen"]["[20,50]"]
-    assert o["n"] == 2 and o["max_abs_emulation_residual"] <= ev.EMULATION_TOL
-    assert o["max_abs_extrapolation_difference"] > ev.EXTRAPOLATION_TOL
+    assert o["n"] == 3 and o["max_abs_emulation_residual"] <= ev.EMULATION_TOL
+    assert o["max_abs_extrapolation_difference_report_only"] > 0.002
 
 
 def test_points_are_the_fine_step_runs(results: dict[str, dict[str, Any]]) -> None:
@@ -1595,7 +1728,7 @@ def test_points_are_the_fine_step_runs(results: dict[str, dict[str, Any]]) -> No
     assert doc["method"]["method_systematic"] == 0.002
     assert doc["method"]["method_systematic_robustness"] == 0.004
     assert doc["method"]["emulation_tolerance"] == 0.0015
-    assert doc["method"]["extrapolation_tolerance"] == 0.002
+    assert "not gates" in doc["method"]["report_only"]
 
 
 def test_fine_step_premise_failure_is_inconclusive(results: dict[str, dict[str, Any]]) -> None:
@@ -1702,7 +1835,8 @@ def test_aggregates_only_and_table_relative_values_rounded(
     list or value) and every table-relative aggregate is written rounded to 0.1 pp."""
     band_keys = {
         "n", "mean_r_M", "mean_r_I", "mean_s", "se_b", "sigma_b", "x_b", "class",
-        "max_abs_emulation_residual", "max_abs_extrapolation_difference",
+        "max_abs_emulation_residual", "max_abs_emulation_residual_f2_report_only",
+        "max_abs_extrapolation_difference_report_only",
         "max_abs_thickness_difference", "max_abs_consistency_residual",
         "max_abs_predicted_difference", "max_abs_model_residual",
     }  # fmt: skip
@@ -1739,11 +1873,20 @@ def test_aggregates_only_and_table_relative_values_rounded(
             "pass",
         }  # fmt: skip
         for reason in [*doc["invalid_runs"].values(), *doc["invalid_points"].values()]:
-            rest = reason.replace(ev.EMULATION_REASON, "").replace(ev.EXTRAPOLATION_REASON, "")
+            rest = reason.replace(ev.EMULATION_REASON, "")
             assert not re.search(r"\d\.\d{3,}", rest), reason  # reasons carry no values
         text = json.dumps(doc)
-        for bad in ("r_i_per", 'delta_e"', "de_m", "de_i", "exit_energy", "differences", '"g1"'):
+        for bad in ('delta_e"', "de_m", "de_i", "exit_energy", "differences", '"g1"', "r_i_alt"):
             assert bad not in text.lower()
+        conv = doc["convention_sensitivity"]
+        assert set(conv) == {
+            "max_abs_delta_r_i_per_band",
+            "pattern_alt",
+            "classes_alt",
+            "invariant",
+        }
+        for ion in conv["max_abs_delta_r_i_per_band"].values():
+            assert all(v is None or round(v, 3) == v for v in ion.values())
 
 
 def test_classes_use_full_precision_values() -> None:
@@ -1751,7 +1894,7 @@ def test_classes_use_full_precision_values() -> None:
     pts = [
         {"e0": 2.4, "valid": True, "r_M": 0.0, "r_I": 0.0, "s": 0.0304, "se_rel": 0.0,
          "d_thick": None, "d_resid": None, "d_pred": 0.0, "r_model": 0.0, "d_emul": None,
-         "d_extra": None},
+         "d_extra": None, "d_emul2": None},
     ]  # fmt: skip
     band = ev.band_aggregates(pts)["[2,5)"]
     # X = 0.0304 / 3 = 0.010133 -> capped 0.01; k = 1.645 x 0.002 = 0.00329; |r_I| + k <= X: I
@@ -2283,3 +2426,81 @@ def test_runtime_checks_fail_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     monkeypatch.setattr(ev, "closure_modules", lambda: {"gen_i3fu2_bundles": ev.gen})
     with pytest.raises(ev.RecordError, match="bytecode cache files exist for .*gen_i3fu2_bundles"):
         ev.runtime_checks()
+
+
+# --- rev8: energy convention, launch, post-computation recheck, limiter marker -------------
+
+
+def _conv_point(e0: float, r_i: float, r_i_alt: float) -> dict[str, Any]:
+    return {"e0": e0, "valid": True, "r_M": 0.06, "r_I": r_i, "s": 0.05, "se_rel": 0.0,
+            "r_I_alt": r_i_alt, "s_alt": 0.05}  # fmt: skip
+
+
+def test_convention_sensitivity_flips_at_a_class_boundary() -> None:
+    """X = 0.01, k = 1.645 x 0.002: I iff |r_I| <= 0.00671; r_I 0.0067 (I) vs the alternative
+    reading 0.0070 (N) flips the pattern ICRU -> MIXED: not invariant."""
+    pts = {
+        ion: [_conv_point(e, 0.0, 0.0) for e in (2.4, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0)]
+        for ion in ("carbon", "oxygen")
+    }
+    out = ev.convention_sensitivity(pts, "ICRU")
+    assert out["invariant"] and out["pattern_alt"] == "ICRU"
+    pts["carbon"][0] = _conv_point(2.4, 0.0067, 0.0070)
+    pts["carbon"][1] = _conv_point(3.0, 0.0067, 0.0070)
+    out = ev.convention_sensitivity(pts, "ICRU")
+    assert not out["invariant"] and out["pattern_alt"] == "MIXED"
+    assert out["classes_alt"]["carbon"]["[2,5)"] == "N"
+    assert out["max_abs_delta_r_i_per_band"]["carbon"]["[2,5)"] == 0.0  # 0.03 pp -> 0.0 at 0.1 pp
+    assert ev.mass_convention_factor("carbon") == pytest.approx(1.000274, abs=1e-6)
+    assert ev.mass_convention_factor("oxygen") == pytest.approx(1.000592, abs=1e-6)
+
+
+def test_launch_record_is_enforced(
+    base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    w = _world(base, tmp_path)
+    for bad, match in (
+        ({"dont_write_bytecode_flag": 0}, "python -B"),
+        ({"pycache_prefix": None}, "pycache_prefix=<fresh empty directory>"),
+        ({"pycache_prefix_exists": False}, "does not exist"),
+        ({"pycache_prefix_files_at_start": 3}, "was not empty"),
+    ):
+        monkeypatch.setattr(ev, "LAUNCH", {**VALID_LAUNCH, **bad})
+        with pytest.raises(ev.RecordError, match=match):
+            _ctx(base, w)
+
+
+def test_post_computation_recheck_covers_lazy_numpy_imports(
+    base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A numpy module imported lazily during the computation (simulated: a shadow module from
+    outside the verified distribution appears in sys.modules) is caught by the recheck."""
+    repo = tmp_path / "repo"
+    shutil.copytree(base["repo"], repo)
+    w = {**base, "root": tmp_path, "repo": repo}
+    _scenario(w, "lazy", _r_icru)
+    _commit(repo, "records")
+    real = ev.stepping_model_check
+    shadow = ModuleType("numpy._lazy_shadow")
+    shadow.__file__ = str(tmp_path / "lazy_shadow.py")
+
+    def lazy() -> Any:
+        sys.modules["numpy._lazy_shadow"] = shadow
+        return real()
+
+    monkeypatch.setattr(ev, "stepping_model_check", lazy)
+    try:
+        with pytest.raises(ev.RecordError, match="numpy._lazy_shadow is loaded from outside"):
+            _evaluate(w, "lazy", repo)
+    finally:
+        sys.modules.pop("numpy._lazy_shadow", None)
+
+
+def test_fine_step_run_requires_the_step_limiter_marker(
+    base: dict[str, Any], tmp_path: Path
+) -> None:
+    w = _world(base, tmp_path, gen.bundle_name(13, 6), stdout=_stdout(SYN_HISTORIES))
+    with pytest.raises(ev.RecordError, match="step limiter marker is missing"):
+        _check(base, w)
+    w2 = _world(base, tmp_path / "ok", gen.bundle_name(13, 6))
+    assert _check(base, w2)["valid"]

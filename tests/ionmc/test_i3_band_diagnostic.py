@@ -609,6 +609,17 @@ def _bytecode_stub(mod) -> Any:  # type: ignore[no-untyped-def]
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(mod.ENV, "bytecode_check", stub)
+        # the test interpreter is not launched with -B -X pycache_prefix (unit-tested below)
+        mp.setattr(
+            mod,
+            "LAUNCH",
+            {
+                "dont_write_bytecode_flag": 1,
+                "pycache_prefix": "/synthetic/empty-prefix",
+                "pycache_prefix_exists": True,
+                "pycache_prefix_files_at_start": 0,
+            },
+        )
         yield
 
 
@@ -953,3 +964,57 @@ def test_bytecode_cache_control(  # type: ignore[no-untyped-def]
     monkeypatch.setattr(sys, "dont_write_bytecode", False)
     with pytest.raises(mod.ENV.EnvironmentSealError, match="dont_write_bytecode is false"):
         check({"sealed_example": m})
+
+
+# --- launch control (Codex REVIEW-8081e0e7 finding 3) ----------------------------------------
+
+
+def test_launch_capture_and_check(  # type: ignore[no-untyped-def]
+    mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = mod.ENV
+    empty = tmp_path / "prefix"
+    empty.mkdir()
+    monkeypatch.setattr(sys, "pycache_prefix", str(empty))
+    rec = env.capture_launch()
+    assert rec["pycache_prefix"] == str(empty) and rec["pycache_prefix_exists"] is True
+    assert rec["pycache_prefix_files_at_start"] == 0
+    assert rec["dont_write_bytecode_flag"] == int(sys.flags.dont_write_bytecode)
+    good = {**rec, "dont_write_bytecode_flag": 1}
+    assert env.check_launch(good)["launch_ok"] is True
+    with pytest.raises(env.EnvironmentSealError, match="python -B"):
+        env.check_launch({**good, "dont_write_bytecode_flag": 0})  # -B missing
+    (empty / "sub").mkdir()
+    (empty / "sub" / "x.cpython-312.pyc").write_bytes(b"old")
+    rec = env.capture_launch()
+    assert rec["pycache_prefix_files_at_start"] == 1
+    with pytest.raises(env.EnvironmentSealError, match="was not empty"):  # non-empty prefix
+        env.check_launch({**rec, "dont_write_bytecode_flag": 1})
+    monkeypatch.setattr(sys, "pycache_prefix", str(tmp_path / "missing"))
+    with pytest.raises(env.EnvironmentSealError, match="does not exist"):
+        env.check_launch({**env.capture_launch(), "dont_write_bytecode_flag": 1})
+    monkeypatch.setattr(sys, "pycache_prefix", None)
+    with pytest.raises(env.EnvironmentSealError, match="pycache_prefix=<fresh empty directory>"):
+        env.check_launch({**env.capture_launch(), "dont_write_bytecode_flag": 1})
+
+
+def test_cli_refuses_a_bad_launch(  # type: ignore[no-untyped-def]
+    mod, cli_repo: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = cli_repo
+    monkeypatch.setattr(mod, "LAUNCH", {**mod.LAUNCH, "pycache_prefix_files_at_start": 2})
+    with pytest.raises(RuntimeError, match="was not empty"):
+        _cli(mod, monkeypatch, env, "--code-sha", env["head"])
+    assert not env["out"].exists()
+
+
+def test_launch_capture_precedes_numpy_and_ionmc_imports() -> None:
+    """Source order: the capture is the first statement after the stdlib imports in both
+    diagnostics (no numpy / ionmc import above it)."""
+    for name in ("i3_band_diagnostic.py", "i3fu2_evaluate.py"):
+        text = (SCRIPT.parent / name).read_text()
+        cut = text.index(".capture_launch()")
+        head = text[:cut]
+        assert (
+            "import numpy" not in head and "from ionmc" not in head and "import ionmc" not in head
+        )

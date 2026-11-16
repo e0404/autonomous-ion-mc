@@ -1847,23 +1847,32 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   curvature; the msc path excess (≈ 5e-6, linear in f) is removed by the extrapolation; so the 0.2 % term of σ_b is
   supported, the 0.1 % per-point premise holds for the best estimate (thin margin at 2.4–3 MeV/u once margins are applied,
   disclosed). OPEN in P13: the Geant4 effective-charge slope for water, a Geant4 one-step vs fine-step comparison, the
-  Urban msc step-limit lines. A consistency failure makes the point INVALID and the repeat
+  Urban msc step-limit lines. (Revision 6: with the fine-step runs as point values this residual no longer enters the
+  result; it is reported as a band maximum only.) A consistency failure makes the point INVALID and the repeat
   rule applies. **Revision 5 (Codex REVIEW-183057ce finding 2 — direct Geant4 evidence instead of a model-side bound):**
   every point is also run with the slab traversed in FINE steps (`d:Ge/Water/MaxStepSize = t/20`, the TOPAS per-component
-  step limiter; parts 6 = 12C, 7 = 16O, 50 000 primaries), whose stepping bias is ≤ 0.02 % by the P13 expansion at f/20
-  plus the table interpolation. The point value entering the band aggregates is the fine-step r_fine; the one-step pair
-  becomes two checks per point: (i) the measured one-step bias g_meas(f) = (1 + r(f))/(1 + r_fine) − 1 must agree with the
-  emulation g_model(f) within 0.15 % for f₁ and f₂ (a real test of the documented algorithm, signal 0.1–0.33 % at
-  2.4–5 MeV/u); (ii) the zero-thickness extrapolation of the pair must agree with r_fine within 0.2 % (the direct Geant4
-  evidence for the residual budget). A failure of (i) or (ii) makes the point INVALID and the whole triple (t, 1.6t, fine)
-  is repeated. A fine-step smoke (seed 20600445, C 2.4 MeV/u, 50 primaries, tracking verbosity 1) must show ≥ 15 steps in
+  step limiter; parts 6 = 12C, 7 = 16O, 50 000 primaries). **Revision 6 (SR-3 fourth pass, blocking finding 1 and
+  finding 2):** each fine step loses ≈ 0.15 % of the energy, i.e. Geant4 takes its LINEAR branch (forward Euler on the
+  pre-step dE/dx with q² re-evaluated per step and the higher-order term at each step's mid energy), whose bias is
+  ≈ σ·δ/2 with σ = dlnS/dlnE: about −0.04 to −0.06 % at every point (same sign; the earlier "≤ 0.02 % by the P13 expansion"
+  applied the range-branch expansion to the wrong branch and is withdrawn); the evaluator emulates this 20-step algorithm
+  (b_fine). The point value entering the band aggregates is the fine-step r_fine. The one-step runs give ONE gate per point:
+  (i) the same-slab check e₁ = g_meas(f₁) − g* with g_meas(f₁) = (1 + r(f₁))/(1 + r_fine) − 1 and
+  g* = (1 + g_s)/(1 + b_s) − 1, where g_s and b_s are the one-step and the 20-step emulation biases evaluated on the slab
+  scaled by (1 + r_fine), i.e. at the measured loss (a stopping (1 + x)·S over t equals S over (1 + x)·t); tolerance 0.15 % (non-circular: ionmc's model plus the measured loss; the one-step bias is 0.36–0.85 % at
+  2.4 MeV/u, so the check has teeth: a wrong charge slope fails it; it is insensitive to the stopping ratio ρ = S_G4/S_M − 1
+  itself, which the former form of the checks was not — the former checks at f₂ and the extrapolation difference
+  |r₀ − r_fine| carried a ρ′ (slope of the ratio) term and would have failed deterministically exactly when TOPAS is
+  ICRU-like, a decision bias toward option (c); they are now REPORT-ONLY band maxima). A failure of (i) makes the point
+  INVALID and the whole triple (t, 1.6t, fine) is repeated. A fine-step smoke (seed 20600445, C 2.4 MeV/u, 50 primaries, tracking verbosity 1) must show ≥ 15 steps in
   the slab per primary before the evidence runs (the limiter acting on GenericIon); the one-step premise for parts 0–3 is
   unchanged. The method systematic becomes 0.2 % (0.1 % table/range construction, 0.1 % per-nucleon energy convention,
-  0.1 % fine-step stepping bias, in quadrature ≈ 0.17 %, rounded up) and the sensitivity re-classification uses 0.4 %.
+  0.1 % fine-step stepping bias — the linear-branch Euler bias above — in quadrature ≈ 0.17 %, rounded up) and the
+  sensitivity re-classification uses 0.4 %.
   **Robustness (revision 3, Codex REVIEW-aa4e7b1b finding 2):** because the declared systematic enters the
-  classification, the classes and pattern are computed a second time with the method systematic doubled (0.5 %);
-  `conclusive` additionally requires the pattern to be unchanged (`robust`), so the scientific route never rests on the
-  exact size of the 0.25 % estimate. An empirical curvature measurement was considered and rejected: with f₁f₂/h² ≈ 18 the
+  classification, the classes and pattern are computed a second time with the method systematic doubled (0.4 % from the
+  revision-5 value of 0.2 %; revisions 3–4 had 0.5 % from 0.25 %); `conclusive` additionally requires the pattern to be
+  unchanged (`robust`), so the scientific route never rests on the exact size of the systematic estimate. An empirical curvature measurement was considered and rejected: with f₁f₂/h² ≈ 18 the
   second difference of three thicknesses would need ≈ 1e7 primaries per run to bound the residual at 0.2 %. Per-point values stay in the materialized cache only; per band only
   the maxima of |Δ_meas − Δ_pred|, |Δ_pred| and |R_model| are written.
 - Controls (pre-declared; a failed control makes step 2 INCONCLUSIVE, not a finding): (i) thickness consistency at every
@@ -1932,12 +1941,13 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   case (formula,
   ranges and guard test unchanged; frozen manifest `validation/reference_cases/topas/i3fu2-frozen-manifest.json`, generator
   `gen_i3fu2_bundles.py`). Repeat rule (SR-3 finding 5; made deterministic in revision 2, Codex finding 5 / SR-3 second pass
-  finding 4; repeats renumbered to parts 8–13 = part + 8, parts 6, 7 and 14–19 reserved): a validity failure of one run is
-  repeated by that run's repeat part only; a consistency failure of a point is repeated by BOTH slabs' repeat parts, and the
-  repeat pair replaces the pair; a partial repeat set, a repeat of a valid run or a repeat without a recorded failure is a
-  `RecordError`; a repeat that is itself invalid, or a second failure of the same point (including a validity repeat
-  followed by an inconsistent pair, which is not repeated again), makes step 2 INCONCLUSIVE; a class U is final (its σ is
-  systematic, a repeat cannot resolve it). Five execution smokes: rehearsal seeds **20600440** (C 10 MeV/u, 2 000 primaries, standard lines) and
+  finding 4; **binding form of revision 5**, repeats = part + 8 at parts 8–15, parts 16–19 reserved): a validity failure of
+  one run is repeated by that run's repeat part only; a failure of check (i) or (ii) of a point is repeated by the repeat
+  parts of the WHOLE triple (t, 1.6t, fine), and the repeat triple replaces the triple; a partial repeat set, a repeat of a
+  valid run or a repeat without a recorded failure is a `RecordError`; a repeat that is itself invalid, or a second failure
+  of the same point (including a validity repeat followed by a failed check, which is not repeated again), makes step 2
+  INCONCLUSIVE; a class U is final (its σ is systematic, a repeat cannot resolve it). (Revisions 2–4 had "both slabs" and
+  parts 8–13; superseded.) Five execution smokes: rehearsal seeds **20600440** (C 10 MeV/u, 2 000 primaries, standard lines) and
   **20600441** (the same with the fluctuation-off line); **20600443** and **20600444** (step-count smokes: C 2.4 and 50 MeV/u,
   slab 1.6t, 50 primaries, `Ts/TrackingVerbosity = 1`, to count the steps per track inside the slab — expected one — and to
   pin the log markers into the committed markers file, revision 2); **20600445** (fine-step smoke, C 2.4 MeV/u, slab t with
@@ -1951,7 +1961,12 @@ unit-charge base table without the run-time q², LS and Barkas terms):
 
 **2a. Decision rule (pre-declared; per ion, per band b ∈ {[2,5), [5,10), [10,20)}).** σ_b = √(SE_b² + 0.2²) % (revision 5:
 0.2 % = 0.1 % table/range construction, 0.1 % per-nucleon energy convention, 0.1 % fine-step stepping bias, in quadrature
-≈ 0.17 %, rounded up; the earlier 0.25 % was the one-step-extrapolation budget, re-derived in revision 1 and restated in
+≈ 0.17 %, rounded up; **energy convention (revision 6, Codex REVIEW-8081e0e7 finding 2):** the ICRU73_NEW axis is kinetic
+energy per nucleon, read as E/A with A the mass number (as row I3 does); the alternative reading E/(M_nucleus/u) differs by
+≤ 0.03 % in energy (12C 11.9967 u, 16O 15.9905 u), well inside the 0.1 % term; Geant4's internal mapping of the ion energy
+onto its proton table (×A·m_p/M ≈ 1.0073, P13 §2) is a property of the Geant4 implementation, not of the table axis, and
+does not enter the comparison of the measured TOPAS loss with the table prediction; the evaluator nevertheless re-runs the
+classification with the alternative reading and `conclusive` requires the pattern to be invariant; the earlier 0.25 % was the one-step-extrapolation budget, re-derived in revision 1 and restated in
 revision 2 as a physics estimate: table/range
 construction ≤ 0.1 %, per-nucleon energy convention ≤ 0.1 %, residual stepping bias after the zero-thickness extrapolation
 ≤ 0.2 % — the modelled q² remainder is ≈ 0.02–0.03 % (SR-3 second pass) and is bounded at 0.1 % per point by the evaluator's
@@ -2013,9 +2028,9 @@ tests, bundles and manifest by sha256); `validation/reference_cases/topas/i3fu2-
 #### 5. Review gates and order
 1. This amendment + step-1 script/test + step-2 generator/bundles/manifest/evaluator/tests in one commit → Codex review on
    the exact commit (re-reviewed until passed) → independent reviewer agent (scientific) → exact-SHA local validation record.
-2. Step-1 run once at the commit carrying pin A; the four step-2 smokes at that commit; the markers file committed (Y),
-   reviewed (pin B), pin B and the plan note committed (Z); then the 40 runs at Z one at a time (outputs materialized,
-   parsed, deleted; repeats only on trigger); results committed
+2. Step-1 run once at the commit carrying pin A; the five step-2 smokes at that commit; the markers file committed (Y),
+   reviewed (pin B), pin B and the plan note committed (Z); then the 58 evidence runs at Z one at a time (outputs
+   materialized, parsed, deleted; repeats only on trigger); results committed
    with dated notes → Codex → exact-SHA record → push → CI green at the exact head.
 3. Step-3 decision note → the same chain; then (b) a new prospective amendment, or (c) the intervention of Appendix A.
 
@@ -2127,3 +2142,26 @@ one-step algorithm, its fetched sources now listed with full hashes (not in the 
 listed with a hash, the diagnostics run with bytecode writing disabled and require that no cached bytecode exists for any
 sealed or numpy module at run time (the orchestrator removes the caches before the run); an authenticated immutable
 environment remains outside this repository's means (disclosed). Not a clinical claim.
+
+**Revision 6 of amendment I3-FU-1 (2026-11-16, orchestrator; after Codex REVIEW-8081e0e7 on 2c19caf7 (changes required: four
+important, one minor); before any run; edits in place above marked "revision 6").** Dispositions: Codex 1 (review provenance
+caller-asserted; repeat of the revision-5 finding) → **accepted limitation, unchanged**, see revision 5; the orchestrator
+records this as a disputed finding: v3's independent-review requirement is met by the review itself (the service's
+protected record, retrievable by review id), and the committed pin plus the signed validation-manager record are the
+strongest binding available without a signing review service (V3-INFRA-005); Codex 2 (energy convention under-budgeted) →
+**disputed in substance, addressed by a sensitivity**: the ×1.0073 factor is Geant4's proton-table mapping, not the ICRU
+axis; the alternative per-nucleon reading differs by ≤ 0.03 %; the evaluator re-classifies under the alternative reading
+and requires invariance; Codex 3 (bytecode not authenticated) → launch mechanism: both diagnostics run with `-B` and a
+fresh, empty `pycache_prefix` directory verified as the scripts' first statement (no pre-existing bytecode can be read for
+any module imported afterwards), and the complete runtime closure incl. lazily imported numpy modules is re-checked after
+the computation; Codex 4 (contradictory frozen rules) → the robustness and repeat-rule sentences rewritten to the
+revision-5 values (0.2 %/0.4 %; triple repeats at parts 8–15), earlier values marked superseded; Codex minor (stale
+revision string) → a single revision constant in the evaluator. **SR-3 fourth pass of 2c19caf7 (DO NOT PROCEED at that
+commit; the fine-step design itself confirmed sound: the limiter only caps the step, no minimum-step interaction, msc
+path excess ≈ 5e-6, fluctuation models mean-preserving):** blocking finding 1 (checks confounded by the stopping ratio) →
+single same-slab gate e₁ with the emulation at the measured loss fraction and the fine-step Euler bias included, the other
+two checks report-only; finding 2 (fine-step bias misstated) → restated as the linear-branch Euler bias −0.04 to −0.06 %,
+inside the 0.1 % term; finding 3 (plan contradictions) → reconciled in this revision; minor 4 → the step-limiter process
+marker is required in every fine-step run (markers file); minor 5 → P13 O5 restated as "not met, rebinding pending", the
+duplicated heading removed; minor 6 → the bytecode-cache purge is a logged step of the run procedure (made moot by the
+fresh `pycache_prefix` launch). Not a clinical claim.

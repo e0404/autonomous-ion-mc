@@ -15,12 +15,21 @@ numerical runtime of the diagnostics by content:
   environment-seal.json``, :data:`SEAL_FIELDS`), written once from the reviewed environment by
   ``i3_band_diagnostic.py --write-environment-seal``; both diagnostics require every field of the
   running environment to equal it (:func:`verify_environment`);
+* launch control (Codex REVIEW-8081e0e7 finding 3): both diagnostics are launched as
+  ``python -B -X pycache_prefix=<fresh empty directory> <script> ...``.
+  :func:`capture_launch` runs as the first statement of each script (only stdlib imported
+  before it, in particular neither numpy nor ionmc) and records ``sys.flags.dont_write_bytecode``,
+  ``sys.pycache_prefix`` and whether that directory exists and holds no file;
+  :func:`check_launch` enforces it before any computation. With an empty prefix no bytecode can
+  have been read for any module imported after the capture: the interpreter compiled the
+  verified sources;
 * runtime controls (Codex REVIEW-183057ce finding 3): every loaded numpy module resolves under the
   verified distribution root and its file is listed with a hash in RECORD (hence verified;
-  :func:`numpy_modules_check`), and the diagnostics run with ``sys.dont_write_bytecode`` true
-  and no ``__cached__`` bytecode file present for any sealed or numpy module
-  (:func:`bytecode_check`; the orchestrator removes the ``__pycache__`` directories before the
-  run, so the interpreter compiles the verified sources).
+  :func:`numpy_modules_check`), and, as a second line of defence only, no ``__cached__``
+  bytecode file exists for any sealed or numpy module (:func:`bytecode_check`; the absence of a
+  cache file at check time cannot prove that none was executed earlier, the prefix mechanism
+  can). Both diagnostics repeat these checks after the computation, just before writing, so
+  lazily imported modules are covered.
 
 Declared limitation: shared libraries outside the numpy distribution (libc, the system
 libraries the interpreter links against) and the operating system are not sealed beyond
@@ -249,3 +258,33 @@ def bytecode_check(modules: Mapping[str, ModuleType]) -> dict[str, Any]:
             "(remove the __pycache__ directories before the run)"
         )
     return {"dont_write_bytecode": True, "modules_without_bytecode_cache": len(modules)}
+
+
+def capture_launch() -> dict[str, Any]:
+    """The launch state, captured as the first statement of a diagnostic (see the module
+    docstring): ``-B`` (``sys.flags.dont_write_bytecode``), ``sys.pycache_prefix`` and whether
+    the prefix directory exists and holds no file at this moment. Never raises."""
+    prefix = getattr(sys, "pycache_prefix", None)
+    path = Path(prefix) if prefix else None
+    exists = bool(path is not None and path.is_dir())
+    files = sum(1 for p in path.rglob("*") if p.is_file()) if exists and path is not None else None
+    return {
+        "dont_write_bytecode_flag": int(sys.flags.dont_write_bytecode),
+        "pycache_prefix": prefix,
+        "pycache_prefix_exists": exists,
+        "pycache_prefix_files_at_start": files,
+    }
+
+
+def check_launch(launch: Mapping[str, Any]) -> dict[str, Any]:
+    """Enforce the captured launch state: ``-B`` given, ``pycache_prefix`` an existing directory
+    that held no file at the capture; else :class:`EnvironmentSealError`."""
+    if launch.get("dont_write_bytecode_flag") != 1:
+        raise EnvironmentSealError("not launched with python -B (sys.flags.dont_write_bytecode)")
+    if not launch.get("pycache_prefix"):
+        raise EnvironmentSealError("not launched with -X pycache_prefix=<fresh empty directory>")
+    if not launch.get("pycache_prefix_exists"):
+        raise EnvironmentSealError("the pycache_prefix directory does not exist")
+    if launch.get("pycache_prefix_files_at_start") != 0:
+        raise EnvironmentSealError("the pycache_prefix directory was not empty at launch")
+    return {**launch, "launch_ok": True}

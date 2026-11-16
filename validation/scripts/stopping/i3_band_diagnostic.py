@@ -2,7 +2,8 @@
 
 Usage::
 
-    uv run python validation/scripts/stopping/i3_band_diagnostic.py --archive PATH \
+    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -X pycache_prefix="$(mktemp -d)" \
+        validation/scripts/stopping/i3_band_diagnostic.py --archive PATH \
         --output-dir DIR --code-sha "$(git rev-parse HEAD)" \
         [--expect-i3 validation/results/stopping/v3-008-i3/icru73_comparison.json] [--repo DIR]
 
@@ -92,11 +93,17 @@ and before the output is written):
   ``sys.version`` and ``platform.platform()`` must equal the seal (recorded as
   ``provenance.environment.seal``). ``--write-environment-seal`` writes the seal of the running
   environment to ``--repo/--environment-seal`` and exits (run once by the orchestrator and
-  committed with the review pin). Runtime controls (Codex REVIEW-183057ce finding 3), after
-  the computation: every loaded numpy module resolves under the verified distribution root and
-  is hashed in its RECORD, ``sys.dont_write_bytecode`` is true (PYTHONDONTWRITEBYTECODE=1) and
-  no sealed or numpy module has its ``__cached__`` bytecode file on disk (the ``__pycache__``
-  directories are removed before the run); recorded as ``provenance.environment.runtime``.
+  committed with the review pin). Launch control (Codex REVIEW-8081e0e7 finding 3): the script
+  must be started with ``python -B -X pycache_prefix=<fresh empty directory>``;
+  ``env_seal.capture_launch`` runs as the first statement after the stdlib imports (before
+  numpy or ionmc is imported) and ``main`` enforces it before any computation, so no bytecode
+  can have been read for any module imported after it. Runtime controls (Codex
+  REVIEW-183057ce finding 3), after the computation and just before writing (lazily imported
+  modules included): every loaded numpy module resolves under the verified distribution root
+  and is hashed in its RECORD; as a second line of defence only, no sealed or numpy module has
+  its ``__cached__`` bytecode file on disk (this cannot prove that none was executed; the
+  launch control can). Recorded as ``provenance.environment.runtime`` (with the launch
+  record).
 * Sealed sources after the computation (the import closure is then complete, including the
   lazily loaded ``compare_icru73`` and anything ``BetheStoppingSource`` imports): every module
   in ``sys.modules`` of the ``ionmc`` package with a ``__file__`` (path relative to the root
@@ -137,27 +144,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-import numpy as np
-from numpy.typing import NDArray
-
-from ionmc.materials import Material, water
-from ionmc.physics.projectiles import (
-    ALPHA,
-    AMU_MEV,
-    CARBON12,
-    ELECTRON_MASS_MEV,
-    OXYGEN16,
-    PROTON,
-    Projectile,
-)
-from ionmc.physics.stopping import (
-    BetheOptions,
-    BetheStoppingSource,
-    bethe_mass_stopping,
-    kinematics,
-    pierce_blann_charge,
-)
-
 
 def _load_env_seal() -> ModuleType:
     """Load the shared environment seal (``env_seal.py``) from this directory."""
@@ -174,6 +160,34 @@ def _load_env_seal() -> ModuleType:
     return module
 
 
+# First statement after the stdlib imports, before numpy or ionmc is imported (Codex
+# REVIEW-8081e0e7 finding 3): capture the launch state (-B, a fresh empty pycache_prefix);
+# enforced in ``main`` before any computation.
+ENV = _load_env_seal()  # stdlib only at import
+LAUNCH: dict[str, Any] = ENV.capture_launch()
+
+import numpy as np  # noqa: E402
+from numpy.typing import NDArray  # noqa: E402
+
+from ionmc.materials import Material, water  # noqa: E402
+from ionmc.physics.projectiles import (  # noqa: E402
+    ALPHA,
+    AMU_MEV,
+    CARBON12,
+    ELECTRON_MASS_MEV,
+    OXYGEN16,
+    PROTON,
+    Projectile,
+)
+from ionmc.physics.stopping import (  # noqa: E402
+    BetheOptions,
+    BetheStoppingSource,
+    bethe_mass_stopping,
+    kinematics,
+    pierce_blann_charge,
+)
+
+
 def _load_i3() -> ModuleType:
     """Load the row I3 script (``compare_icru73.py``) from this directory."""
     path = Path(__file__).resolve().with_name("compare_icru73.py")
@@ -187,7 +201,6 @@ def _load_i3() -> ModuleType:
 
 
 I3 = _load_i3()
-ENV = _load_env_seal()
 ARCHIVE_SHA256: str = I3.ARCHIVE_SHA256
 MEMBER_SHA256: dict[str, str] = I3.MEMBER_SHA256
 TARGET_WATER: int = I3.TARGET_WATER
@@ -920,6 +933,7 @@ def main() -> int:
                if getattr(args, k) is None]  # fmt: skip
     if missing:
         parser.error(f"the following arguments are required: {', '.join(missing)}")
+    launch = ENV.check_launch(LAUNCH)  # before any computation
     verify_checkout(repo, args.code_sha)
     environment = check_environment(committed_bytes(repo, args.code_sha, "uv.lock"))
     environment["seal"] = ENV.verify_environment(
@@ -938,6 +952,7 @@ def main() -> int:
         )
     }
     environment["runtime"] = {
+        "launch": launch,
         **ENV.numpy_modules_check(),
         **ENV.bytecode_check({**sealed_modules, **ENV.numpy_modules()}),
     }

@@ -2,7 +2,8 @@
 
 Usage::
 
-    python validation/scripts/stopping/i3fu2_evaluate.py --runs DIR --archive PATH \
+    PYTHONDONTWRITEBYTECODE=1 python -B -X pycache_prefix="$(mktemp -d)" \
+        validation/scripts/stopping/i3fu2_evaluate.py --runs DIR --archive PATH \
         --code-sha SHA --smokes DIR \
         [--records validation/results/stopping/v3-008-i3fu2/topas-runs] \
         [--review-pin validation/results/stopping/v3-008-i3fu2/i3fu2-review.json] \
@@ -11,9 +12,16 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 and decision
-rule 2a, revision 2: the dispositions of Codex REVIEW-22f384ed and REVIEW-aa4e7b1b and of the
-independent reviewer's passes 2 and 3); no gate, no validation claim.
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 5)
+and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
+
+**Launch (Codex REVIEW-8081e0e7 finding 3).** The evaluator must be started as
+``python -B -X pycache_prefix=<fresh empty directory> i3fu2_evaluate.py ...``:
+:data:`LAUNCH` is captured by ``env_seal.capture_launch`` as the first statement after the
+stdlib imports (before numpy or ionmc is imported) and enforced by :func:`context`
+(``env_seal.check_launch``: ``sys.flags.dont_write_bytecode`` 1, ``sys.pycache_prefix`` an
+existing directory that held no file at the capture), so no bytecode can have been read for any
+module imported after it.
 
 **Inputs.** ``--repo`` (default: this checkout) is read only as committed at its HEAD
 (``r2_io.CommittedReader``: a working copy that differs fails closed); ``--records``,
@@ -90,14 +98,28 @@ after pin B's (and pin A's) ``finished_at`` and after both attestations' ``signe
 Every run: ``started_at`` <= ``finished_at``.
 
 Runtime controls (revision 5, Codex REVIEW-183057ce finding 3; ``env_seal``): every loaded numpy
-module resolves under the verified distribution root and is listed with a hash in its RECORD,
-``sys.dont_write_bytecode`` is true (PYTHONDONTWRITEBYTECODE=1) and no sealed or numpy module
-has its ``__cached__`` bytecode file on disk (the orchestrator removes the ``__pycache__``
-directories before the run); recorded as ``provenance.environment.runtime``.
+module resolves under the verified distribution root and is listed with a hash in its RECORD;
+as a second line of defence only, no sealed or numpy module has its ``__cached__`` bytecode file
+on disk (the absence of a cache file cannot prove that none was executed; the launch control
+above can). Run in :func:`context` (``provenance.environment.runtime``, with the launch record)
+and again after the computation, just before the result is returned, covering lazily imported
+numpy and closure modules (``provenance.environment.runtime_after``).
+
+**Energy convention (Codex REVIEW-8081e0e7 finding 2; pre-declared sensitivity).** The table's
+axis is kinetic energy per nucleon, read as E / A with A the mass number. The alternative
+reading E / (M / u) (M the committed ionmc nuclear mass: the lookup energy is higher by
+0.0274 % for 12C and 0.0592 % for 16O) gives r_I_alt and s_alt; classes and pattern are
+recomputed with them (``convention_sensitivity`` = {max_abs_delta_r_i_per_band (0.1 pp),
+pattern_alt, classes_alt, invariant}); ``conclusive`` requires ``invariant`` (reason
+``not_invariant_to_energy_convention``). Geant4's internal proton-table mapping is not a
+property of the table axis and does not enter.
 
 **Log markers.** ``--markers`` is the committed JSON ``{"fluct_on_marker", "fluct_off_marker",
-"step_line_re", "track_header_re"}``; every value must be a non-empty regular expression
-(compiled with ``re.M``), else ``RecordError``. Neither fluctuation marker may match a run's
+"step_line_re", "track_header_re", "step_limiter_marker"}``; every value must be a non-empty
+regular expression (compiled with ``re.M``), else ``RecordError``. ``step_limiter_marker`` (the
+step limiter's process-list line, pinned from the fine-step smoke) must match every fine-step
+run's stdout (parts 6, 7 and their repeats), else ``RecordError``; its absence elsewhere is not
+required. Neither fluctuation marker may match a run's
 native input text (they must identify the Geant4 ``G4EmParameters`` printout, not the TOPAS
 parameter echo): ``RecordError``. The fluctuation markers must discriminate over all
 authenticated runs and smokes: ``fluct_off_marker`` matches every fluctuation-off stdout and no
@@ -172,19 +194,26 @@ premise fails).
 slab t (C part 0, O part 2), slab 1.6 t (parts 1, 3) and the fine-step run, slab t with the
 per-component step limit MaxStepSize t/20 (parts 6, 7; asserted from ``max_step_um``). The
 point value entering the band aggregates is the fine-step run: r_M, r_I, s and SE_rel of that
-run (direct Geant4 evidence at fine stepping). The one-step pair enters two checks per point:
-(i) emulation check, g_meas(f) = (1 + r_M(f)) / (1 + r_M,fine) - 1 for f1 and f2 with
-max_f |g_meas(f) - g_model(f)| <= :data:`EMULATION_TOL` (0.15 %; the expected signal is
-0.1-0.33 %); (ii) extrapolation check, |r_0 - r_M,fine| <= :data:`EXTRAPOLATION_TOL` (0.2 %),
-r_0 = (f2 r_M(f1) - f1 r_M(f2)) / (f2 - f1). A failure of (i) (checked first) or (ii) makes the
-point INVALID (repeat rule). The former difference check |Delta_meas - Delta_pred| <= 0.3 % is
-reported as a band maximum only. Method systematic (revision 5): 0.2 % = 0.1 % table/range
-construction, 0.1 % per-nucleon energy convention and 0.1 % fine-step stepping bias (the P13
-expansion at f/20 gives <= 0.02 %, plus the table interpolation) in quadrature (0.17 %),
-rounded up.
+run (direct Geant4 evidence at fine stepping). The fine-step runs lose ~0.15 % per step, i.e.
+they use Geant4's LINEAR branch: emulated by :func:`fine_algorithm_loss` (20 forward-Euler steps
+of length t/20, q^2 and S_base at each step's pre-step energy, the correction term once per step
+at its mid energy; He: S_full at the pre-step energy), b_fine = Delta E_fine / Delta E_exact - 1
+(about -0.04 to -0.06 %, the same sign everywhere). The gate (reviewer pass 4, same-slab check):
+e1 = g_meas(f1) - g*(f1) with g_meas(f1) = (1 + r_M(f1)) / (1 + r_M,fine) - 1 and
+g*(f1) = (1 + g_s(f1)) / (1 + b_s) - 1 (:func:`expected_g_meas`), g_s and b_s the one-step and
+fine-step emulation biases evaluated on the slab scaled by (1 + r_M,fine), i.e. at the MEASURED
+loss fraction f1 (1 + r_M,fine); |e1| <= :data:`EMULATION_TOL` (0.15 %), a failure makes the
+point INVALID (repeat rule). Reported only (not gates; they carry the slope of the stopping
+ratio rho' (rho = S_G4 / S_M - 1) and would fail deterministically in an ICRU-like outcome):
+e2 = g_meas(f2) - g*(f2) (1.6 t run against the slab-t fine run) and the extrapolation
+difference r_0 - r_M,fine, r_0 = (f2 r_M(f1) - f1 r_M(f2)) / (f2 - f1); also the former
+|Delta_meas - Delta_pred|. Method systematic (revision 5): 0.2 % = 0.1 % table/range
+construction, 0.1 % per-nucleon energy convention and 0.1 % stepping (covering the
+linear-branch Euler bias of the fine steps, -0.04 to -0.06 %, and the table interpolation) in
+quadrature (0.17 %), rounded up.
 
 **Repeat rule (deterministic).** Repeat bundle = part + 8 (:data:`gen.REPEAT_OFFSET`). A validity
-failure of a run requires the repeat of exactly that run; a failure of check (i) or (ii) of a
+failure of a run requires the repeat of exactly that run; a failure of the gate e1 of a
 point (all three runs valid) requires the repeat of the WHOLE triple, which replaces it. The offered
 repeats of a point must be exactly the required set: a repeat offered without a recorded
 failure, a repeat of a valid run, or a partial set is a ``RecordError``. Required repeats not
@@ -216,6 +245,7 @@ written; reasons carry no values (decision 0038).
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import importlib
 import importlib.metadata
@@ -233,14 +263,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-import numpy as np
-from numpy.typing import NDArray
-
-from ionmc.materials import water
-from ionmc.physics.projectiles import Projectile
-from ionmc.physics.stopping import bethe_mass_stopping, kinematics, pierce_blann_charge
-from ionmc.reference.parsers import ParseError, parse_topas_csv
-
 HERE = Path(__file__).resolve().parent
 
 
@@ -256,10 +278,27 @@ def _load(name: str, path: Path) -> ModuleType:
     return mod
 
 
+# First statement after the stdlib imports, before numpy or ionmc is imported (Codex
+# REVIEW-8081e0e7 finding 3): capture the launch state (-B, a fresh empty pycache_prefix);
+# enforced by :func:`context` before any computation.
+env_seal = _load("env_seal", HERE / "env_seal.py")  # stdlib only at import
+LAUNCH: dict[str, Any] = env_seal.capture_launch()
+
+import numpy as np  # noqa: E402
+from numpy.typing import NDArray  # noqa: E402
+
+from ionmc.materials import water  # noqa: E402
+from ionmc.physics.projectiles import AMU_MEV, Projectile  # noqa: E402
+from ionmc.physics.stopping import (  # noqa: E402
+    bethe_mass_stopping,
+    kinematics,
+    pierce_blann_charge,
+)
+from ionmc.reference.parsers import ParseError, parse_topas_csv  # noqa: E402
+
 gen = _load("gen_i3fu2_bundles", HERE / "gen_i3fu2_bundles.py")
 icru = _load("compare_icru73", HERE / "compare_icru73.py")
 ss = _load("ss_evaluate", HERE.parent / "ion_em" / "ss_evaluate.py")
-env_seal = _load("env_seal", HERE / "env_seal.py")
 rio = ss.io  # validation/scripts/ion_em/r2_io.py (record verification helpers)
 
 RecordError = rio.RecordError
@@ -307,7 +346,13 @@ PLAN_NOTE_RE = re.compile(
     r"(?P<markers_sha>[0-9a-f]{40})(?![0-9A-Za-z])",
     re.M,
 )
-MARKER_KEYS = ("fluct_on_marker", "fluct_off_marker", "step_line_re", "track_header_re")
+MARKER_KEYS = (
+    "fluct_on_marker",
+    "fluct_off_marker",
+    "step_line_re",
+    "track_header_re",
+    "step_limiter_marker",  # the step limiter's process-list line (fine-step runs)
+)
 #: Validation scripts loaded by path (module names) whose files belong to the executable
 #: closure, besides this module and every ``ionmc`` module (:func:`executable_closure`).
 SCRIPT_MODULES = (
@@ -337,14 +382,14 @@ MAX_LOSS_FRACTION = 0.2  # sanity bound on <Delta E> / E_in (design 0.03 / 0.048
 Z_RTOL = 1e-4
 Z_ATOL_CM = 1e-9
 #: declared method systematic (revision 5): 0.1 % table/range construction, 0.1 % per-nucleon
-#: energy convention, 0.1 % fine-step stepping bias; in quadrature 0.17 %, rounded up to 0.2 %
+#: energy convention, 0.1 % stepping (the linear-branch Euler bias of the fine steps, -0.04 to
+#: -0.06 %); in quadrature 0.17 %, rounded up to 0.2 %
 METHOD_SYSTEMATIC = 0.002
 ROBUSTNESS_SYSTEMATIC = 2.0 * METHOD_SYSTEMATIC  # 0.4 %
 X_CAP = 0.01
 K_ONE_SIDED = 1.645
 CONSISTENCY_TOL = 0.003  # former |Delta_meas - Delta_pred| check (revision 5: reported only)
-EMULATION_TOL = 0.0015  # check (i): |g_meas(f) - g_model(f)| for f1 and f2
-EXTRAPOLATION_TOL = 0.002  # check (ii): |r_0 - r_fine|
+EMULATION_TOL = 0.0015  # the gate: |e1| = |g_meas(f1) - g*(f1)|
 MIN_FINE_STEPS = 15  # fine-step smoke: steps with the pre-step point in the slab, per primary
 MODEL_RESIDUAL_LIMIT = 0.001  # |R_model| per point (design premise)
 FACTORS = (0.03, 0.048)  # thickness factors f1 (slab t), f2 (slab 1.6 t) of every pair
@@ -380,11 +425,12 @@ LENGTH_UNITS_MM = {
     "km": 1e6,
     "pc": 3.0856775814913673e19,
 }
-EMULATION_REASON = f"emulation check |g_meas - g_model| > {EMULATION_TOL}"
-EXTRAPOLATION_REASON = f"extrapolation check |r_0 - r_fine| > {EXTRAPOLATION_TOL}"
+EMULATION_REASON = f"same-slab emulation check |e1| > {EMULATION_TOL}"
 FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
+CONVENTION_REASON = "not_invariant_to_energy_convention"
+AMENDMENT_REVISION = 5
 REDISTRIBUTION_NOTE = (
     "Aggregates only: no libdEdx/ICRU 73 or Geant4 table values, no per-energy deviations, "
     "ratios or TOPAS energy-loss values (decision 0038); the controls are written as pass/fail "
@@ -524,6 +570,56 @@ def algorithm_loss(proj: Projectile, a: int, e0: float, slab_mm: float, ion: str
     return de_table + RHO_G_CM3 * (slab_mm / 10.0) * s_corr
 
 
+def fine_algorithm_loss(
+    proj: Projectile, a: int, e0: float, slab_mm: float, ion: str, n_steps: int = 20
+) -> float:
+    """Energy loss [MeV] of Geant4's LINEAR branch over ``n_steps`` limiter steps of length
+    slab/n (the fine-step runs lose ~0.15 % per step, below ``linLossLimit``): forward Euler,
+    each step losing length x rho x q^2(E_pre) S_base(E_pre) (q^2 and S_base at the step's
+    pre-step energy) plus the correction term once per step at the step's mid energy
+    max(E_pre - table loss / 2, E_pre / 2); He: length x rho x S_full(E_pre) (q frozen per step)."""
+    full = model_stopping(proj)
+    base = base_stopping_per_q2(proj)
+    length_cm = slab_mm / 10.0 / n_steps
+    e = a * e0
+    for _ in range(n_steps):
+        e_u = e / a
+        if e_u <= E_MIN_PER_U:
+            raise ValueError(f"fine-step emulation leaves the domain: {e_u} MeV/u")
+        if ion == "he":
+            e -= RHO_G_CM3 * length_cm * full(e_u)
+            continue
+        table = RHO_G_CM3 * length_cm * effective_charge_sq(proj, e_u) * base(e_u)
+        mid_u = max(e_u - table / a / 2.0, e_u / 2.0)
+        corr = full(mid_u) - effective_charge_sq(proj, mid_u) * base(mid_u)
+        e -= table + RHO_G_CM3 * length_cm * corr
+    return a * e0 - e
+
+
+@functools.lru_cache(maxsize=4096)  # a pure function of its arguments (called per check)
+def expected_g_meas(ion: str, case: int, r_fine: float) -> tuple[float, float]:
+    """(g*(f1), g*(f2)): the expected g_meas = (1 + r_M(f)) / (1 + r_M,fine) - 1 at the MEASURED
+    loss: the emulated one-step and fine-step biases evaluated on slabs scaled by (1 + r_fine)
+    (a stopping (1 + r_fine) x ionmc's over a slab t is equivalent to ionmc's over (1 + r_fine) t,
+    i.e. the loss fraction f (1 + r_fine)): g*(f) = (1 + g_s(f)) / (1 + b_s) - 1 with g_s(f) =
+    Delta E_alg / Delta E_exact - 1 over slab(f) (1 + r_fine) and b_s = Delta E_fine /
+    Delta E_exact - 1 over t (1 + r_fine)."""
+    proj, _z, a, _p = gen.IONS[ion]
+    e0 = float(gen.CASES[case])
+    full = model_stopping(proj)
+    scale = 1.0 + r_fine
+    t = gen.slab_mm(ion, case, 1) * scale
+    exact_t = slab_energy_loss(a * e0, a, t, full)
+    b_s = fine_algorithm_loss(proj, a, e0, t, ion, gen.FINE_DIVISOR) / exact_t - 1.0
+    out = []
+    for mult in (1, 2):
+        tm = gen.slab_mm(ion, case, mult) * scale
+        exact = exact_t if mult == 1 else slab_energy_loss(a * e0, a, tm, full)
+        g_s = algorithm_loss(proj, a, e0, tm, ion) / exact - 1.0
+        out.append((1.0 + g_s) / (1.0 + b_s) - 1.0)
+    return out[0], out[1]
+
+
 def stepping_bias(ion: str, case: int) -> dict[str, float]:
     """Model-side emulation of the single-step algorithm for one point (memoised): g(f1),
     g(f2) with g = Delta E_alg / Delta E_exact - 1 over the generator's slabs t and 1.6 t,
@@ -538,11 +634,15 @@ def stepping_bias(ion: str, case: int) -> dict[str, float]:
             t = gen.slab_mm(ion, case, mult)
             de_exact = predicted_loss(f"model:{ion}", exact, a, e0, t)
             g.append(algorithm_loss(proj, a, e0, t, ion) / de_exact - 1.0)
+        de_fine = fine_algorithm_loss(proj, a, e0, gen.slab_mm(ion, case, 1), ion, gen.FINE_DIVISOR)
         _STEPPING[key] = {
             "g1": g[0],
             "g2": g[1],
             "d_pred": g[1] - g[0],
             "r_model": richardson(g[0], g[1]),
+            "b_fine": de_fine
+            / predicted_loss(f"model:{ion}", exact, a, e0, gen.slab_mm(ion, case, 1))
+            - 1.0,
         }
     return _STEPPING[key]
 
@@ -1244,13 +1344,14 @@ def context(
                 f"log-marker file {markers_rel} differs between {what} {sha} and HEAD"
             )
     try:
+        launch = env_seal.check_launch(LAUNCH)
         env_record = env_seal.verify_environment(reader.read(env_rel))
     except env_seal.EnvironmentSealError as exc:
         raise RecordError(f"environment seal {env_rel}: {exc}") from exc
     environment = {
         "lock": environment_check(reader.read("uv.lock").decode("utf-8")),
         "seal": {"path": env_rel, **env_record},
-        "runtime": runtime_checks(),
+        "runtime": {"launch": launch, **runtime_checks()},
     }
     return Context(
         repo=reader.repo,
@@ -1481,6 +1582,10 @@ def check_run(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
         stderr = rio.read_verified(run, "stderr.txt")
         problems = config_problems(run.native, stdout, info["ion"])
         problems += native_marker_problems(ctx.markers, run.native)
+        if info.get("max_step_um") is not None and not ctx.markers["step_limiter_marker"].search(
+            stdout
+        ):
+            problems.append("fine-step run: the step limiter marker is missing from stdout")
         if problems:
             raise RecordError("configuration markers: " + "; ".join(problems))
         files = {n: rio.read_verified(run, f"work/{n}") for n in gen.EXPECTED_OUTPUTS}
@@ -1605,20 +1710,82 @@ def richardson_se(se1: float, se2: float, f1: float = FACTORS[0], f2: float = FA
     return math.hypot(f2 * se1, f1 * se2) / (f2 - f1)
 
 
-def run_ratios(run: dict[str, Any], s_model: dict, s_table: dict, keys: dict) -> dict[str, Any]:
-    """r_M (and r_I, s for C/O), SE_rel of one valid run (predictions memoised)."""
+def run_ratios(
+    run: dict[str, Any],
+    s_model: dict,
+    s_table: dict,
+    keys: dict,
+    s_alt: dict | None = None,
+    keys_alt: dict | None = None,
+) -> dict[str, Any]:
+    """r_M (and r_I, s for C/O, and with ``s_alt`` the same under the alternative energy
+    convention: ``r_I_alt``, ``s_alt``), SE_rel of one valid run (predictions memoised)."""
     info = run["info"]
     ion, a, e0, t = info["ion"], int(info["a"]), float(info["e0_per_u_mev"]), info["slab_mm"]
     try:
         de_m = predicted_loss(f"model:{ion}", s_model[ion], a, e0, float(t))
         de_i = predicted_loss(keys[ion], s_table[ion], a, e0, float(t)) if ion in s_table else None
+        de_alt = None
+        if s_alt is not None and keys_alt is not None and ion in s_alt:
+            de_alt = predicted_loss(keys_alt[ion], s_alt[ion], a, e0, float(t))
     except ValueError as exc:
         raise RecordError(f"run {run['bundle']}: prediction failed: {exc}") from exc
     out = {"e0": e0, "r_M": run["de"] / de_m - 1.0, "se_rel": run["se"] / run["de"]}
     if de_i is not None:
         out["r_I"] = run["de"] / de_i - 1.0
         out["s"] = de_i / de_m - 1.0
+    if de_alt is not None:
+        out["r_I_alt"] = run["de"] / de_alt - 1.0
+        out["s_alt"] = de_alt / de_m - 1.0
     return out
+
+
+def mass_convention_factor(ion: str) -> float:
+    """A / (M / u): the table read at E / (M / u) instead of E / A is the table at
+    (E / A) x this factor (M the committed nuclear mass of the ionmc projectile)."""
+    proj, _z, a, _p = gen.IONS[ion]
+    return float(a) / (float(proj.mass_mev) / AMU_MEV)
+
+
+def alternative_convention_table(table: Stopping, ion: str) -> Stopping:
+    """The table interpreted with its axis as E / (M / u) (convention sensitivity)."""
+    factor = mass_convention_factor(ion)
+
+    def s(e_u: float) -> float:
+        return table(e_u * factor)
+
+    return s
+
+
+def convention_sensitivity(points: dict[str, list[dict[str, Any]]], before: str) -> dict[str, Any]:
+    """Pre-declared energy-convention sensitivity (Codex REVIEW-8081e0e7 finding 2): classes and
+    pattern recomputed with r_I and s of the table read at E / (M / u); ``invariant`` iff the
+    pattern equals ``before``; per ion and band the maximum |r_I - r_I_alt| (0.1 pp rounded)."""
+    classes = {
+        ion: band_classes(pts, METHOD_SYSTEMATIC, "r_I_alt", "s_alt") for ion, pts in points.items()
+    }
+    alt = pattern({ion: {b: {"class": c} for b, c in cl.items()} for ion, cl in classes.items()})
+    delta = {
+        ion: {
+            name: _round(
+                _max_abs(
+                    [
+                        p["r_I"] - p["r_I_alt"]
+                        for p in pts
+                        if p["valid"] and band_of(p["e0"]) == name
+                    ]
+                )
+            )
+            for name, *_ in BANDS
+        }
+        for ion, pts in points.items()
+    }
+    return {
+        "max_abs_delta_r_i_per_band": delta,
+        "pattern_alt": alt,
+        "classes_alt": classes,
+        "invariant": alt == before,
+    }
 
 
 @dataclass
@@ -1632,7 +1799,7 @@ class Point:
     valid: bool
     reason: str | None
     used: dict[str, str]
-    model: dict[str, float] | None = None
+    model: dict[str, Any] | None = None
 
     def _triple(self) -> list[dict[str, Any]] | None:
         if self.runs is None or len(self.runs) != 3 or not all(r["valid"] for r in self.runs):
@@ -1650,12 +1817,18 @@ class Point:
         return None if d is None or self.model is None else d - self.model["d_pred"]
 
     def emulation_residual(self) -> float | None:
-        """max over f1, f2 of |g_meas(f) - g_model(f)|, g_meas(f) = (1 + r(f)) / (1 + r_fine) - 1
-        (check (i))."""
+        """|e1| (check (i), the gate; :func:`emulation_residuals`)."""
         rs = self._triple()
         if rs is None or self.model is None:
             return None
         return emulation_residual(rs, self.model)
+
+    def emulation_residual_f2(self) -> float | None:
+        """e2 (report only: carries the slope of the stopping ratio)."""
+        rs = self._triple()
+        if rs is None or self.model is None:
+            return None
+        return emulation_residuals(rs, self.model)[1]
 
     def extrapolation_difference(self) -> float | None:
         """r_0 - r_fine with r_0 the zero-thickness extrapolation of the pair (check (ii))."""
@@ -1663,12 +1836,19 @@ class Point:
         return None if rs is None else extrapolation_difference(rs)
 
 
-def emulation_residual(rs: list[dict[str, Any]], model: dict[str, float]) -> float:
-    """Check (i): max(|g_meas(f1) - g1|, |g_meas(f2) - g2|), g_meas(f) = (1 + r_M(f)) /
-    (1 + r_M,fine) - 1."""
-    fine = 1.0 + float(rs[2]["r_M"])
-    g_meas = [(1.0 + float(rs[k]["r_M"])) / fine - 1.0 for k in (0, 1)]
-    return max(abs(g_meas[0] - model["g1"]), abs(g_meas[1] - model["g2"]))
+def emulation_residuals(rs: list[dict[str, Any]], model: dict[str, Any]) -> tuple[float, float]:
+    """(e1, e2): e_k = g_meas(f_k) - g*(f_k), g_meas(f) = (1 + r_M(f)) / (1 + r_M,fine) - 1 and
+    g* from ``model["expect"](r_M,fine)`` (:func:`expected_g_meas`). e1 (same slab t) is the
+    gate; e2 carries the slope of the stopping ratio and is reported only."""
+    r_fine = float(rs[2]["r_M"])
+    g_star = model["expect"](r_fine)
+    g_meas = [(1.0 + float(rs[k]["r_M"])) / (1.0 + r_fine) - 1.0 for k in (0, 1)]
+    return g_meas[0] - g_star[0], g_meas[1] - g_star[1]
+
+
+def emulation_residual(rs: list[dict[str, Any]], model: dict[str, Any]) -> float:
+    """Check (i): |e1| (the gate)."""
+    return abs(emulation_residuals(rs, model)[0])
 
 
 def extrapolation_difference(rs: list[dict[str, Any]]) -> float:
@@ -1681,7 +1861,7 @@ def resolve_point(
     case: int,
     parts: tuple[int, ...],
     ratios: Callable,
-    model: dict[str, float] | None = None,
+    model: dict[str, Any] | None = None,
 ) -> Point:
     """Deterministic repeat rule for one point (one part, or the triple slab t / slab 1.6 t /
     fine-step with the model's one-step biases ``model``); see the module docstring."""
@@ -1695,9 +1875,7 @@ def resolve_point(
             return None
         if not emulation_residual(rs, model) <= EMULATION_TOL:
             return EMULATION_REASON
-        if not abs(extrapolation_difference(rs)) <= EXTRAPOLATION_TOL:
-            return EXTRAPOLATION_REASON
-        return None
+        return None  # e2 and the extrapolation difference are reported only
 
     def with_ratios(r: dict[str, Any]) -> dict[str, Any]:
         return {**r, **ratios(r)} if r["valid"] else r
@@ -1744,9 +1922,12 @@ def _max_abs(values: list[float | None]) -> float | None:
     return max(vals) if vals else None
 
 
-def band_classes(points: list[dict[str, Any]], systematic: float) -> dict[str, str]:
+def band_classes(
+    points: list[dict[str, Any]], systematic: float, r_i_key: str = "r_I", s_key: str = "s"
+) -> dict[str, str]:
     """Class per band of the valid points with the method systematic ``systematic`` (the
-    robustness check uses twice :data:`METHOD_SYSTEMATIC`); "none" for an empty band."""
+    robustness check uses twice :data:`METHOD_SYSTEMATIC`; the convention sensitivity the
+    alternative ``r_I_alt`` / ``s_alt``); "none" for an empty band."""
     out = {}
     for name, *_ in BANDS:
         valid = [p for p in points if p["valid"] and band_of(p["e0"]) == name]
@@ -1754,8 +1935,8 @@ def band_classes(points: list[dict[str, Any]], systematic: float) -> dict[str, s
             out[name] = "none"
             continue
         r_m = float(np.mean([p["r_M"] for p in valid]))
-        r_i = float(np.mean([p["r_I"] for p in valid]))
-        s = float(np.mean([p["s"] for p in valid]))
+        r_i = float(np.mean([p[r_i_key] for p in valid]))
+        s = float(np.mean([p[s_key] for p in valid]))
         se_b = math.sqrt(sum(p["se_rel"] ** 2 for p in valid)) / len(valid)
         out[name] = classify(r_m, r_i, s, math.sqrt(se_b**2 + systematic**2))
     return out
@@ -1781,7 +1962,8 @@ def band_aggregates(points: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "x_b": None,
             "class": "none",
             "max_abs_emulation_residual": _max_abs([p["d_emul"] for p in pts]),
-            "max_abs_extrapolation_difference": _max_abs([p["d_extra"] for p in pts]),
+            "max_abs_emulation_residual_f2_report_only": _max_abs([p["d_emul2"] for p in pts]),
+            "max_abs_extrapolation_difference_report_only": _max_abs([p["d_extra"] for p in pts]),
             "max_abs_thickness_difference": _max_abs([p["d_thick"] for p in pts]),
             "max_abs_consistency_residual": _max_abs([p["d_resid"] for p in pts]),
             "max_abs_predicted_difference": _max_abs([p["d_pred"] for p in pts]),
@@ -1880,6 +2062,8 @@ def evaluate(
         for ion, z in (("carbon", 6), ("oxygen", 8))
     }
     keys = {ion: f"table:{archive_sha}:{ion}" for ion in s_table}
+    s_alt = {ion: alternative_convention_table(s_table[ion], ion) for ion in s_table}
+    keys_alt = {ion: f"table-alt:{archive_sha}:{ion}" for ion in s_table}
 
     runs = {b: check_run(ctx, b, rid) for b, rid in sorted(ctx.index.items())}
     for name in runs:
@@ -1914,7 +2098,7 @@ def evaluate(
     }
 
     def ratios(r: dict[str, Any]) -> dict[str, Any]:
-        return run_ratios(r, s_model, s_table, keys)
+        return run_ratios(r, s_model, s_table, keys, s_alt, keys_alt)
 
     repeats_used: dict[str, str] = {}
     invalid_points: dict[str, str] = {}
@@ -1926,13 +2110,17 @@ def evaluate(
             for p in parts:
                 if gen.bundle_name(case, p) not in runs:
                     raise RecordError(f"missing evidence run {gen.bundle_name(case, p)}")
-            model = stepping[ion][case]
+            model = {
+                **stepping[ion][case],
+                "expect": functools.partial(expected_g_meas, ion, case),
+            }
             pt = resolve_point(runs, case, parts, ratios, model)
             repeats_used.update(pt.used)
             e0 = float(gen.CASES[case])
             base = {
                 "e0": e0,
                 "d_emul": pt.emulation_residual(),
+                "d_emul2": pt.emulation_residual_f2(),
                 "d_extra": pt.extrapolation_difference(),
                 "d_thick": pt.thickness_difference(),
                 "d_resid": pt.consistency_residual(),
@@ -1958,6 +2146,8 @@ def evaluate(
                     "r_I": fine["r_I"],
                     "s": fine["s"],
                     "se_rel": fine["se_rel"],
+                    "r_I_alt": fine["r_I_alt"],
+                    "s_alt": fine["s_alt"],
                 }
             )
     bands = {ion: band_aggregates(points[ion]) for ion in TRIPLE_PARTS}
@@ -2017,8 +2207,12 @@ def evaluate(
     robust = before == pattern2
     if not robust:
         reasons.append(ROBUST_REASON)
+    convention = convention_sensitivity(points, before)
+    if not convention["invariant"]:
+        reasons.append(CONVENTION_REASON)
     conclusive = not reasons
     late = sorted(set(executable_closure()) - set(ctx.sealed))
+    ctx.environment["runtime_after"] = runtime_checks()  # lazily imported modules included
     if late:
         raise RecordError(f"modules imported after the seal: {late}")
     try:
@@ -2029,7 +2223,7 @@ def evaluate(
     return {
         "schema": RESULT_SCHEMA,
         "task_id": TASK_ID,
-        "amendment": "I3-FU-1 step 2 (revision 2)",
+        "amendment": f"I3-FU-1 step 2 (revision {AMENDMENT_REVISION})",
         "claim": "diagnostic; no gate; no validation claim",
         "code_sha": code_sha,
         "method": {
@@ -2038,19 +2232,23 @@ def evaluate(
             "rk4_steps": N_RK4,
             "model": "ionmc bethe_mass_stopping default options, water(78.0)",
             "table": "libdEdx ICRU73_NEW liquid water (target 276), log-log interpolated",
+            "energy_convention": "energy per nucleon = E/A, A = mass number; alternative "
+            "E/(M/u) tested (M the committed ionmc nuclear mass)",
             "stepping_model": "P13 record: table part q^2(E_pre) S_base(E) integrated over the "
             "one-step slab + correction term at the mid-step energy (C/O); He table part with "
             "the full model, q frozen; g(f) = Delta E_alg / Delta E_exact - 1",
             "method_systematic": METHOD_SYSTEMATIC,
             "method_systematic_robustness": ROBUSTNESS_SYSTEMATIC,
             "method_systematic_composition": "0.1 % table/range construction, 0.1 % per-nucleon "
-            "energy convention, 0.1 % fine-step stepping bias; quadrature 0.17 %, rounded to 0.2 %",
+            "energy convention, 0.1 % stepping (linear-branch Euler bias of the fine steps, "
+            "-0.04 to -0.06 %); quadrature 0.17 %, rounded to 0.2 %",
             "fine_step_divisor": gen.FINE_DIVISOR,
             "x_cap": X_CAP,
             "k_one_sided": K_ONE_SIDED,
             "consistency_tolerance_reported_only": CONSISTENCY_TOL,
             "emulation_tolerance": EMULATION_TOL,
-            "extrapolation_tolerance": EXTRAPOLATION_TOL,
+            "report_only": "e2 (1.6 t vs fine) and r_0 - r_fine carry rho' (the slope of the "
+            "stopping ratio); not gates",
             "point": "r_fine: the fine-step run (MaxStepSize t/20); the one-step pair enters the "
             "emulation (i) and extrapolation (ii) checks",
             "model_residual_limit": MODEL_RESIDUAL_LIMIT,
@@ -2063,6 +2261,7 @@ def evaluate(
         "classes_sigma_doubled": classes2,
         "pattern_sigma_doubled": pattern2,
         "robust": robust,
+        "convention_sensitivity": convention,
         "pattern": before if conclusive else "INCONCLUSIVE",
         "conclusive": conclusive,
         "inconclusive_reasons": reasons,

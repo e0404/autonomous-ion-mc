@@ -11,7 +11,6 @@ an opaque error for Geant4 source URLs on 2026-11-16 (three attempts), so these 
 their line citations are bound to the recorded hashes only (disclosed limitation; a later successful acquisition can
 re-bind them). No Geant4 data values are reproduced. Not a clinical claim.
 
-# P13: stepping-bias bound of the I3-FU-1 step-2 thin-slab extrapolation (Codex REVIEW-c4f3fdd1 finding 2)
 
 Scope: amendment I3-FU-1 step 2 "Quantity" bullet / rule 2a (plan `validation/plans/v3-008-acceptance.md`, heading
 "### Amendment I3-FU-1"). Question: residual stepping bias of r0 = (f2 r(f1) - f1 r(f2))/(f2 - f1), f1 = 3 %, f2 = 4.8 %,
@@ -136,7 +135,7 @@ emulation A (the committed evaluator) underestimates R and Delta_pred = g(f2) - 
 6. **Branch condition (FACT).** The test is length * q2(E_pre) * S_base(E_s) > 0.02 E_pre ([VELP] L813, L824), i.e. the
    pre-step **table** loss without the LS term. The design sets ell S_M(E0) = 3 % E0; Geant4's table S differs from S_M by
    a few % (I3 residuals), so the estimate is 2.8-3.2 % >= 2 % at f1 (margin ~1/3); f2 a fortiori. The short-step
-   branch would bias by -a f... but is not taken. Step-count smokes verify the single step; OPEN: they do not log the
+   branch (forward Euler on the pre-step dE/dx, q² per step) biases by about σ·δ/2 per step with σ = dlnS/dlnE, i.e. −0.04 to −0.06 % for the revision-5 fine-step runs (δ ≈ 0.15 %; SR-3 fourth pass), not −a f; it is not taken by the one-step slabs. Step-count smokes verify the single step; OPEN: they do not log the
    branch; no direct runtime evidence beyond the arithmetic.
 7. **Energy dependence of the stopping ratio itself (ESTIMATE).** r(f) also contains rho(f) = <S_G4>/<S_M> - 1 over the
    slab; its quadratic part ~ d^2 rho/dlnE^2 f^2 / 6 with |d^2 rho/dlnE^2| <~ 0.02 -> < 0.001 %; not stepping.
@@ -168,4 +167,4 @@ grid settings, continuity of the base table at 2 MeV in water). Model estimates 
 - O3: [URB] ComputeTrueStepLength lines and the GenericIon msc step-limit type (bound already negligible).
 - O4: emulation A (committed evaluator) vs B: B implements [LS] L263-300 literally; consider adopting B for Delta_pred
   and R_model, or widen the stated budget; decision for the orchestrator.
-- O5: register the fetched sources (hashes above) before any of their line citations enter Git.
+- O5: register the fetched sources (hashes above) before any of their line citations enter Git. **Status 2026-11-16 (orchestrator): NOT met — the citations are in Git bound to the full sha256 listed in §1 without a provenance-cache entry (the acquisition tool errored); rebinding pending.**
