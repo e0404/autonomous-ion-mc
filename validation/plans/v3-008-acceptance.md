@@ -2200,3 +2200,11 @@ two findings remain; Codex 3 (plan inconsistencies) → "four smokes" sentences 
 INCONCLUSIVE definition of rule 2a completed to the evaluator's full list (premises, robustness, convention invariance);
 Codex 4 (revision constant one behind) → the evaluator's `AMENDMENT_REVISION` is coupled to the plan by a test that reads
 the highest revision record of this amendment (now 8). Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; intervention filed).** Codex REVIEW-60fe6c01 on 7df946b6 retained only the two
+infrastructure-bound findings (review-service signature; authenticated launcher). As announced in the revision-8 record,
+intervention **IR-20261116-123921-312B59** (categories 4 and 5; record `reference_requests/interventions/IR-20261116-123921-312B59/`)
+asks the operator to choose between (A) proceeding under the disclosed limitations with a disposition-accepting pin rule,
+(B) building signed review records first (V3-INFRA-006; operator restart of the codex-worker service) and (C) stopping the
+follow-up. Until the answer: no step-1 run, no smoke, no evidence run; the commits of 2026-11-16 stay unpushed (the
+per-commit push gate requires a passed review); PR #84 stays open, not merged (row I3 FAIL). Not a clinical claim.
