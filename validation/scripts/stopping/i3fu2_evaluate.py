@@ -13,7 +13,7 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 12)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 13)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
 **Launch (Codex REVIEW-8081e0e7 finding 3, REVIEW-cf6fa397).** The evaluator must be started
@@ -420,7 +420,7 @@ FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 12  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
+AMENDMENT_REVISION = 13  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
 #: the plan's revision records of this amendment (counted in the plan committed at code_sha)
 PLAN_REVISION_RE = re.compile(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", re.M)
 REDISTRIBUTION_NOTE = (

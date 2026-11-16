@@ -379,32 +379,63 @@ def bytecode_check(modules: Mapping[str, ModuleType]) -> dict[str, Any]:
     return {"dont_write_bytecode": True, "modules_without_bytecode_cache": len(modules)}
 
 
-def _launcher() -> ModuleType:
-    """``sealed_launch.py`` of this directory (loaded by path; its import has no side effect)."""
-    name = "_ionmc_sealed_launch_checks"
-    if name in sys.modules:
-        return sys.modules[name]
-    path = Path(__file__).resolve().parent / "sealed_launch.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load {path}")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+#: ``builtins`` attribute under which ``sealed_launch.py`` passes its launch record
+RECORD_NAME = "__ionmc_sealed_launch__"
+_FILEFINDER_HOOK = (
+    "_frozen_importlib_external",
+    "FileFinder.path_hook.<locals>.path_hook_for_FileFinder",
+    "<frozen importlib._bootstrap_external>",
+)
+
+
+def machinery_problems(
+    meta_path: list[Any] | None = None, path_hooks: list[Any] | None = None
+) -> list[str]:
+    """``sys.meta_path`` / ``sys.path_hooks`` / ``sys.path_importer_cache`` are the standard
+    ones, by identity (the same check as ``sealed_launch.py`` (b), repeated here at the capture:
+    the launcher refuses to be imported as a module, so its functions cannot be reused)."""
+    import importlib.machinery
+    import zipimport
+
+    meta = list(sys.meta_path if meta_path is None else meta_path)
+    hooks = list(sys.path_hooks if path_hooks is None else path_hooks)
+    want = [
+        importlib.machinery.BuiltinImporter,
+        importlib.machinery.FrozenImporter,
+        importlib.machinery.PathFinder,
+    ]
+    out = []
+    if len(meta) != len(want) or any(m is not w for m, w in zip(meta, want, strict=False)):
+        out.append(f"sys.meta_path is not the standard finder list: {meta!r}")
+    ok_hooks = len(hooks) == 2 and hooks[0] is zipimport.zipimporter
+    if ok_hooks:
+        hook = hooks[1]
+        code = getattr(hook, "__code__", None)
+        ok_hooks = (
+            getattr(hook, "__module__", None),
+            getattr(hook, "__qualname__", None),
+            getattr(code, "co_filename", None),
+        ) == _FILEFINDER_HOOK
+    if not ok_hooks:
+        out.append(f"sys.path_hooks is not the standard hook list: {hooks!r}")
+    for key, finder in sys.path_importer_cache.items():
+        if finder is not None and not isinstance(
+            finder, importlib.machinery.FileFinder | zipimport.zipimporter
+        ):
+            out.append(f"sys.path_importer_cache[{key!r}] holds a foreign finder {finder!r}")
+    return out
 
 
 def capture_launch() -> dict[str, Any]:
     """The launch state, captured as the first statement of a diagnostic (see the module
     docstring): the flags, ``sys.pycache_prefix`` and whether it holds no file, the import
-    machinery check (by identity, :mod:`sealed_launch`), ``sys.path`` and the launcher record
+    machinery check (by identity, :func:`machinery_problems`), ``sys.path`` and the launcher record
     (``builtins.__ionmc_sealed_launch__``). Never raises."""
     prefix = getattr(sys, "pycache_prefix", None)
     path = Path(prefix) if prefix else None
     exists = bool(path is not None and path.is_dir())
     files = sum(1 for p in path.rglob("*") if p.is_file()) if exists and path is not None else None
-    launcher = _launcher()
-    record = getattr(builtins, launcher.RECORD_NAME, None)
+    record = getattr(builtins, RECORD_NAME, None)
     return {
         "dont_write_bytecode_flag": int(sys.flags.dont_write_bytecode),
         "pycache_prefix": prefix,
@@ -415,7 +446,7 @@ def capture_launch() -> dict[str, Any]:
         "meta_path": [
             type(f).__name__ if not isinstance(f, type) else f.__name__ for f in sys.meta_path
         ],
-        "machinery_problems": launcher.machinery_problems(),
+        "machinery_problems": machinery_problems(),
         "sys_path_at_capture": list(sys.path),
         "launcher_record": dict(record) if isinstance(record, dict) else None,
     }

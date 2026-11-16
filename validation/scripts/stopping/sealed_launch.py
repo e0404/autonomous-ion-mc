@@ -57,6 +57,13 @@ imported after start-up). The launcher
     ``head_sha`` and ``target_committed``; compiles and executes exactly those bytes with the
     captured, verified ``compile`` / ``exec``.
 
+The git calls run in a sanitized environment (PATH, ``LANG=C``, a non-existent ``HOME``, no
+inherited ``GIT_*`` variable, system and global git configuration disabled) and are bound to the
+launcher's own repository (``rev-parse --show-toplevel`` must equal it; the git common dir is
+recorded); any git redirection variable (:data:`GIT_REDIRECT_VARIABLES`) in the launcher's own
+environment is refused by name (Codex REVIEW-d8ecd044). The launcher refuses to be imported as a
+module (ImportError before any function is defined), so a wrapper cannot reuse its functions.
+
 Any failed check: a message on stderr and exit status 2; the target is not run.
 
 Trust model: the trusted base is the interpreter binary (hashed in the environment seal and
@@ -85,6 +92,8 @@ _EXEC = _builtins_at_start.exec
 _OPEN = _builtins_at_start.open
 _IMPORT = _builtins_at_start.__import__
 _HAS_CALLER_FRAME = _IMPORT("sys")._getframe(0).f_back is not None
+if __name__ != "__main__":  # Codex REVIEW-d8ecd044: never usable as a library from a wrapper
+    raise ImportError("sealed_launch.py must be run as a script; it refuses to be imported")
 
 import builtins  # noqa: E402
 import hashlib  # noqa: E402
@@ -246,26 +255,78 @@ def bootstrap_problems() -> list[str]:
     return out
 
 
-def committed_target(rel: str) -> tuple[bytes, str]:
-    """(3): the target's bytes committed at HEAD of the repository and HEAD itself, via the git
-    binary (list-form subprocess, no shell); the target must have no uncommitted change.
+#: git variables that redirect the repository, index or object store: their presence in the
+#: launcher's own environment is refused (fail closed, the variable named)
+GIT_REDIRECT_VARIABLES = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+)
+
+
+def git_environment_problems(environ: dict[str, str] | None = None) -> list[str]:
+    """(g) no git redirection variable may be set in the launcher's own environment."""
+    env = os.environ if environ is None else environ
+    return [f"{v} is set in the launcher's environment (refused)" for v in GIT_REDIRECT_VARIABLES
+            if v in env]  # fmt: skip
+
+
+def git_env() -> dict[str, str]:
+    """The sanitized environment of the git calls: PATH, LANG=C, a non-existent HOME, no
+    inherited ``GIT_*`` variable; system and global git configuration disabled."""
+    return {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "LANG": "C",
+        "HOME": "/nonexistent-ionmc-sealed-launch-home",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+    }
+
+
+def committed_target(rel: str) -> tuple[bytes, dict[str, str]]:
+    """(g): the target's bytes committed at HEAD of the launcher's own repository, via the git
+    binary (list-form subprocess, no shell, :func:`git_env`). The repository is bound: ``git -C
+    <repo> rev-parse --show-toplevel`` must be the repository three levels above the launcher
+    and ``--git-common-dir`` an existing directory (recorded); the target must have no
+    uncommitted change. Returns (bytes, {head_sha, git, toplevel, git_common_dir});
     RuntimeError otherwise."""
-    git = shutil.which("git")
+    problems = git_environment_problems()
+    if problems:
+        raise RuntimeError("; ".join(problems))
+    git = shutil.which("git", path=git_env()["PATH"])
     if git is None:
         raise RuntimeError("git not found (needed to authenticate the target)")
 
     def run(*args: str) -> bytes:
         proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
-            [git, "-C", str(REPO), *args], capture_output=True, check=False
+            [git, "-C", str(REPO), *args], capture_output=True, check=False, env=git_env()
         )
         if proc.returncode != 0:
             raise RuntimeError(f"git {' '.join(args)} failed: {proc.stderr.decode().strip()}")
         return proc.stdout
 
+    toplevel = Path(run("rev-parse", "--show-toplevel").decode().strip()).resolve()
+    if toplevel != REPO:
+        raise RuntimeError(f"git toplevel {toplevel} is not the launcher's repository {REPO}")
+    common = Path(
+        run("rev-parse", "--path-format=absolute", "--git-common-dir").decode().strip()
+    ).resolve()
+    if not common.is_dir():
+        raise RuntimeError(f"git common dir {common} is not a directory")
     head = run("rev-parse", "HEAD").decode().strip()
     if run("status", "--porcelain", "--untracked-files=no", "--", rel).strip():
         raise RuntimeError(f"the target {rel} has an uncommitted change")
-    return run("show", f"HEAD:{rel}"), head
+    binding = {
+        "head_sha": head,
+        "git": git,
+        "git_toplevel": str(toplevel),
+        "git_common_dir": str(common),
+    }
+    return run("show", f"HEAD:{rel}"), binding
 
 
 def preimport_problems(modules: dict[str, Any] | None = None) -> list[str]:
@@ -297,7 +358,7 @@ def target_rel(target: Path) -> str:
     return rel
 
 
-def launch_record(target: Path, blob: bytes, head_sha: str) -> dict[str, Any]:
+def launch_record(target: Path, blob: bytes, binding: dict[str, str]) -> dict[str, Any]:
     """Run checks (a)-(e); raise RuntimeError on any problem; return the record."""
     problems = flag_problems() + machinery_problems() + preimport_problems()
     if problems:
@@ -316,7 +377,7 @@ def launch_record(target: Path, blob: bytes, head_sha: str) -> dict[str, Any]:
         "target": target_rel(target),
         "target_path": str(target.resolve()),
         "target_sha256": hashlib.sha256(blob).hexdigest(),
-        "head_sha": head_sha,
+        **binding,
         "target_committed": True,
         "sys_modules_at_launch": sorted(sys.modules),
         "python_executable": str(Path(sys.executable).resolve()),
@@ -343,16 +404,21 @@ def main(argv: list[str]) -> int:
         return 2
     target = Path(argv[0]).resolve()
     try:
-        problems = bootstrap_problems() + flag_problems() + machinery_problems()
+        problems = (
+            bootstrap_problems()
+            + flag_problems()
+            + machinery_problems()
+            + git_environment_problems()
+        )
         if problems:
             raise RuntimeError("; ".join(problems))
         rel = target_rel(target)
         with _OPEN(target, "rb") as fh:  # the verified builtin open
             blob = fh.read()  # hashed, authenticated and executed bytes are the same
-        committed, head_sha = committed_target(rel)
+        committed, binding = committed_target(rel)
         if blob != committed:
             raise RuntimeError(f"the target {rel} differs from the committed bytes at HEAD")
-        record = launch_record(target, blob, head_sha)
+        record = launch_record(target, blob, binding)
         code = _COMPILE(blob, str(target), "exec", dont_inherit=True)
     except (RuntimeError, OSError, SyntaxError) as exc:
         print(f"sealed_launch: refused: {exc}", file=sys.stderr)

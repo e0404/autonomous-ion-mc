@@ -2276,3 +2276,20 @@ is compiled and executed with the captured builtins. Trust model (docstring): th
 (hashed in the seal and verified after start), the git binary used for the bootstrap comparison, the kernel and libc;
 the stdlib modules imported before the launcher's checks are recorded and verified afterwards against the seal. The
 evaluator's revision constant follows the plan (12); no evaluator logic changed in this revision. Not a clinical claim.
+
+**Revision 13 of amendment I3-FU-1 (2026-11-16, orchestrator; Codex REVIEW-d8ecd044 on 10384889; before any run).**
+Codex finding 1 (an in-process wrapper could import the launcher's functions, forge a valid launch record, monkeypatch
+ionmc in memory and execute the committed target): no in-process mechanism can bind a process whose start the executing
+party controls, so the binding is moved to the trusted external bootstrap the experiment already has — **both
+diagnostics are executed by the host-runner service** (`run_host_validation`: the service starts the process itself from
+a clean snapshot of the committed SHA with the exact argv recorded and the record signed with the published host-runner
+key; no network, no home, writable outputs only under `validation/generated`). The signed host-run records (argv with the
+launcher command line, `sha`, stdout/stderr hashes, output-manifest hash) are committed next to the results and bound in
+the dated results notes; the launcher's in-process checks stay as defence in depth, and the launcher additionally refuses
+to be imported as a module. The environment seal is written by a host-runner run of the step-1 script in
+`--write-environment-seal` mode (so it describes the host-runner's interpreter, numpy distribution and stdlib) and
+committed before pin A; the seal written in the sandbox on 2026-11-16 is superseded. Codex finding 2 (git selection not
+sealed) → the launcher runs git with a sanitized environment (every `GIT_*` variable removed; refusal if one is set),
+binds it to the repository explicitly and records the resolved top level and git directory. Execution order for the
+runs is unchanged (step 1 at the pin-A commit; smokes; markers; pin B; evidence runs), each host call ≤ 1500 s, one at a
+time. Not a clinical claim.

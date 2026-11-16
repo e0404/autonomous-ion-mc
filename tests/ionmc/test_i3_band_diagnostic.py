@@ -18,6 +18,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -1053,12 +1054,13 @@ def _launch_py(
     *args: str,
     flags: tuple[str, ...] = ("-I", "-S", "-B"),
     prefix: Path | None = None,
+    env: dict[str, str] | None = None,
 ) -> Any:
     if prefix is None:
         prefix = tmp_path / "prefix"
         prefix.mkdir(exist_ok=True)
     cmd = [sys.executable, *flags, "-X", f"pycache_prefix={prefix}", str(script), *args]
-    return subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=tmp_path)
+    return subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=tmp_path, env=env)
 
 
 def test_sealed_launch_end_to_end_writes_a_seal(mod, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
@@ -1131,14 +1133,11 @@ def test_sealed_launcher_refuses_a_foreign_import_hook(tmp_path: Path) -> None:
     assert proc.returncode == 2 and "module frame has a caller" in proc.stderr
 
 
-def test_machinery_check_by_identity() -> None:
+def test_machinery_check_by_identity(mod) -> None:  # type: ignore[no-untyped-def]
     import importlib.machinery
     import zipimport
 
-    launcher = importlib.util.spec_from_file_location("_t_launch", LAUNCHER)
-    assert launcher is not None and launcher.loader is not None
-    lmod = importlib.util.module_from_spec(launcher)
-    launcher.loader.exec_module(lmod)
+    lmod = mod.ENV  # the capture-time copy of the launcher's check (the launcher is not importable)
     std = [
         importlib.machinery.BuiltinImporter,
         importlib.machinery.FrozenImporter,
@@ -1263,3 +1262,46 @@ def test_launch_capture_precedes_numpy_and_ionmc_imports() -> None:
         assert (
             "import numpy" not in head and "from ionmc" not in head and "import ionmc" not in head
         )
+
+
+def test_launcher_refuses_to_be_imported(tmp_path: Path) -> None:
+    """Codex REVIEW-d8ecd044: a wrapper cannot import the launcher to reuse its functions
+    (``committed_target`` / ``launch_record``): the import raises before any function exists."""
+    spec = importlib.util.spec_from_file_location("_t_sealed_launch", LAUNCHER)
+    assert spec is not None and spec.loader is not None
+    with pytest.raises(ImportError, match="refuses to be imported"):
+        spec.loader.exec_module(importlib.util.module_from_spec(spec))
+    wrapper = tmp_path / "importer.py"
+    wrapper.write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(LAUNCHER.parent)!r})\n"
+        "from sealed_launch import committed_target, launch_record\n"
+        "print('reused')\n"
+    )
+    proc = _launch_py(tmp_path, wrapper)
+    assert proc.returncode != 0 and "refuses to be imported" in proc.stderr
+    assert "reused" not in proc.stdout
+
+
+def test_launcher_refuses_git_redirection_to_a_decoy(tmp_path: Path) -> None:
+    """GIT_DIR / GIT_WORK_TREE pointing at a decoy repository whose committed target equals
+    the tampered bytes on disk: refused by name before git runs (the sanitized git environment
+    would ignore them anyway)."""
+    repo, launcher, target = _target_repo(tmp_path)
+    tampered = "print('tampered')\n"
+    decoy = tmp_path / "decoy"
+    (decoy / "validation" / "scripts" / "stopping").mkdir(parents=True)
+    (decoy / "validation" / "scripts" / "stopping" / "i3_band_diagnostic.py").write_text(tampered)
+    _git(decoy, "init", "-q", "-b", "main")
+    _commit(decoy, "decoy with the tampered target")
+    target.write_text(tampered)
+    env = {**os.environ, "GIT_DIR": str(decoy / ".git"), "GIT_WORK_TREE": str(decoy)}
+    proc = _launch_py(tmp_path, launcher, str(target), env=env)
+    assert proc.returncode == 2 and "tampered" not in proc.stdout
+    assert "GIT_DIR is set" in proc.stderr and "GIT_WORK_TREE is set" in proc.stderr
+    for var in ("GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"):
+        proc = _launch_py(tmp_path, launcher, str(target), env={**os.environ, var: "/x"})
+        assert proc.returncode == 2 and f"{var} is set" in proc.stderr
+    # without the variables the tampered (uncommitted) target is refused by the git binding
+    proc = _launch_py(tmp_path, launcher, str(target))
+    assert proc.returncode == 2 and "has an uncommitted change" in proc.stderr
