@@ -12,7 +12,7 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 5)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 6)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
 **Launch (Codex REVIEW-8081e0e7 finding 3).** The evaluator must be started as
@@ -190,27 +190,27 @@ model residual of the zero-thickness extrapolation R_model = (f2 g(f1) - f1 g(f2
 |R_model| <= :data:`MODEL_RESIDUAL_LIMIT` at every C/O/He point (else ``RecordError``: the design
 premise fails).
 
-**Points (revision 5, Codex REVIEW-183057ce finding 2).** Per ion and case a triple of runs:
-slab t (C part 0, O part 2), slab 1.6 t (parts 1, 3) and the fine-step run, slab t with the
-per-component step limit MaxStepSize t/20 (parts 6, 7; asserted from ``max_step_um``). The
-point value entering the band aggregates is the fine-step run: r_M, r_I, s and SE_rel of that
-run (direct Geant4 evidence at fine stepping). The fine-step runs lose ~0.15 % per step, i.e.
-they use Geant4's LINEAR branch: emulated by :func:`fine_algorithm_loss` (20 forward-Euler steps
-of length t/20, q^2 and S_base at each step's pre-step energy, the correction term once per step
-at its mid energy; He: S_full at the pre-step energy), b_fine = Delta E_fine / Delta E_exact - 1
-(about -0.04 to -0.06 %, the same sign everywhere). The gate (reviewer pass 4, same-slab check):
-e1 = g_meas(f1) - g*(f1) with g_meas(f1) = (1 + r_M(f1)) / (1 + r_M,fine) - 1 and
-g*(f1) = (1 + g_s(f1)) / (1 + b_s) - 1 (:func:`expected_g_meas`), g_s and b_s the one-step and
-fine-step emulation biases evaluated on the slab scaled by (1 + r_M,fine), i.e. at the MEASURED
-loss fraction f1 (1 + r_M,fine); |e1| <= :data:`EMULATION_TOL` (0.15 %), a failure makes the
-point INVALID (repeat rule). Reported only (not gates; they carry the slope of the stopping
-ratio rho' (rho = S_G4 / S_M - 1) and would fail deterministically in an ICRU-like outcome):
-e2 = g_meas(f2) - g*(f2) (1.6 t run against the slab-t fine run) and the extrapolation
-difference r_0 - r_M,fine, r_0 = (f2 r_M(f1) - f1 r_M(f2)) / (f2 - f1); also the former
-|Delta_meas - Delta_pred|. Method systematic (revision 5): 0.2 % = 0.1 % table/range
-construction, 0.1 % per-nucleon energy convention and 0.1 % stepping (covering the
-linear-branch Euler bias of the fine steps, -0.04 to -0.06 %, and the table interpolation) in
-quadrature (0.17 %), rounded up.
+**Points (revision 5, Codex REVIEW-183057ce finding 2).** Per ion and case a triple of runs: slab t
+(C part 0, O part 2), slab 1.6 t (parts 1, 3) and the fine-step run, slab t with the per-component
+step limit MaxStepSize t/20 (parts 6, 7; asserted from ``max_step_um``). The point value entering
+the band aggregates is the fine-step run: r_M, r_I, s and SE_rel of that run (direct Geant4
+evidence at fine stepping). The fine-step runs lose ~0.15 % per step, i.e. they use Geant4's LINEAR
+branch: emulated by :func:`fine_algorithm_loss` (20 forward-Euler steps of length t/20, q^2 and
+S_base at each step's pre-step energy, the correction term once per step at its mid energy; He:
+S_full at the pre-step energy), b_fine = Delta E_fine / Delta E_exact - 1 (about -0.04 to -0.06 %,
+the same sign everywhere). The gate (reviewer pass 4, same-slab check): e1 = g_meas(f1) - g*(f1)
+with g_meas(f1) = (1 + r_M(f1)) / (1 + r_M,fine) - 1 and g*(f1) = (1 + g_s(f1)) / (1 + b_s) - 1
+(:func:`expected_g_meas`), g_s and b_s the one-step and fine-step emulation biases evaluated on the
+slab scaled by (1 + r_M,fine), i.e. at the MEASURED loss fraction f1 (1 + r_M,fine); |e1| <=
+:data:`EMULATION_TOL` (0.15 %), a failure makes the point INVALID (repeat rule). Reported only (not
+gates; they carry the slope of the stopping ratio rho' (rho = S_G4 / S_M - 1) and would fail
+deterministically in an ICRU-like outcome): e2 = g_meas(f2) - g*(f2) (1.6 t run against the slab-t
+fine run) and the extrapolation difference r_0 - r_M,fine, r_0 = (f2 r_M(f1) - f1 r_M(f2)) / (f2 -
+f1); also the former |Delta_meas - Delta_pred|. If g* is not computable (an extreme r_M,fine scales
+the slab out of the emulation domain) the point is INVALID with the reason ``emulation_domain``.
+Method systematic (revision 5): 0.2 % = 0.1 % table/range construction, 0.1 % per-nucleon energy
+convention and 0.1 % stepping (covering the linear-branch Euler bias of the fine steps, -0.04 to
+-0.06 %, and the table interpolation) in quadrature (0.17 %), rounded up.
 
 **Repeat rule (deterministic).** Repeat bundle = part + 8 (:data:`gen.REPEAT_OFFSET`). A validity
 failure of a run requires the repeat of exactly that run; a failure of the gate e1 of a
@@ -225,17 +225,17 @@ the valid points): n, mean r_M, mean r_I, mean s, SE_b = sqrt(sum SE_rel^2) / n,
 sqrt(SE_b^2 + 0.002^2), X_b = min(0.01, |s_b| / 3), the class (relative to the sign of s_b; U
 first: X_b <= 1.645 sigma_b; I: |r_I| + 1.645 sigma_b <= X_b; H: sign(s_b) r_I - 1.645 sigma_b >
 X_b; M: |r_M| + 1.645 sigma_b <= X_b; L: -sign(s_b) r_M - 1.645 sigma_b > X_b; else N) and the band
-maxima of the emulation residual (i), |r_0 - r_fine| (ii), |r_M(f2) - r_M(f1)|, |Delta_meas -
-Delta_pred|, |Delta_pred| and |R_model|. The table-relative aggregates (mean r_M, mean r_I, mean s,
-X_b and the He ``max_abs_r_m``) are written rounded to 0.1 percentage point; classes and the
-pattern are computed from the full-precision values. Pattern: ICRU iff both ions are I/H in [2,5)
-and [5,10) and I/H/U in [10,20); MODEL iff both are M/L in [2,5) and [5,10) and M/L/U in [10,20);
-else MIXED (``pattern_before_controls``). Robustness to the declared systematic (pre-declared): the
-classes and the pattern are computed a second time with the method systematic doubled to 0.4 %
-(``classes_sigma_doubled``, ``pattern_sigma_doubled``); ``robust`` = (``pattern_before_controls``
-== ``pattern_sigma_doubled``). ``pattern`` is INCONCLUSIVE whenever ``conclusive`` is false: a
-control failed or is incomplete, an evidence point is invalid, a band of [2,5) / [5,10) is U, the
-one-step or the fine-step premise fails, or the pattern is not robust
+maxima of the gate |e1|, the report-only quantities |e2| and |r_0 - r_fine|, |r_M(f2) - r_M(f1)|,
+|Delta_meas - Delta_pred|, |Delta_pred| and |R_model|. The table-relative aggregates (mean r_M,
+mean r_I, mean s, X_b and the He ``max_abs_r_m``) are written rounded to 0.1 percentage point;
+classes and the pattern are computed from the full-precision values. Pattern: ICRU iff both ions
+are I/H in [2,5) and [5,10) and I/H/U in [10,20); MODEL iff both are M/L in [2,5) and [5,10) and
+M/L/U in [10,20); else MIXED (``pattern_before_controls``). Robustness to the declared systematic
+(pre-declared): the classes and the pattern are computed a second time with the method systematic
+doubled to 0.4 % (``classes_sigma_doubled``, ``pattern_sigma_doubled``); ``robust`` =
+(``pattern_before_controls`` == ``pattern_sigma_doubled``). ``pattern`` is INCONCLUSIVE whenever
+``conclusive`` is false: a control failed or is incomplete, an evidence point is invalid, a band of
+[2,5) / [5,10) is U, the one-step or the fine-step premise fails, or the pattern is not robust
 (``not_robust_to_systematic``). Controls: He (part 4, cases 17/21): pass iff both points valid and
 |r_M| <= 0.005; fluctuations off (part 5 vs the C slab-t run of the same case, cases 13/21): pass
 iff complete, the marker set discriminates and |r_M(off) - r_M(on)| <= 0.002. Nothing per point is
@@ -426,11 +426,12 @@ LENGTH_UNITS_MM = {
     "pc": 3.0856775814913673e19,
 }
 EMULATION_REASON = f"same-slab emulation check |e1| > {EMULATION_TOL}"
+EMULATION_DOMAIN_REASON = "emulation_domain"  # g* not computable (scaled slab leaves the domain)
 FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 5
+AMENDMENT_REVISION = 6
 REDISTRIBUTION_NOTE = (
     "Aggregates only: no libdEdx/ICRU 73 or Geant4 table values, no per-energy deviations, "
     "ratios or TOPAS energy-loss values (decision 0038); the controls are written as pass/fail "
@@ -1817,21 +1818,27 @@ class Point:
         return None if d is None or self.model is None else d - self.model["d_pred"]
 
     def emulation_residual(self) -> float | None:
-        """|e1| (check (i), the gate; :func:`emulation_residuals`)."""
+        """|e1| (the gate; :func:`emulation_residuals`); None if g* is not computable."""
         rs = self._triple()
         if rs is None or self.model is None:
             return None
-        return emulation_residual(rs, self.model)
+        try:
+            return emulation_residual(rs, self.model)
+        except ValueError:
+            return None
 
     def emulation_residual_f2(self) -> float | None:
         """e2 (report only: carries the slope of the stopping ratio)."""
         rs = self._triple()
         if rs is None or self.model is None:
             return None
-        return emulation_residuals(rs, self.model)[1]
+        try:
+            return emulation_residuals(rs, self.model)[1]
+        except ValueError:
+            return None
 
     def extrapolation_difference(self) -> float | None:
-        """r_0 - r_fine with r_0 the zero-thickness extrapolation of the pair (check (ii))."""
+        """r_0 - r_fine with r_0 the zero-thickness extrapolation of the pair (report only)."""
         rs = self._triple()
         return None if rs is None else extrapolation_difference(rs)
 
@@ -1852,7 +1859,7 @@ def emulation_residual(rs: list[dict[str, Any]], model: dict[str, Any]) -> float
 
 
 def extrapolation_difference(rs: list[dict[str, Any]]) -> float:
-    """Check (ii): r_0 - r_fine, r_0 = (f2 r_M(f1) - f1 r_M(f2)) / (f2 - f1)."""
+    """Report-only quantity: r_0 - r_fine, r_0 = (f2 r_M(f1) - f1 r_M(f2)) / (f2 - f1)."""
     return richardson(float(rs[0]["r_M"]), float(rs[1]["r_M"])) - float(rs[2]["r_M"])
 
 
@@ -1873,7 +1880,11 @@ def resolve_point(
     def check_failure(rs: list[dict[str, Any]]) -> str | None:
         if len(rs) == 1 or model is None:
             return None
-        if not emulation_residual(rs, model) <= EMULATION_TOL:
+        try:
+            e1 = emulation_residual(rs, model)
+        except ValueError:  # the scaled slab leaves the emulation domain (extreme r_fine)
+            return EMULATION_DOMAIN_REASON
+        if not e1 <= EMULATION_TOL:
             return EMULATION_REASON
         return None  # e2 and the extrapolation difference are reported only
 
@@ -1944,9 +1955,9 @@ def band_classes(
 
 def band_aggregates(points: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Per band: n, means of r_M, r_I, s (fine-step points; written rounded, classified at full
-    precision), SE_b, sigma_b, X_b, class and the band maxima of the emulation residual (check
-    (i)), the extrapolation difference (check (ii)), the thickness difference, the consistency
-    residual, the predicted difference and the model residual."""
+    precision), SE_b, sigma_b, X_b, class and the band maxima of the gate |e1|, the report-only
+    quantities |e2| and |r_0 - r_fine|, the thickness difference, the consistency residual, the
+    predicted difference and the model residual."""
     out: dict[str, dict[str, Any]] = {}
     for name, *_ in BANDS:
         pts = [p for p in points if band_of(p["e0"]) == name]
@@ -2250,7 +2261,7 @@ def evaluate(
             "report_only": "e2 (1.6 t vs fine) and r_0 - r_fine carry rho' (the slope of the "
             "stopping ratio); not gates",
             "point": "r_fine: the fine-step run (MaxStepSize t/20); the one-step pair enters the "
-            "emulation (i) and extrapolation (ii) checks",
+            "gate e1 (slab t vs fine) and the report-only quantities e2 and r_0 - r_fine",
             "model_residual_limit": MODEL_RESIDUAL_LIMIT,
             "he_model_max_abs_r_model": he_model,
             "he_tolerance": HE_TOL,

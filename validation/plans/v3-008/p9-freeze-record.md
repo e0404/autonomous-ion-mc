@@ -1519,10 +1519,10 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/scripts/stopping/i3_band_diagnostic.py` | `e774c8570f8613858e7a1793b7cc1948658ff3e34100c6a1de0e03a8f22ace35` |
-| `tests/ionmc/test_i3_band_diagnostic.py` | `2201bd36d981e0c0c55f265995ffb979f89a2403ebf57c7538139a8c60423ffc` |
+| `tests/ionmc/test_i3_band_diagnostic.py` | `47024d1e0ce8def63889cc7be79cd9cf72062ff94792d9476ff8b1827e0dffe5` |
 | `validation/scripts/stopping/gen_i3fu2_bundles.py` | `46200570d35f40143902c1dffc7245c39700459c453b0b3a21ae75f87251b17b` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `bc2ad6bb24c0017802d4a9d94c24b34297ef650d8e800a47470e0658c82511e1` |
-| `tests/ionmc/test_i3fu2.py` | `8ed0f8971cbccf117bec6a9670881f554e7b41a7e799f73d1cfa9b2ed0425d9c` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `db4c9727230df8164a10b0acf57b70e0f8e64c1a5ee0bfbc5fd46d504635a06c` |
+| `tests/ionmc/test_i3fu2.py` | `fcf2611a5cf9b113089ed747a0fc3363f7e36df81c77c0af44ef1b70ed037528` |
 | `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `cb4664944d7f6f25a3b3acd059cdd93834d3b9e92a99f4cee6d579f20cdfd971` |
 
 
@@ -1536,9 +1536,9 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/env_seal.py` | `c56018d20b30417c4b1577c80818135d7c6b0c3df8ebd8ed3e405d63cf61f4ec` |
+| `validation/scripts/stopping/env_seal.py` | `8ca77dd5e3b9949eecfddadff56834a8e70d1cb1da2676f2d9c3f22dd8445874` |
 | `validation/results/stopping/v3-008-i3fu1/environment-seal.json` | `486ef12d69d59493a51f19a2ec0a4893f64c11c5cbdf5273bc7d5f4d018b2435` |
-| `validation/plans/v3-008/p13-i3fu2-stepping-bound.md` | `15d96f537ad5fe4c8f8c843af68a368f8d6efefb9d4a591edbd49d9d32cfee83` |
+| `validation/plans/v3-008/p13-i3fu2-stepping-bound.md` | `d72b29b8689f3f57908d5a5e01d03f754d73fbaa8404cbdf037aae3ba763ccc7` |
 | `validation/plans/v3-008/p13-scripts/p13.py` | `39e5ffa71b9045ad9ab44faaab050be0a613f4b2a879867d11706ed6c8360c90` |
 
 
@@ -1547,6 +1547,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — revision 5 of amendment I3-FU-1 (Codex REVIEW-183057ce on 9706fd01): instruments revised again before any run; rows above carry the revision-5 hashes (earlier hashes in the previous commits of the day); the i3fu2 manifest now binds 121 bundles (58 evidence, 58 repeats, 5 smokes; 242 files).**
 
 **Dated note (2026-11-16, orchestrator) — revision 6 of amendment I3-FU-1 (Codex REVIEW-8081e0e7 and the SR-3 fourth pass of 2c19caf7): the diagnostics, the environment-seal helper, their tests and the P13 record revised again before any run; rows above carry the revision-6 hashes (earlier hashes in the previous commits of the day); bundles and manifest unchanged (121 bundles).**
+
+**Dated note (2026-11-16, orchestrator) — revision 7 of amendment I3-FU-1 (Codex REVIEW-0b05e7e4 and the SR-3 fifth pass of 62059510): text and constant edits of the evaluator, the environment helper, their tests and the P13 record before any run; rows above carry the revision-7 hashes (earlier hashes in the previous commits of the day); bundles and manifest unchanged (121 bundles).**
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

@@ -1651,7 +1651,7 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
         att = pins[name]["attestation"]
         assert att["signed_at_utc"] == signed and att["validation_id"].startswith("VAL-syn-")
     assert doc["amendment"] == f"I3-FU-1 step 2 (revision {ev.AMENDMENT_REVISION})"
-    assert ev.AMENDMENT_REVISION == 5 and "I3-FU-1 step 2 (revision 5)" in (ev.__doc__ or "")
+    assert ev.AMENDMENT_REVISION == 6 and "I3-FU-1 step 2 (revision 6)" in (ev.__doc__ or "")
     conv = doc["convention_sensitivity"]
     assert conv["invariant"] is True and conv["pattern_alt"] == "ICRU"
     assert conv["classes_alt"] == {ion: _cls(doc, ion) for ion in ("carbon", "oxygen")}
@@ -2504,3 +2504,15 @@ def test_fine_step_run_requires_the_step_limiter_marker(
         _check(base, w)
     w2 = _world(base, tmp_path / "ok", gen.bundle_name(13, 6))
     assert _check(base, w2)["valid"]
+
+
+def test_extreme_r_fine_is_an_emulation_domain_failure() -> None:
+    """rev9: g* is not computable for r_fine ~ 3 (the slab scaled by 4 leaves the emulation
+    domain): the point is INVALID with the reason ``emulation_domain`` (no uncaught ValueError);
+    the reported residuals are None."""
+    n = gen.bundle_name
+    runs = {n(13, p): _fake(r=r) for p, r in zip((0, 1, 6), (3.01, 3.02, 3.0), strict=True)}
+    pt = ev.resolve_point(runs, 13, (0, 1, 6), _ratios, _model("carbon", 13))
+    assert not pt.valid and pt.reason == f"{ev.EMULATION_DOMAIN_REASON}; no repeat"
+    assert ev.EMULATION_DOMAIN_REASON == "emulation_domain"
+    assert pt.emulation_residual() is None and pt.emulation_residual_f2() is None

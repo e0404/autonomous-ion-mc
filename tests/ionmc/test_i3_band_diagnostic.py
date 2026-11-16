@@ -980,6 +980,12 @@ def test_launch_capture_and_check(  # type: ignore[no-untyped-def]
     assert rec["pycache_prefix"] == str(empty) and rec["pycache_prefix_exists"] is True
     assert rec["pycache_prefix_files_at_start"] == 0
     assert rec["dont_write_bytecode_flag"] == int(sys.flags.dont_write_bytecode)
+    assert rec["isolated_flag"] == int(sys.flags.isolated)
+    assert rec["no_site_flag"] == int(sys.flags.no_site)
+    assert rec["meta_path"] == [
+        f.__name__ if isinstance(f, type) else type(f).__name__ for f in sys.meta_path
+    ]
+    assert "PathFinder" in rec["meta_path"]
     good = {**rec, "dont_write_bytecode_flag": 1}
     assert env.check_launch(good)["launch_ok"] is True
     with pytest.raises(env.EnvironmentSealError, match="python -B"):

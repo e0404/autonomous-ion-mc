@@ -22,7 +22,12 @@ numerical runtime of the diagnostics by content:
   ``sys.pycache_prefix`` and whether that directory exists and holds no file;
   :func:`check_launch` enforces it before any computation. With an empty prefix no bytecode can
   have been read for any module imported after the capture: the interpreter compiled the
-  verified sources;
+  verified sources. Disclosed residual: Python start-up (``site``, ``.pth`` files,
+  ``sitecustomize`` / ``usercustomize``), any import hook and the stdlib sources execute before
+  the capture and are not sealed; ``-I`` / ``-S`` are not used because the venv's
+  site-packages must stay importable. The capture records ``sys.flags.isolated``,
+  ``sys.flags.no_site`` and the class names of the ``sys.meta_path`` entries, so that an
+  unexpected import hook is at least visible in the provenance;
 * runtime controls (Codex REVIEW-183057ce finding 3): every loaded numpy module resolves under the
   verified distribution root and its file is listed with a hash in RECORD (hence verified;
   :func:`numpy_modules_check`), and, as a second line of defence only, no ``__cached__``
@@ -273,6 +278,11 @@ def capture_launch() -> dict[str, Any]:
         "pycache_prefix": prefix,
         "pycache_prefix_exists": exists,
         "pycache_prefix_files_at_start": files,
+        "isolated_flag": int(sys.flags.isolated),
+        "no_site_flag": int(sys.flags.no_site),
+        "meta_path": [
+            type(f).__name__ if not isinstance(f, type) else f.__name__ for f in sys.meta_path
+        ],
     }
 
 

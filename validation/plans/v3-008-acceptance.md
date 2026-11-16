@@ -1821,8 +1821,10 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   (`edep.csv`) as the cross-check (Sum/N must equal A·E0 − ⟨E_exit⟩ within 0.1 %).
 - Quantity: ⟨ΔE⟩_T = A·E0 − ⟨E_exit⟩ with SE = std/√N; predictions ΔE_M (ionmc default Bethe, water 78 eV) and ΔE_I
   (ICRU73_NEW, log-log interpolated on its grid) by integrating dE/dx = −ρS(E) along the slab (RK4, ≥ 200 steps);
-  r_M = ΔE_T/ΔE_M − 1, r_I = ΔE_T/ΔE_I − 1, s = ΔE_I/ΔE_M − 1 per point and slab (s extrapolated like r_M and r_I); the
-  point value entering the band aggregates is the extrapolation to zero thickness r₀ = (f₂·r(f₁) − f₁·r(f₂))/(f₂ − f₁) with
+  r_M = ΔE_T/ΔE_M − 1, r_I = ΔE_T/ΔE_I − 1, s = ΔE_I/ΔE_M − 1 per point and slab. **[Revisions 1–4, SUPERSEDED by
+  revision 5 below: the point value is the fine-step r_fine; the extrapolation r₀ and everything in this paragraph up to
+  the revision-5 marker are report-only quantities, not gates.]** The former point value was the extrapolation to zero
+  thickness r₀ = (f₂·r(f₁) − f₁·r(f₂))/(f₂ − f₁) with
   f₁ = 3 %, f₂ = 4.8 % (removes the bias linear in f; revision 1), SE₀ = √((f₂·SE₁)² + (f₁·SE₂)²)/(f₂ − f₁). **Revision 2
   (Codex REVIEW-22f384ed finding 4; SR-3 second pass finding 3):** the thickness pair alone cannot bound the quadratic
   remainder of the extrapolation (for a bias a·f + b·f² the residual −b·f₁f₂ is not constrained by r(f₂) − r(f₁)), so the
@@ -1830,8 +1832,9 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   the P13 source reading `validation/plans/v3-008/p13-i3fu2-stepping-bound.md`: the table part is the exact integral
   along the step of q²(E_pre)·S_base(E) with q² frozen at the pre-step energy and S_base the unit-charge stopping without
   the higher-order terms; the higher-order term is added once at the mid-step energy with q² and β there; alpha: table
-  part only): g(f) = ΔE_alg(f)/ΔE_exact(f) − 1 per point for f₁ and f₂. The per-point consistency check becomes
-  |(r_M(f₂) − r_M(f₁)) − (g(f₂) − g(f₁))| ≤ 0.3 % — a gross-error check (revision 3 wording, SR-3 third pass C1): it cannot
+  part only): g(f) = ΔE_alg(f)/ΔE_exact(f) − 1 per point for f₁ and f₂. The per-point consistency check was (revisions 2–5;
+  report-only since revision 6, no gate) |(r_M(f₂) − r_M(f₁)) − (g(f₂) − g(f₁))| ≤ 0.3 % — a gross-error check (revision 3
+  wording, SR-3 third pass C1): it cannot
   resolve the modelled bias itself (max Δ_pred 0.26 % < 0.3 %) and does not bound an unmodelled quadratic term; the 0.2 %
   stepping budget rests on the enforced single step (step-count smokes) and the D-4 §3.2 mechanism analysis of the
   documented along-step algorithm (pre-step dE/dx or range-table inversion by `linLossLimit`; q² at the pre-step energy;
@@ -1848,8 +1851,8 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   supported, the 0.1 % per-point premise holds for the best estimate (thin margin at 2.4–3 MeV/u once margins are applied,
   disclosed). OPEN in P13: the Geant4 effective-charge slope for water, a Geant4 one-step vs fine-step comparison, the
   Urban msc step-limit lines. (Revision 6: with the fine-step runs as point values this residual no longer enters the
-  result; it is reported as a band maximum only.) A consistency failure makes the point INVALID and the repeat
-  rule applies. **Revision 5 (Codex REVIEW-183057ce finding 2 — direct Geant4 evidence instead of a model-side bound):**
+  result; it is reported as a band maximum only.) [The sentence "A consistency failure makes the point INVALID and the
+  repeat rule applies" of revisions 2–5 is superseded: only the gate e₁ of revision 6 invalidates a point.] **Revision 5 (Codex REVIEW-183057ce finding 2 — direct Geant4 evidence instead of a model-side bound):**
   every point is also run with the slab traversed in FINE steps (`d:Ge/Water/MaxStepSize = t/20`, the TOPAS per-component
   step limiter; parts 6 = 12C, 7 = 16O, 50 000 primaries). **Revision 6 (SR-3 fourth pass, blocking finding 1 and
   finding 2):** each fine step loses ≈ 0.15 % of the energy, i.e. Geant4 takes its LINEAR branch (forward Euler on the
@@ -1860,8 +1863,10 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   (i) the same-slab check e₁ = g_meas(f₁) − g* with g_meas(f₁) = (1 + r(f₁))/(1 + r_fine) − 1 and
   g* = (1 + g_s)/(1 + b_s) − 1, where g_s and b_s are the one-step and the 20-step emulation biases evaluated on the slab
   scaled by (1 + r_fine), i.e. at the measured loss (a stopping (1 + x)·S over t equals S over (1 + x)·t); tolerance 0.15 % (non-circular: ionmc's model plus the measured loss; the one-step bias is 0.36–0.85 % at
-  2.4 MeV/u, so the check has teeth: a wrong charge slope fails it; it is insensitive to the stopping ratio ρ = S_G4/S_M − 1
-  itself, which the former form of the checks was not — the former checks at f₂ and the extrapolation difference
+  2.4 MeV/u, so the check has teeth: a wrong charge slope fails it at |Δλ| ≈ 0.1 (e₁ ≈ 0.0155·Δλ; the Ziegler-type Geant4
+  charge against ionmc's Barkas-125 form gives |Δλ| ≤ 0.01 at 2.4 MeV/u, ESTIMATE, P13 O1), while a stopping ratio
+  ρ = S_G4/S_M − 1 carried by the base stopping or the correction term cancels (e₁ ≈ 0.01 % at ρ = 0.15; a ρ carried by q²
+  acts like Δλ) — the former form of the checks was not insensitive to ρ — the former checks at f₂ and the extrapolation difference
   |r₀ − r_fine| carried a ρ′ (slope of the ratio) term and would have failed deterministically exactly when TOPAS is
   ICRU-like, a decision bias toward option (c); they are now REPORT-ONLY band maxima). A failure of (i) makes the point
   INVALID and the whole triple (t, 1.6t, fine) is repeated. A fine-step smoke (seed 20600445, C 2.4 MeV/u, 50 primaries, tracking verbosity 1) must show ≥ 15 steps in
@@ -1875,8 +1880,10 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   unchanged (`robust`), so the scientific route never rests on the exact size of the systematic estimate. An empirical curvature measurement was considered and rejected: with f₁f₂/h² ≈ 18 the
   second difference of three thicknesses would need ≈ 1e7 primaries per run to bound the residual at 0.2 %. Per-point values stay in the materialized cache only; per band only
   the maxima of |Δ_meas − Δ_pred|, |Δ_pred| and |R_model| are written.
-- Controls (pre-declared; a failed control makes step 2 INCONCLUSIVE, not a finding): (i) thickness consistency at every
-  point as above (the pair t/1.6t replaces the former t/(t/2) control; written per band as maxima, revision 2);
+- Controls (pre-declared; a failed control makes step 2 INCONCLUSIVE, not a finding): (i) the per-point gate e₁ of
+  revision 6 (same-slab emulation check; a failed point is repeated as a triple, a second failure makes step 2
+  INCONCLUSIVE) — the thickness-consistency control of revisions 1–5 (pair t/1.6t, 0.8 % then 0.3 %) is report-only, written
+  per band as maxima;
   (ii) 4He at 10 and 50 MeV/u, |r_M| ≤ 0.5 % against ionmc's alpha Bethe (78 eV; I2 SEEN agreement ≤ 0.20 % at ≥ 10 MeV/u;
   tests the scoring chain, not the GenericIon path; no r_I for He; written as pass/fail and max |r_M| only — the TOPAS alpha
   path is the ICRU 90 alpha array, so the two values themselves stay in the cache, SR-3 finding 9); (iii) energy-loss
@@ -1894,8 +1901,9 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   against the smoke logs; SR-3 third pass C2).
 - Aggregates written to `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json` by the committed evaluator
   `validation/scripts/stopping/i3fu2_evaluate.py` (tested on synthetic runs): per ion and band b ∈ {[2,5), [5,10), [10,20),
-  [20,50]} over the extrapolated points: n, mean r_M, mean r_I, mean s, SE_b = √(Σ SE_rel²)/n, the class below, the band
-  maximum thickness difference, the controls verdicts, `pattern_before_controls` and `pattern`; nothing per point. The
+  [20,50]} over the fine-step point values (revision 5): n, mean r_M, mean r_I, mean s, SE_b = √(Σ SE_rel²)/n, the class
+  below, the band maxima of |e₁|, |e₂| (report-only), |r₀ − r_fine| (report-only), the thickness difference and the
+  consistency residual (report-only), the controls verdicts, `pattern_before_controls` and `pattern`; nothing per point. The
   evaluator authenticates every run (revision 1, Codex REVIEW-cfdff398 finding 1, mirroring `ss_evaluate.py`/`r2_io.py`):
   Ed25519 signature of the reference-runner record, success status, `code_sha` = the reviewed SHA passed on the command
   line with the committed review pin `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` (`review_id`, `head_sha`,
@@ -1942,8 +1950,9 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   ranges and guard test unchanged; frozen manifest `validation/reference_cases/topas/i3fu2-frozen-manifest.json`, generator
   `gen_i3fu2_bundles.py`). Repeat rule (SR-3 finding 5; made deterministic in revision 2, Codex finding 5 / SR-3 second pass
   finding 4; **binding form of revision 5**, repeats = part + 8 at parts 8–15, parts 16–19 reserved): a validity failure of
-  one run is repeated by that run's repeat part only; a failure of check (i) or (ii) of a point is repeated by the repeat
-  parts of the WHOLE triple (t, 1.6t, fine), and the repeat triple replaces the triple; a partial repeat set, a repeat of a
+  one run is repeated by that run's repeat part only; a failure of the gate e₁ (check (i); revision 6 — the former check
+  (ii) is report-only) of a point is repeated by the repeat parts of the WHOLE triple (t, 1.6t, fine), and the repeat
+  triple replaces the triple; a partial repeat set, a repeat of a
   valid run or a repeat without a recorded failure is a `RecordError`; a repeat that is itself invalid, or a second failure
   of the same point (including a validity repeat followed by a failed check, which is not repeated again), makes step 2
   INCONCLUSIVE; a class U is final (its σ is systematic, a repeat cannot resolve it). (Revisions 2–4 had "both slabs" and
@@ -1963,7 +1972,8 @@ unit-charge base table without the run-time q², LS and Barkas terms):
 0.2 % = 0.1 % table/range construction, 0.1 % per-nucleon energy convention, 0.1 % fine-step stepping bias, in quadrature
 ≈ 0.17 %, rounded up; **energy convention (revision 6, Codex REVIEW-8081e0e7 finding 2):** the ICRU73_NEW axis is kinetic
 energy per nucleon, read as E/A with A the mass number (as row I3 does); the alternative reading E/(M_nucleus/u) differs by
-≤ 0.03 % in energy (12C 11.9967 u, 16O 15.9905 u), well inside the 0.1 % term; Geant4's internal mapping of the ion energy
+0.027 % (12C, 11.9967 u) and 0.059 % (16O, 15.9905 u) in energy, i.e. ≈ 0.02–0.05 % in stopping, inside the 0.1 % term
+(revision 7 corrects the earlier "≤ 0.03 %"); Geant4's internal mapping of the ion energy
 onto its proton table (×A·m_p/M ≈ 1.0073, P13 §2) is a property of the Geant4 implementation, not of the table axis, and
 does not enter the comparison of the measured TOPAS loss with the table prediction; the evaluator nevertheless re-runs the
 classification with the alternative reading and `conclusive` requires the pattern to be invariant; the earlier 0.25 % was the one-step-extrapolation budget, re-derived in revision 1 and restated in
@@ -2165,3 +2175,19 @@ inside the 0.1 % term; finding 3 (plan contradictions) → reconciled in this re
 marker is required in every fine-step run (markers file); minor 5 → P13 O5 restated as "not met, rebinding pending", the
 duplicated heading removed; minor 6 → the bytecode-cache purge is a logged step of the run procedure (made moot by the
 fresh `pycache_prefix` launch). Not a clinical claim.
+
+**Revision 7 of amendment I3-FU-1 (2026-11-16, orchestrator; after Codex REVIEW-0b05e7e4 on 62059510 (changes required:
+three important, two minor) and the SR-3 fifth pass of the same commit (APPROVE WITH CHANGES, no blocking finding: the
+de-confounded gate derived and confirmed, residual ρ-dependence ≈ 0.01 %, tolerance adequate, the convention reasoning
+confirmed, the launch control sound); before any run; text and constant edits only).** Dispositions: Codex 1 (review
+provenance; third repeat) → unchanged, see revisions 5–6; Codex 2 (start-up/import machinery not sealed) → **disclosed
+residual**: Python start-up (site, `.pth`, `sitecustomize`), import hooks and the stdlib sources execute before the
+launch capture and are not sealed (`-I`/`-S` would remove the venv's site-packages); the launch record now lists the
+isolation flags and the `sys.meta_path` entry classes so an unexpected import hook is visible; an authenticated launcher
+remains outside this repository's means; Codex 3 / SR-3-5 1 (plan still contradictory) → every superseded sentence
+(extrapolated point value, 0.3 % consistency gate, "control (i) thickness consistency", "extrapolated points", "check (i)
+or (ii)") is now marked superseded in place or rewritten, the written-maxima list completed; Codex 4 / SR-3-5 2
+(revision string) → `AMENDMENT_REVISION = 6`; Codex 5 / SR-3-5 1 (0.03 %) → 0.027 % / 0.059 % stated; SR-3-5 3 → the ρ
+sensitivity qualified (q²-carried ρ acts like Δλ; threshold |Δλ| ≈ 0.1; Ziegler-vs-Barkas estimate ≤ 0.01); SR-3-5 4 → an
+extreme r_fine makes the point INVALID (`emulation_domain`) instead of raising; SR-3-5 5 (uniform b_fine ≈ −0.05 % left in
+r_fine) → noted, inside the 0.1 % term. Not a clinical claim.

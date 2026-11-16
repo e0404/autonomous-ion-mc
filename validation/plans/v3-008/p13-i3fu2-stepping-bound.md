@@ -160,7 +160,7 @@ grid settings, continuity of the base table at 2 MeV in water). Model estimates 
 4-6 (ionmc q_eff and slopes as proxy for Geant4's; proxy proton stopping for the interpolation emulation; Highland msc).
 
 ## 7. OPEN items and the discriminating evidence
-- O1: Geant4 [IEC] dlnq2/dlnE for C/O in water (replaces the x2 allowance); needs G4IonisParamMat Fermi energy/Zeff.
+- O1: Geant4 [IEC] dlnq2/dlnE for C/O in water (replaces the x2 allowance); needs G4IonisParamMat Fermi energy/Zeff. **ESTIMATE (SR-3 fifth pass, 2026-11-16): the Ziegler-type Geant4 charge ([IEC], v_F ≈ 0.97) against ionmc's Barkas-125 form gives dln q²/dlnE 0.190 vs 0.192 (C) and 0.258 vs 0.266 (O) at 2.4 MeV/u, |Δλ| ≤ 0.01; the revision-6 gate e₁ ≈ 0.0155·Δλ fails at |Δλ| ≈ 0.1.**
 - O2: interpolation with the actual ICRU90 proton array (replaces the x3 allowance); needs the data values, which this
   record does not transcribe; alternatively a one-step vs many-step Geant4 comparison (MaxStep 0.1 um in the slab) at
   2.4 and 3 MeV/u would measure (frozen-q2 + interpolation) jointly at f1, f2 (statistics: SE of Delta E <~ 0.02 %).
