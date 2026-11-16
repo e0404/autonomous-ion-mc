@@ -2,29 +2,40 @@
   "attestation": {
     "alg": "ed25519",
     "key_id": "b53b2800f81a4e64",
-    "payload_sha256": "f6534376aefd1152e5e7855fab934ea068914b566f4993041cd3ab09a00b5482",
+    "payload_sha256": "2e0a0203c692553de63ea83127cec565c26a4719d81d70fa1bbf9b40c0645b0e",
     "public_key": "2fa323ebc164551322a8268176a463563f8036a2a91cf6de02d7a1ebfe407bfe",
     "schema": "ionmc-attestation-1",
-    "signature": "6f4ea96d1f5b753a75102abbd9cd9aeb41950f14138b5c42fd8d3e470a16280867741361ecdad4a9777ffd1c69460985be9bf62584efb40abea3df235511f604",
-    "signed_at_utc": "2026-11-16T18:40:02.821876+00:00",
+    "signature": "6c227e4895fdc150ed3fc3ff9785388124d66dff24ef4a9ea63de31b7014f92e0b4c49969974553a8369be7c537a0f9b3836b3466ad97865150a9035a72faf00",
+    "signed_at_utc": "2026-11-16T20:07:25.007453+00:00",
     "signer": "codex-worker"
   },
   "base_sha": "8dfbeb37ec200fa6d9044aef69c0e4bb9a5d7a24",
   "experiment_id": "experiment-v3",
-  "finished_at": "2026-11-16T18:40:02.818814+00:00",
-  "head_sha": "2727578d8a0fb2524da097f6beba03f78397d56e",
+  "finished_at": "2026-11-16T20:07:25.004863+00:00",
+  "head_sha": "054ecbf5b0bf7e6403cb687f67c7558170da8f79",
   "model": "gpt-5.6-sol",
   "provider": "openai",
   "report": {
-    "findings": [],
-    "head_sha": "2727578d8a0fb2524da097f6beba03f78397d56e",
-    "summary": "The prior important finding is resolved. The equivalent-thickness transform now preserves and scales the nominal 20-step sequence, with an independently constructed scaled-stopping regression that distinguishes the former repartitioning error. Replacement review and smoke records, chronology, input/output bindings, trust identities, and freeze hashes are consistent. No new blocking or important issues were found. Tests were not executed, as instructed.",
+    "findings": [
+      {
+        "description": "The plan still says the diagnostic smoke seeds are “consumed once” after observation, but revision 17 reruns the previously observed seeds 20600440–20600445. Because these runs are explicitly ungraded diagnostics, this does not undermine the fresh evidence family, but the seed-ledger wording should be reconciled.",
+        "path": "validation/plans/v3-008-acceptance.md:340",
+        "severity": "minor"
+      },
+      {
+        "description": "The final rebinding note lists the identical topas-smokes/index.json hash transition twice. Remove the duplicate entry to keep the freeze record unambiguous.",
+        "path": "validation/plans/v3-008/p9-freeze-record.md:1951",
+        "severity": "minor"
+      }
+    ],
+    "head_sha": "054ecbf5b0bf7e6403cb687f67c7558170da8f79",
+    "summary": "The prior important finding is resolved. Revision 17 consumes the disclosed 20619000 seed family and freezes a disjoint 20627200 family for all 116 evidence/repeat bundles. Generator, evaluator, bundle metadata, native inputs, manifest hashes, guard coverage, review binding, and smoke chronology agree; the old result remains explicitly inconclusive seen data. No blocking or important findings remain. Review was read-only, and tests were not executed as instructed.",
     "verdict": "pass"
   },
-  "report_sha256": "3c8dcb24b367ab2afdfe847931dcf6265bb614e777cadff4131277dbc6b9c905",
-  "review_id": "REVIEW-ba7d4c76244d4392a63a8e372a0c569f",
+  "report_sha256": "8d1ba41d67c2d851eb96cb081dcf9a77b8da532f9018ea6cccc6f6231fff8564",
+  "review_id": "REVIEW-be33eda9d6d34628a5bbbb6544093919",
   "schema_version": 1,
-  "started_at": "2026-11-16T18:36:04.219187+00:00",
+  "started_at": "2026-11-16T20:03:00.768491+00:00",
   "status": "passed",
   "task_id": "V3-008",
   "tool": "codex exec"

@@ -338,7 +338,7 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
     2 000 primaries; **20600443** and **20600444** (step-count smokes, C 2.4 and 50 MeV/u, 50 primaries, tracking verbosity 1);
     **20600442** reserved for one re-smoke. Formula,
     ranges and guard test unchanged at the time of writing [revision 17 (2026-11-16) added the family `20627200 + 100·part + case` for the evidence and repeat bundles and the guard-test bullet below; the smokes keep their rehearsal seeds]; no ledger change. These runs are diagnostics (no grade); their seeds are consumed once
-    their outputs are observed.
+    their outputs are observed [reconciled 2026-11-16 (Codex REVIEW-be33eda9 minor): the rehearsal smokes are ungraded execution checks whose outputs are never evidence, so the amendment's chronology rule re-runs the same five smoke seeds after every new pin A (as revisions 15–17 did); "consumed" applies to evidence families].
 - Never 2098xxxx or 2099xxxx. CI tests use fixed small seeds documented in the tests.
 
 **Guard test** `tests/ionmc/test_v3_008_seed_families.py`. It asserts that every V3-008 seed is:
@@ -2560,3 +2560,5 @@ Full evaluator-equivalent pre-check in the sandbox on every materialized smoke (
 `native_marker_problems`, `measure_outputs`, step counts and phase spaces): no problem; the fine-step smoke scores 50 of 50
 with exactly 20 slab steps, the step smokes 50 of 50 with one slab step, the markers discriminate over all five. Not a
 clinical claim.
+
+**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-77788fd4ea6740f78fdf1fd3d82ee03c at 94b17d30218a9dc5fc3c659a2a15cd4f691aa110; markers review REVIEW-be33eda9d6d34628a5bbbb6544093919 at 054ecbf5b0bf7e6403cb687f67c7558170da8f79. Pin B (signed, passed; two minor wording findings fixed in this commit; started 20:03:00 UTC, after the five smokes finished at 19:58:51 UTC; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`, replacing the superseded pin REVIEW-ba7d4c76) reviewed the commit that holds the re-run smoke records, the marker file and pin A; the 58 evidence runs of the revision-17 seed family follow at the commit carrying this note, after pin B's signed finished_at 20:07:25 UTC, one at a time. Not a clinical claim.

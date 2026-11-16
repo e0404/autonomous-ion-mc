@@ -1628,7 +1628,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json` | `9c8a2c0d070dcba8e2b6d7892109cf8a9751facea8972609589a8e906acb069f` |
+| `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json` | `cc403ed090f2f0a6b5e35f273a325fa0311eaff14cc25ad39496182ff93befb7` |
 
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-2 evidence records: the 58 signed reference-runner records of the evidence bundles run at c8102e89 (`record.json` + `artifacts.json` each) and `topas-runs/index.json`, bound as committed:**
@@ -1948,7 +1948,9 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `f974f388103940e77a1d6098e5c8f0455d3b150895d5e12b9b611bafb7fe1e01` |
 
 
-**Dated note (2026-11-16, orchestrator) — seed-family guard test asserts the revision-17 family in the plan text (Codex REVIEW-b4ba2391 minor) rebound; entries that changed:** `tests/ionmc/test_v3_008_seed_families.py` b2396006… → 15c9a396…; `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` d380d352… → f974f388…; `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` d380d352… → f974f388…. All other entries unchanged (recomputed).
+**Dated note (2026-11-16, orchestrator) — seed-family guard test asserts the revision-17 family in the plan text (Codex REVIEW-b4ba2391 minor) rebound; entries that changed:** `tests/ionmc/test_v3_008_seed_families.py` b2396006… → 15c9a396…; `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` d380d352… → f974f388…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin B replaced after revision 17 (REVIEW-be33eda9 of 054ecbf5, verbatim, verified); the duplicated index.json entry of the previous note removed (Codex REVIEW-be33eda9 minor); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json` 9c8a2c0d… → cc403ed0…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
