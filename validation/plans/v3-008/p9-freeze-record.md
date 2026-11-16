@@ -88,7 +88,7 @@ evidence for `icru90/z{6,8}_G4_WATER.dat`. This note concerns FC-2 only.
 | `tests/ionmc/test_ion_em_ss_budget.py` | `ca49735b5b00831aeaabd59d63faecfc23b98fe0d4247024ca963d7e9a77f097` | P9 (iv) |
 | `tests/ionmc/test_ion_em_ls_option.py` | `c67966c8d2c3d9564032e33e666321dd11bd8d2386780afa0cb74850455ca84d` | P9 (iii) |
 | `tests/ionmc/test_ion_em_mapping_src.py` | `865d3143892f8c6ebc548a86400bae198d455c3ad8c3bec2df074ebeb0210175` | I11-map (src), I0, I1 |
-| `tests/ionmc/test_v3_008_seed_families.py` | `b2396006852a15dbee340caacec071d66c4ae32c1ee97fefd4ca45ea2c488dad` | P7, §C |
+| `tests/ionmc/test_v3_008_seed_families.py` | `15c9a3967d96a80389bfa8c373dbe4cc3989c231353a4ba6783ff4da1ce0e236` | P7, §C |
 
 ### 2.3 Implementation already on the branch (src)
 
@@ -1611,7 +1611,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu1/icru73_band_diagnostic.json` | `e8d55ad7c904825ec5b74a7af4bb0a498d00ee0e2c12dfaadfbffb05ed1fe323` |
 | `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T164519Z-ad778a16.json` | `6c724cc13aec870093705b55af3bb461b1e833fbce2c3a97ff87f825bd6d68a6` |
 | `validation/results/stopping/v3-008-i3fu2/log-markers.json` | `c079f5fb1e38063864759c61e0aeb9ce2ad505ba4915141a07012414f725511a` |
-| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `d380d352ac4bb41f73407933025564fc71759071b549fb9a26daebe3285d4ee6` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `f974f388103940e77a1d6098e5c8f0455d3b150895d5e12b9b611bafb7fe1e01` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-02585a61132fb2de1155-ac89fa51/record.json` | `3a86638d15fbac37043cd88b1dff115e26c52e5c1a631b3b86067af9a07b0b36` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-02585a61132fb2de1155-ac89fa51/artifacts.json` | `d2e96941c78c7e910ded48f80f9323718d4cd73ba4e25dc3a71725b66518370e` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6264dc380b486ed2240f-e4e90893/record.json` | `1172a79924e4d178b6123415516f6155cf1663f1334d122ba93f999809266ee2` |
@@ -1783,7 +1783,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-630235343ca8303d1f82-a859e12e/record.json` | `04a3957f714956f2c68c6cb56808b9d180f1c68dd46e63a4365c56757147e2f4` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-c41909fecb9f7d09bd4c-f12dda89/artifacts.json` | `473e594316ae11a3866828aa9e61006db18d3453842e5aa9b6ded5cf0539ffe0` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-c41909fecb9f7d09bd4c-f12dda89/record.json` | `9edb6e3c791756382c0793dc0b55468651cf88e26e46d8b1a8e9c61c58d80979` |
-| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `d380d352ac4bb41f73407933025564fc71759071b549fb9a26daebe3285d4ee6` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `f974f388103940e77a1d6098e5c8f0455d3b150895d5e12b9b611bafb7fe1e01` |
 
 
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` 4b360868… → d380d352…. All other entries unchanged (recomputed).
@@ -1930,6 +1930,25 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 revision 17 (new evidence seed family 20627200 + 100·part + case; 116 bundles and the manifest regenerated; guard test) rebound; entries that changed:** `tests/ionmc/test_v3_008_seed_families.py` e4e33e66… → b2396006…; `validation/scripts/stopping/gen_i3fu2_bundles.py` d478be6f… → 5f0113f5…; `validation/scripts/stopping/i3fu2_evaluate.py` c67a9723… → 49ddc566…; `tests/ionmc/test_i3fu2.py` b1645748… → 8f86d768…; `validation/reference_cases/topas/i3fu2-frozen-manifest.json` d9b2dd20… → 690ff0bf…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin A replaced after revision 17 (REVIEW-77788fd4 of 94b17d30, verbatim, verified); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` 853340ad… → 75668d6f…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-2 smokes re-run at 845e5f10 after the revision-17 pin A: the five signed reference-runner records with their artifact listings and `topas-smokes/index.json`, bound as committed (earlier smoke entries above are history):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-12512b1e40611ea4ce3b-7205f9a6/artifacts.json` | `7ad2e8f06b095c7aac22288c09b86b26ab7e4535bbaa67db98f984adec9afcea` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-12512b1e40611ea4ce3b-7205f9a6/record.json` | `4180b47dd32e8624aad21c0aa94e102d6b6ea0111863fdb6fb890946a9b23c0a` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-48838aba24e41c71ff3b-ed673f25/artifacts.json` | `9ad01639868e0cf316d35db8fb1a7c70ac675f72c7709f5268da3e71cf6e397d` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-48838aba24e41c71ff3b-ed673f25/record.json` | `6a8a5e5b6ac943d7ccdb7baae416b0b4739544451c6428558d3013918c68f450` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-503044447b5ebdfd6345-90796c02/artifacts.json` | `3cb75ab9acd1beb5082bec841a2537bd6911734328503d53a5308cbaf62604fa` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-503044447b5ebdfd6345-90796c02/record.json` | `043f95c49c1384e71515b5b39ba3c11ba2c3521bfe828bcd0d4372b5ac45c169` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6af6a37172270d50d8d6-ea73954d/artifacts.json` | `5dd07a44d1383f83d7e25dc0eb271385f4089c81c72f35c99e4eb4b028fb67d2` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6af6a37172270d50d8d6-ea73954d/record.json` | `f364cc91e25ed0d5aa9f14561c0b8b9c83a24e0c2ef18adbae9f847e7104ac96` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-cc2800f7530b94ca4564-92db453f/artifacts.json` | `a2866e586674cdc9423040302b7a59064a9c6baf7fdbd6686627b961d1478509` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-cc2800f7530b94ca4564-92db453f/record.json` | `1e99a799b27d77d7b8c2cdce28139b2673091b0026c615906bca771d7f740c27` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `f974f388103940e77a1d6098e5c8f0455d3b150895d5e12b9b611bafb7fe1e01` |
+
+
+**Dated note (2026-11-16, orchestrator) — seed-family guard test asserts the revision-17 family in the plan text (Codex REVIEW-b4ba2391 minor) rebound; entries that changed:** `tests/ionmc/test_v3_008_seed_families.py` b2396006… → 15c9a396…; `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` d380d352… → f974f388…; `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` d380d352… → f974f388…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

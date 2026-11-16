@@ -167,6 +167,7 @@ def test_plan_section_c_matches_constants():
     assert f"continues at **{V3_005_NEXT_BASE}**" in c
     assert f"{REHEARSAL_8[0]}–{REHEARSAL_8[-1]}" in c
     assert f"`{TOPAS_8_BASE} + 100·part + case`" in c
+    assert f"`{I3FU2_BASE} + 100·part + case`" in c  # revision 17 family (2026-11-16)
     assert f"part {TOPAS_PARTS[0]}–{TOPAS_PARTS[-1]}" in c
     assert f"case {TOPAS_CASES[0]}–{TOPAS_CASES[-1]}" in c
     assert f"r_index ≤ {R_MAX}" in c and "k < 100" in c

@@ -1,0 +1,43 @@
+{
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "303cce4c129d387c",
+    "payload_sha256": "7b73040bf27f0446903f38e40af77a3a5cb3fe31ff9d0eeb35eaad5d75a4421b",
+    "public_key": "4ca28f27ff512758365bdd54799baaaaec661eeac507a7c6ff0785cf1ac417e9",
+    "schema": "ionmc-attestation-1",
+    "signature": "800f6ec52d4c6758b989d6a4ced031fded7ec49960a011cdd6838ba3a2bca463513e17a430d0cce39774253d93ee2f4b464ea3044b71a9e6c314ce4390c71a0d",
+    "signed_at_utc": "2026-11-16T19:58:35.834594+00:00",
+    "signer": "reference-runner"
+  },
+  "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+  "configuration_id": "cc2800f7530b94ca45647fa2416521d91e2ef7b5e0dffead1738c42958a8d5d9",
+  "engine": "topas",
+  "error": null,
+  "exit_code": 0,
+  "finished_at": "2026-11-16T19:58:35.832492+00:00",
+  "metadata_status": "declared; inspect native logs/outputs",
+  "missing_outputs": [],
+  "output_count": 5,
+  "output_files_sha256": "97ca9c23e3d5c4765bec7dc4404996f3ebd32f79d0dc94c2fb218ed7c74544a0",
+  "request_sha256": "2f21f64eb091c7c27f5c369dff4a4cbd4f156026a8723473456c04c3d1ceed61",
+  "run_id": "REF-cc2800f7530b94ca4564-92db453f",
+  "schema_version": 3,
+  "scientifically_validated": false,
+  "seconds": 0.7722463149693795,
+  "started_at": "2026-11-16T19:58:35.060247+00:00",
+  "stderr": {
+    "bytes": 196,
+    "text": " -#- CONSTRUCTING PROCESS -#- stepLimiter\n -#- CONSTRUCTING PROCESS -#- G4EmStandard_opt4\nG4WT0 >  -#- CONSTRUCTING PROCESS -#- stepLimiter\nG4WT0 >  -#- CONSTRUCTING PROCESS -#- G4EmStandard_opt4\n",
+    "truncated": false
+  },
+  "stderr_sha256": "1e2d958ae60809fc8e8f3a3ae167f23f779906160bd73153c8c9593a5ee2cea4",
+  "stdout": {
+    "bytes": 122112,
+    "text": "B\nG4WT0 > Pool ID '17G4PrimaryParticle', size : 0.000961 MB\nG4WT0 > Pool ID '15G4HCofThisEvent', size : 0.000961 MB\nG4WT0 > Pool ID '17G4DynamicParticle', size : 0.000961 MB\nG4WT0 > Pool ID '19G4ElectronOccupancy', size : 0.000961 MB\nG4WT0 > Pool ID '7G4Track', size : 0.000961 MB\nG4WT0 > Pool ID '18G4TouchableHistory', size : 0.000961 MB\nG4WT0 > Pool ID '15G4CountedObjectIvE', size : 0.000961 MB\nG4WT0 > Number of memory pools allocated: 11; of which, static: 0\nG4WT0 > Dynamic pools deleted: 11 / Total memory freed: 0.017 MB\nG4WT0 > ============================================================\nG4WT0 > G4Allocator objects are deleted.\nG4WT0 > Thread-local UImanager is to be deleted.\nG4WT0 > There should not be any thread-local G4cout/G4cerr hereafter.\nUImanager deleted.\nStateManager deleted.\nRunManagerKernel is deleted. Good bye :)\nRunManager is deleted.\nG4 kernel has come to Quit state.\nDeleting G4Run (id:0) \nUserDetectorConstruction deleted 0x621529061120\nUserPhysicsList deleted 0x621529383e08\nUserActionInitialization deleted 0x6215295d36a0\nUserWorkerInitialization deleted 0\nUserWorkerThreadInitialization deleted 0x62152aacd540\nUserRunAction deleted.\nUserPrimaryGenerator deleted.\nRunManager is deleting RunManagerKernel.\nG4SDManager deleted.\nEventManager deleted.\nUnits table cleared.\nTransportationManager deleted.\nTotal navigation history collections cleaned: 3\nG4RNGHelper object is deleted.\n================== Deleting memory pools ===================\nPool ID '20G4NavigationLevelRep', size : 0.00288 MB\nPool ID '24G4ReferenceCountedHandleIvE', size : 0.000961 MB\nPool ID '17G4DynamicParticle', size : 0.000961 MB\nPool ID '15G4CountedObjectIvE', size : 0.000961 MB\nNumber of memory pools allocated: 4; of which, static: 0\nDynamic pools deleted: 4 / Total memory freed: 0.0058 MB\n============================================================\nG4Allocator objects are deleted.\nUImanager deleted.\nStateManager deleted.\nRunManagerKernel is deleted. Good bye :)\nRunManager is deleted.\n",
+    "truncated": true
+  },
+  "stdout_sha256": "ac7cd62d1ea3820f83a5c4b3ba74a55a65f5bfbb2193a6384bfb23d623fd9b5f",
+  "succeeded": true,
+  "task_id": "V3-008",
+  "timed_out": false
+}
