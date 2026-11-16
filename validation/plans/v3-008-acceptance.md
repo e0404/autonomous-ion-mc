@@ -2308,3 +2308,20 @@ the host-written one** (`validation/results/stopping/v3-008-i3fu1/environment-se
 from the sandbox-written seal of revision 9 only in the numpy `RECORD` digest, the installation-specific manifest of the
 same 2.5.3 wheel; interpreter, stdlib (827 modules) and extension-module hashes are identical); the three signed
 host-run records are committed under `validation/results/stopping/v3-008-i3fu1/host-records/`. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; operator response, discovery review, key publication).** The operator's response to
+IR-20261116-132756-B6F2C2 is recorded verbatim in `reference_requests/interventions/IR-20261116-132756-B6F2C2/response.json`
+(resolved 2026-11-16T16:15 UTC): the codex-worker service was restarted, the earlier request IR-20261116-123921-312B59 is
+superseded by its addendum and this follow-up (recorded as such in its `response.json`), the required trust publication and
+exact-commit review precede the I3-FU-1 diagnostics, and **no review-gate waiver, scientific tolerance change or
+authorization to merge PR #84 is granted** — nothing in this plan is relaxed. Discovery review of the branch head f23789ec:
+REVIEW-9c76c229a6894653abc9d4ea05554b8c, signed (signer codex-worker, key_id b53b2800f81a4e64, the key ID the operator
+reported; key_id = sha256(public key)[:16] checked, signature verified with `review_records.verify_review_record`),
+verdict pass, one minor finding (check (a) of the launcher docstring still described an existing empty bytecode-cache
+prefix only; fixed in the commit carrying this note; the usage example's `mktemp -d` is one of the accepted forms). This
+discovery review is not a pin (the key was not published at its time; a signed review of a later commit, after the
+develop merge of the key publication, is pin A). Key publication: task V3-INFRA-007 (pure trust-file branch, commit
+7d0887e1; evidence host run RUN-20261116T162135Z-1401dad3, signed reference run REF-959f22bf56d49d970e46-0e963904,
+VAL-20261116-162217-45D636, review REVIEW-5c8ede3163e2487dbe616e29c2dcac45 signed and passed; PR #91 merged, `v3/develop`
+8dfbeb37, merged into this branch as 0c1bd1b5). With the key in the committed trust map, the discovery review record verifies
+(`review_records.verify_review_record` → `verified`); the evaluator's pin rule can now be satisfied. Not a clinical claim.

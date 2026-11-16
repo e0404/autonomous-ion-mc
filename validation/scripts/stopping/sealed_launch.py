@@ -14,8 +14,8 @@ path), ``-S`` (no ``site``: no ``.pth`` files, no ``sitecustomize`` / ``usercust
 imported after start-up). The launcher
 
 (a) checks ``sys.flags.isolated == 1``, ``sys.flags.no_site == 1``,
-    ``sys.flags.dont_write_bytecode == 1`` and that ``sys.pycache_prefix`` is an existing
-    directory holding no file;
+    ``sys.flags.dont_write_bytecode == 1`` and that ``sys.pycache_prefix`` is set to an absent
+    path or to an existing directory holding no file;
 (b) checks the import machinery by identity: ``sys.meta_path`` is exactly
     [``importlib.machinery.BuiltinImporter``, ``FrozenImporter``, ``PathFinder``] (the class
     objects themselves); ``sys.path_hooks`` is exactly [``zipimport.zipimporter``, the

@@ -1556,7 +1556,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/sealed_launch.py` | `b25e0d514a6871e809b82f09fe710e4f948eef0578760708da1eab5d3dc06eff` |
+| `validation/scripts/stopping/sealed_launch.py` | `24bd01b6a16bb17072064f4a9d9d16fa5c9d55a483703db70fdfb77cf3f35c48` |
 | `reference_requests/interventions/IR-20261116-123921-312B59/ADDENDUM-1.md` | `1aff8b47aaf9870862df3dfbe5fabc807a6e032fb4946028a4c112905110864c` |
 
 
@@ -1586,6 +1586,16 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_i3_band_diagnostic.py` fa317f12… → de0ba74e…; `validation/scripts/stopping/i3fu2_evaluate.py` 053914b2… → b6422f2b…; `tests/ionmc/test_i3fu2.py` 4ffa01fa… → 7eaacdaf…; `validation/scripts/stopping/env_seal.py` 934ac22e… → c05501da…; `validation/results/stopping/v3-008-i3fu1/environment-seal.json` 2d173286… → 41663668…; `validation/scripts/stopping/sealed_launch.py` 583c90bb… → f7965215…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/stopping/sealed_launch.py` f7965215… → b25e0d51…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — the operator's responses to the two interventions of 2026-11-16 (IR-20261116-132756-B6F2C2 resolved verbatim: codex-worker restarted, trust publication and exact-commit review before the I3-FU-1 diagnostics, no gate waiver / tolerance change / PR #84 merge authorization; IR-20261116-123921-312B59 recorded as superseded by its addendum and that follow-up), bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `reference_requests/interventions/IR-20261116-123921-312B59/response.json` | `e1fc42b05d6dfe9cc21d8c7f88fecdfb307e8c7febedc104aa7ba5648187169b` |
+| `reference_requests/interventions/IR-20261116-132756-B6F2C2/response.json` | `bc5154cc83bd6cd73f8bda4bedb4e07d8ad40c523bb4b158764f28b1f3582ff4` |
+
+
+**Dated note (2026-11-16, orchestrator) — launcher docstring (check (a): absent-or-empty bytecode-cache prefix; minor finding of the signed discovery review REVIEW-9c76c229 on f23789ec, which passed) rebound; entries that changed:** `validation/scripts/stopping/sealed_launch.py` b25e0d51… → 24bd01b6…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
