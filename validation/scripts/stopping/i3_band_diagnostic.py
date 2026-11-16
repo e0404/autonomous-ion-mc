@@ -83,7 +83,16 @@ and before the output is written):
 * Environment (``provenance.environment``, checked against the ``uv.lock`` committed at
   ``code_sha``): the running ``numpy.__version__`` must equal the single numpy ``[[package]]``
   version of the lock, and the running Python must satisfy the lock's ``requires-python``
-  (recorded as is when the lock has none; an unsupported specifier fails closed).
+  (recorded as is when the lock has none; an unsupported specifier fails closed). The
+  environment seal (``env_seal.py``, Codex REVIEW-c4f3fdd1 finding 3; ``--environment-seal``,
+  default ``validation/results/stopping/v3-008-i3fu1/environment-seal.json``, read as committed
+  at ``code_sha``): the installed numpy distribution is verified file by file against its wheel
+  RECORD, and the numpy version, the RECORD sha256, the sha256 of numpy's
+  ``_multiarray_umath`` extension, the sha256 of the resolved Python executable,
+  ``sys.version`` and ``platform.platform()`` must equal the seal (recorded as
+  ``provenance.environment.seal``). ``--write-environment-seal`` writes the seal of the running
+  environment to ``--repo/--environment-seal`` and exits (run once by the orchestrator and
+  committed with the review pin).
 * Sealed sources after the computation (the import closure is then complete, including the
   lazily loaded ``compare_icru73`` and anything ``BetheStoppingSource`` imports): every module
   in ``sys.modules`` of the ``ionmc`` package with a ``__file__`` (path relative to the root
@@ -94,9 +103,9 @@ and before the output is written):
   fails. ``uv.lock`` and ``pyproject.toml`` are sealed too (disk == committed bytes). The
   ``{path: sha256}`` map is ``provenance.sealed_sources``; ``provenance.ionmc_loaded_from_repo``
   says whether the loaded ionmc files lie under ``--repo`` itself (byte identity, not location,
-  is the requirement). Declared limitation: the bytes of third-party packages (numpy, the
-  Python interpreter, compiled extensions) are not sealed; only their lock file and versions
-  are.
+  is the requirement). ``env_seal.py`` (loaded by path) and the environment seal are sealed
+  too. Declared limitation: shared libraries outside the numpy distribution and the
+  interpreter binary (libc, system libraries) are not sealed beyond ``platform.platform()``.
 * ``--expect-i3`` is a repo-relative path (default ``DEFAULT_EXPECT_I3``) read as committed
   bytes at ``code_sha`` (``git show``), not from the working copy; the working copy must be
   byte-identical. Recorded as ``provenance.expect_i3`` = ``{path, sha256, committed_at, matched}``.
@@ -146,6 +155,21 @@ from ionmc.physics.stopping import (
 )
 
 
+def _load_env_seal() -> ModuleType:
+    """Load the shared environment seal (``env_seal.py``) from this directory."""
+    name = "env_seal"
+    if name in sys.modules:
+        return sys.modules[name]
+    path = Path(__file__).resolve().parent / "env_seal.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_i3() -> ModuleType:
     """Load the row I3 script (``compare_icru73.py``) from this directory."""
     path = Path(__file__).resolve().with_name("compare_icru73.py")
@@ -159,6 +183,7 @@ def _load_i3() -> ModuleType:
 
 
 I3 = _load_i3()
+ENV = _load_env_seal()
 ARCHIVE_SHA256: str = I3.ARCHIVE_SHA256
 MEMBER_SHA256: dict[str, str] = I3.MEMBER_SHA256
 TARGET_WATER: int = I3.TARGET_WATER
@@ -237,11 +262,13 @@ DEFAULT_REPO = Path(__file__).resolve().parents[3]
 DEFAULT_EXPECT_I3 = "validation/results/stopping/v3-008-i3/icru73_comparison.json"
 SCRIPT_REL = "validation/scripts/stopping/i3_band_diagnostic.py"
 I3_SCRIPT_REL = "validation/scripts/stopping/compare_icru73.py"
+ENV_SCRIPT_REL = "validation/scripts/stopping/env_seal.py"
 LOCK_FILES = ("uv.lock", "pyproject.toml")  # sealed (disk == committed bytes)
 ENVIRONMENT_NOTE = (
     "numpy version and Python version checked against the uv.lock committed at code_sha; the "
-    "bytes of third-party packages (numpy, the interpreter, compiled extensions) are NOT sealed "
-    "(declared limitation); uv.lock and pyproject.toml are"
+    "numpy distribution (every RECORD-listed file), its _multiarray_umath extension and the "
+    "Python executable are sealed by content against the committed environment seal; shared "
+    "libraries outside them (libc, system libraries) are NOT sealed (declared limitation)"
 )
 _SPECIFIER_RE = re.compile(r"\s*(>=|<=|==|!=|>|<)\s*(\d+(?:\.\d+)*)(\.\*)?\s*")
 
@@ -786,7 +813,9 @@ def ionmc_closure() -> dict[str, Path]:
     return out
 
 
-def seal_sources(repo: Path, code_sha: str) -> tuple[dict[str, str], bool]:
+def seal_sources(
+    repo: Path, code_sha: str, extra: tuple[str, ...] = ()
+) -> tuple[dict[str, str], bool]:
     """Seal the executable closure and the lock files (see the module docstring).
 
     Returns ``({path: sha256}, whether every loaded ionmc file lies under repo)``; raises
@@ -796,6 +825,7 @@ def seal_sources(repo: Path, code_sha: str) -> tuple[dict[str, str], bool]:
     loaded: dict[str, Path] = {
         SCRIPT_REL: Path(__file__).resolve(),
         I3_SCRIPT_REL: Path(str(I3.__file__)).resolve(),
+        ENV_SCRIPT_REL: Path(str(ENV.__file__)).resolve(),
         **closure,
     }
     sealed: dict[str, str] = {}
@@ -804,7 +834,7 @@ def seal_sources(repo: Path, code_sha: str) -> tuple[dict[str, str], bool]:
         if path.read_bytes() != raw:
             raise RuntimeError(f"loaded {rel} ({path}) differs from its committed bytes")
         sealed[rel] = hashlib.sha256(raw).hexdigest()
-    for rel in LOCK_FILES:
+    for rel in (*LOCK_FILES, *extra):
         sealed[rel] = hashlib.sha256(committed_bytes(repo, code_sha, rel)).hexdigest()
     root = Path(repo).resolve()
     return sealed, all(path.is_relative_to(root) for path in closure.values())
@@ -845,12 +875,23 @@ def check_expect_i3(result: dict[str, Any], raw: bytes, rel: str, code_sha: str)
 def main() -> int:
     """Command-line entry point."""
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
-    parser.add_argument("--archive", required=True, help="libdEdx archive (sha256-verified)")
-    parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--archive", help="libdEdx archive (sha256-verified); required")
+    parser.add_argument("--output-dir", help="required")
     parser.add_argument(
         "--code-sha",
-        required=True,
-        help="40-hex SHA that must equal HEAD of the clean --repo checkout",
+        help="40-hex SHA that must equal HEAD of the clean --repo checkout; required",
+    )
+    parser.add_argument(
+        "--environment-seal",
+        default=ENV.SEAL_REL,
+        help="repo-relative committed environment seal (read at --code-sha); the running "
+        "environment must match every field",
+    )
+    parser.add_argument(
+        "--write-environment-seal",
+        action="store_true",
+        help="write the seal of the running environment to --repo/--environment-seal and exit "
+        "(nothing else is computed)",
     )
     parser.add_argument(
         "--repo",
@@ -865,12 +906,25 @@ def main() -> int:
     )
     args = parser.parse_args()
     repo = Path(args.repo)
+    if args.write_environment_seal:
+        target = repo / args.environment_seal
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(ENV.seal_text(ENV.current_environment()), encoding="utf-8")
+        print(target)
+        return 0
+    missing = [f"--{k.replace('_', '-')}" for k in ("archive", "output_dir", "code_sha")
+               if getattr(args, k) is None]  # fmt: skip
+    if missing:
+        parser.error(f"the following arguments are required: {', '.join(missing)}")
     verify_checkout(repo, args.code_sha)
     environment = check_environment(committed_bytes(repo, args.code_sha, "uv.lock"))
+    environment["seal"] = ENV.verify_environment(
+        committed_bytes(repo, args.code_sha, args.environment_seal)
+    )
     i3_raw = committed_bytes(repo, args.code_sha, args.expect_i3)
     result = run(Path(args.archive), args.code_sha)
     # after the computation: the import closure is complete (nothing written before this passes)
-    sealed, from_repo = seal_sources(repo, args.code_sha)
+    sealed, from_repo = seal_sources(repo, args.code_sha, (args.environment_seal,))
     result["provenance"]["sealed_sources"] = sealed
     result["provenance"]["ionmc_loaded_from_repo"] = from_repo
     result["provenance"]["environment"] = environment

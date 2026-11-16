@@ -37,9 +37,16 @@ module and every validation script loaded by path (:data:`SCRIPT_MODULES`, with 
 attestation module), each with a ``__file__`` under this checkout, plus :data:`SEALED_FILES`
 (``uv.lock``, ``pyproject.toml``). A module imported after the seal is a ``RecordError``. The
 running numpy version must equal the version pinned for numpy in ``uv.lock`` and Python
-major.minor the lower bound of its ``requires-python``. Declared limitation: the bytes of
-third-party binaries (numpy, the Python interpreter) are not sealed; the lock file is. Written:
-``provenance.sealed_sources`` {path: sha256} and ``provenance.environment``.
+major.minor the lower bound of its ``requires-python``. Environment seal (Codex REVIEW-c4f3fdd1
+finding 3; ``env_seal.py``, shared with step 1): the committed seal ``--environment-seal``
+(default ``validation/results/stopping/v3-008-i3fu1/environment-seal.json``, sealed with the
+closure at every commit above) must equal the running environment in every field (numpy
+version, the sha256 of numpy's wheel RECORD after every RECORD-listed file has been verified,
+the sha256 of numpy's ``_multiarray_umath`` extension and of the resolved Python executable,
+``sys.version``, ``platform.platform()``). Declared limitation: shared libraries outside the
+numpy distribution and the interpreter binary (libc, system libraries) are not sealed beyond
+``platform.platform()``. Written: ``provenance.sealed_sources`` {path: sha256} and
+``provenance.environment`` (``lock``, ``seal``).
 
 **Review pins and the plan note.** Two verbatim codex-worker review records: pin A
 ``i3fu2-review.json`` (the review of the commit that seals the evaluator) and pin B
@@ -47,10 +54,19 @@ third-party binaries (numpy, the Python interpreter) are not sealed; the lock fi
 from the smoke logs, and pin A). Each must hold :data:`rio.REVIEW_FIELDS` and ``report.verdict``,
 ``status`` "passed", ``report.verdict`` "pass", ``task_id`` "V3-008", a 40-hex ``head_sha`` (equal
 to ``report.head_sha`` where present), a 64-hex ``report_sha256`` and ISO ``started_at`` <
-``finished_at``. The review service does not sign its records (a signed review record is the
-future item V3-INFRA-005): as for the V5-SS chain, the binding is to the reviewed, committed
-bytes. The acceptance plan at HEAD and at ``code_sha`` must contain exactly one line matching
-:data:`PLAN_NOTE_RE`, identical at both::
+``finished_at``. Each pin is accompanied by a committed verbatim copy of a signed
+validation-manager local-validation record (Codex REVIEW-c4f3fdd1 finding 1;
+``i3fu2-review-attestation.json``, ``i3fu2-markers-review-attestation.json``;
+:func:`check_pin_attestation`): verified Ed25519 attestation by a ``validation-manager`` key of
+the committed trust map, ``task_id`` V3-008, ``git_sha`` = the pin's ``head_sha``, ``status``
+"passed", ``details.review_record`` equal to the committed pin, ``signed_at_utc`` after the
+review's ``finished_at`` and before every run that depends on the pin (the smokes for pin A,
+the evidence runs for pin B). Pin A's attestation is byte-identical at pin B's ``head_sha``, at
+``code_sha`` and at HEAD, pin B's at ``code_sha`` and HEAD. Residual limitation: the review
+service itself still does not sign its records (future item V3-INFRA-005); the signed
+validation record proves that the pin existed, unaltered, at the signed time, not that the
+review service produced it. The acceptance plan at HEAD and at ``code_sha`` must contain exactly
+one line matching :data:`PLAN_NOTE_RE`, identical at both::
 
     **Dated note (<YYYY-MM-DD>, orchestrator; I3-FU-1 step-2 review pins).** evaluator review
     <REVIEW-...> at <40-hex>; markers review <REVIEW-...> at <40-hex>
@@ -67,10 +83,11 @@ trust map is ``infrastructure/keys/trusted_attestation_keys.json`` at HEAD.
 **Chronology.** Smokes (all four; missing or late: ``RecordError``, nothing graded): the
 record's code_sha carries pin A (pin A byte-identical there, pin A's ``head_sha`` an ancestor of
 it) and is an ancestor of (or equal to) pin B's ``head_sha``; ``started_at`` after pin A's
-``finished_at`` and ``finished_at`` before pin B's ``started_at`` (the marker file is derived from
-the smoke logs, so its review begins after the smokes end). Evidence and repeat runs: code_sha
-equals ``--code-sha`` and ``started_at`` is after pin B's (and pin A's) ``finished_at``. Every
-run: ``started_at`` <= ``finished_at``.
+``finished_at`` and after pin A's attestation ``signed_at_utc``, and ``finished_at`` before pin
+B's ``started_at`` (the marker file is derived from the smoke logs, so its review begins after
+the smokes end). Evidence and repeat runs: code_sha equals ``--code-sha`` and ``started_at`` is
+after pin B's (and pin A's) ``finished_at`` and after both attestations' ``signed_at_utc``.
+Every run: ``started_at`` <= ``finished_at``.
 
 **Log markers.** ``--markers`` is the committed JSON ``{"fluct_on_marker", "fluct_off_marker",
 "step_line_re", "track_header_re"}``; every value must be a non-empty regular expression
@@ -118,16 +135,27 @@ default options at ``water(78.0)`` and (I) the libdEdx ICRU73_NEW liquid-water t
 r_M = Delta E_T / Delta E_M - 1, r_I = Delta E_T / Delta E_I - 1, s = Delta E_I / Delta E_M - 1,
 SE_rel = SE / Delta E_T.
 
-**Stepping model.** Geant4's range-table branch freezes the effective charge at the pre-step
-energy for a one-step slab. Emulated with ionmc's own model: S(E) = q^2(E) S_0(E) with q from
-``pierce_blann_charge`` and S_0 = S / q^2 numerically; the algorithm's loss integrates
-S(E) q^2(E_pre) / q^2(E) over the slab with the same RK4 integrator as the exact loss. g(f) =
-Delta E_alg / Delta E_exact - 1 at f1 = 0.03 (slab t) and f2 = 0.048 (slab 1.6 t) per point (He
-with z = 2 through the same callable). Per point: Delta_pred = g(f2) - g(f1); Delta_meas =
-r_M(f2) - r_M(f1); consistency |Delta_meas - Delta_pred| <= :data:`CONSISTENCY_TOL` (a failure
-makes the point INVALID: repeat rule); model residual of the extrapolation R_model = (f2 g(f1) -
-f1 g(f2)) / (f2 - f1) with |R_model| <= :data:`MODEL_RESIDUAL_LIMIT` at every C/O/He point (else
-``RecordError``: the design premise fails). The 0.25 % method systematic in sigma_b stays (its
+**Stepping model (P13 record: the Geant4 11.4.2 single-step algorithm, ``G4VEnergyLossProcess::
+AlongStepDoIt`` and ``G4LindhardSorensenIonModel::CorrectionsAlongStep``).** For a slab crossed
+in one step in the range-table branch, Geant4 (i) integrates the table part exactly along the
+step with the effective charge frozen at the pre-step energy, q^2(E_pre) S_base(E), where S_base
+is the unit-charge base stopping WITHOUT the higher-order correction terms, and (ii) adds the
+LS/Barkas correction term once, evaluated at the mid-step energy E_mid = max(E_pre -
+Delta E_table / 2, E_pre / 2) with q^2(E_mid) and beta(E_mid), times the step length. Emulated
+with ionmc's committed model (:func:`algorithm_loss`): S_base/q^2(E) = ``bethe_mass_stopping``
+with ``barkas``, ``bloch``, ``mott`` and ``effective_charge`` off, divided by z^2 (the L0 +
+shell part per unit charge); S_corr(E) = S_full(E) - q^2(E) S_base/q^2(E) (everything the
+default model adds beyond it, with the default effective charge); Delta E_alg = Delta E_table +
+rho t S_corr(E_mid), Delta E_table by the same RK4 integrator as the exact loss. He (the alpha
+path: no along-step correction in ``G4BetheBlochModel``): the table part only, with the full
+default alpha model and q frozen at the pre-step energy. Delta E_exact: the default model with
+q^2(E) along the path (:func:`slab_energy_loss`). g(f) = Delta E_alg / Delta E_exact - 1 at
+f1 = 0.03 (slab t) and f2 = 0.048 (slab 1.6 t) per point. Per point: Delta_pred = g(f2) -
+g(f1); Delta_meas = r_M(f2) - r_M(f1); consistency |Delta_meas - Delta_pred| <=
+:data:`CONSISTENCY_TOL` (a failure makes the point INVALID: repeat rule); model residual of
+the extrapolation R_model = (f2 g(f1) - f1 g(f2)) / (f2 - f1) with |R_model| <=
+:data:`MODEL_RESIDUAL_LIMIT` at every C/O/He point (else ``RecordError``: the design premise
+fails). The 0.25 % method systematic in sigma_b stays (its
 0.2 % stepping term is twice the residual limit).
 
 **Points.** Per ion (C parts 0/1, O parts 2/3) and case: the zero-thickness (Richardson)
@@ -211,6 +239,7 @@ def _load(name: str, path: Path) -> ModuleType:
 gen = _load("gen_i3fu2_bundles", HERE / "gen_i3fu2_bundles.py")
 icru = _load("compare_icru73", HERE / "compare_icru73.py")
 ss = _load("ss_evaluate", HERE.parent / "ion_em" / "ss_evaluate.py")
+env_seal = _load("env_seal", HERE / "env_seal.py")
 rio = ss.io  # validation/scripts/ion_em/r2_io.py (record verification helpers)
 
 RecordError = rio.RecordError
@@ -233,6 +262,18 @@ RESULTS_DIR = "validation/results/stopping/v3-008-i3fu2"
 REVIEW_PIN = f"{RESULTS_DIR}/i3fu2-review.json"  # pin A: the evaluator seal review
 MARKERS_PIN = f"{RESULTS_DIR}/i3fu2-markers-review.json"  # pin B: markers + pin A review
 MARKERS = f"{RESULTS_DIR}/log-markers.json"
+#: verbatim signed validation-manager records carrying each pin (Codex REVIEW-c4f3fdd1 finding 1)
+REVIEW_ATTESTATION = f"{RESULTS_DIR}/i3fu2-review-attestation.json"
+MARKERS_ATTESTATION = f"{RESULTS_DIR}/i3fu2-markers-review-attestation.json"
+VALIDATION_SIGNER = "validation-manager"
+#: fields the validation service adds when it lists a record (not part of the signed payload)
+DERIVED_VALIDATION_FIELDS = (
+    "attestation_status",
+    "attestation_reason",
+    "host_run_attestation",
+    "reference_run_attestation",
+)
+ENV_SEAL = env_seal.SEAL_REL
 RECORDS = f"{RESULTS_DIR}/topas-runs"
 MANIFEST = f"{gen.REL_PREFIX}/i3fu2-frozen-manifest.json"
 PLAN_PATH: str = rio.PLAN_PATH
@@ -257,6 +298,7 @@ SCRIPT_MODULES = (
     "r2_evaluate",
     "ss_budget",
     "ss_wrapper_template",
+    "env_seal",
     "infrastructure.experiment_v3.attest",
 )
 #: Non-module files sealed with the closure (the dependency lock and the project metadata).
@@ -422,6 +464,36 @@ def frozen_charge_stopping(proj: Projectile, stopping: Stopping, e_pre_u: float)
 _STEPPING: dict[tuple[str, int], dict[str, float]] = {}
 
 
+def base_stopping_per_q2(proj: Projectile) -> Stopping:
+    """Unit-charge base stopping of the default model: ``bethe_mass_stopping`` with the Barkas,
+    Bloch and Mott terms and the effective charge off, divided by z^2 (L0 + shell)."""
+    mat = water(78.0)
+    z2 = float(proj.z) ** 2
+
+    def s(e_u: float) -> float:
+        out = bethe_mass_stopping(
+            e_u, proj, mat, barkas=False, bloch=False, mott=False, effective_charge=False
+        )
+        return float(out[0]) / z2
+
+    return s
+
+
+def algorithm_loss(proj: Projectile, a: int, e0: float, slab_mm: float, ion: str) -> float:
+    """Energy loss [MeV] of Geant4's single-step algorithm emulated with ionmc's model (module
+    docstring, P13 record): C/O table part q^2(E_pre) S_base(E) integrated over the slab plus the
+    correction term at the mid-step energy; He the table part with the full default model."""
+    full = model_stopping(proj)
+    if ion == "he":
+        return slab_energy_loss(a * e0, a, slab_mm, frozen_charge_stopping(proj, full, e0))
+    base = base_stopping_per_q2(proj)
+    q2_pre = effective_charge_sq(proj, e0)
+    de_table = slab_energy_loss(a * e0, a, slab_mm, lambda e_u: q2_pre * base(e_u))
+    e_mid_u = max(e0 - de_table / a / 2.0, e0 / 2.0)
+    s_corr = full(e_mid_u) - effective_charge_sq(proj, e_mid_u) * base(e_mid_u)
+    return de_table + RHO_G_CM3 * (slab_mm / 10.0) * s_corr
+
+
 def stepping_bias(ion: str, case: int) -> dict[str, float]:
     """Model-side emulation of the single-step algorithm for one point (memoised): g(f1),
     g(f2) with g = Delta E_alg / Delta E_exact - 1 over the generator's slabs t and 1.6 t,
@@ -431,13 +503,11 @@ def stepping_bias(ion: str, case: int) -> dict[str, float]:
         proj, _z, a, _p = gen.IONS[ion]
         e0 = float(gen.CASES[case])
         exact = model_stopping(proj)
-        alg = frozen_charge_stopping(proj, exact, e0)
         g = []
         for mult in (1, 2):
             t = gen.slab_mm(ion, case, mult)
             de_exact = predicted_loss(f"model:{ion}", exact, a, e0, t)
-            de_alg = slab_energy_loss(a * e0, a, t, alg)
-            g.append(de_alg / de_exact - 1.0)
+            g.append(algorithm_loss(proj, a, e0, t, ion) / de_exact - 1.0)
         _STEPPING[key] = {
             "g1": g[0],
             "g2": g[1],
@@ -740,7 +810,7 @@ class Context:
     trust_info: dict[str, Any]
     index: dict[str, str]
     smoke_index: dict[str, str]
-    environment: dict[str, str]
+    environment: dict[str, Any]
     bundles: dict[str, tuple[int, int]] = field(default_factory=dict)
     _committed: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
 
@@ -830,12 +900,14 @@ def tree_blob_ids(repo: Path, sha: str, rels: list[str]) -> dict[str, str]:
     return out
 
 
-def sealed_sources(reader: Any, shas: dict[str, str]) -> dict[str, str]:
+def sealed_sources(
+    reader: Any, shas: dict[str, str], extra: tuple[str, ...] = ()
+) -> dict[str, str]:
     """Every file of the executable closure and of :data:`SEALED_FILES` byte-identical on disk
     in ``--repo``, in the loaded file (modules) and as committed at HEAD and at every commit of
     ``shas`` {what: sha}; returns {path: sha256}."""
     closure = executable_closure()
-    rels = sorted(set(closure) | set(SEALED_FILES))
+    rels = sorted(set(closure) | set(SEALED_FILES) | set(extra))
     disk: dict[str, bytes] = {}
     for rel in rels:
         path = reader.repo / rel
@@ -913,16 +985,73 @@ def parse_plan_note(text: str, where: str) -> dict[str, str]:
     return {**found[0].groupdict(), "line": found[0].group(0)}
 
 
-def load_pins(reader: Any, rel_a: str, rel_b: str, code_sha: str) -> tuple[dict, dict[str, str]]:
+def check_pin_attestation(
+    blob: bytes, rel: str, pin: dict[str, Any], trust: dict[str, Any]
+) -> dict[str, Any]:
+    """The committed verbatim validation-manager record that carries a review pin: a verified
+    Ed25519 attestation by a trusted ``validation-manager`` key (the committed trust map), task
+    V3-008, ``git_sha`` = the pin's ``head_sha``, ``status`` "passed", ``details.review_record``
+    equal to the committed pin, and ``attestation.signed_at_utc`` after the review's
+    ``finished_at``. Accepted layouts: the record itself or ``{"validation": record}``; the
+    fields the service adds when listing (:data:`DERIVED_VALIDATION_FIELDS`) are dropped before
+    verification, as ``local_validation.records_for`` does. Returns the signed time and the
+    provenance record."""
+    try:
+        doc = json.loads(blob.decode("utf-8"))
+    except ValueError as exc:
+        raise RecordError(f"pin attestation {rel} is not JSON: {exc}") from exc
+    rec = doc.get("validation") if isinstance(doc, dict) and "validation" in doc else doc
+    if not isinstance(rec, dict):
+        raise RecordError(f"pin attestation {rel} is not a validation record")
+    rec = {k: v for k, v in rec.items() if k not in DERIVED_VALIDATION_FIELDS}
+    status, why = rio.attest_module().classify_record(rec, trust, VALIDATION_SIGNER)
+    if status != "verified":
+        raise RecordError(f"pin attestation {rel}: attestation {status}: {why}")
+    if rec.get("task_id") != TASK_ID:
+        raise RecordError(f"pin attestation {rel}: task_id {rec.get('task_id')!r} != {TASK_ID}")
+    if rec.get("git_sha") != pin["doc"]["head_sha"]:
+        raise RecordError(f"pin attestation {rel}: git_sha is not the pin's head_sha")
+    if rec.get("status") != "passed":
+        raise RecordError(f"pin attestation {rel}: status {rec.get('status')!r} is not passed")
+    details = rec.get("details")
+    if not isinstance(details, dict) or details.get("review_record") != pin["doc"]:
+        raise RecordError(f"pin attestation {rel} does not carry the committed review pin")
+    signed_at = rec["attestation"]["signed_at_utc"]
+    signed = rio._parse_time(signed_at, f"{rel} signed_at_utc")
+    if not signed > pin["finished"]:
+        raise RecordError(
+            f"pin attestation {rel}: signed_at_utc is not after the review's finished_at"
+        )
+    return {
+        "signed": signed,
+        "provenance": {
+            "path": rel,
+            "sha256": hashlib.sha256(blob).hexdigest(),
+            "validation_id": rec.get("validation_id"),
+            "key_id": rec["attestation"]["key_id"],
+            "signed_at_utc": signed_at,
+        },
+    }
+
+
+def load_pins(
+    reader: Any,
+    rel_a: str,
+    rel_b: str,
+    code_sha: str,
+    trust: dict[str, Any],
+    att_a: str = REVIEW_ATTESTATION,
+    att_b: str = MARKERS_ATTESTATION,
+) -> tuple[dict, dict[str, str]]:
     """Both review pins and the plan note naming them (see the module docstring)."""
     note = parse_plan_note(reader.read(PLAN_PATH).decode("utf-8"), "HEAD")
     at_code = parse_plan_note(rio.git_show(reader.repo, code_sha, PLAN_PATH).decode(), code_sha)
     if at_code != note:
         raise RecordError(f"the review-pin plan note differs between code_sha {code_sha} and HEAD")
     pins: dict[str, dict[str, Any]] = {}
-    for name, rel, id_key, sha_key in (
-        ("evaluator", rel_a, "eval_id", "eval_sha"),
-        ("markers", rel_b, "markers_id", "markers_sha"),
+    for name, rel, id_key, sha_key, att_rel in (
+        ("evaluator", rel_a, "eval_id", "eval_sha", att_a),
+        ("markers", rel_b, "markers_id", "markers_sha", att_b),
     ):
         blob = reader.read(rel)
         if rio.git_show(reader.repo, code_sha, rel) != blob:
@@ -942,13 +1071,19 @@ def load_pins(reader: Any, rel_a: str, rel_b: str, code_sha: str) -> tuple[dict,
             "finished": rio._parse_time(doc["finished_at"], f"{rel} finished_at"),
             "started": rio._parse_time(doc["started_at"], f"{rel} started_at"),
         }
+        att_blob = reader.read(att_rel)
+        if rio.git_show(reader.repo, code_sha, att_rel) != att_blob:
+            raise RecordError(f"pin attestation {att_rel} differs between code_sha and HEAD")
+        att = check_pin_attestation(att_blob, att_rel, pins[name], trust)
+        pins[name].update(signed=att["signed"], attestation=att["provenance"], att_blob=att_blob)
     a, b = pins["evaluator"]["doc"]["head_sha"], pins["markers"]["doc"]["head_sha"]
     if not rio.is_ancestor(reader.repo, a, b):
         raise RecordError(f"evaluator review head_sha {a} is not an ancestor of the markers one")
     if not rio.is_ancestor(reader.repo, b, code_sha):
         raise RecordError(f"markers review head_sha {b} is not an ancestor of code_sha {code_sha}")
-    if rio.git_show(reader.repo, b, rel_a) != pins["evaluator"]["blob"]:
-        raise RecordError(f"review pin {rel_a} differs between the markers review {b} and HEAD")
+    for rel, key in ((rel_a, "blob"), (att_a, "att_blob")):
+        if rio.git_show(reader.repo, b, rel) != pins["evaluator"][key]:
+            raise RecordError(f"{rel} differs between the markers review {b} and HEAD")
     return pins, note
 
 
@@ -1026,6 +1161,9 @@ def context(
     smokes: str,
     markers_pin: str = MARKERS_PIN,
     markers: str = MARKERS,
+    review_attestation: str = REVIEW_ATTESTATION,
+    markers_attestation: str = MARKERS_ATTESTATION,
+    environment_seal: str = ENV_SEAL,
 ) -> Context:
     reader = rio.CommittedReader(repo)
     require_clean(reader.repo)
@@ -1035,11 +1173,15 @@ def context(
         raise RecordError(f"code_sha {code_sha} is not an ancestor of HEAD {reader.head}")
     rels = [reader.rel(p) for p in (records, smokes, review_pin, markers_pin, manifest)]
     records_rel, smoke_rel, pin_a, pin_b, man_rel = rels
-    pins, note = load_pins(reader, pin_a, pin_b, code_sha)
+    trust, trust_info = rio.committed_trust(reader)
+    att_a, att_b, env_rel = (
+        reader.rel(p) for p in (review_attestation, markers_attestation, environment_seal)
+    )
+    pins, note = load_pins(reader, pin_a, pin_b, code_sha, trust, att_a, att_b)
     reviewed = pins["evaluator"]["doc"]["head_sha"]
     markers_reviewed = pins["markers"]["doc"]["head_sha"]
     seal_shas = {"code_sha": code_sha, "the evaluator review head_sha": reviewed}
-    sealed = sealed_sources(reader, seal_shas)
+    sealed = sealed_sources(reader, seal_shas, (env_rel,))
     man, man_sha = load_manifest(reader, man_rel, seal_shas)
     markers_rel = reader.rel(markers)
     m_blob = reader.read(markers_rel)
@@ -1048,8 +1190,14 @@ def context(
             raise RecordError(
                 f"log-marker file {markers_rel} differs between {what} {sha} and HEAD"
             )
-    trust, trust_info = rio.committed_trust(reader)
-    environment = environment_check(reader.read("uv.lock").decode("utf-8"))
+    try:
+        env_record = env_seal.verify_environment(reader.read(env_rel))
+    except env_seal.EnvironmentSealError as exc:
+        raise RecordError(f"environment seal {env_rel}: {exc}") from exc
+    environment = {
+        "lock": environment_check(reader.read("uv.lock").decode("utf-8")),
+        "seal": {"path": env_rel, **env_record},
+    }
     return Context(
         repo=reader.repo,
         reader=reader,
@@ -1169,10 +1317,13 @@ def load_run(ctx: Context, bundle: str, run_id: str, records: str | None = None)
     if exp.smoke:
         check_smoke_sha(ctx, code_sha)
         after, after_what = ctx.pins["evaluator"]["finished"], "the evaluator review pin's"
+        signed, signed_what = ctx.pins["evaluator"]["signed"], "the evaluator review"
     else:
         if code_sha != ctx.code_sha:
             raise RecordError(f"record code_sha {code_sha} != --code-sha {ctx.code_sha}")
         after, after_what = ctx.runs_after, "both review pins'"
+        signed = max(p["signed"] for p in ctx.pins.values())
+        signed_what = "the markers review"
     started = rio._parse_time(result["started_at"], f"{run_id} started_at")
     finished = rio._parse_time(result["finished_at"], f"{run_id} finished_at")
     if started > finished:
@@ -1180,6 +1331,11 @@ def load_run(ctx: Context, bundle: str, run_id: str, records: str | None = None)
     if not started > after:
         raise RecordError(
             f"reference_started {result['started_at']} is not after {after_what} finished_at"
+        )
+    if not started > signed:
+        raise RecordError(
+            f"reference_started {result['started_at']} is not after {signed_what} attestation's "
+            "signed_at_utc"
         )
     if exp.smoke and not finished < ctx.pins["markers"]["started"]:
         raise RecordError(
@@ -1596,6 +1752,9 @@ def evaluate(
     smokes: str,
     markers_pin: str = MARKERS_PIN,
     markers: str = MARKERS,
+    review_attestation: str = REVIEW_ATTESTATION,
+    markers_attestation: str = MARKERS_ATTESTATION,
+    environment_seal: str = ENV_SEAL,
     archive_sha256: str | None = None,
     member_sha256: dict[str, str] | None = None,
 ) -> dict[str, Any]:
@@ -1611,6 +1770,9 @@ def evaluate(
         smokes=smokes,
         markers_pin=markers_pin,
         markers=markers,
+        review_attestation=review_attestation,
+        markers_attestation=markers_attestation,
+        environment_seal=environment_seal,
     )
     stepping = stepping_model_check()
     archive_sha = icru.ARCHIVE_SHA256 if archive_sha256 is None else archive_sha256
@@ -1769,8 +1931,9 @@ def evaluate(
             "rk4_steps": N_RK4,
             "model": "ionmc bethe_mass_stopping default options, water(78.0)",
             "table": "libdEdx ICRU73_NEW liquid water (target 276), log-log interpolated",
-            "stepping_model": "q^2 frozen at the pre-step energy over the one-step slab, "
-            "S_0 = S / q^2 of the default model; g(f) = Delta E_alg / Delta E_exact - 1",
+            "stepping_model": "P13 record: table part q^2(E_pre) S_base(E) integrated over the "
+            "one-step slab + correction term at the mid-step energy (C/O); He table part with "
+            "the full model, q frozen; g(f) = Delta E_alg / Delta E_exact - 1",
             "method_systematic": METHOD_SYSTEMATIC,
             "method_systematic_robustness": 2.0 * METHOD_SYSTEMATIC,
             "x_cap": X_CAP,
@@ -1811,6 +1974,7 @@ def evaluate(
                     "path": p["path"],
                     "sha256": p["sha256"],
                     **{k: p["doc"][k] for k in ("review_id", "head_sha", "finished_at")},
+                    "attestation": p["attestation"],
                 }
                 for name, p in ctx.pins.items()
             },
@@ -1851,6 +2015,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--review-pin", default=REVIEW_PIN)
     ap.add_argument("--markers-pin", default=MARKERS_PIN)
     ap.add_argument("--markers", default=MARKERS)
+    ap.add_argument("--review-attestation", default=REVIEW_ATTESTATION)
+    ap.add_argument("--markers-attestation", default=MARKERS_ATTESTATION)
+    ap.add_argument("--environment-seal", default=ENV_SEAL)
     ap.add_argument("--repo", type=Path, default=gen.REPO_ROOT)
     ap.add_argument("--archive", type=Path, required=True)
     ap.add_argument("--manifest", default=MANIFEST)
@@ -1868,6 +2035,9 @@ def main(argv: list[str] | None = None) -> int:
         smokes=a.smokes,
         markers_pin=a.markers_pin,
         markers=a.markers,
+        review_attestation=a.review_attestation,
+        markers_attestation=a.markers_attestation,
+        environment_seal=a.environment_seal,
     )
     a.output_dir.mkdir(parents=True, exist_ok=True)
     out = a.output_dir / RESULT_NAME

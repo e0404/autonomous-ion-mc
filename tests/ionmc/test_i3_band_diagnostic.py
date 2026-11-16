@@ -568,9 +568,12 @@ def cli_repo(mod, model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dic
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
     sources = [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / "src/ionmc").rglob("*.py")]
-    for rel in [*sources, mod.SCRIPT_REL, mod.I3_SCRIPT_REL, *mod.LOCK_FILES]:
+    for rel in [*sources, mod.SCRIPT_REL, mod.I3_SCRIPT_REL, mod.ENV_SCRIPT_REL, *mod.LOCK_FILES]:
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         (repo / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+    seal = repo / mod.ENV.SEAL_REL
+    seal.parent.mkdir(parents=True, exist_ok=True)
+    seal.write_text(mod.ENV.seal_text(_ENVIRONMENT), encoding="utf-8")
     i3 = repo / mod.DEFAULT_EXPECT_I3
     i3.parent.mkdir(parents=True)
     i3.write_text(_i3_json(mod, path, sha, members), encoding="utf-8")
@@ -582,6 +585,15 @@ def cli_repo(mod, model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dic
         lambda a, c, _run=mod.run: _run(a, c, archive_sha256=sha, member_sha256=members),
     )
     return {"archive": path, "repo": repo, "head": head, "i3": i3, "out": tmp_path / "out"}
+
+
+_ENVIRONMENT: dict[str, Any] = {}
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _environment(mod) -> None:  # type: ignore[no-untyped-def]
+    """The running environment's seal fields, computed once (RECORD verification ~0.5 s)."""
+    _ENVIRONMENT.update(mod.ENV.current_environment())
 
 
 def _cli(mod, monkeypatch: pytest.MonkeyPatch, env: dict[str, Any], *extra: str) -> int:  # type: ignore[no-untyped-def]
@@ -616,7 +628,8 @@ def test_cli_success_records_sealed_sources_and_committed_i3(  # type: ignore[no
         for name, m in list(sys.modules.items())
         if (name == "ionmc" or name.startswith("ionmc.")) and getattr(m, "__file__", None)
     }
-    expected = closure | {mod.SCRIPT_REL, mod.I3_SCRIPT_REL, "uv.lock", "pyproject.toml"}
+    expected = closure | {mod.SCRIPT_REL, mod.I3_SCRIPT_REL, mod.ENV_SCRIPT_REL, mod.ENV.SEAL_REL}
+    expected |= {"uv.lock", "pyproject.toml"}
     assert set(sealed) == expected
     assert {
         "src/ionmc/physics/stopping.py",
@@ -625,7 +638,8 @@ def test_cli_success_records_sealed_sources_and_committed_i3(  # type: ignore[no
         "src/ionmc/data/nist_star.py",
     } <= set(sealed)
     for rel, digest in sealed.items():
-        assert digest == hashlib.sha256((REPO_ROOT / rel).read_bytes()).hexdigest(), rel
+        source = (env["repo"] if rel == mod.ENV.SEAL_REL else REPO_ROOT) / rel
+        assert digest == hashlib.sha256(source.read_bytes()).hexdigest(), rel
     assert prov["ionmc_loaded_from_repo"] is False  # executed from the worktree, bytes identical
     environment = prov["environment"]
     assert environment["numpy"] == {
@@ -636,6 +650,13 @@ def test_cli_success_records_sealed_sources_and_committed_i3(  # type: ignore[no
     assert environment["python"]["major_minor"] == f"{sys.version_info[0]}.{sys.version_info[1]}"
     assert environment["python"]["check"] == "satisfies uv.lock requires-python"
     assert "NOT sealed" in environment["note"]
+    seal = environment["seal"]
+    assert seal["match"] is True and seal["numpy_version"] == np.__version__
+    assert seal["numpy_record_files_verified"] > 100
+    assert seal["seal_sha256"] == sealed[mod.ENV.SEAL_REL]
+    assert {k: seal[k] for k in mod.ENV.SEAL_FIELDS} == {
+        k: _ENVIRONMENT[k] for k in mod.ENV.SEAL_FIELDS
+    }
     record = prov["expect_i3"]
     committed = env["i3"].read_bytes()  # unchanged since the commit (clean-tree check passed)
     assert record == {
@@ -766,3 +787,99 @@ def test_python_specifier(mod, spec: str, ok: bool) -> None:  # type: ignore[no-
 def test_python_specifier_unsupported_fails_closed(mod) -> None:  # type: ignore[no-untyped-def]
     with pytest.raises(RuntimeError, match="unsupported"):
         mod._python_satisfies((3, 12, 0), "~=3.12")
+
+
+# --- environment seal (Codex REVIEW-c4f3fdd1 finding 3) --------------------------------------
+
+
+def test_numpy_record_verifies_on_this_environment(mod) -> None:  # type: ignore[no-untyped-def]
+    info = mod.ENV.numpy_dist_info()
+    out = mod.ENV.verify_record(info)
+    assert out["files_verified"] > 100
+    assert out["record_sha256"] == hashlib.sha256((info / "RECORD").read_bytes()).hexdigest()
+    assert _ENVIRONMENT["numpy_version"] == np.__version__
+    assert mod.ENV.multiarray_extension().name.startswith("_multiarray_umath")
+
+
+def _fake_dist(tmp_path: Path, files: dict[str, bytes], rows: list[list[str]]) -> Path:
+    import csv
+
+    for rel, blob in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_bytes(blob)
+    info = tmp_path / "fake-1.0.dist-info"
+    info.mkdir(exist_ok=True)
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    for row in rows:
+        writer.writerow(row)
+    writer.writerow(["fake-1.0.dist-info/RECORD", "", ""])
+    (info / "RECORD").write_text(buf.getvalue())
+    return info
+
+
+def _row(rel: str, blob: bytes) -> list[str]:
+    import base64
+
+    digest = base64.urlsafe_b64encode(hashlib.sha256(blob).digest()).rstrip(b"=").decode()
+    return [rel, f"sha256={digest}", str(len(blob))]
+
+
+def test_record_verification_fails_on_a_planted_mismatch(  # type: ignore[no-untyped-def]
+    mod, tmp_path: Path
+) -> None:
+    a, b = b"print(1)\n", b"\x00\x01binary"
+    rows = [_row("fake/a.py", a), _row("fake/b.so", b), ["fake/c.pyc", "", ""]]
+    info = _fake_dist(tmp_path, {"fake/a.py": a, "fake/b.so": b}, rows)
+    assert mod.ENV.verify_record(info)["files_verified"] == 2  # RECORD and unhashed rows skipped
+    (tmp_path / "fake/b.so").write_bytes(b"\x00\x01binarY")
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="hash mismatch for fake/b.so"):
+        mod.ENV.verify_record(info)
+    (tmp_path / "fake/b.so").unlink()
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="fake/b.so, which is missing"):
+        mod.ENV.verify_record(info)
+    info2 = _fake_dist(tmp_path / "md5", {"fake/a.py": a}, [["fake/a.py", "md5=abc", "9"]])
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="unsupported hash"):
+        mod.ENV.verify_record(info2)
+
+
+def test_environment_seal_round_trip_and_mismatch(mod) -> None:  # type: ignore[no-untyped-def]
+    raw = mod.ENV.seal_text(_ENVIRONMENT).encode()
+    doc = json.loads(raw)
+    assert sorted(doc) == sorted(("schema", *mod.ENV.SEAL_FIELDS))
+    out = mod.ENV.verify_environment(raw, _ENVIRONMENT)
+    assert out["match"] is True and out["seal_sha256"] == hashlib.sha256(raw).hexdigest()
+    for key in mod.ENV.SEAL_FIELDS:
+        changed = json.dumps({**doc, key: doc[key] + "x"}).encode()
+        with pytest.raises(
+            mod.ENV.EnvironmentSealError, match=re.escape(f"differs from the seal in ['{key}']")
+        ):
+            mod.ENV.verify_environment(changed, _ENVIRONMENT)
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="exactly"):
+        mod.ENV.verify_environment(json.dumps({**doc, "extra": "1"}).encode(), _ENVIRONMENT)
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="schema"):
+        mod.ENV.verify_environment(b"{}", _ENVIRONMENT)
+
+
+def test_cli_writes_the_environment_seal(  # type: ignore[no-untyped-def]
+    mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = ["i3_band_diagnostic", "--repo", str(tmp_path), "--write-environment-seal"]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert mod.main() == 0
+    raw = (tmp_path / mod.ENV.SEAL_REL).read_bytes()
+    assert raw.endswith(b"}\n") and not raw.endswith(b"\n\n")
+    assert mod.ENV.verify_environment(raw)["match"] is True  # re-read: the same environment
+
+
+def test_cli_refuses_an_environment_that_differs_from_the_seal(  # type: ignore[no-untyped-def]
+    mod, cli_repo: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = cli_repo
+    seal = env["repo"] / mod.ENV.SEAL_REL
+    doc = json.loads(seal.read_text())
+    seal.write_text(json.dumps({**doc, "python_executable_sha256": "0" * 64}) + "\n")
+    head = _commit(env["repo"], "a seal of another interpreter")
+    with pytest.raises(RuntimeError, match="python_executable_sha256"):
+        _cli(mod, monkeypatch, env, "--code-sha", head)
+    assert not env["out"].exists()

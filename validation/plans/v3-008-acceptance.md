@@ -1825,17 +1825,28 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   f₁ = 3 %, f₂ = 4.8 % (removes the bias linear in f; revision 1), SE₀ = √((f₂·SE₁)² + (f₁·SE₂)²)/(f₂ − f₁). **Revision 2
   (Codex REVIEW-22f384ed finding 4; SR-3 second pass finding 3):** the thickness pair alone cannot bound the quadratic
   remainder of the extrapolation (for a bias a·f + b·f² the residual −b·f₁f₂ is not constrained by r(f₂) − r(f₁)), so the
-  evaluator carries a model-side emulation of the Geant4 single-step algorithm with ionmc's own model (q² frozen at the
-  pre-step energy, the base stopping integrated along the step; the mechanism D-4 §3.2 identifies as the only
-  first-order bias): g(f) = ΔE_alg(f)/ΔE_exact(f) − 1 per point for f₁ and f₂. The per-point consistency check becomes
+  evaluator carries a model-side emulation of the Geant4 single-step algorithm with ionmc's own model (revision 4, per
+  the P13 source reading `validation/plans/v3-008/p13-i3fu2-stepping-bound.md`: the table part is the exact integral
+  along the step of q²(E_pre)·S_base(E) with q² frozen at the pre-step energy and S_base the unit-charge stopping without
+  the higher-order terms; the higher-order term is added once at the mid-step energy with q² and β there; alpha: table
+  part only): g(f) = ΔE_alg(f)/ΔE_exact(f) − 1 per point for f₁ and f₂. The per-point consistency check becomes
   |(r_M(f₂) − r_M(f₁)) − (g(f₂) − g(f₁))| ≤ 0.3 % — a gross-error check (revision 3 wording, SR-3 third pass C1): it cannot
   resolve the modelled bias itself (max Δ_pred 0.26 % < 0.3 %) and does not bound an unmodelled quadratic term; the 0.2 %
   stepping budget rests on the enforced single step (step-count smokes) and the D-4 §3.2 mechanism analysis of the
   documented along-step algorithm (pre-step dE/dx or range-table inversion by `linLossLimit`; q² at the pre-step energy;
   the LS/Barkas along-step corrections at the mid-step energy, a midpoint rule of order f²), which the emulation
   implements — and the modelled extrapolation residual R_model = (f₂·g(f₁) − f₁·g(f₂))/(f₂ − f₁) must be ≤ 0.1 % at every
-  point (a fixed property of the committed design, checked at run time; SR-3's emulation gives −0.019 % (C) / −0.024 % (O)
-  at 2.4 MeV/u and −0.003 % (C) / −0.006 % (O) at 10 MeV/u). A consistency failure makes the point INVALID and the repeat
+  point (a fixed property of the committed design, checked at run time; the P13 emulation with the mid-step higher-order
+  term gives −0.024 % (C) / −0.033 % (O) at 2.4 MeV/u and −0.005 % (C) / −0.009 % (O) at 10 MeV/u; the earlier
+  whole-stopping emulation gave a bias about 20 % smaller at 2.4–5 MeV/u). **P13 bound (revision 4):** from the algorithm as executed (source-verified:
+  [VELP] L609/L612 q² at the pre-step energy, L813/L824 branch, L826–827 inverse-range lookup, L856 corrections with the
+  pre-step energy; [LS] L263–L308 mid-step evaluation; tables 20 bins/decade with splines, [OPT4] L119, [LTB], [PVc]), the
+  residual after extrapolation is ≤ 0.06 % at every point as the best estimate and ≤ 0.16 % with explicit margins for the
+  table interpolation (×3 on an emulated 0.028 %), the effective-charge form (×2 on the q² term) and the mid-step
+  curvature; the msc path excess (≈ 5e-6, linear in f) is removed by the extrapolation; so the 0.2 % term of σ_b is
+  supported, the 0.1 % per-point premise holds for the best estimate (thin margin at 2.4–3 MeV/u once margins are applied,
+  disclosed). OPEN in P13: the Geant4 effective-charge slope for water, a Geant4 one-step vs fine-step comparison, the
+  Urban msc step-limit lines. A consistency failure makes the point INVALID and the repeat
   rule applies. **Robustness (revision 3, Codex REVIEW-aa4e7b1b finding 2):** because the declared systematic enters the
   classification, the classes and pattern are computed a second time with the method systematic doubled (0.5 %);
   `conclusive` additionally requires the pattern to be unchanged (`robust`), so the scientific route never rests on the
@@ -2067,3 +2078,19 @@ phase space must hold one row per primary, half-digit tolerance at both faces; C
 dynamic import closure, `uv.lock`/`pyproject.toml` sealed, numpy and Python versions checked against the lock; Codex minor
 (contradictory repeat-part wording) → one binding rule in §C and in the seeds bullet; SR-3-3 C2 → markers must be the Geant4
 parameter printout, never the input echo (evaluator guard); SR-3-3 C5 → wording. Not a clinical claim.
+
+**Revision 4 of amendment I3-FU-1 (2026-11-16, orchestrator; after Codex REVIEW-c4f3fdd1 on 2aaf1b67 (changes required:
+three important findings); before any run; edits in place above marked "revision 4").** Dispositions: Codex 1 (review pins
+forgeable) → each pin is accompanied by a committed verbatim copy of a signed validation-manager local-validation record
+(`i3fu2-review-attestation.json`, `i3fu2-markers-review-attestation.json`) whose `details.review_record` is the pin and whose
+`git_sha` is the pin's head; the evaluator verifies the Ed25519 attestation against the committed trust map (signer
+validation-manager, key be42a5ebe42a750b), requires the embedded record to equal the pin and the signing time to lie after
+the review's `finished_at` and before the dependent runs (the smokes start after pin A's signed record, the evidence runs
+after pin B's) — the review service itself still does not sign (V3-INFRA-005),
+so the signed record proves that the pin existed unaltered at the signed time, a disclosed residual; Codex 2 (stepping
+bound unsupported) → the P13 source-derived bound (above) and the refined emulation; the sensitivity re-classification
+stays; Codex 3 (binaries unsealed) → `env_seal.py`: the installed numpy distribution is verified file by file against its
+wheel manifest (`RECORD`), and a committed environment seal (`validation/results/stopping/v3-008-i3fu1/environment-seal.json`:
+numpy version, RECORD and extension-module hashes, interpreter hash, `sys.version`, platform) must match the running
+environment of both diagnostics; the seal is sealed like the sources; a byte-identical host environment is thereby
+required, an authenticated immutable environment remains outside this repository's means (disclosed). Not a clinical claim.

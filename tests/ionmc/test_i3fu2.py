@@ -48,7 +48,11 @@ GRID = np.geomspace(0.025, 1000.0, 53)
 SYN_HISTORIES = 1000
 ROW_NOISE = 0.004  # relative spread of the synthetic exit energies
 TABLE_FACTOR = 1.05  # synthetic ICRU73_NEW = ionmc model x this factor (s ~ +5 %)
-KEY_SEED = bytes(range(32))
+KEY_SEED = bytes(range(32))  # synthetic reference-runner key
+VM_SEED = bytes(range(1, 33))  # synthetic validation-manager key (trusted in the temp repos)
+ROGUE_SEED = bytes(range(2, 34))  # a validation-manager key nobody trusts
+ATT_A_SIGNED = "2026-11-16T12:02:00+00:00"  # pin A attestation (before the smokes)
+ATT_B_SIGNED = "2026-11-16T12:35:00+00:00"  # pin B attestation (before the evidence runs)
 PIN_A_STARTED = "2026-11-16T11:50:00+00:00"  # evaluator review (pin A)
 PIN_A_FINISHED = "2026-11-16T12:00:00+00:00"
 SMOKE_STARTED = "2026-11-16T12:05:00+00:00"  # smokes: after pin A, before pin B starts
@@ -461,12 +465,41 @@ def test_stepping_model_residual_within_limit_at_every_point() -> None:
     assert len(table["carbon"]) == len(table["oxygen"]) == 9 and sorted(table["he"]) == [17, 21]
     worst = {ion: max(abs(v["r_model"]) for v in pts.values()) for ion, pts in table.items()}
     assert all(w <= ev.MODEL_RESIDUAL_LIMIT for w in worst.values())
-    assert worst["carbon"] < 3e-4 and worst["oxygen"] < 3e-4 and worst["he"] < 1e-6
+    # P13 record: R_model ~ -0.033 % (O 2.4 MeV/u), -0.024 % (C 2.4 MeV/u)
+    assert 2e-4 < worst["carbon"] < 3e-4 and 3e-4 < worst["oxygen"] < 4e-4 and worst["he"] < 1e-6
     for ion in ("carbon", "oxygen"):
-        for v in table[ion].values():
-            assert 0.0 <= v["g1"] <= v["g2"] and v["d_pred"] == pytest.approx(v["g2"] - v["g1"])
-        assert table[ion][13]["g1"] > 2e-3  # ~ +0.3-0.4 % at 2.4 MeV/u, f = 3 % (plan)
-        assert table[ion][21]["g2"] < 1e-4
+        assert all(v["r_model"] < 0.0 for v in table[ion].values())
+    d_max = max(abs(v["d_pred"]) for v in table["oxygen"].values())
+    assert d_max == pytest.approx(0.0033, abs=1e-4)  # P13: Delta_pred up to ~0.33 % (O 2.4)
+    for ion in ("carbon", "oxygen"):
+        for case, v in table[ion].items():
+            assert v["d_pred"] == pytest.approx(v["g2"] - v["g1"])
+            if case <= 20:  # <= 30 MeV/u: the algorithm loses more, more so in the thicker slab
+                assert 0.0 < v["g1"] < v["g2"]
+        assert table[ion][13]["g1"] > 3e-3  # ~ +0.36 % (C) / +0.52 % (O) at 2.4 MeV/u, f = 3 %
+        assert abs(table[ion][21]["g2"]) < 1e-4  # 50 MeV/u: negligible either way
+
+
+def test_algorithm_loss_decomposition() -> None:
+    """P13 record: the C/O algorithm loss = table part with q^2(E_pre) S_base + the correction
+    term at the mid-step energy; it exceeds the earlier whole-stopping frozen-charge emulation
+    at 2.4 MeV/u, and He uses the frozen whole-stopping path."""
+    for ion in ("carbon", "oxygen"):
+        proj, z, a, _p = gen.IONS[ion]
+        full = ev.model_stopping(proj)
+        base = ev.base_stopping_per_q2(proj)
+        unit = bethe_mass_stopping(10.0, proj, water(78.0), barkas=False, bloch=False,
+                                   mott=False, effective_charge=False)[0]  # fmt: skip
+        assert base(10.0) * z**2 == pytest.approx(float(unit), rel=1e-14)
+        t = gen.slab_mm(ion, 13, 1)
+        whole = ev.slab_energy_loss(a * 2.4, a, t, ev.frozen_charge_stopping(proj, full, 2.4))
+        assert ev.algorithm_loss(proj, a, 2.4, t, ion) > whole
+    proj, _z, a, _p = gen.IONS["he"]
+    full = ev.model_stopping(proj)
+    t = gen.slab_mm("he", 17, 1)
+    assert ev.algorithm_loss(proj, a, 10.0, t, "he") == ev.slab_energy_loss(
+        a * 10.0, a, t, ev.frozen_charge_stopping(proj, full, 10.0)
+    )
 
 
 def test_frozen_charge_stopping_is_exact_at_the_pre_step_energy() -> None:
@@ -481,7 +514,8 @@ def test_frozen_charge_stopping_is_exact_at_the_pre_step_energy() -> None:
 def test_planted_algorithm_bias_is_consistent_and_extrapolates() -> None:
     """A TOPAS bias equal to the model's g(f) passes the consistency check and the
     extrapolation recovers the planted r0 up to exactly the modelled residual (1 + r0) R_model
-    (|R_model| <= 2.5e-4); a bias of the opposite sign fails the check at the low points."""
+    (|R_model| <= 3.5e-4, P13 record); a bias of the opposite sign fails the check at the low
+    points."""
     fails = []
     for ion in ("carbon", "oxygen"):
         for case in gen.ALL_CASES:
@@ -492,7 +526,7 @@ def test_planted_algorithm_bias_is_consistent_and_extrapolates() -> None:
                 assert abs((r2 - r1) - m["d_pred"]) <= ev.CONSISTENCY_TOL
                 got = ev.richardson(r1, r2)
                 assert abs(got - (r0 + (1 + r0) * m["r_model"])) < 1e-12
-                assert abs(got - r0) < 2.6e-4
+                assert abs(got - r0) < 3.5e-4
                 pt = ev.resolve_point(
                     {gen.bundle_name(case, 0): _fake(r=r1), gen.bundle_name(case, 1): _fake(r=r2)},
                     case,
@@ -864,6 +898,46 @@ def _review(review_id: str, head: str, started: str, finished: str, **over: Any)
     return doc
 
 
+def _attestation(
+    review: dict[str, Any],
+    signed_at: str,
+    *,
+    seed: bytes = VM_SEED,
+    details: dict[str, Any] | None = None,
+    **over: Any,
+) -> dict[str, Any]:
+    """A validation-manager local-validation record carrying ``review`` under
+    ``details.review_record``, signed at ``signed_at`` (the layout of ``VAL-*.json``)."""
+    at = IO.attest_module()
+    rec: dict[str, Any] = {
+        "schema_version": 1,
+        "validation_id": f"VAL-syn-{review['review_id']}",
+        "task_id": "V3-008",
+        "recorded_at_utc": signed_at,
+        "suite": "I3-FU-1 step-2 review pin",
+        "status": "passed",
+        "summary": "synthetic pin record",
+        "details": {"review_record": review} if details is None else details,
+        "git_branch": "task/v3-008",
+        "git_sha": review["head_sha"],
+        "worktree": "/synthetic",
+    }
+    rec.update(over)
+    key = at.keypair_from_seed(seed)
+    message = at.signed_message(rec, "validation-manager", signed_at, key.key_id)
+    rec["attestation"] = {
+        "schema": at.SCHEMA,
+        "alg": at.ALG,
+        "signer": "validation-manager",
+        "key_id": key.key_id,
+        "public_key": key.public_key.hex(),
+        "signed_at_utc": signed_at,
+        "payload_sha256": hashlib.sha256(at.canonical_payload(rec)).hexdigest(),
+        "signature": at.sign(message, key.seed).hex(),
+    }
+    return rec
+
+
 def _note(eval_id: str, eval_sha: str, markers_id: str, markers_sha: str) -> str:
     return (
         "**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review "
@@ -905,23 +979,29 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     gen.generate(bundles, histories=SYN_HISTORIES)
     (repo / ev.MANIFEST).write_text(gen.manifest_text(bundles))
     kp = IO.attest_module().keypair_from_seed(KEY_SEED)
+    vm = IO.attest_module().keypair_from_seed(VM_SEED)
     _write_json(
         repo / IO.DEFAULT_TRUST,
-        {"reference-runner": [{"key_id": kp.key_id, "public_key": kp.public_key.hex()}]},
+        {
+            "reference-runner": [{"key_id": kp.key_id, "public_key": kp.public_key.hex()}],
+            "validation-manager": [{"key_id": vm.key_id, "public_key": vm.public_key.hex()}],
+        },
     )
+    seal = repo / ev.ENV_SEAL
+    seal.parent.mkdir(parents=True, exist_ok=True)
+    seal.write_text(ev.env_seal.seal_text(ev.env_seal.current_environment()))
     (repo / ev.PLAN_PATH).parent.mkdir(parents=True, exist_ok=True)
     (repo / ev.PLAN_PATH).write_text("# synthetic acceptance plan\n")
     reviewed = _commit(repo, "sealed evaluator and bundles")
-    _write_json(
-        repo / ev.REVIEW_PIN, _review("REVIEW-syn-a", reviewed, PIN_A_STARTED, PIN_A_FINISHED)
-    )
-    pin_a_sha = _commit(repo, "pin A")
+    pin_a = _review("REVIEW-syn-a", reviewed, PIN_A_STARTED, PIN_A_FINISHED)
+    _write_json(repo / ev.REVIEW_PIN, pin_a)
+    _write_json(repo / ev.REVIEW_ATTESTATION, _attestation(pin_a, ATT_A_SIGNED))
+    pin_a_sha = _commit(repo, "pin A and its signed validation record")
     _write_json(repo / ev.MARKERS, TEST_MARKERS)
     markers_sha = _commit(repo, "markers from the smoke logs")
-    _write_json(
-        repo / ev.MARKERS_PIN,
-        _review("REVIEW-syn-b", markers_sha, PIN_B_STARTED, PIN_B_FINISHED),
-    )
+    pin_b = _review("REVIEW-syn-b", markers_sha, PIN_B_STARTED, PIN_B_FINISHED)
+    _write_json(repo / ev.MARKERS_PIN, pin_b)
+    _write_json(repo / ev.MARKERS_ATTESTATION, _attestation(pin_b, ATT_B_SIGNED))
     (repo / ev.PLAN_PATH).write_text(
         "# synthetic acceptance plan\n\n"
         + _note("REVIEW-syn-a", reviewed, "REVIEW-syn-b", markers_sha)
@@ -942,6 +1022,8 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     return {
         "root": root,
         "repo": repo,
+        "pin_a": pin_a,
+        "pin_b": pin_b,
         "reviewed": reviewed,
         "pin_a_sha": pin_a_sha,
         "markers_sha": markers_sha,
@@ -1287,8 +1369,8 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
             assert v["sigma_b"] == pytest.approx(np.hypot(v["se_b"], 0.0025))
             assert 1e-4 < v["se_b"] < 6e-4  # 0.4 % row noise, 1000 rows, extrapolated points
             assert v["max_abs_consistency_residual"] < 2e-3  # planted g: Delta_meas ~ Delta_pred
-            assert 0.0 <= v["max_abs_model_residual"] < 3e-4
-            assert v["max_abs_predicted_difference"] < 3e-3
+            assert 0.0 <= v["max_abs_model_residual"] < 3.5e-4
+            assert v["max_abs_predicted_difference"] < 3.5e-3
             if (ion, b) != ("carbon", "[10,20)"):
                 assert v["mean_r_I"] == pytest.approx(0.0, abs=4e-3)
     assert doc["bands"]["carbon"]["[10,20)"]["mean_r_I"] == pytest.approx(0.03, abs=4e-3)
@@ -1335,12 +1417,21 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
     assert prov["log_markers"]["path"] == ev.MARKERS
     assert "I3-FU-1 step-2 review pins" in prov["plan_note"]["line"]
     sealed = prov["sealed_sources"]
-    assert set(sealed) == set(ev.executable_closure()) | set(ev.SEALED_FILES)
+    assert set(sealed) == set(ev.executable_closure()) | set(ev.SEALED_FILES) | {ev.ENV_SEAL}
+    assert "validation/scripts/stopping/env_seal.py" in sealed
     for rel, digest in sealed.items():
-        assert digest == hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
+        source = (base["repo"] if rel == ev.ENV_SEAL else ROOT) / rel
+        assert digest == hashlib.sha256(source.read_bytes()).hexdigest()
     env = prov["environment"]
-    assert env["numpy"] == env["numpy_locked"] == np.__version__
-    assert env["python"] == env["python_locked"]
+    assert env["lock"]["numpy"] == env["lock"]["numpy_locked"] == np.__version__
+    assert env["lock"]["python"] == env["lock"]["python_locked"]
+    seal = env["seal"]
+    assert seal["path"] == ev.ENV_SEAL and seal["match"] is True
+    assert seal["numpy_version"] == np.__version__ and seal["numpy_record_files_verified"] > 100
+    assert seal["seal_sha256"] == sealed[ev.ENV_SEAL]
+    for name, signed in (("evaluator", ATT_A_SIGNED), ("markers", ATT_B_SIGNED)):
+        att = pins[name]["attestation"]
+        assert att["signed_at_utc"] == signed and att["validation_id"].startswith("VAL-syn-")
     assert doc["amendment"] == "I3-FU-1 step 2 (revision 2)"
 
 
@@ -1760,19 +1851,27 @@ def test_environment_must_match_the_lock(
         )
     w = _world(base, tmp_path)
     monkeypatch.setattr(np, "__version__", "0.0.1")
-    with pytest.raises(ev.RecordError, match="numpy 0.0.1 differs from the uv.lock pin"):
+    # caught first by the environment seal (the installed distribution is not the imported numpy)
+    with pytest.raises(ev.RecordError, match="imported numpy 0.0.1|numpy 0.0.1 differs"):
         _ctx(base, w)
+    with pytest.raises(ev.RecordError, match="numpy 0.0.1 differs from the uv.lock pin"):
+        ev.environment_check(lock)
 
 
 def _repin(base: dict[str, Any], tmp: Path, *, pin_a: Any = None, pin_b: Any = None,
-           note: str | None = None) -> dict[str, Any]:  # fmt: skip
-    """A copy of the base repository whose pins / plan note are rewritten in ONE new commit,
-    which then serves as code_sha."""
+           note: str | None = None, att_a: Any = None,
+           att_b: Any = None) -> dict[str, Any]:  # fmt: skip
+    """A copy of the base repository whose pins / attestations / plan note are rewritten in ONE
+    new commit, which then serves as code_sha."""
     w = _world(base, tmp)
-    if pin_a is not None:
-        _write_json(w["repo"] / ev.REVIEW_PIN, pin_a)
-    if pin_b is not None:
-        _write_json(w["repo"] / ev.MARKERS_PIN, pin_b)
+    for rel, doc in (
+        (ev.REVIEW_PIN, pin_a),
+        (ev.MARKERS_PIN, pin_b),
+        (ev.REVIEW_ATTESTATION, att_a),
+        (ev.MARKERS_ATTESTATION, att_b),
+    ):
+        if doc is not None:
+            _write_json(w["repo"] / rel, doc)
     if note is not None:
         (w["repo"] / ev.PLAN_PATH).write_text("# synthetic acceptance plan\n\n" + note)
     w["code_sha"] = _commit(w["repo"], "rewritten pins")
@@ -1915,7 +2014,7 @@ def test_smoke_chronology_and_binding_raise(
 def test_smoke_at_the_markers_review_head_is_accepted(base: dict[str, Any], tmp_path: Path) -> None:
     out = _smoke_check(
         base, tmp_path, ev.STEP_SMOKES[0], code_sha=base["markers_sha"],
-        started="2026-11-16T12:01:00+00:00", finished="2026-11-16T12:19:00+00:00",
+        started="2026-11-16T12:03:00+00:00", finished="2026-11-16T12:19:00+00:00",
     )  # fmt: skip
     assert out["ok"] and out["code_sha"] == base["markers_sha"]
 
@@ -1936,3 +2035,103 @@ def test_missing_or_late_smokes_raise_in_the_evaluation(
         _evaluate(w, "late", repo)
     with pytest.raises(ev.RecordError, match="lacks .*all four smokes are required"):
         _evaluate(w, "three", repo)
+
+
+# --- review pins bound to signed validation records (Codex REVIEW-c4f3fdd1 finding 1) --------
+
+
+def _att_variant(base: dict[str, Any], which: str, kind: str) -> dict[str, Any]:
+    pin = base["pin_a"] if which == "a" else base["pin_b"]
+    signed = ATT_A_SIGNED if which == "a" else ATT_B_SIGNED
+    if kind == "altered":  # the review inside the details changed after signing
+        doc = _attestation(pin, signed)
+        doc["details"]["review_record"] = {**pin, "summary": "forged"}
+        return doc
+    if kind == "untrusted":
+        return _attestation(pin, signed, seed=ROGUE_SEED)
+    if kind == "git_sha":
+        return _attestation(pin, signed, git_sha="f" * 40)
+    if kind == "status":
+        return _attestation(pin, signed, status="failed")
+    if kind == "task":
+        return _attestation(pin, signed, task_id="V3-005")
+    if kind == "other_review":  # validly signed, but for a different review record
+        return _attestation(pin, signed, details={"review_record": {**pin, "summary": "other"}})
+    if kind == "early":  # signed before the review finished
+        return _attestation(pin, "2026-11-16T11:00:00+00:00")
+    raise ValueError(kind)
+
+
+@pytest.mark.parametrize("which", ["a", "b"])
+@pytest.mark.parametrize(
+    "kind, match",
+    [
+        ("altered", "attestation invalid: payload hash mismatch"),
+        ("untrusted", "attestation unverified"),
+        ("git_sha", "git_sha is not the pin's head_sha"),
+        ("status", "status 'failed' is not passed"),
+        ("task", "task_id 'V3-005'"),
+        ("other_review", "does not carry the committed review pin"),
+        ("early", "not after the review's finished_at"),
+    ],
+)
+def test_pin_attestation_tampering_raises(
+    base: dict[str, Any], tmp_path: Path, which: str, kind: str, match: str
+) -> None:
+    doc = _att_variant(base, which, kind)
+    w = _repin(base, tmp_path, att_a=doc) if which == "a" else _repin(base, tmp_path, att_b=doc)
+    with pytest.raises(ev.RecordError, match=match):
+        _ctx(base, w, code_sha=w["code_sha"])
+
+
+def test_pin_attestation_layouts_and_missing(base: dict[str, Any], tmp_path: Path) -> None:
+    """The listed layout (``{"validation": record}`` with the service's derived fields) is
+    accepted; a missing attestation file is a RecordError."""
+    rec = _attestation(base["pin_b"], ATT_B_SIGNED)
+    wrapped = {"validation": {**rec, "attestation_status": "verified", "attestation_reason": "ok"}}
+    w = _repin(base, tmp_path / "wrapped", att_b=wrapped)
+    ctx = _ctx(base, w, code_sha=w["code_sha"])
+    assert ctx.pins["markers"]["attestation"]["signed_at_utc"] == ATT_B_SIGNED
+    w = _world(base, tmp_path / "missing")
+    (w["repo"] / ev.MARKERS_ATTESTATION).unlink()
+    w["code_sha"] = _commit(w["repo"], "attestation removed")
+    with pytest.raises(ev.RecordError, match="not committed"):
+        _ctx(base, w, code_sha=w["code_sha"])
+    w = _world(base, tmp_path / "moved")  # pin A's record rewritten after the markers review
+    _write_json(
+        w["repo"] / ev.REVIEW_ATTESTATION, _attestation(base["pin_a"], ATT_A_SIGNED, summary="x")
+    )
+    w["code_sha"] = _commit(w["repo"], "pin A record re-signed later")
+    with pytest.raises(ev.RecordError, match="differs between the markers review"):
+        _ctx(base, w, code_sha=w["code_sha"])
+
+
+def test_runs_must_start_after_the_pin_attestations(base: dict[str, Any], tmp_path: Path) -> None:
+    """Signed after the runs: smokes must start after pin A's signed_at_utc, evidence runs after
+    pin B's (the pins' signed times are set later than the synthetic runs)."""
+    w = _world(base, tmp_path)
+    ctx = _ctx(base, w)
+    ctx.pins["evaluator"]["signed"] = IO._parse_time("2026-11-16T12:07:00+00:00", "t")
+    smoke = ev.STEP_SMOKES[0]
+    with pytest.raises(ev.RecordError, match="not after the evaluator review attestation"):
+        ev.check_smoke(ctx, smoke, ctx.smoke_index[smoke])
+    ctx = _ctx(base, w)
+    ctx.pins["markers"]["signed"] = IO._parse_time("2026-11-16T13:30:00+00:00", "t")
+    with pytest.raises(ev.RecordError, match="not after the markers review attestation"):
+        ev.check_run(ctx, w["bundle"], w["run_id"])
+    assert ev.check_smoke(ctx, smoke, ctx.smoke_index[smoke])["ok"]  # smokes depend on pin A
+
+
+def test_environment_seal_mismatch_raises(
+    base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    w = _world(base, tmp_path)
+    real = ev.env_seal.current_environment()
+    for key in ev.env_seal.SEAL_FIELDS:
+        monkeypatch.setattr(ev.env_seal, "current_environment", lambda k=key: {**real, k: "x"})
+        with pytest.raises(
+            ev.RecordError, match=f"environment seal .*differs from the seal.*{key}"
+        ):
+            _ctx(base, w)
+    monkeypatch.setattr(ev.env_seal, "current_environment", lambda: real)
+    assert _ctx(base, w).environment["seal"]["match"] is True
