@@ -869,7 +869,7 @@ consumed rows and fresh evidence) and a declared uncertainty followed by a categ
 on the integration of PR #84 with the FAIL declared. Nothing graded is re-graded; I3 stays FAIL. Not a clinical claim.
 
 **Dated note (2026-11-16, orchestrator; amendment I3-FU-1 step 1 run at 5999f789).** The band-mean hypothesis quoted above
-is WITHDRAWN by the pre-declared rule 1a (eight of nine quoted quantities match at 0.1 pp; the oxygen ≥ 50 MeV/u rounded band
+is WITHDRAWN by the pre-declared rule 1a (nine of ten quoted quantities match at 0.1 pp; the oxygen ≥ 50 MeV/u rounded band
 mean is −0.1 pp against the quoted max-type bound); the committed diagnostic stands as the record of the band-wise C/O deficit.
 The z-scan attributes the [10,20) MeV/u band to a z²-like shape and no other band to a single-term shape (common negative
 sign over Z = 3–10 in every band); Z = 1, 2 lie within ±0.8 pp. Step 2 (TOPAS thin-slab measurement) follows; nothing graded

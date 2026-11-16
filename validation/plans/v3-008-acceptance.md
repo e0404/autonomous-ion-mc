@@ -2341,7 +2341,7 @@ published host-runner key, exit 0, output-manifest sha256 05c5191b…, argv = th
 record committed as `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T164519Z-ad778a16.json`; result
 committed verbatim as `validation/results/stopping/v3-008-i3fu1/icru73_band_diagnostic.json`, sha256 e8d55ad7…; `--expect-i3`
 matched the committed row-I3 file; environment, launch and sealed-source checks passed in the script).
-- **Rule 1a verdict (computed by the script): WITHDRAWN.** Eight of the nine quoted quantities match exactly at 0.1 pp (C/O
+- **Rule 1a verdict (computed by the script): WITHDRAWN.** Nine of the ten quoted quantities (four band means and one high-band check per ion) match exactly at 0.1 pp (C/O
   band means −8.6/−12.2, −4.3/−7.5, −1.8/−3.9, −0.3/−0.8 %; C [50,1000] rounded mean 0.0); the oxygen [50,1000] rounded band
   mean is −0.1 pp, outside the quoted max-type bound of 0.06 % as the rule reads it. By the pre-declared rule the hypothesis
   as recorded is withdrawn in this plan, decision 0043 and the ledger; the committed result stands; no re-computation with
@@ -2369,3 +2369,21 @@ the far face; the fine-step smoke gives 20 slab steps per primary. No evidence r
 clinical claim.
 
 **Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-c35482f470fb4b5f874ef5d91f0d067b at 38019380f3584a1d895bdb8922b17b3af326a67e; markers review REVIEW-d3d88ac3bc774119bf24147899bf5d9e at d21f01b548da597035a744d8234b77fc62058a58. Pin B (signed, passed, no findings; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`) reviewed the commit that added the marker file, the smoke records and pin A; the 58 evidence runs follow at the commit carrying this note (Z), after pin B's signed finished_at 17:03:54 UTC, one at a time. Not a clinical claim.
+
+**Dated results note — I3-FU-1 step-2 evidence runs (58) at c8102e89 (2026-11-16, orchestrator; records only, nothing graded).**
+The 58 evidence bundles of the frozen manifest (cases 13–21, parts 0–7 as generated) were run once each, one at a time, at
+commit Z (c8102e89, which carries both review pins and the one-line pins note), through the reference-runner service
+(engine topas), all after pin B's signed `finished_at` (17:03:54 UTC; first run started 17:14:13 UTC, last finished
+17:34:51 UTC); every signed record reports `succeeded` true, exit 0, no timeout, no missing output, `code_sha` =
+c8102e89. The 57 runs after the first 13 were executed by a reference-worker agent under the same procedure; the last one by
+the orchestrator. The signed records and artifact listings are committed verbatim under
+`validation/results/stopping/v3-008-i3fu2/topas-runs/<run_id>/` with `index.json` (bundle, case, part, run_id, seed,
+code_sha, signed start/finish); 117 files, directory digest (sha256 over the sorted `path sha256` lines) 868cbdd2ff07c318d4b126b4ccf841f615bbf2df8bb549e443c5ed1a8c6b60e9.
+Outputs are materialized in the ignored task cache for the evaluator and are deleted after it has run. No run has been
+read, parsed or graded by hand; the evaluator (`i3fu2_evaluate.py`, run by the host-runner through the sealed launcher at
+a later commit with `--code-sha c8102e89`) grades them once. CI note: the GitHub tests job failed at c8102e89 because the
+runner resolved Python 3.14 while the sealed diagnostics require the locked lower bound 3.12 (`r2_io.RecordError: Python
+3.14 differs from uv.lock requires-python 3.12`, 32 failed / 17 errors, all in `test_i3fu2.py`); the workflow now pins
+`UV_PYTHON: "3.12"` for the tests job (no test or gate changed). Codex REVIEW-a92fa005 on c8102e89 (signed, pass) noted
+the "eight of nine" miscount of the step-1 note: corrected to nine of ten (four band means and one high-band check per
+ion) here, in decision 0043 and in both ledger rows; the WITHDRAWN verdict is unchanged. Not a clinical claim.

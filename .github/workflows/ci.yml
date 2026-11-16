@@ -40,6 +40,11 @@ jobs:
     name: tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # The sealed diagnostics of V3-008 amendment I3-FU-1 require the running interpreter's
+      # major.minor to equal the lower bound of uv.lock's requires-python (3.12); without a pin
+      # uv selects the newest interpreter (3.14 on 2026-11-16) and those tests fail.
+      UV_PYTHON: "3.12"
 
     steps:
       - name: Check out repository
