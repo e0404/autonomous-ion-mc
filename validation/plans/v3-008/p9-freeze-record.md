@@ -2109,6 +2109,13 @@ placeholder scorer output was deleted unread.
 | `reference_requests/interventions/IR-20261116-204824-29B867/README.md` | `179f171dd51f4a61fbf823f1ceb3305078923e47bc971acfb0c1b15d35dcae25` |
 | `reference_requests/interventions/IR-20261116-204824-29B867/request.json` | `fedecdd09fd426e0ddf76c461fde5a50ffc0bf88422fbc078d7a4ce5d6ad95e8` |
 
+
+**Dated note (2026-11-16, orchestrator) — ADDENDUM-1 of IR-20261116-204824-29B867 (extent of the affected region corrected to the P12 figures; methodology wording), bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `reference_requests/interventions/IR-20261116-204824-29B867/ADDENDUM-1.md` | `3aa8425691b804913fde473f5b0ab18b98091d14356c57639be155d3a2e3f960` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

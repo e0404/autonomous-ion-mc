@@ -909,13 +909,17 @@ ICRU73_NEW, lineage identity with the 2009 revision OPEN) by band means of 8.6/1
 5–10, 1.8/3.9 % at 10–20 and 0.3/0.8 % at 20–50 MeV/u, and by at most 0.05 % (C) / 0.1 % (O) in band mean above 50 MeV/u;
 the CSDA-range agreement with the table is within 0.26 % (C) / 0.39 % (O); row I3 FAILED and is not re-graded. The
 acceptance reference (TOPAS 4.3 / Geant4 11.4.2, opt4 EM-only) differs from ionmc by band means of +3.5/+5.0 % (C/O) at
-2–5 MeV/u, +1.4/+2.2 % at 5–10, +0.6/+1.0 % at 10–20 and +0.1/+0.3 % at 20–50 MeV/u (one-step thin-slab mean energy loss;
+2–5 MeV/u, +1.4/+2.2 % at 5–10, +0.6/+1.0 % at 10–20 and +0.1/+0.3 % at 20–50 MeV/u (thin-slab mean energy loss; the
+point values are the fine-step runs (20 limited steps in the slab), the one-step slab pair enters only the per-point
+emulation gate and the report-only checks [corrected 2026-11-16, Codex REVIEW-e0d9bcd0: the first wording said "one-step"];
 0.2 % method systematic; the oxygen 2.4 MeV/u point invalid after its repeat), i.e. it lies between ionmc and the table and
-nearer to ionmc. **Capability statement (§5):** below 20 MeV/u (C: the last ≈ 0.4 mm of range at 290 MeV/u; O: the last
-≈ 0.3 mm at 350 MeV/u) ionmc's C/O stopping is lower than the revised ICRU 73 table by up to 12 % and than the acceptance
-reference by up to 5 % (band means); the declared domains of §5 are unchanged (their lower ends 80 / 100 MeV/u lie far
-above the affected bands, which every beam traverses only at the end of its range); this is a declared model limitation,
-not an excludable domain. No model change is made under this decision; option (b) (tabulated or re-parameterised
+nearer to ionmc. **Capability statement (§5):** below 20 MeV/u — the last ≈ 1.45 mm of range at C 290 MeV/u (0.9 % of
+163 mm) and ≈ 1.11 mm at O 350 MeV/u (0.7 % of 167 mm); below 50 MeV/u ≈ 7.5 mm (4.6 %) and ≈ 5.7 mm (3.4 %) (P12 §4,
+committed; corrected 2026-11-16 for Codex REVIEW-e0d9bcd0: the first wording "≈ 0.4 / 0.3 mm" was the region below
+10 MeV/u, an understatement by a factor 3–4) — ionmc's C/O stopping is lower than the revised ICRU 73 table by up to 12 %
+and than the acceptance reference by up to 5 % (band means); the declared domains of §5 are unchanged (their lower ends
+80 / 100 MeV/u lie far above the affected bands, which every beam traverses only at the end of its range); this is a
+declared model limitation, not an excludable domain. No model change is made under this decision; option (b) (tabulated or re-parameterised
 low-energy C/O stopping) stays available to a later task with its own amendment, licence review and fresh held-out
 evidence. Integration of V3-008 with this gating FAIL declared is a material scope reduction reserved to the operator
 (Appendix A intervention). Not a clinical claim.

@@ -2659,3 +2659,13 @@ evaluator run RUN-20261116T203950Z-df7c5df4 that graded step 2 was launched from
 host-runner and is bound to it by its signed record; the failed review record stays in the service's state. Codex
 REVIEW-dfe0cc57's minor finding (a duplicated `topas-runs/index.json` hash transition in a freeze-record note) is corrected
 in this commit. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; Codex REVIEW-e0d9bcd0 on ee9ee73d, important + minor; corrections and intervention
+addendum).** The capability statement of decision 0043 and the reason text of IR-20261116-204824-29B867 understated the
+spatial extent of the declared limitation: "the last ≈ 0.4 / 0.3 mm of range" is the region below 10 MeV/u; the region
+below 20 MeV/u is the last ≈ 1.45 mm (C 290 MeV/u, 0.9 %) / ≈ 1.11 mm (O 350 MeV/u, 0.7 %) and below 50 MeV/u ≈ 7.5 /
+5.7 mm (4.6 / 3.4 %) — the committed P12 §4 figures. The band means were also described as "one-step" although the point
+values are the fine-step runs (the one-step pair feeds only the emulation gate). Both are corrected in place in decision
+0043 (marked) and by `ADDENDUM-1.md` in the intervention directory, which the operator is asked to read with the request;
+the options and the declared uncertainty values are unchanged. The step-3 decision (option (c)) is unaffected: the
+extent of the region does not enter rule 2a. Not a clinical claim.
