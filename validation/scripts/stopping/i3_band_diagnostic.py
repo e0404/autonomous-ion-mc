@@ -289,10 +289,11 @@ I3_SCRIPT_REL = "validation/scripts/stopping/compare_icru73.py"
 ENV_SCRIPT_REL = "validation/scripts/stopping/env_seal.py"
 LOCK_FILES = ("uv.lock", "pyproject.toml")  # sealed (disk == committed bytes)
 ENVIRONMENT_NOTE = (
-    "numpy version and Python version checked against the uv.lock committed at code_sha; the "
-    "numpy distribution (every RECORD-listed file), its _multiarray_umath extension and the "
-    "Python executable are sealed by content against the committed environment seal; shared "
-    "libraries outside them (libc, system libraries) are NOT sealed (declared limitation)"
+    "numpy version and Python version checked against the uv.lock committed at code_sha; "
+    "hashed against the committed environment seal: the numpy distribution (every RECORD-listed "
+    "file), its _multiarray_umath extension, the interpreter executable, every loaded stdlib "
+    "module and the launcher; only the kernel, libc and the C runtime the interpreter links "
+    "against are NOT sealed (declared limitation)"
 )
 _SPECIFIER_RE = re.compile(r"\s*(>=|<=|==|!=|>|<)\s*(\d+(?:\.\d+)*)(\.\*)?\s*")
 
@@ -930,7 +931,8 @@ def main() -> int:
     )
     args = parser.parse_args()
     repo = Path(args.repo)
-    launch = ENV.check_launch(LAUNCH)  # before anything else (also for writing the seal)
+    # before anything else (also for writing the seal); binds the launched target to this file
+    launch = ENV.check_launch(LAUNCH, Path(__file__).resolve())
     if args.write_environment_seal:
         target = repo / args.environment_seal
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -952,6 +954,8 @@ def main() -> int:
     sealed, from_repo = seal_sources(repo, args.code_sha, (args.environment_seal, ENV.LAUNCHER_REL))
     if launch["launcher_record"].get("launcher_sha256") != sealed[ENV.LAUNCHER_REL]:
         raise RuntimeError("the launcher that started this run is not the sealed sealed_launch.py")
+    if launch["launcher_record"].get("target_sha256") != sealed[SCRIPT_REL]:
+        raise RuntimeError("the launched target differs from the committed (sealed) script")
     sealed_modules = {
         name: mod
         for name, mod in sys.modules.items()

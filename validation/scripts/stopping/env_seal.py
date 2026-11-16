@@ -421,13 +421,20 @@ def capture_launch() -> dict[str, Any]:
     }
 
 
-def check_launch(launch: Mapping[str, Any]) -> dict[str, Any]:
+PREIMPORT_FORBIDDEN = ("numpy", "ionmc")  # top-level packages that must not precede the launch
+
+
+def check_launch(launch: Mapping[str, Any], target_file: Path | None = None) -> dict[str, Any]:
     """Enforce the captured launch state (Codex REVIEW-cf6fa397): launched through
     ``sealed_launch.py`` (its record present, origin and launcher sha256 recorded), ``-I -S -B``,
     ``pycache_prefix`` an existing directory that held no file at the capture, the standard import
     machinery by identity, and ``sys.path`` equal to the launcher's explicit list; else
     :class:`EnvironmentSealError`. Returns the provenance record (the launcher record without its
-    stdlib hash map, which is summarised by its count)."""
+    stdlib hash map, which is summarised by its count). With ``target_file`` (the diagnostic's
+    own resolved ``__file__``; Codex REVIEW-e0d37216): the record's ``target_path`` must be that
+    file and its ``target_sha256`` the sha256 of that file on disk (the diagnostics further
+    compare it with the committed bytes), and the record's ``sys_modules_at_launch`` must hold no
+    numpy / ionmc module."""
     record = launch.get("launcher_record")
     if not isinstance(record, dict) or record.get("origin") != LAUNCHER_REL:
         raise EnvironmentSealError("not launched through sealed_launch.py (no launcher record)")
@@ -445,6 +452,21 @@ def check_launch(launch: Mapping[str, Any]) -> dict[str, Any]:
         raise EnvironmentSealError(f"import machinery: {launch['machinery_problems']}")
     if launch.get("sys_path_at_capture") != record.get("sys_path"):
         raise EnvironmentSealError("sys.path at the capture is not the launcher's explicit list")
+    preloaded = [
+        n
+        for n in record.get("sys_modules_at_launch") or []
+        if n in PREIMPORT_FORBIDDEN or n.split(".")[0] in PREIMPORT_FORBIDDEN
+    ]
+    if not isinstance(record.get("sys_modules_at_launch"), list) or preloaded:
+        raise EnvironmentSealError(
+            f"modules imported before the launch (or no module list recorded): {preloaded}"
+        )
+    if target_file is not None:
+        own = Path(target_file).resolve()
+        if record.get("target_path") != str(own):
+            raise EnvironmentSealError(f"the launcher ran {record.get('target_path')}, not {own}")
+        if record.get("target_sha256") != _sha256_file(own):
+            raise EnvironmentSealError("target_sha256 of the launch differs from this file on disk")
     summary = {k: v for k, v in record.items() if k != "stdlib_modules_at_launch"}
     summary["stdlib_modules_at_launch"] = len(record.get("stdlib_modules_at_launch") or {})
     return {

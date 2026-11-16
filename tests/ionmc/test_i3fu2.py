@@ -91,6 +91,12 @@ VALID_LAUNCH = {  # a launch record as sealed_launch.py + env_seal.capture_launc
         ).hexdigest(),
         "sys_path": list(_SYN_PATH),
         "stdlib_modules_at_launch": {},
+        "target": "validation/scripts/stopping/i3fu2_evaluate.py",
+        "target_path": str((ROOT / "validation/scripts/stopping/i3fu2_evaluate.py").resolve()),
+        "target_sha256": hashlib.sha256(
+            (ROOT / "validation/scripts/stopping/i3fu2_evaluate.py").read_bytes()
+        ).hexdigest(),
+        "sys_modules_at_launch": ["builtins", "sys"],
     },
 }
 
@@ -2494,6 +2500,12 @@ def test_launch_record_is_enforced(
         ({"machinery_problems": ["foreign finder"]}, "import machinery"),
         ({"sys_path_at_capture": ["/elsewhere"]}, "explicit list"),
         ({"launcher_record": {**record, "launcher_sha256": "0" * 64}}, "not the sealed"),
+        ({"launcher_record": {**record, "target_sha256": "0" * 64}}, "differs from this file"),
+        ({"launcher_record": {**record, "target_path": "/elsewhere/x.py"}}, "the launcher ran"),
+        (
+            {"launcher_record": {**record, "sys_modules_at_launch": ["sys", "numpy.linalg"]}},
+            "modules imported before the launch",
+        ),
     ):
         monkeypatch.setattr(ev, "LAUNCH", {**VALID_LAUNCH, **bad})
         with pytest.raises(ev.RecordError, match=match):

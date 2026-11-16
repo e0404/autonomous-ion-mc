@@ -615,6 +615,10 @@ def _valid_launch(mod) -> dict[str, Any]:  # type: ignore[no-untyped-def]
             "launcher_sha256": hashlib.sha256(LAUNCHER.read_bytes()).hexdigest(),
             "sys_path": list(path),
             "stdlib_modules_at_launch": {},
+            "target": mod.SCRIPT_REL,
+            "target_path": str(Path(mod.__file__).resolve()),
+            "target_sha256": hashlib.sha256(Path(mod.__file__).read_bytes()).hexdigest(),
+            "sys_modules_at_launch": ["builtins", "sys"],
         },
     }
 
@@ -1023,49 +1027,51 @@ def test_launch_capture_and_check(  # type: ignore[no-untyped-def]
     ):
         with pytest.raises(env.EnvironmentSealError, match=match):
             env.check_launch({**good, **bad})
+    own = Path(mod.__file__).resolve()
+    assert env.check_launch(good, own)["launch_ok"] is True
+    rec = good["launcher_record"]
+    for bad_rec, match in (
+        ({"target_sha256": "0" * 64}, "differs from this file on disk"),  # tampered target
+        ({"target_path": "/elsewhere/x.py"}, "the launcher ran"),
+        ({"sys_modules_at_launch": ["numpy"]}, "modules imported before the launch"),
+        ({"sys_modules_at_launch": None}, "no module list recorded"),
+    ):
+        with pytest.raises(env.EnvironmentSealError, match=match):
+            env.check_launch({**good, "launcher_record": {**rec, **bad_rec}}, own)
     (empty / "sub").mkdir()
     (empty / "sub" / "x.cpython-312.pyc").write_bytes(b"old")
     assert env.capture_launch()["pycache_prefix_files_at_start"] == 1
 
 
-def _launch(tmp_path: Path, target_text: str, *flags: str, prefix: Path | None = None) -> Any:
-    target = tmp_path / "target.py"
-    target.write_text(target_text)
+DIAG = REPO_ROOT / "validation/scripts/stopping/i3_band_diagnostic.py"
+SITE = REPO_ROOT / ".venv/lib/python{}.{}/site-packages".format(*sys.version_info[:2])
+
+
+def _launch_py(
+    tmp_path: Path,
+    script: Path,
+    *args: str,
+    flags: tuple[str, ...] = ("-I", "-S", "-B"),
+    prefix: Path | None = None,
+) -> Any:
     if prefix is None:
         prefix = tmp_path / "prefix"
         prefix.mkdir(exist_ok=True)
-    cmd = [
-        sys.executable,
-        *flags,
-        "-X",
-        f"pycache_prefix={prefix}",
-        str(LAUNCHER),
-        str(target),
-        "a1",
-    ]
+    cmd = [sys.executable, *flags, "-X", f"pycache_prefix={prefix}", str(script), *args]
     return subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=tmp_path)
 
 
-TINY_TARGET = """import builtins, json, sys
-r = getattr(builtins, "__ionmc_sealed_launch__")
-print(json.dumps({"argv": sys.argv[1:], "origin": r["origin"], "path": r["sys_path"],
-                  "flags": r["flags"], "n": len(r["stdlib_modules_at_launch"]),
-                  "name": __name__}))
-"""
-
-
-def test_sealed_launcher_runs_the_target(tmp_path: Path) -> None:
-    proc = _launch(tmp_path, TINY_TARGET, "-I", "-S", "-B")
-    assert proc.returncode == 0, proc.stderr
-    out = json.loads(proc.stdout.strip().splitlines()[-1])
-    assert out["argv"] == ["a1"] and out["name"] == "__main__"
-    assert out["origin"] == "validation/scripts/stopping/sealed_launch.py"
-    assert out["flags"] == {"isolated": 1, "no_site": 1, "dont_write_bytecode": 1}
-    assert out["path"][:2] == [
-        str(REPO_ROOT / "src"),
-        str(REPO_ROOT / "validation/scripts/stopping"),
-    ]
-    assert out["path"][2].endswith("site-packages") and out["n"] > 5
+def test_sealed_launch_end_to_end_writes_a_seal(mod, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """A real launch of the step-1 script through the launcher (the launch record is checked
+    by the script itself, target binding included) writing an environment seal."""
+    repo = tmp_path / "r"
+    repo.mkdir()
+    proc = _launch_py(
+        tmp_path, LAUNCHER, str(DIAG), "--repo", str(repo), "--write-environment-seal"
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    seal = json.loads((repo / mod.ENV.SEAL_REL).read_text())
+    assert seal["schema"] == mod.ENV.SEAL_SCHEMA and len(seal[mod.ENV.STDLIB_KEY]) > 500
 
 
 @pytest.mark.parametrize(
@@ -1079,39 +1085,56 @@ def test_sealed_launcher_runs_the_target(tmp_path: Path) -> None:
 def test_sealed_launcher_refuses_without_isolation(
     tmp_path: Path, flags: tuple[str, ...], match: str
 ) -> None:
-    proc = _launch(tmp_path, TINY_TARGET, *flags)
-    assert proc.returncode == 2 and match in proc.stderr and proc.stdout == ""
+    proc = _launch_py(tmp_path, LAUNCHER, str(DIAG), "--help", flags=flags)
+    assert proc.returncode == 2 and match in proc.stderr and "usage" not in proc.stdout
 
 
 def test_sealed_launcher_refuses_a_non_empty_prefix(tmp_path: Path) -> None:
     prefix = tmp_path / "used"
     prefix.mkdir()
     (prefix / "old.pyc").write_bytes(b"x")
-    proc = _launch(tmp_path, TINY_TARGET, "-I", "-S", "-B", prefix=prefix)
+    proc = _launch_py(tmp_path, LAUNCHER, str(DIAG), "--help", prefix=prefix)
     assert proc.returncode == 2 and "not empty" in proc.stderr
+
+
+def test_sealed_launcher_refuses_a_foreign_target(tmp_path: Path) -> None:
+    other = tmp_path / "other.py"
+    other.write_text("print('ran')\n")
+    for target in (other, REPO_ROOT / "validation/scripts/stopping/env_seal.py"):
+        proc = _launch_py(tmp_path, LAUNCHER, str(target))
+        assert proc.returncode == 2 and "is not one of" in proc.stderr and "ran" not in proc.stdout
+
+
+def _wrapper(tmp_path: Path, body: str) -> Path:
+    wrapper = tmp_path / "wrapper.py"
+    wrapper.write_text(
+        "import runpy, sys\n"
+        + body
+        + f"sys.argv = [{str(LAUNCHER)!r}, {str(DIAG)!r}, '--help']\n"
+        + f"runpy.run_path({str(LAUNCHER)!r}, run_name='__main__')\n"
+    )
+    return wrapper
 
 
 def test_sealed_launcher_refuses_a_foreign_import_hook(tmp_path: Path) -> None:
     """A wrapper installs a foreign meta_path finder before the launcher's checks run."""
-    wrapper = tmp_path / "wrapper.py"
-    wrapper.write_text(
-        "import runpy, sys\n"
+    body = (
         "class Hook:\n"
         "    @staticmethod\n"
         "    def find_spec(*a, **k):\n"
         "        return None\n"
         "sys.meta_path.insert(0, Hook())\n"
-        f"sys.argv = [{str(LAUNCHER)!r}, *sys.argv[1:]]\n"
-        f"runpy.run_path({str(LAUNCHER)!r}, run_name='__main__')\n"
     )
-    target = tmp_path / "t.py"
-    target.write_text(TINY_TARGET)
-    prefix = tmp_path / "p"
-    prefix.mkdir()
-    cmd = [sys.executable, "-I", "-S", "-B", "-X", f"pycache_prefix={prefix}", str(wrapper),
-           str(target)]  # fmt: skip
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=tmp_path)
+    proc = _launch_py(tmp_path, _wrapper(tmp_path, body))
     assert proc.returncode == 2 and "sys.meta_path is not the standard finder list" in proc.stderr
+
+
+def test_sealed_launcher_refuses_a_pre_imported_numpy(tmp_path: Path) -> None:
+    """A wrapper imports (and could monkeypatch) numpy, then invokes the launcher in-process."""
+    body = f"sys.path.append({str(SITE)!r})\nimport numpy\nnumpy.sum = None\n"
+    proc = _launch_py(tmp_path, _wrapper(tmp_path, body))
+    assert proc.returncode == 2 and "modules already imported before the launch" in proc.stderr
+    assert "'numpy'" in proc.stderr and "usage" not in proc.stdout
 
 
 def test_stdlib_module_missing_or_altered_in_the_seal(mod) -> None:  # type: ignore[no-untyped-def]

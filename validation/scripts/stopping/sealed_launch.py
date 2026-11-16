@@ -5,6 +5,9 @@ Usage (the only accepted launch of ``i3_band_diagnostic.py`` and ``i3fu2_evaluat
     .venv/bin/python -I -S -B -X pycache_prefix="$(mktemp -d)" \
         validation/scripts/stopping/sealed_launch.py <target script> <args...>
 
+The target must be one of :data:`ALLOWED_TARGETS` (exact repository-relative path); any other
+path is refused (Codex REVIEW-e0d37216).
+
 ``-I`` (isolated: no PYTHON* environment variables, no user site, no script directory on the
 path), ``-S`` (no ``site``: no ``.pth`` files, no ``sitecustomize`` / ``usercustomize``), ``-B``
 (no bytecode written) and a fresh empty ``pycache_prefix`` (no bytecode read for any module
@@ -30,9 +33,23 @@ imported after start-up). The launcher
     lies under ``sysconfig.get_paths()["stdlib"]``), its own sha256 and the above, and passes
     the record to the target as ``builtins.__ionmc_sealed_launch__`` (a dict; set immediately
     before the target runs, read by ``env_seal.capture_launch``);
-(e) runs the target as ``__main__`` with ``runpy.run_path``.
+(e) refuses if any ``numpy`` / ``ionmc`` module, or any module whose file lies under the
+    repository's ``src/ionmc`` or ``validation/scripts`` (other than this launcher), is already
+    in ``sys.modules`` (no wrapper can pre-import and monkeypatch them); records the module names
+    present at launch (``sys_modules_at_launch``);
+(f) reads the target's bytes once, records ``target`` (repository-relative), ``target_path``
+    and ``target_sha256`` BEFORE executing, and executes exactly those bytes (compiled with the
+    target's file name) as ``__main__`` in a fresh module (``__file__`` = the target path), so
+    the hashed and the executed bytes are the same.
 
 Any failed check: a message on stderr and exit status 2; the target is not run.
+
+Binding, honestly stated: the interpreter start-up and the stdlib modules imported before this
+launcher's own checks (including those it imports itself) are verified only after the fact:
+they are recorded here (``stdlib_modules_at_launch``) and checked against the environment seal
+by the diagnostics (record-and-detect). The target and everything it imports are bound before
+execution: the target by its hash, its imports through the fresh empty bytecode prefix, the
+explicit ``sys.path`` and the sealed sources checked by the diagnostics.
 """
 
 from __future__ import annotations
@@ -41,9 +58,9 @@ import builtins
 import hashlib
 import importlib.machinery
 import os
-import runpy
 import sys
 import sysconfig
+import types
 import zipimport
 from pathlib import Path
 from typing import Any
@@ -56,6 +73,10 @@ FILEFINDER_HOOK = (
     "<frozen importlib._bootstrap_external>",
 )
 REPO = Path(__file__).resolve().parents[3]
+ALLOWED_TARGETS = (
+    "validation/scripts/stopping/i3_band_diagnostic.py",
+    "validation/scripts/stopping/i3fu2_evaluate.py",
+)
 
 
 def _sha256(path: Path) -> str:
@@ -145,9 +166,38 @@ def loaded_stdlib_hashes() -> dict[str, str]:
     return dict(sorted(out.items()))
 
 
-def launch_record(target: Path) -> dict[str, Any]:
-    """Run checks (a)-(d); raise RuntimeError on any problem; return the record."""
-    problems = flag_problems() + machinery_problems()
+def preimport_problems(modules: dict[str, Any] | None = None) -> list[str]:
+    """(e): no numpy / ionmc / repository-script module may be loaded before the target."""
+    mods = sys.modules if modules is None else modules
+    own = Path(__file__).resolve()
+    roots = (REPO / "src" / "ionmc", REPO / "validation" / "scripts")
+    bad = []
+    for name, mod in list(mods.items()):
+        if name in ("numpy", "ionmc") or name.startswith(("numpy.", "ionmc.")):
+            bad.append(name)
+            continue
+        f = getattr(mod, "__file__", None)
+        if f:
+            path = Path(f).resolve()
+            if path != own and any(path.is_relative_to(r) for r in roots):
+                bad.append(name)
+    return [f"modules already imported before the launch: {sorted(bad)}"] if bad else []
+
+
+def target_rel(target: Path) -> str:
+    """The repository-relative path of an allowed target; anything else raises RuntimeError."""
+    try:
+        rel = target.resolve().relative_to(REPO).as_posix()
+    except ValueError:
+        rel = ""
+    if rel not in ALLOWED_TARGETS:
+        raise RuntimeError(f"target {target} is not one of {ALLOWED_TARGETS}")
+    return rel
+
+
+def launch_record(target: Path, blob: bytes) -> dict[str, Any]:
+    """Run checks (a)-(e); raise RuntimeError on any problem; return the record."""
+    problems = flag_problems() + machinery_problems() + preimport_problems()
     if problems:
         raise RuntimeError("; ".join(problems))
     base = stdlib_dir()
@@ -161,7 +211,10 @@ def launch_record(target: Path) -> dict[str, Any]:
     return {
         "origin": ORIGIN,
         "launcher_sha256": _sha256(Path(__file__).resolve()),
-        "target": str(target),
+        "target": target_rel(target),
+        "target_path": str(target.resolve()),
+        "target_sha256": hashlib.sha256(blob).hexdigest(),
+        "sys_modules_at_launch": sorted(sys.modules),
         "python_executable": str(Path(sys.executable).resolve()),
         "flags": {
             "isolated": sys.flags.isolated,
@@ -186,13 +239,20 @@ def main(argv: list[str]) -> int:
         return 2
     target = Path(argv[0]).resolve()
     try:
-        record = launch_record(target)
-    except RuntimeError as exc:
+        target_rel(target)
+        blob = target.read_bytes()  # hashed and executed bytes are the same (f)
+        record = launch_record(target, blob)
+        code = compile(blob, str(target), "exec", dont_inherit=True)
+    except (RuntimeError, OSError, SyntaxError) as exc:
         print(f"sealed_launch: refused: {exc}", file=sys.stderr)
         return 2
     setattr(builtins, RECORD_NAME, record)
     sys.argv = [str(target), *argv[1:]]
-    runpy.run_path(str(target), run_name="__main__")
+    module = types.ModuleType("__main__")
+    module.__file__ = str(target)
+    module.__builtins__ = builtins  # type: ignore[attr-defined]
+    sys.modules["__main__"] = module
+    exec(code, module.__dict__)  # noqa: S102 - the hashed, allowed target
     return 0
 
 

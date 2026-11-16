@@ -13,7 +13,7 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 9)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 10)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
 **Launch (Codex REVIEW-8081e0e7 finding 3, REVIEW-cf6fa397).** The evaluator must be started
@@ -436,7 +436,7 @@ FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 9  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
+AMENDMENT_REVISION = 10  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
 #: the plan's revision records of this amendment (counted in the plan committed at code_sha)
 PLAN_REVISION_RE = re.compile(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", re.M)
 REDISTRIBUTION_NOTE = (
@@ -1110,7 +1110,10 @@ def environment_check(lock_text: str) -> dict[str, str]:
         "numpy_locked": found[0],
         "python": running_py,
         "python_locked": locked_py,
-        "note": "third-party binary bytes (numpy, the interpreter) are not sealed; uv.lock is",
+        "note": "versions against uv.lock; bytes sealed separately (environment seal): the numpy "
+        "distribution (every RECORD-listed file), the interpreter executable, numpy's "
+        "_multiarray_umath extension, every loaded stdlib module and the launcher are hashed; "
+        "only the kernel, libc and the C runtime the interpreter links against are outside",
     }
 
 
@@ -1362,7 +1365,7 @@ def context(
                 f"log-marker file {markers_rel} differs between {what} {sha} and HEAD"
             )
     try:
-        launch = env_seal.check_launch(LAUNCH)
+        launch = env_seal.check_launch(LAUNCH, Path(__file__).resolve())
         seal_raw = reader.read(env_rel)
         env_record = env_seal.verify_environment(seal_raw)
         stdlib_seal = dict(env_seal.parse_seal(seal_raw)[env_seal.STDLIB_KEY])
@@ -1371,6 +1374,9 @@ def context(
     launcher_rel = env_seal.LAUNCHER_REL
     if launch["launcher_record"].get("launcher_sha256") != sealed.get(launcher_rel):
         raise RecordError("the launcher that started this run is not the sealed sealed_launch.py")
+    own_rel = "validation/scripts/stopping/i3fu2_evaluate.py"
+    if launch["launcher_record"].get("target_sha256") != sealed.get(own_rel):
+        raise RecordError("the launched target differs from the committed (sealed) evaluator")
     environment = {
         "lock": environment_check(reader.read("uv.lock").decode("utf-8")),
         "seal": {"path": env_rel, **env_record},

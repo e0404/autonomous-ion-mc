@@ -2239,3 +2239,17 @@ the committed `sealed_launch.py` (a sealed file). The committed environment seal
 (≈ 830); every stdlib module loaded by a diagnostic must be present with a matching hash, checked at start and again
 after the computation. What remains outside the seal: the kernel, libc and the C runtime of the interpreter (disclosed).
 The seal was regenerated through the launcher at this revision. Not a clinical claim.
+
+**Revision 10 of amendment I3-FU-1 (2026-11-16, orchestrator; Codex REVIEW-e0d37216 on e46abb76; before any run).** (1) The
+launcher binds the executed target: only the two diagnostics are accepted by exact repository-relative path, the target's
+bytes are read and hashed once and exactly those bytes are executed as `__main__`, the launch record carries the target
+path, its sha256 and the list of modules present at launch, and the launcher refuses to start if numpy, ionmc or any
+module under `src/ionmc` or `validation/scripts` is already imported (no wrapper can pre-import and monkeypatch); each
+diagnostic requires the recorded target to be itself, the recorded hash to equal its bytes on disk and its committed
+bytes, and the module list to be free of numpy/ionmc. (2) The provenance notes of both diagnostics now describe the
+implemented controls accurately (numpy distribution, extension module, interpreter, loaded stdlib modules and launcher
+are hashed; kernel, libc and the interpreter's C runtime are outside). (3) The review-provenance finding is being closed
+at the infrastructure level: **V3-INFRA-006** (signed codex-worker review records, PR #90) was merged into `v3/develop`
+at 7dfab634 after two passed Codex reviews and green CI; the service restart that activates it is requested from the
+operator by the narrow intervention **IR-20261116-132756-B6F2C2** (record in `reference_requests/interventions/`); once
+active, the evaluator's pin rule will consume the service-signed record (next revision). Not a clinical claim.
