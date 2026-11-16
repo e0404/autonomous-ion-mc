@@ -13,7 +13,8 @@ with these corrections.
    figures (`validation/plans/v3-008/p12-i3-low-energy-stopping.md`). Decision 0043's capability statement is corrected in
    the same commit as this addendum.
 2. **Methodology wording (minor).** The TOPAS/ionmc band means are described as "one-step thin-slab mean energy loss". The
-   point values entering the band means are the **fine-step runs** (20 limited steps in the slab); the one-step slab pair
+   point values entering the band means are the **fine-step runs** (20 slab steps: 19 limited to 0.0515 t and one
+   boundary-limited step of 0.0215 t); the one-step slab pair
    (t and 1.6 t) enters only the per-point emulation gate and the report-only checks.
 
 The request remains open; integration of PR #84 waits for the operator's answer. Not a clinical claim.

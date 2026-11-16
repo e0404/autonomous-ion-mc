@@ -2114,10 +2114,12 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `reference_requests/interventions/IR-20261116-204824-29B867/ADDENDUM-1.md` | `9c7c0545842d292e8f15ea30f33da69819beb0a5197eb1dc263186334440ea4c` |
+| `reference_requests/interventions/IR-20261116-204824-29B867/ADDENDUM-1.md` | `37ee0bd3e8f819c9da4169a87d5a4b75d66309e88674fbfd2aac0514464b402d` |
 
 
 **Dated note (2026-11-16, orchestrator) — ADDENDUM-1 wording corrected (the ≤ 0.8 % deficit is that of the 20–50 MeV/u band; Codex REVIEW-21409d5d minor); entries that changed:** `reference_requests/interventions/IR-20261116-204824-29B867/ADDENDUM-1.md` 3aa84256… → 9c7c0545…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — ADDENDUM-1 step-count wording (20 slab steps = 19 limited + 1 boundary-limited; Codex REVIEW-5ca9fa4a minor); entries that changed:** `reference_requests/interventions/IR-20261116-204824-29B867/ADDENDUM-1.md` 9c7c0545… → 37ee0bd3…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

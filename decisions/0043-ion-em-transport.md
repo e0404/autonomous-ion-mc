@@ -910,7 +910,7 @@ ICRU73_NEW, lineage identity with the 2009 revision OPEN) by band means of 8.6/1
 the CSDA-range agreement with the table is within 0.26 % (C) / 0.39 % (O); row I3 FAILED and is not re-graded. The
 acceptance reference (TOPAS 4.3 / Geant4 11.4.2, opt4 EM-only) differs from ionmc by band means of +3.5/+5.0 % (C/O) at
 2–5 MeV/u, +1.4/+2.2 % at 5–10, +0.6/+1.0 % at 10–20 and +0.1/+0.3 % at 20–50 MeV/u (thin-slab mean energy loss; the
-point values are the fine-step runs (20 limited steps in the slab), the one-step slab pair enters only the per-point
+point values are the fine-step runs (20 slab steps: 19 limited to 0.0515 t and one boundary-limited step), the one-step slab pair enters only the per-point
 emulation gate and the report-only checks [corrected 2026-11-16, Codex REVIEW-e0d9bcd0: the first wording said "one-step"];
 0.2 % method systematic; the oxygen 2.4 MeV/u point invalid after its repeat), i.e. it lies between ionmc and the table and
 nearer to ionmc. **Capability statement (§5):** below 20 MeV/u — the last ≈ 1.45 mm of range at C 290 MeV/u (0.9 % of
