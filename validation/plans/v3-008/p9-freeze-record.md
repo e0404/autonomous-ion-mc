@@ -1596,6 +1596,13 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-16, orchestrator) — launcher docstring (check (a): absent-or-empty bytecode-cache prefix; minor finding of the signed discovery review REVIEW-9c76c229 on f23789ec, which passed) rebound; entries that changed:** `validation/scripts/stopping/sealed_launch.py` b25e0d51… → 24bd01b6…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin A (the codex-worker-signed, passed review REVIEW-c35482f470fb4b5f874ef5d91f0d067b of 38019380, verbatim; verified against the committed trust map), bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` | `0c93bd1fd6006106fc8662cb379d1834336561358169b5aa2ebe46b2c2e8a5ce` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

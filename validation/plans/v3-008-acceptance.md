@@ -2325,3 +2325,10 @@ develop merge of the key publication, is pin A). Key publication: task V3-INFRA-
 VAL-20261116-162217-45D636, review REVIEW-5c8ede3163e2487dbe616e29c2dcac45 signed and passed; PR #91 merged, `v3/develop`
 8dfbeb37, merged into this branch as 0c1bd1b5). With the key in the committed trust map, the discovery review record verifies
 (`review_records.verify_review_record` → `verified`); the evaluator's pin rule can now be satisfied. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; I3-FU-1 pin A).** Pin A is the codex-worker-signed, passed review
+REVIEW-c35482f470fb4b5f874ef5d91f0d067b of 38019380f3584a1d895bdb8922b17b3af326a67e (no findings; signed 2026-11-16T16:37:28Z,
+key_id b53b2800f81a4e64; verified against the committed trust map), committed verbatim as
+`validation/results/stopping/v3-008-i3fu2/i3fu2-review.json`. The step-1 run and the five step-2 smokes follow at the
+commit carrying this note (X in the amendment's order), after pin A's signed `finished_at`; the one-line "I3-FU-1 step-2
+review pins" note naming both pins is written at commit Z, after pin B. Not a clinical claim.
