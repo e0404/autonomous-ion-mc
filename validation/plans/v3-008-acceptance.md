@@ -2438,3 +2438,11 @@ sequence is preserved (`scaled_fine_steps`); an independently constructed regres
 nominal steps equals the scaled-steps emulation to 1e-12; the re-partitioned construction differs) is added. The plan text
 of revision 15 above ("the absolute limiter step of the nominal slab is kept and the remainder adjusts") is superseded by
 this note. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; I3-FU-1 pin A after revision 15).** Pin A is now the codex-worker-signed, passed
+review REVIEW-c801dd374d824eb7a324ffe630ab1103 of 0a915106e32af78f3f02ec807690c4fbe4762bb5 (revision 15 corrected; no
+findings; signed 2026-11-16T18:23:03Z; verified against the committed trust map), committed verbatim as
+`validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` (replacing the superseded pin REVIEW-c35482f4). The five
+smokes follow at the commit carrying this note, after this pin's signed `finished_at`, the fine-step smoke first with the
+full `check_smoke` pre-check (phase space complete, ≥ 15 slab steps per primary); the new pin B, the new one-line pins
+note and the 58 evidence runs follow. Not a clinical claim.

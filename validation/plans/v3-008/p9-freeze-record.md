@@ -1601,7 +1601,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` | `0c93bd1fd6006106fc8662cb379d1834336561358169b5aa2ebe46b2c2e8a5ce` |
+| `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` | `ea0963052fd79c74a525faf2d8471509fc7f8da7e1cd590ccaa087d684565f4c` |
 
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-1 result and its signed host-run record (run at 5999f789), the step-2 marker file and the five signed smoke records with their artifact listings, bound as committed:**
@@ -1766,6 +1766,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — ruff formatting (pre-commit) of the revision-15 test file before the commit; entries that changed:** `tests/ionmc/test_i3fu2.py` 9192e394… → 12a159bc…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — revision 15 corrected for Codex REVIEW-3500cb18 (scaled fine-step sequence preserved; regression test); entries that changed:** `validation/scripts/stopping/i3fu2_evaluate.py` 0dad742e… → be4515cf…; `tests/ionmc/test_i3fu2.py` 12a159bc… → 9230b886…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin A replaced after revision 15 (REVIEW-c801dd37 of 0a915106, verbatim, verified); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` 0c93bd1f… → ea096305…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
