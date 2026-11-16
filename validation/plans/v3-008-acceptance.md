@@ -2562,3 +2562,17 @@ with exactly 20 slab steps, the step smokes 50 of 50 with one slab step, the mar
 clinical claim.
 
 **Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-77788fd4ea6740f78fdf1fd3d82ee03c at 94b17d30218a9dc5fc3c659a2a15cd4f691aa110; markers review REVIEW-be33eda9d6d34628a5bbbb6544093919 at 054ecbf5b0bf7e6403cb687f67c7558170da8f79. Pin B (signed, passed; two minor wording findings fixed in this commit; started 20:03:00 UTC, after the five smokes finished at 19:58:51 UTC; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`, replacing the superseded pin REVIEW-ba7d4c76) reviewed the commit that holds the re-run smoke records, the marker file and pin A; the 58 evidence runs of the revision-17 seed family follow at the commit carrying this note, after pin B's signed finished_at 20:07:25 UTC, one at a time. Not a clinical claim.
+
+**Dated results note — I3-FU-1 step-2 evidence runs (58) at 48b41981, revision-17 seed family (2026-11-16, orchestrator;
+records only, nothing graded).** The 58 evidence bundles of the re-frozen manifest (seeds 20627200 + 100·part + case,
+20627213–20627921) were run once each, one at a time, at commit Z''' (48b41981, which carries both review pins and the
+one-line pins note), through the reference-runner service (engine topas), all after pin B's signed `finished_at` 20:07:25
+UTC (first run started 20:10:00 UTC, last finished 20:30:43 UTC); every signed record reports `succeeded`
+true, exit 0, no timeout, no missing output, `code_sha` = 48b41981. All 58 runs were executed by a reference-worker agent
+in six resumed segments under the procedure of the first attempt (the agent twice issued a scratchpad log write in the same
+message as a run call; no two compute jobs overlapped). The signed records and artifact listings are committed verbatim
+under `validation/results/stopping/v3-008-i3fu2/topas-runs/<run_id>/` with `index.json`, replacing the superseded records
+of c223f5e5 (history); 117 files, directory digest 63bb2e0d55f8f4abb6af5a266a4ae536d521f68e46f459109eea3225ecc9b779. Run metadata only: every
+fine-step run reports every primary reaching the far-face phase space. No run has been read, parsed or graded by hand and
+no shadow evaluation has been or will be made on these runs; the evaluator (host-runner, sealed launcher, `--code-sha
+48b41981`) grades them once at the next commit. Not a clinical claim.

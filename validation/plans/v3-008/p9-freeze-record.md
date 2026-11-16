@@ -1751,7 +1751,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f0a690352eec4c53a56d-7488d6c4/record.json` | `2658816f0734eb2e03d57248eee74fc0bcf0d1af3acc742761e97d76d5401d3a` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1d3b62e354c3d2b713d-2b86d1e8/artifacts.json` | `789e02b7ec4a430299cf794c0ebfc8179e25537e98b597631239e83447301544` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1d3b62e354c3d2b713d-2b86d1e8/record.json` | `ec1d7bddbe536c89216bdeace89a9c9501785739b5849118a1605f5802943419` |
-| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `30d3a5257095430f8b6b3d629bbb73c467c391af35f498fc0bdb523b8ec20507` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `599027c349c394fa361dbd48cee0acc4f29a198a7375dc72e690b21126a37955` |
 
 
 **Dated note (2026-11-16, orchestrator) — the signed host-run record of the first (failed-closed) evaluator attempt of amendment I3-FU-1 step 2 (STOP note), bound as committed:**
@@ -1910,10 +1910,10 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efb143b59ff25d434f49-cf0916b7/record.json` | `d0bc53235f6b5488ef4e7dfccab5819eaad095171114383b1f1ceb6403b8876c` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1a0770920779870d332-45342c2e/artifacts.json` | `7578624e32aead49df9b10521a7ba306e0f16159fcbc41da7d5ff420c4214633` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1a0770920779870d332-45342c2e/record.json` | `fb62f13463a40e5f3843fcc9326ec20496554fe67d2657df34733a4382773eea` |
-| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `30d3a5257095430f8b6b3d629bbb73c467c391af35f498fc0bdb523b8ec20507` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `599027c349c394fa361dbd48cee0acc4f29a198a7375dc72e690b21126a37955` |
 
 
-**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` b967e827… → 30d3a525…. All other entries unchanged (recomputed).
+**Dated note (2026-11-16, orchestrator) — evidence records index of the revision-17 family rebound; entries that changed:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` b967e827… → 30d3a525…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step 2 graded once at code_sha c223f5e5 (INCONCLUSIVE on two instrument defects; STOP note) — the result and the signed host-run record of the evaluator run, bound as committed:**
 
@@ -1951,6 +1951,131 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — seed-family guard test asserts the revision-17 family in the plan text (Codex REVIEW-b4ba2391 minor) rebound; entries that changed:** `tests/ionmc/test_v3_008_seed_families.py` b2396006… → 15c9a396…; `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` d380d352… → f974f388…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin B replaced after revision 17 (REVIEW-be33eda9 of 054ecbf5, verbatim, verified); the duplicated index.json entry of the previous note removed (Codex REVIEW-be33eda9 minor); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json` 9c8a2c0d… → cc403ed0…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-2 evidence records, revision-17 seed family: the 58 signed reference-runner records of the evidence bundles run at 48b41981 (`record.json` + `artifacts.json` each) and `topas-runs/index.json`, bound as committed (the entries of the superseded records at c223f5e5 and c8102e89 above are history):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-01317dd73ff59413a9cb-209f9cb6/artifacts.json` | `f047c1b920f6f3cbb82a7470db2550bf1130fb310743425e3d4f6adee4452e6a` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-01317dd73ff59413a9cb-209f9cb6/record.json` | `41f78755ddc1489f605e5617126a5ef082c6e8aca8829b5a1255790bedb23de5` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-034071647483ca9425e0-a12323cb/artifacts.json` | `800f03bc5c33d972361f8c00ffde9ad056d567113ca2c6347b83c35dd5be8278` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-034071647483ca9425e0-a12323cb/record.json` | `4ab98b00c2dcdd18ac31c146eb474495ea04cb1507caa16a5c5cf08cb75b5c82` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0346041be5033120ddb5-a903c0cd/artifacts.json` | `7cfa755d65c12e6f5cb3f2d830fb75c0875808a8f745e79e91c0a882e78df309` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0346041be5033120ddb5-a903c0cd/record.json` | `01da80d1cd084a155ae43d54be8adfbf8cd732fe6477173a9bd1ef1be91bee88` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-10d71ac91908800cbf78-2aca6057/artifacts.json` | `1e8f41b67d0ff7d61441945bdc5698c35db64d60116acaad84d2f66304729b81` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-10d71ac91908800cbf78-2aca6057/record.json` | `e80cd27466ebd109c2795a3f3adcd3cff2231e45109f701204415b887605028b` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-15e4ddb01abf08b1b23a-964ab83c/artifacts.json` | `30b4ef132e08db0982a3fea7b446f72cdff1d8f85dcd6a482b55e38b3f38f416` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-15e4ddb01abf08b1b23a-964ab83c/record.json` | `802abe20b605ae9bc3327a643f4216f005c6b106e523322b036c703ffbbfc4c7` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-18157832db84118715c8-e8571d9d/artifacts.json` | `272089968affb1cc8c40507f46127de303bf312973548ef1e9c34c8ec42ab72e` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-18157832db84118715c8-e8571d9d/record.json` | `a732cbb2568293e9d051d82a6a777c5931b399053bb14c7ff58f64ce9e4a19c2` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-193a067c6fd14ce30818-cf6ab82d/artifacts.json` | `2a6ec9d3977e9b4a56c636a53c40ddefbe12a162f5d7bea193eebbbbba01154d` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-193a067c6fd14ce30818-cf6ab82d/record.json` | `7b2cbb75969469272661034fcb29a771e554052e8ed5c11affe9a3d17daf9486` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-1d6fd42a074e7a9419d9-fbde1413/artifacts.json` | `0fd22ebb53f67c42df607fa6cd5e1389569f87f295678f11364cdf72550b3943` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-1d6fd42a074e7a9419d9-fbde1413/record.json` | `0f05362bff5de243b503bc1bbdf0d956e48306183e6d0667cebfcfd01689b42d` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-26519ef6e924c922295f-a2bfea3e/artifacts.json` | `7d707195a439a4f7e6dedac119070a0599e6aab6a20764c6daefef8cc9507d6b` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-26519ef6e924c922295f-a2bfea3e/record.json` | `49ae873a87cfeba5bb6f0cfb7d413bcfcdbb14ddfb90c92fa70ffa967f047441` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2fdf9194535a90964a5a-4c8986ca/artifacts.json` | `e4936b2ec5a5b6c56bba59f7730ba1d24371cdad2e69eddab696698197923034` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2fdf9194535a90964a5a-4c8986ca/record.json` | `fbbcadbecbfafea63f9039faf68b8a699cecb7c78d83a096606cf476456eb407` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-334780dc287e397ed197-7dc9ba17/artifacts.json` | `2d032ff612ba38317327b2b0f71b5355cc77e9e1f6438c0820dd517e44b4e456` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-334780dc287e397ed197-7dc9ba17/record.json` | `cb0ecf27db5e4db096b7623c38b95106533eef0e953521a6344fd4be1872a8e0` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-33e91682b1affa26cc7d-d4bc0d31/artifacts.json` | `66c8adc2f57f04b8f45ebf65d328095816e4ce1613ac0ba1aab997efa56aa775` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-33e91682b1affa26cc7d-d4bc0d31/record.json` | `cb74c4174b033fc38554c6babf7858b4acaf852afab80292bb1c40c8f6b10fce` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-35421bbb7ad02e182cd6-de2e490b/artifacts.json` | `11423eca6f801e5adb5fe069a73d33c344cbfe52404ed52742a69f2f9666e3a8` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-35421bbb7ad02e182cd6-de2e490b/record.json` | `5dcbae35f56d44ac76a1da5fb94055f105fe7f79230e77ff05ede01f74c36528` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4340e118cc50d146ca3d-db49b62f/artifacts.json` | `4c09d0aaf6c3e1a9087c239a708dfcb447a211b3246d2c595887001fb61cb726` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4340e118cc50d146ca3d-db49b62f/record.json` | `3ccfce177fec229d00d74a5ed65b0d35c4395d58c5263502863c294490260820` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-44e48724722d710e2179-ac59dc0a/artifacts.json` | `cb0aba40209ee3005d5e45a2176c150c898dd0c2f28adc5c565f728da83ec3c8` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-44e48724722d710e2179-ac59dc0a/record.json` | `353ae09941e2b2ebfbb634a2f5617c3370e880c820812be80349e581349ea4d1` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4679e19c41ba80e336e4-477a8a37/artifacts.json` | `9864c96dc33685b3d995562d80c995a46ec43b98c3d31effcf926bc5aaf2fea0` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4679e19c41ba80e336e4-477a8a37/record.json` | `dae04fa7bb2bd0c363b678d186c20f7aef4e04cf92ab32470eaab3212c07137f` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4a49cd6fffa4c83aec1e-04b33c65/artifacts.json` | `0a68d9a855dd7d59eedf8a5378302989a523138e61d5d156c19e7310b0ad0805` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4a49cd6fffa4c83aec1e-04b33c65/record.json` | `c641a75844f1fd47d99c301e74016c4bae5a3e95db63fc263cca9deb628fc23a` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-507379546467fe79e8b9-c5ab816c/artifacts.json` | `6a12fb67af4819bb8e595cad6609476e07210d8fd41f472cfb1ebb15eb5ffd00` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-507379546467fe79e8b9-c5ab816c/record.json` | `afd32214e954d3294795c66959b726fa58106a4bc286428e4ddba7480bd8ca86` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-566037c93d07ee627c7c-a2d06b3e/artifacts.json` | `3a655fa596947ff9fa5f129d7e98853ab6734503e256e568571e4d8739011703` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-566037c93d07ee627c7c-a2d06b3e/record.json` | `e40ad9696120b3ba5b76c839d9492ff9cdacea27e2cc0a7e11ac57442ae91bb4` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57c4b395040b52bfd7dc-dfc51c71/artifacts.json` | `a062c6485554113046758e98d00210646d1731329e52d35c6272e8f98aa0ff22` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57c4b395040b52bfd7dc-dfc51c71/record.json` | `d79fdd1567a739b768009bcd72450f760d32019551e51554342ad4c49b374315` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5a7cb95751edf90a6b4d-858a3e30/artifacts.json` | `6c8a3467379f0ad8787426e81fa53b9f45b5106256c422bb309a216942a7295d` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5a7cb95751edf90a6b4d-858a3e30/record.json` | `3e0d9b86eefcd3f871307c02663326577fd866660e38701a5d2884b1d2b8f6f6` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6001cd9b87600f47b472-71338ceb/artifacts.json` | `0c645dde97a2c77b4a7687f5c3a715f422212bec9ebf71749071055e1435730b` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6001cd9b87600f47b472-71338ceb/record.json` | `a99fc7bc21778fdca99d7dd94caf17638f8f558d4b6c950af083fa5d45802d31` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6064c334796ae2785442-b3a1450b/artifacts.json` | `ecd6e82f4ae02a74982888322e7b20c5755de862081d9007fb37288bce45fb44` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6064c334796ae2785442-b3a1450b/record.json` | `807605ad8750d9d0c92eff023e50402d5d5b28c21e7fedb1f898eb7709ba7499` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-62330be48505d81acc17-75b64304/artifacts.json` | `81e2946b83a45a78c1a34a9b01fefae0a2db2e5ef297e009b42198314ebf6554` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-62330be48505d81acc17-75b64304/record.json` | `81266d998e56927eada140eee041608571942b7574aba67d8b954746e6b0d424` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-69fce8cfff75542c1dd8-2cc5081b/artifacts.json` | `e5656c5d85e18fa8967a1642a551394df60597f18fd3a0a90a791428acc8a5a9` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-69fce8cfff75542c1dd8-2cc5081b/record.json` | `14e5e3a70561094cedb23545ead4506a18c41c8442db90f292ca5daaecc5c177` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7b7e1e2da70df86c1c03-385b9a3c/artifacts.json` | `9be85fb89aff20529e6fdad588eee230eeb3f894df56f76dc31b18c0ac7a1ea9` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7b7e1e2da70df86c1c03-385b9a3c/record.json` | `12986130ed0eba9d2cc9f21ae5dbedf080ee45585071fc0e08ee16ec942009ae` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7c8733c503f3d7d02e84-8c4071e8/artifacts.json` | `f413a90d4b0a14d0dc2512e571c85b8a3a13281dadbbb074a1dccfefc6a059b8` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7c8733c503f3d7d02e84-8c4071e8/record.json` | `4cf2aed820304a0628d983085a7ea1c9289aa987b6a046c371c70c164885911e` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-80d9b0b5ce76781cf9c0-7726786e/artifacts.json` | `5b2131fe64694e3a6c3467bedb8f01e44ed1286ce3f037235c978cef78beef0d` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-80d9b0b5ce76781cf9c0-7726786e/record.json` | `1798c531119af40dcce6e7032b66912abe476c55e9ede52d938e2701b737cb41` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-827b9b8015b2dbc7af21-e4fd35b9/artifacts.json` | `763f8f4e3da30ca944b07e4f7f74e3453dcba0006952922ed09faeeef625426e` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-827b9b8015b2dbc7af21-e4fd35b9/record.json` | `fab55355a1e178679550a6d8884d9a911f1074c4ff615e33e5dcab302716275e` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-874d0671caa1f081ec1e-342eca3d/artifacts.json` | `dbabfc27a5aa0832123b89eb360b6157667c3c33ab9845482a0b290813fc89d1` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-874d0671caa1f081ec1e-342eca3d/record.json` | `152811fb30e9db84abf6104d497b2af609749e759aa4a5e0704cc91fa21e11ce` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-921d9e36498d33a9c405-f40cd16a/artifacts.json` | `75b5719844eaea67d752c017263bf8f333a124febebdce7858b3d47c2a5e7e7d` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-921d9e36498d33a9c405-f40cd16a/record.json` | `ef5cb83a80e60a624ae90c230b94ed7b078c051bcfcdf77e8bc5bdfafd8235c4` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-966d7e75cd12d21cb800-11c1619b/artifacts.json` | `d3f5a4116469a553b310dbd223ffd3e269e8c6ec88e639e2f6a10000459991cb` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-966d7e75cd12d21cb800-11c1619b/record.json` | `1fc4a6dc95be27b4a62dc4e10a73006a0983f46b585c39b31c905161a57a5e12` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-96d8d2e37de1c70dfdc0-01c609a8/artifacts.json` | `30b8c46f7b3562b6ded7fe304396454d4fff56f821088156729df8cf72008a61` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-96d8d2e37de1c70dfdc0-01c609a8/record.json` | `012fe9d25ea7a3819f519a17365139716007715fc916dd0cc08e0efa592fa91b` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-9766ce7c9331477f0669-08e1ceb3/artifacts.json` | `69b2eddce1a8818f3009b87b380b4cca3c77efbc65d7cd522abe7aa0d6ff19d1` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-9766ce7c9331477f0669-08e1ceb3/record.json` | `85ffbfa3b1abdfe3969ae8fe920f282941ab3dfb840ef2e5247f4ecd63da52a1` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a33cdfedf26584329104-7b2ce079/artifacts.json` | `c74c26fa30e50622fc59f91ce861cac2b236facdb5e1e2f36072502b5ebb1582` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a33cdfedf26584329104-7b2ce079/record.json` | `9ac037214520f97810f0bb252acaccb174771117e5643d4258ff6d69eb261ed3` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a659830ddc4fc264d546-bcbaf245/artifacts.json` | `14f7247f12740b0d29f6d8049ef86e6f224883bf9d92622355c855b057f0ba35` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a659830ddc4fc264d546-bcbaf245/record.json` | `d0f2c447fa14b8281f4c21ca190fce51584be61701abd03fc4dce5e26f58da6f` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b00a05e95a1281b5aada-ebee5c76/artifacts.json` | `38992a3062db1603f4a4921d3e6a73704c1f4f630eab4e31149b05d677a05a07` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b00a05e95a1281b5aada-ebee5c76/record.json` | `303ca935d89d616e88bdfc751ef6a155a3fe26861a190680f4902bbe4d944de3` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b11bd33b39b88fe89c46-af47290f/artifacts.json` | `f6d838c40eb3029a173600c45980d5eeb465ea56ef534df454d0612d92be4ecf` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b11bd33b39b88fe89c46-af47290f/record.json` | `6e66a025e14ca2e5eb9c0a43bffcd9b963be605bfa0f2ea5461ad686b533f7aa` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c223850b2b9d77ff7c9e-a4d4a830/artifacts.json` | `937b082cee501ee3f88c1da5a6c1060778154909062053b82b9f594848481a51` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c223850b2b9d77ff7c9e-a4d4a830/record.json` | `3cad55ff62cee1d63dff41f2dea4889a2da74b3884e392bdcbe640ee22959133` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c688c491b5546e0dbca0-1ef4c4da/artifacts.json` | `efa7c5f53c59f18e271081ceb202b71a2b8099069b04f636e86b65314756f895` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c688c491b5546e0dbca0-1ef4c4da/record.json` | `b6e6591b3aa31207084972d3d9d1e081bf9066be800ed2a3b5faef46ed16790e` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c79507ec342938ca9105-27e8733c/artifacts.json` | `fac27f840d114d58fb8fe32d43f859a9b30fdeb5905a3289d259d7d6de5d6309` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c79507ec342938ca9105-27e8733c/record.json` | `e1d6884d71cd69b81f3653f31eb15549f771ca14327f52cf43b39f32f70fa56e` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-cb95ace3daa213279ea0-a500faab/artifacts.json` | `81403ca4c8a12f18881b99417fd07858a94547053a3d5798453cbd51af8c43a8` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-cb95ace3daa213279ea0-a500faab/record.json` | `7eadc290a1840ae580e2fcba6a826108e861b72ea3784084c6404740259c196b` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ce9226a5bbfb16eb869e-4f9da79f/artifacts.json` | `38caf9786439fc68f84856a60772edc4e92741ad1d319b9ea85c39fa6f5c71d9` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ce9226a5bbfb16eb869e-4f9da79f/record.json` | `2b56bb7fe8fad0534cffe724f21904a6177cc396d3973acaa917d38a0e793a3a` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ced4ce8940e55ef92f13-ae4fb860/artifacts.json` | `0d5cac670117b53c0aa98e18e08d64ff75f384698bdc3329d281a71aa5531d9f` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ced4ce8940e55ef92f13-ae4fb860/record.json` | `7da0ad7e1d3e96f8d97c14a88c4c764b6286fd9e70737acee8006d6092aed1c0` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d299e02a79e9c3b17687-2a9114e6/artifacts.json` | `02df0582ed97ba9a9f5f11674830879c63ecc9607528fa427bb553d1f6c1d5c8` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d299e02a79e9c3b17687-2a9114e6/record.json` | `293c5037d00cdb2cba93b2c564f0f53faf27412aa37bd79d5f918790f7c68867` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d34b1a6504c7a034d558-92ebdb96/artifacts.json` | `81a527cab2e36e73521ee6f512d61f6814d932a59672180a2152bbbad687d4ae` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d34b1a6504c7a034d558-92ebdb96/record.json` | `dd6a7a58749e5752b5616b997713cb790e2272ce7ac63cc8c51dd00729a11fb7` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d6528fd2e39314cb9ae2-8fa23bd8/artifacts.json` | `682e57ed4ec9b2c2f9ceaec5e2f1f254e7aa517ebf9994632eed617cd4884ccd` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d6528fd2e39314cb9ae2-8fa23bd8/record.json` | `d3389620ff9d5795b4bcca3028206e6c1d8f02215403cfdc3652659caf403d6d` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d8829979c9380e3bc2de-68e39530/artifacts.json` | `25830061738f53c9e096d0d4e34ba2352be10ebdde10fa075b2fab23430eb11f` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d8829979c9380e3bc2de-68e39530/record.json` | `1b067b30f26ffad9308afe73e1eb184d3b27620f91d7bdbd1435074b0bfc444a` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d9f714e0c3be4e33616b-d74e169f/artifacts.json` | `1c4cdceb30705434fd4aea8dac3418ad6bd30dfe75d5a99fedb125b9aa2f11ca` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d9f714e0c3be4e33616b-d74e169f/record.json` | `76db3d73c03557d18b2bda86cfe06e2944070f787e3d67fd52eb7c1fe8b54ee1` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-db297f533c47d3347a6e-6fb63f06/artifacts.json` | `352625a1d9fcac179d5c27cada583735aa115fdc79ea29dadcd94026eb41196c` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-db297f533c47d3347a6e-6fb63f06/record.json` | `f96c88a3e634413b29a1398cf1d2ef0e34d63d6c9fc94fd443eeb514e6932df9` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-dbf0fc324d8559a8e0a9-1ac66258/artifacts.json` | `570136da2a150a0062a4d89221511215bd97a62a3b6eacb382e39e9fbedad3c4` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-dbf0fc324d8559a8e0a9-1ac66258/record.json` | `f699b7db540469f667faa64c7a5ce3d5e93955ed5cced75ae8a20755dc29621f` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-de22a48b412d3c97b054-55229681/artifacts.json` | `7faac64c8ad352cb4aefb089f806346c0aaeeab2eb839349008d8b83425ffce4` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-de22a48b412d3c97b054-55229681/record.json` | `b7e356dde1e3845bfd90c7511c7aa1242d10f1f7462864e77cc695551c5254a5` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-e2bb5445256b7347ad7e-7ed0ce15/artifacts.json` | `04e812bafe59ba2b6d4ceaf07c3c2fdd48bec83552668f7e40bcc6fcf9b26d59` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-e2bb5445256b7347ad7e-7ed0ce15/record.json` | `1399e8836d88254278d483c4c568f330a7a7ad785b63955d1198a53759c8c9cb` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ed750548af470ae3f7f2-5424ea56/artifacts.json` | `8944ffaf017bb1062eafbd7c5be7c7c74c3a73dbaa0a663012f4e6e115a96d9f` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ed750548af470ae3f7f2-5424ea56/record.json` | `46d7d7bde7ab6c3148a858ccce2e5a17815a2836150f3db79b4b85d92d64be1d` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efcd482b29adb96b30f4-7961a9e2/artifacts.json` | `136cee279e75f64eac63448c9f07973898afe11fded01851c8d8f5b4d2d603eb` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efcd482b29adb96b30f4-7961a9e2/record.json` | `095b87e606035fc30edfcaf820c2d7ca0abdecc8c9dd4b26f776fd317c28ee48` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f2d24653f9406ecb3d14-b09ae72c/artifacts.json` | `5f59246c641bb13737af7e3ad35e437be0ccf71f680a149346e2f88959f039d5` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f2d24653f9406ecb3d14-b09ae72c/record.json` | `3ceab9ec2f38aa72b22a6cf36ed0c5daf7b5f3924962333db483f376b62561f9` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f56ed9fedb385edb25db-b9053f8f/artifacts.json` | `da488248ef0dcd6ae8b3ae8912c9d9e3b2a3865badce0e246c67c123d7890db1` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f56ed9fedb385edb25db-b9053f8f/record.json` | `11828ffcb30f6b884ac627daec2f1067d4b623740a911d19eb0576bbfae0c36b` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-fd7d96cd25e2fa3968aa-0452e5f4/artifacts.json` | `9ed1edd4aa75ae1e3145b144b256cd05e210fd06674f81566e620506446f0f57` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-fd7d96cd25e2fa3968aa-0452e5f4/record.json` | `7f3bff06b3f75dbcd37e13f4b893a3d2c47e59e7af0a04e97ef9f0d5693ae285` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `599027c349c394fa361dbd48cee0acc4f29a198a7375dc72e690b21126a37955` |
+
+
+**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 30d3a525… → 599027c3…; `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 30d3a525… → 599027c3…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
