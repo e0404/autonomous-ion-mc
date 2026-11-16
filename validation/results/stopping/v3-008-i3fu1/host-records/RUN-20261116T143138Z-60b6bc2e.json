@@ -1,0 +1,51 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys\nprint('GIT env:', {k: v for k, v in os.environ.items() if k.startswith('GIT_')})\nprint('cwd', os.getcwd(), 'exe', sys.executable, 'version', sys.version)\nprint('workspace entries', sorted(os.listdir('/workspace'))[:40])\nprint('.git present:', os.path.exists('/workspace/.git'), 'is dir' if os.path.isdir('/workspace/.git') else '')\nenv = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}\nfor args in (['git', '-C', '/workspace', 'rev-parse', '--show-toplevel', 'HEAD'], ['git', '-C', '/workspace', 'status', '--porcelain', '--untracked-files=no']):\n    p = subprocess.run(args, capture_output=True, text=True, env=env)\n    print('without GIT env', args[3:], p.returncode, p.stdout.strip()[:200], p.stderr.strip()[:200])\n    p = subprocess.run(args, capture_output=True, text=True)\n    print('with GIT env', args[3:], p.returncode, p.stdout.strip()[:200], p.stderr.strip()[:200])\nprint('pyvenv.cfg two levels up:', os.path.exists(os.path.join(os.path.dirname(os.path.dirname(sys.executable)), 'pyvenv.cfg')))\nimport sysconfig; print('purelib', sysconfig.get_paths()['purelib'])\nprint('numpy dist:', [d for d in os.listdir(sysconfig.get_paths()['purelib']) if d.startswith('numpy')])\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "0f830727720700336a3db098ec9bfad43bbb7001a3de8825fcaecd322b1c0cb8",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "59d18dfb3cca720a1174cbf49eb378c3fd5c7a1b310eac88911c3b3692cc26f413981c8b268dcde69b424bc84306b1215781b4b9b60a30893f9f41216df1520c",
+    "signed_at_utc": "2026-11-16T14:31:40.856008+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-008-helium-carbon-and-oxygen-electromagnetic-transport-effective",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 0.32175429799826816,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261116T143138Z-60b6bc2e/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-16T14:31:40.841081+00:00",
+  "output_manifest_sha256": null,
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261116T143138Z-60b6bc2e",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/benchmarks/generated/RUN-20261116T143138Z-60b6bc2e"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261116T143138Z-60b6bc2e",
+  "run_id": "RUN-20261116T143138Z-60b6bc2e",
+  "schema_version": 1,
+  "sha": "c89e9b06e48d8e4607944c4c372c2acf7ba0cf41",
+  "sha_after": "c89e9b06e48d8e4607944c4c372c2acf7ba0cf41",
+  "started_at": "2026-11-16T14:31:40.519303+00:00",
+  "stderr": "",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261116T143138Z-60b6bc2e/stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_total_chars": 0,
+  "stderr_truncated": false,
+  "stdout": "GIT env: {'GIT_WORK_TREE': '/workspace'}\ncwd /workspace exe /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python version 3.12.0 (main, Oct 18 2023, 16:27:16) [GCC 11.4.0]\nworkspace entries ['.claude', '.git', '.github', '.gitignore', '.ionmc-cache', '.ionmc-condition.json', '.mcp.json', '.pre-commit-config.yaml', 'AGENTS.md', 'CLAUDE.md', 'EXPERIMENT.md', 'README.md', 'REQUIREMENTS.md', 'THIRD_PARTY_NOTICES.md', 'benchmarks', 'decisions', 'docs', 'experiment', 'infrastructure', 'pyproject.toml', 'reference_requests', 'src', 'tests', 'uv.lock', 'validation', 'zensical.toml']\n.git present: True is dir\nwithout GIT env ['rev-parse', '--show-toplevel', 'HEAD'] 0 /workspace\nc89e9b06e48d8e4607944c4c372c2acf7ba0cf41 \nwith GIT env ['rev-parse', '--show-toplevel', 'HEAD'] 0 /workspace\nc89e9b06e48d8e4607944c4c372c2acf7ba0cf41 \nwithout GIT env ['status', '--porcelain', '--untracked-files=no'] 0  \nwith GIT env ['status', '--porcelain', '--untracked-files=no'] 0  \npyvenv.cfg two levels up: True\npurelib /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/lib/python3.12/site-packages\nnumpy dist: ['numpy', 'numpy.libs', 'numpy-2.5.3.dist-info']\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261116T143138Z-60b6bc2e/stdout.txt",
+  "stdout_sha256": "ad3560cc6c22c4639804c0962283a6ff54609708e26a9ecbecbca1ebd52931b7",
+  "stdout_total_chars": 1186,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-008",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-008"
+}

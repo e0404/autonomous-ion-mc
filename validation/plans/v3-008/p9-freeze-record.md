@@ -1519,10 +1519,10 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/scripts/stopping/i3_band_diagnostic.py` | `137c8414a4e0dcefaac883c16758efb18e3170cce97881267fc2e310c9ebd435` |
-| `tests/ionmc/test_i3_band_diagnostic.py` | `fa317f121a6652cd1862eebdb47a485bd576b0c954ca5ab173cc9f633107f336` |
+| `tests/ionmc/test_i3_band_diagnostic.py` | `de0ba74e279ebf1d3ccedb552f1a6bfdf3466cbd19f202fbffcba5edc00031dd` |
 | `validation/scripts/stopping/gen_i3fu2_bundles.py` | `46200570d35f40143902c1dffc7245c39700459c453b0b3a21ae75f87251b17b` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `053914b24413241e9a63f16b13fc3d80113b44dd6dd4d2cc0d065c902cfcb820` |
-| `tests/ionmc/test_i3fu2.py` | `4ffa01fa41d63baa187e1abcb5fbd931d6e258cb7b31c9cc0de7a8e9b4922adc` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `b6422f2b3d8a6bef1136fc373fdc28f9b2c71ce40731b1f4904c48290b03f3fa` |
+| `tests/ionmc/test_i3fu2.py` | `7eaacdaf6d2f8685159aa49d036b37f317d1b192a7cc0a09dc305777c53541a5` |
 | `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `cb4664944d7f6f25a3b3acd059cdd93834d3b9e92a99f4cee6d579f20cdfd971` |
 
 
@@ -1536,8 +1536,8 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/env_seal.py` | `934ac22ed7a382bc02e3b23a02d21e2b77c16a6c59c32ad6c22b5528fde493e6` |
-| `validation/results/stopping/v3-008-i3fu1/environment-seal.json` | `2d173286b270a32a715f23efae5134896b8a3365d3967f76f837d9f6053053db` |
+| `validation/scripts/stopping/env_seal.py` | `c05501da207024b36dea916007cf2f25b40ff1285c6c45f8acc031dd857231f7` |
+| `validation/results/stopping/v3-008-i3fu1/environment-seal.json` | `4166366856656e669c7cd4aabbfec3c679203d90af3e9eca24dd1b1eb87991c9` |
 | `validation/plans/v3-008/p13-i3fu2-stepping-bound.md` | `d72b29b8689f3f57908d5a5e01d03f754d73fbaa8404cbdf037aae3ba763ccc7` |
 | `validation/plans/v3-008/p13-scripts/p13.py` | `39e5ffa71b9045ad9ab44faaab050be0a613f4b2a879867d11706ed6c8360c90` |
 
@@ -1556,7 +1556,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/sealed_launch.py` | `583c90bb8622865fe90d83299169664590140053de1e684333c341cc9cc978a0` |
+| `validation/scripts/stopping/sealed_launch.py` | `f7965215d1dee3638ed28ab8cd206b3ff0b325254ce6d22f5c61f49511ad5306` |
 | `reference_requests/interventions/IR-20261116-123921-312B59/ADDENDUM-1.md` | `1aff8b47aaf9870862df3dfbe5fabc807a6e032fb4946028a4c112905110864c` |
 
 
@@ -1570,9 +1570,20 @@ placeholder scorer output was deleted unread.
 
 **Dated note (2026-11-16, orchestrator) — revision 13 of amendment I3-FU-1 (host-runner execution; sanitized git environment; launcher refuses import): launcher, environment helper, evaluator revision constant and step-1 test revised; rows above carry the revision-13 hashes; bundles and manifest unchanged.**
 
-**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_i3_band_diagnostic.py` 0a9740cd… → 8501dd97…; `validation/scripts/stopping/i3fu2_evaluate.py` 68a8a31d… → 21620118…; `validation/scripts/stopping/sealed_launch.py` 4008eddf… → dd48e7a9…. All other entries unchanged (recomputed).
+**Dated note (2026-11-16, orchestrator) — revision 14 of amendment I3-FU-1 (host-runner reconciliation; host-written environment seal): launcher, environment helper, tests, evaluator revision constant and the environment seal revised; rows above carry the revision-14 hashes; bundles and manifest unchanged.**
 
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_i3_band_diagnostic.py` 8501dd97… → fa317f12…; `validation/scripts/stopping/i3fu2_evaluate.py` 21620118… → 053914b2…; `validation/scripts/stopping/env_seal.py` 06ac9a82… → 934ac22e…; `validation/scripts/stopping/sealed_launch.py` dd48e7a9… → 583c90bb…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — files added by revision 14 of amendment I3-FU-1: the three signed host-run records of the environment-seal run on the host (sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T143120Z-6b3d8b5d.json` | `0b995e091af7748fc5e1d48b5cbe97c2bd2a0b6f660f856cbd2c32b10e8f5691` |
+| `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T143138Z-60b6bc2e.json` | `e20347b8892822db814695d01c8230053b8b10ef33782df4d7495d356ea51fdd` |
+| `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T143149Z-4bc6c0e0.json` | `cc36fa3aa230b8b632436f44611e9777fbd8465d369fee0992af1c9bf5434294` |
+
+
+**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_i3_band_diagnostic.py` fa317f12… → de0ba74e…; `validation/scripts/stopping/i3fu2_evaluate.py` 053914b2… → b6422f2b…; `tests/ionmc/test_i3fu2.py` 4ffa01fa… → 7eaacdaf…; `validation/scripts/stopping/env_seal.py` 934ac22e… → c05501da…; `validation/results/stopping/v3-008-i3fu1/environment-seal.json` 2d173286… → 41663668…; `validation/scripts/stopping/sealed_launch.py` 583c90bb… → f7965215…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

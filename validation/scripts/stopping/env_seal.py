@@ -458,14 +458,14 @@ PREIMPORT_FORBIDDEN = ("numpy", "ionmc")  # top-level packages that must not pre
 def check_launch(launch: Mapping[str, Any], target_file: Path | None = None) -> dict[str, Any]:
     """Enforce the captured launch state (Codex REVIEW-cf6fa397): launched through
     ``sealed_launch.py`` (its record present, origin and launcher sha256 recorded), ``-I -S -B``,
-    ``pycache_prefix`` an existing directory that held no file at the capture, the standard import
-    machinery by identity, and ``sys.path`` equal to the launcher's explicit list; else
-    :class:`EnvironmentSealError`. Returns the provenance record (the launcher record without its
-    stdlib hash map, which is summarised by its count). With ``target_file`` (the diagnostic's
+    ``pycache_prefix`` absent or an existing directory that held no file at the capture, the
+    standard import machinery by identity, and ``sys.path`` equal to the launcher's explicit list;
+    else :class:`EnvironmentSealError`. Returns the provenance record (the launcher record without
+    its stdlib hash map, which is summarised by its count). With ``target_file`` (the diagnostic's
     own resolved ``__file__``; Codex REVIEW-e0d37216): the record's ``target_path`` must be that
-    file and its ``target_sha256`` the sha256 of that file on disk (the diagnostics further
-    compare it with the committed bytes), and the record's ``sys_modules_at_launch`` must hold no
-    numpy / ionmc module."""
+    file and its ``target_sha256`` the sha256 of that file on disk (the diagnostics further compare
+    it with the committed bytes), and the record's ``sys_modules_at_launch`` must hold no numpy /
+    ionmc module."""
     record = launch.get("launcher_record")
     if not isinstance(record, dict) or record.get("origin") != LAUNCHER_REL:
         raise EnvironmentSealError("not launched through sealed_launch.py (no launcher record)")
@@ -475,9 +475,8 @@ def check_launch(launch: Mapping[str, Any], target_file: Path | None = None) -> 
         raise EnvironmentSealError("not launched with python -I -S (isolated, no site)")
     if not launch.get("pycache_prefix"):
         raise EnvironmentSealError("not launched with -X pycache_prefix=<fresh empty directory>")
-    if not launch.get("pycache_prefix_exists"):
-        raise EnvironmentSealError("the pycache_prefix directory does not exist")
-    if launch.get("pycache_prefix_files_at_start") != 0:
+    # absent (cannot hold stale bytecode; -B writes nothing) or an existing empty directory
+    if launch.get("pycache_prefix_exists") and launch.get("pycache_prefix_files_at_start") != 0:
         raise EnvironmentSealError("the pycache_prefix directory was not empty at launch")
     if launch.get("machinery_problems"):
         raise EnvironmentSealError(f"import machinery: {launch['machinery_problems']}")

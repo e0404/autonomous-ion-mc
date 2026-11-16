@@ -61,8 +61,14 @@ The git calls run in a sanitized environment (PATH, ``LANG=C``, a non-existent `
 inherited ``GIT_*`` variable, system and global git configuration disabled) and are bound to the
 launcher's own repository (``rev-parse --show-toplevel`` must equal it; the git common dir is
 recorded); any git redirection variable (:data:`GIT_REDIRECT_VARIABLES`) in the launcher's own
-environment is refused by name (Codex REVIEW-d8ecd044). The launcher refuses to be imported as a
-module (ImportError before any function is defined), so a wrapper cannot reuse its functions.
+environment is refused by name (Codex REVIEW-d8ecd044), except ``GIT_WORK_TREE`` whose real path
+equals the launcher's repository root (set by the host-runner service; recorded as
+``git_work_tree_env``; removed from the git subprocess environment like every ``GIT_*``
+variable; Codex REVIEW-427b5254). The bytecode-cache prefix may be absent (a directory that does
+not exist cannot hold stale bytecode; with -B nothing is written there) or an existing empty
+directory; the state is recorded (``pycache_prefix_state``). The launcher refuses to be imported
+as a module (ImportError before any function is defined), so a wrapper cannot reuse its
+functions.
 
 Any failed check: a message on stderr and exit status 2; the target is not run.
 
@@ -137,14 +143,28 @@ def flag_problems() -> list[str]:
     for name in ("isolated", "no_site", "dont_write_bytecode"):
         if getattr(sys.flags, name) != 1:
             out.append(f"sys.flags.{name} is not 1 (launch with python -I -S -B)")
-    prefix = getattr(sys, "pycache_prefix", None)
-    if not prefix:
+    state = prefix_state()
+    if state == "unset":
         out.append("sys.pycache_prefix is not set (-X pycache_prefix=<fresh empty directory>)")
-    elif not Path(prefix).is_dir():
-        out.append("the pycache_prefix directory does not exist")
-    elif any(p.is_file() for p in Path(prefix).rglob("*")):
+    elif state == "not-a-directory":
+        out.append("the pycache_prefix path exists but is not a directory")
+    elif state == "non-empty":
         out.append("the pycache_prefix directory is not empty")
     return out
+
+
+def prefix_state() -> str:
+    """``absent`` (a directory that does not exist cannot hold stale bytecode; with -B nothing is
+    written there), ``empty``, ``non-empty``, ``not-a-directory`` or ``unset``."""
+    prefix = getattr(sys, "pycache_prefix", None)
+    if not prefix:
+        return "unset"
+    path = Path(prefix)
+    if not path.exists():
+        return "absent"
+    if not path.is_dir():
+        return "not-a-directory"
+    return "non-empty" if any(p.is_file() for p in path.rglob("*")) else "empty"
 
 
 def machinery_problems(
@@ -268,11 +288,24 @@ GIT_REDIRECT_VARIABLES = (
 )
 
 
-def git_environment_problems(environ: dict[str, str] | None = None) -> list[str]:
-    """(g) no git redirection variable may be set in the launcher's own environment."""
+def git_environment_problems(environ: Any = None) -> list[str]:
+    """(g) no git redirection variable may be set in the launcher's own environment, except
+    ``GIT_WORK_TREE`` whose real path equals the launcher's repository root (the host-runner
+    service sets it to the run's checkout; Codex REVIEW-427b5254)."""
     env = os.environ if environ is None else environ
-    return [f"{v} is set in the launcher's environment (refused)" for v in GIT_REDIRECT_VARIABLES
-            if v in env]  # fmt: skip
+    out = []
+    for v in GIT_REDIRECT_VARIABLES:
+        if v not in env:
+            continue
+        if v == "GIT_WORK_TREE" and Path(env[v]).resolve() == REPO:
+            continue
+        if v == "GIT_WORK_TREE":
+            out.append(
+                f"GIT_WORK_TREE={env[v]!r} is not the launcher's repository {REPO} (refused)"
+            )
+        else:
+            out.append(f"{v} is set in the launcher's environment (refused)")
+    return out
 
 
 def git_env() -> dict[str, str]:
@@ -387,7 +420,8 @@ def launch_record(target: Path, blob: bytes, binding: dict[str, str]) -> dict[st
             "dont_write_bytecode": sys.flags.dont_write_bytecode,
         },
         "pycache_prefix": sys.pycache_prefix,
-        "pycache_prefix_empty": True,
+        "pycache_prefix_state": prefix_state(),
+        "git_work_tree_env": os.environ.get("GIT_WORK_TREE"),
         "machinery_ok": True,
         "sys_path": list(sys.path),
         "sys_prefix": sys.prefix,

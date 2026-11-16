@@ -2404,7 +2404,6 @@ def test_launch_record_is_enforced(
     for bad, match in (
         ({"dont_write_bytecode_flag": 0}, "python -B"),
         ({"pycache_prefix": None}, "pycache_prefix=<fresh empty directory>"),
-        ({"pycache_prefix_exists": False}, "does not exist"),
         ({"pycache_prefix_files_at_start": 3}, "was not empty"),
         ({"isolated_flag": 0}, "python -I -S"),
         ({"no_site_flag": 0}, "python -I -S"),

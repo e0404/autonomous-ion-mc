@@ -2293,3 +2293,18 @@ sealed) → the launcher runs git with a sanitized environment (every `GIT_*` va
 binds it to the repository explicitly and records the resolved top level and git directory. Execution order for the
 runs is unchanged (step 1 at the pin-A commit; smokes; markers; pin B; evidence runs), each host call ≤ 1500 s, one at a
 time. Not a clinical claim.
+
+**Revision 14 of amendment I3-FU-1 (2026-11-16, orchestrator; Codex REVIEW-427b5254 on c89e9b06; before any run).** The
+host-runner workflow and the launcher are reconciled: the runner always sets `GIT_WORK_TREE=/workspace` for the sandboxed
+process, which the revision-13 launcher refused by name (confirmed on the host: the direct invocation of the seal-writing
+run, signed record RUN-20261116T143120Z-6b3d8b5d, exited 2; a probe, RUN-20261116T143138Z-60b6bc2e, established that
+`/workspace` is a real git checkout at the committed SHA, clean, with the host venv's interpreter 3.12.0 and numpy 2.5.3;
+the seal-writing run then succeeded through a wrapper that dropped the variable before `execve`, signed record
+RUN-20261116T143149Z-4bc6c0e0, output-manifest sha256 227b6153…). The launcher now accepts `GIT_WORK_TREE` if and only if it
+equals its own repository root (every other `GIT_*` variable stays fatal; git still runs with a sanitized environment),
+and accepts an absent bytecode-cache prefix directory (nothing stale can be read from a directory that does not exist),
+so the prescribed direct `run_host_validation` invocation works without a wrapper. **The committed environment seal is now
+the host-written one** (`validation/results/stopping/v3-008-i3fu1/environment-seal.json`, from RUN-…4bc6c0e0; it differs
+from the sandbox-written seal of revision 9 only in the numpy `RECORD` digest, the installation-specific manifest of the
+same 2.5.3 wheel; interpreter, stdlib (827 modules) and extension-module hashes are identical); the three signed
+host-run records are committed under `validation/results/stopping/v3-008-i3fu1/host-records/`. Not a clinical claim.

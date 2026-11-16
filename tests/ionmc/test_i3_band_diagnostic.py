@@ -1021,7 +1021,6 @@ def test_launch_capture_and_check(  # type: ignore[no-untyped-def]
         ({"isolated_flag": 0}, "python -I -S"),
         ({"no_site_flag": 0}, "python -I -S"),
         ({"pycache_prefix_files_at_start": 1}, "was not empty"),
-        ({"pycache_prefix_exists": False}, "does not exist"),
         ({"pycache_prefix": None}, "pycache_prefix=<fresh empty directory>"),
         ({"machinery_problems": ["x"]}, "import machinery"),
         ({"sys_path_at_capture": ["/x"]}, "explicit list"),
@@ -1298,10 +1297,67 @@ def test_launcher_refuses_git_redirection_to_a_decoy(tmp_path: Path) -> None:
     env = {**os.environ, "GIT_DIR": str(decoy / ".git"), "GIT_WORK_TREE": str(decoy)}
     proc = _launch_py(tmp_path, launcher, str(target), env=env)
     assert proc.returncode == 2 and "tampered" not in proc.stdout
-    assert "GIT_DIR is set" in proc.stderr and "GIT_WORK_TREE is set" in proc.stderr
+    assert "GIT_DIR is set" in proc.stderr
+    assert "GIT_WORK_TREE=" in proc.stderr and "is not the launcher's repository" in proc.stderr
     for var in ("GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"):
         proc = _launch_py(tmp_path, launcher, str(target), env={**os.environ, var: "/x"})
         assert proc.returncode == 2 and f"{var} is set" in proc.stderr
     # without the variables the tampered (uncommitted) target is refused by the git binding
     proc = _launch_py(tmp_path, launcher, str(target))
     assert proc.returncode == 2 and "has an uncommitted change" in proc.stderr
+
+
+def test_absent_prefix_is_accepted(mod) -> None:  # type: ignore[no-untyped-def]
+    """Rev16: an absent pycache_prefix (cannot hold stale bytecode) passes the capture check."""
+    good = _valid_launch(mod)
+    absent = {**good, "pycache_prefix_exists": False, "pycache_prefix_files_at_start": None}
+    assert mod.ENV.check_launch(absent)["launch_ok"] is True
+
+
+RECORD_TARGET = (
+    "import builtins, json\n"
+    "r = getattr(builtins, '__ionmc_sealed_launch__')\n"
+    "print(json.dumps({k: r[k] for k in ('git_work_tree_env', 'pycache_prefix_state')}))\n"
+)
+
+
+def test_host_runner_like_environment_is_accepted(tmp_path: Path) -> None:
+    """Codex REVIEW-427b5254: the host-runner service starts the process with a minimal
+    environment and GIT_WORK_TREE = the run's checkout; accepted when it is the launcher's
+    repository root, and recorded."""
+    repo, launcher, target = _target_repo(tmp_path)
+    target.write_text(RECORD_TARGET)
+    _commit(repo, "record-printing target")
+    env = {"PATH": os.environ["PATH"], "GIT_WORK_TREE": str(repo)}
+    proc = _launch_py(tmp_path, launcher, str(target), env=env)
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out == {"git_work_tree_env": str(repo), "pycache_prefix_state": "empty"}
+
+
+def test_git_work_tree_to_a_decoy_is_refused(tmp_path: Path) -> None:
+    repo, launcher, target = _target_repo(tmp_path)
+    tampered = "print('tampered')\n"
+    decoy = tmp_path / "decoy"
+    (decoy / "validation" / "scripts" / "stopping").mkdir(parents=True)
+    (decoy / "validation" / "scripts" / "stopping" / "i3_band_diagnostic.py").write_text(tampered)
+    _git(decoy, "init", "-q", "-b", "main")
+    _commit(decoy, "decoy with the tampered target")
+    target.write_text(tampered)
+    env = {"PATH": os.environ["PATH"], "GIT_WORK_TREE": str(decoy)}
+    proc = _launch_py(tmp_path, launcher, str(target), env=env)
+    assert proc.returncode == 2 and "tampered" not in proc.stdout
+    assert f"GIT_WORK_TREE={str(decoy)!r} is not the launcher's repository" in proc.stderr
+
+
+def test_absent_prefix_is_accepted_and_stays_absent(tmp_path: Path) -> None:
+    repo, launcher, target = _target_repo(tmp_path)
+    target.write_text(RECORD_TARGET + "import json as _j, wave as _w\n")
+    _commit(repo, "record-printing target")
+    absent = tmp_path / "no-such-prefix"
+    proc = _launch_py(tmp_path, launcher, str(target), prefix=absent)
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out["pycache_prefix_state"] == "absent" and out["git_work_tree_env"] is None
+    assert not absent.exists()  # -B: no bytecode written anywhere
+    assert not list(repo.rglob("__pycache__")) and not list(repo.rglob("*.pyc"))
