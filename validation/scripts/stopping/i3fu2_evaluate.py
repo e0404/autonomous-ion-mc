@@ -13,7 +13,7 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 10)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 11)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
 **Launch (Codex REVIEW-8081e0e7 finding 3, REVIEW-cf6fa397).** The evaluator must be started
@@ -61,25 +61,20 @@ numpy distribution and the interpreter binary (libc, system libraries) are not s
 ``platform.platform()``. Written: ``provenance.sealed_sources`` {path: sha256} and
 ``provenance.environment`` (``lock``, ``seal``).
 
-**Review pins and the plan note.** Two verbatim codex-worker review records: pin A
+**Review pins and the plan note (revision 11).** Two codex-worker-SIGNED review records, the
+verbatim JSON returned by ``inspect_codex_review`` (with its ``attestation`` block): pin A
 ``i3fu2-review.json`` (the review of the commit that seals the evaluator) and pin B
-``i3fu2-markers-review.json`` (the review of the commit that adds the log-marker file, derived
-from the smoke logs, and pin A). Each must hold :data:`rio.REVIEW_FIELDS` and ``report.verdict``,
-``status`` "passed", ``report.verdict`` "pass", ``task_id`` "V3-008", a 40-hex ``head_sha`` (equal
-to ``report.head_sha`` where present), a 64-hex ``report_sha256`` and ISO ``started_at`` <
-``finished_at``. Each pin is accompanied by a committed verbatim copy of a signed
-validation-manager local-validation record (Codex REVIEW-c4f3fdd1 finding 1;
-``i3fu2-review-attestation.json``, ``i3fu2-markers-review-attestation.json``;
-:func:`check_pin_attestation`): verified Ed25519 attestation by a ``validation-manager`` key of
-the committed trust map, ``task_id`` V3-008, ``git_sha`` = the pin's ``head_sha``, ``status``
-"passed", ``details.review_record`` equal to the committed pin, ``signed_at_utc`` after the
-review's ``finished_at`` and before every run that depends on the pin (the smokes for pin A,
-the evidence runs for pin B). Pin A's attestation is byte-identical at pin B's ``head_sha``, at
-``code_sha`` and at HEAD, pin B's at ``code_sha`` and HEAD. Residual limitation: the review
-service itself still does not sign its records (future item V3-INFRA-005); the signed
-validation record proves that the pin existed, unaltered, at the signed time, not that the
-review service produced it. The acceptance plan at HEAD and at ``code_sha`` must contain exactly
-one line matching :data:`PLAN_NOTE_RE`, identical at both::
+``i3fu2-markers-review.json`` (the review of the commit that adds the log-marker file, derived from
+the smoke logs, and pin A). Each is verified with
+``infrastructure.validation.review_records.verify_review_record`` against the committed trust map
+(signer ``codex-worker``; schema, status/verdict consistency, timestamps, the experiment id, task
+V3-008) and must be ``verified``: an unsigned record or one signed by a key that is not in the
+trust map (``unverified``) and a tampered or inconsistent record (``invalid``) are a
+``RecordError`` (fail closed). Further: ``status`` "passed", ``report.verdict`` "pass", ``task_id``
+"V3-008", a 40-hex ``head_sha``. The chronology uses the signed ``started_at`` / ``finished_at``.
+Provenance: ``review_pins.<name>.attestation`` = the codex-worker signature summary (``key_id``,
+``signed_at_utc``). The acceptance plan at HEAD and at ``code_sha`` must contain exactly one line
+matching :data:`PLAN_NOTE_RE`, identical at both::
 
     **Dated note (<YYYY-MM-DD>, orchestrator; I3-FU-1 step-2 review pins).** evaluator review
     <REVIEW-...> at <40-hex>; markers review <REVIEW-...> at <40-hex>
@@ -96,10 +91,10 @@ trust map is ``infrastructure/keys/trusted_attestation_keys.json`` at HEAD.
 **Chronology.** Smokes (all five; missing or late: ``RecordError``, nothing graded): the
 record's code_sha carries pin A (pin A byte-identical there, pin A's ``head_sha`` an ancestor of
 it) and is an ancestor of (or equal to) pin B's ``head_sha``; ``started_at`` after pin A's
-``finished_at`` and after pin A's attestation ``signed_at_utc``, and ``finished_at`` before pin
-B's ``started_at`` (the marker file is derived from the smoke logs, so its review begins after
-the smokes end). Evidence and repeat runs: code_sha equals ``--code-sha`` and ``started_at`` is
-after pin B's (and pin A's) ``finished_at`` and after both attestations' ``signed_at_utc``.
+``finished_at`` (signed), and ``finished_at`` before pin B's signed ``started_at`` (the marker
+file is derived from the smoke logs, so its review begins after the smokes end). Evidence and
+repeat runs: code_sha equals ``--code-sha`` and ``started_at`` is after pin B's (and pin A's)
+signed ``finished_at``.
 Every run: ``started_at`` <= ``finished_at``.
 
 Runtime controls (revision 5, Codex REVIEW-183057ce finding 3; ``env_seal``): every loaded numpy
@@ -326,17 +321,6 @@ RESULTS_DIR = "validation/results/stopping/v3-008-i3fu2"
 REVIEW_PIN = f"{RESULTS_DIR}/i3fu2-review.json"  # pin A: the evaluator seal review
 MARKERS_PIN = f"{RESULTS_DIR}/i3fu2-markers-review.json"  # pin B: markers + pin A review
 MARKERS = f"{RESULTS_DIR}/log-markers.json"
-#: verbatim signed validation-manager records carrying each pin (Codex REVIEW-c4f3fdd1 finding 1)
-REVIEW_ATTESTATION = f"{RESULTS_DIR}/i3fu2-review-attestation.json"
-MARKERS_ATTESTATION = f"{RESULTS_DIR}/i3fu2-markers-review-attestation.json"
-VALIDATION_SIGNER = "validation-manager"
-#: fields the validation service adds when it lists a record (not part of the signed payload)
-DERIVED_VALIDATION_FIELDS = (
-    "attestation_status",
-    "attestation_reason",
-    "host_run_attestation",
-    "reference_run_attestation",
-)
 ENV_SEAL = env_seal.SEAL_REL
 RECORDS = f"{RESULTS_DIR}/topas-runs"
 MANIFEST = f"{gen.REL_PREFIX}/i3fu2-frozen-manifest.json"
@@ -436,7 +420,7 @@ FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 10  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
+AMENDMENT_REVISION = 11  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
 #: the plan's revision records of this amendment (counted in the plan committed at code_sha)
 PLAN_REVISION_RE = re.compile(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", re.M)
 REDISTRIBUTION_NOTE = (
@@ -992,7 +976,8 @@ def require_clean(repo: Path) -> None:
 def executable_closure() -> dict[str, Path]:
     """{path relative to this checkout: loaded file} of every module of the running interpreter
     that belongs to the decision code: this module, every ``ionmc`` module and every script of
-    :data:`SCRIPT_MODULES` (namespace packages without a file are skipped). A closure module
+    :data:`SCRIPT_MODULES` and every ``infrastructure.*`` module (the attestation and review-record
+    verifiers; namespace packages without a file are skipped). A closure module
     loaded from outside this checkout is a ``RecordError``."""
     rio.attest_module()
     root = REPO_ROOT.resolve()
@@ -1003,6 +988,7 @@ def executable_closure() -> dict[str, Path]:
             or name == "ionmc"
             or name.startswith("ionmc.")
             or name in SCRIPT_MODULES
+            or name.startswith("infrastructure.")
         ):
             continue
         f = getattr(mod, "__file__", None)
@@ -1022,7 +1008,11 @@ def closure_modules() -> dict[str, ModuleType]:
     return {
         name: mod
         for name, mod in sys.modules.items()
-        if (name in (__name__, "ionmc") or name.startswith("ionmc.") or name in SCRIPT_MODULES)
+        if (
+            name in (__name__, "ionmc")
+            or name.startswith(("ionmc.", "infrastructure."))
+            or name in SCRIPT_MODULES
+        )
         and getattr(mod, "__file__", None)
     }
 
@@ -1117,27 +1107,27 @@ def environment_check(lock_text: str) -> dict[str, str]:
     }
 
 
-def check_review_record(doc: Any, what: str) -> dict[str, Any]:
-    """A verbatim passed codex-worker review record (schema of ``ss-seal-review.json``)."""
-    for key in rio.REVIEW_FIELDS:
-        rio.require(doc, key, what)
-    rio.require(doc["report"], "verdict", f"{what} report")
-    if doc["status"] != "passed":
-        raise RecordError(f"{what}: status {doc['status']!r} is not 'passed'")
-    if doc["report"]["verdict"] != "pass":
-        raise RecordError(f"{what}: report verdict {doc['report']['verdict']!r} is not 'pass'")
-    if doc.get("task_id") != TASK_ID:
-        raise RecordError(f"{what}: task_id {doc.get('task_id')!r} is not {TASK_ID}")
-    if not isinstance(doc["head_sha"], str) or not SHA_RE.match(doc["head_sha"]):
+def review_records_module() -> Any:
+    """``infrastructure/validation/review_records.py`` of this checkout (V3-INFRA-006)."""
+    rio.attest_module()  # puts the checkout root on sys.path
+    return importlib.import_module("infrastructure.validation.review_records")
+
+
+def check_review_record(doc: Any, what: str, trust: dict[str, Any]) -> dict[str, Any]:
+    """A codex-worker-signed review record, verified (``verify_review_record`` against the
+    committed trust map, task V3-008) and passed; anything else is a ``RecordError``."""
+    if not isinstance(doc, dict):
+        raise RecordError(f"{what}: not a review record object")
+    status, why = review_records_module().verify_review_record(doc, trust, expected_task_id=TASK_ID)
+    if status != "verified":
+        raise RecordError(f"{what}: codex-worker review record {status}: {why}")
+    if doc.get("status") != "passed":
+        raise RecordError(f"{what}: status {doc.get('status')!r} is not 'passed'")
+    report = doc.get("report")
+    if not isinstance(report, dict) or report.get("verdict") != "pass":
+        raise RecordError(f"{what}: report verdict is not 'pass'")
+    if not isinstance(doc.get("head_sha"), str) or not SHA_RE.match(doc["head_sha"]):
         raise RecordError(f"{what}: head_sha is not a 40-hex commit SHA")
-    if "head_sha" in doc["report"] and doc["report"]["head_sha"] != doc["head_sha"]:
-        raise RecordError(f"{what}: report head_sha differs from head_sha")
-    digest = rio.require(doc, "report_sha256", what)
-    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-        raise RecordError(f"{what}: report_sha256 is not a 64-hex digest")
-    started = rio._parse_time(rio.require(doc, "started_at", what), f"{what} started_at")
-    if not started < rio._parse_time(doc["finished_at"], f"{what} finished_at"):
-        raise RecordError(f"{what}: started_at is not before finished_at")
     return dict(doc)
 
 
@@ -1152,55 +1142,6 @@ def parse_plan_note(text: str, where: str) -> dict[str, str]:
     return {**found[0].groupdict(), "line": found[0].group(0)}
 
 
-def check_pin_attestation(
-    blob: bytes, rel: str, pin: dict[str, Any], trust: dict[str, Any]
-) -> dict[str, Any]:
-    """The committed verbatim validation-manager record that carries a review pin: a verified
-    Ed25519 attestation by a trusted ``validation-manager`` key (the committed trust map), task
-    V3-008, ``git_sha`` = the pin's ``head_sha``, ``status`` "passed", ``details.review_record``
-    equal to the committed pin, and ``attestation.signed_at_utc`` after the review's
-    ``finished_at``. Accepted layouts: the record itself or ``{"validation": record}``; the
-    fields the service adds when listing (:data:`DERIVED_VALIDATION_FIELDS`) are dropped before
-    verification, as ``local_validation.records_for`` does. Returns the signed time and the
-    provenance record."""
-    try:
-        doc = json.loads(blob.decode("utf-8"))
-    except ValueError as exc:
-        raise RecordError(f"pin attestation {rel} is not JSON: {exc}") from exc
-    rec = doc.get("validation") if isinstance(doc, dict) and "validation" in doc else doc
-    if not isinstance(rec, dict):
-        raise RecordError(f"pin attestation {rel} is not a validation record")
-    rec = {k: v for k, v in rec.items() if k not in DERIVED_VALIDATION_FIELDS}
-    status, why = rio.attest_module().classify_record(rec, trust, VALIDATION_SIGNER)
-    if status != "verified":
-        raise RecordError(f"pin attestation {rel}: attestation {status}: {why}")
-    if rec.get("task_id") != TASK_ID:
-        raise RecordError(f"pin attestation {rel}: task_id {rec.get('task_id')!r} != {TASK_ID}")
-    if rec.get("git_sha") != pin["doc"]["head_sha"]:
-        raise RecordError(f"pin attestation {rel}: git_sha is not the pin's head_sha")
-    if rec.get("status") != "passed":
-        raise RecordError(f"pin attestation {rel}: status {rec.get('status')!r} is not passed")
-    details = rec.get("details")
-    if not isinstance(details, dict) or details.get("review_record") != pin["doc"]:
-        raise RecordError(f"pin attestation {rel} does not carry the committed review pin")
-    signed_at = rec["attestation"]["signed_at_utc"]
-    signed = rio._parse_time(signed_at, f"{rel} signed_at_utc")
-    if not signed > pin["finished"]:
-        raise RecordError(
-            f"pin attestation {rel}: signed_at_utc is not after the review's finished_at"
-        )
-    return {
-        "signed": signed,
-        "provenance": {
-            "path": rel,
-            "sha256": hashlib.sha256(blob).hexdigest(),
-            "validation_id": rec.get("validation_id"),
-            "key_id": rec["attestation"]["key_id"],
-            "signed_at_utc": signed_at,
-        },
-    }
-
-
 def plan_revision_records(text: str) -> int:
     """The highest N of the ``**Revision N of amendment I3-FU-1`` records of the plan (0: none)."""
     return max((int(m) for m in PLAN_REVISION_RE.findall(text)), default=0)
@@ -1212,8 +1153,6 @@ def load_pins(
     rel_b: str,
     code_sha: str,
     trust: dict[str, Any],
-    att_a: str = REVIEW_ATTESTATION,
-    att_b: str = MARKERS_ATTESTATION,
 ) -> tuple[dict, dict[str, str]]:
     """Both review pins and the plan note naming them (see the module docstring)."""
     note = parse_plan_note(reader.read(PLAN_PATH).decode("utf-8"), "HEAD")
@@ -1222,9 +1161,9 @@ def load_pins(
     if at_code != note:
         raise RecordError(f"the review-pin plan note differs between code_sha {code_sha} and HEAD")
     pins: dict[str, dict[str, Any]] = {}
-    for name, rel, id_key, sha_key, att_rel in (
-        ("evaluator", rel_a, "eval_id", "eval_sha", att_a),
-        ("markers", rel_b, "markers_id", "markers_sha", att_b),
+    for name, rel, id_key, sha_key in (
+        ("evaluator", rel_a, "eval_id", "eval_sha"),
+        ("markers", rel_b, "markers_id", "markers_sha"),
     ):
         blob = reader.read(rel)
         if rio.git_show(reader.repo, code_sha, rel) != blob:
@@ -1233,7 +1172,7 @@ def load_pins(
             doc = json.loads(blob.decode("utf-8"))
         except ValueError as exc:
             raise RecordError(f"review pin {rel} is not JSON: {exc}") from exc
-        doc = check_review_record(doc, f"review pin {rel}")
+        doc = check_review_record(doc, f"review pin {rel}", trust)
         if doc["review_id"] != note[id_key] or doc["head_sha"] != note[sha_key]:
             raise RecordError(f"review pin {rel} is not the {name} review named by the plan note")
         pins[name] = {
@@ -1243,20 +1182,19 @@ def load_pins(
             "blob": blob,
             "finished": rio._parse_time(doc["finished_at"], f"{rel} finished_at"),
             "started": rio._parse_time(doc["started_at"], f"{rel} started_at"),
+            "attestation": {
+                "signer": doc["attestation"]["signer"],
+                "key_id": doc["attestation"]["key_id"],
+                "signed_at_utc": doc["attestation"]["signed_at_utc"],
+            },
         }
-        att_blob = reader.read(att_rel)
-        if rio.git_show(reader.repo, code_sha, att_rel) != att_blob:
-            raise RecordError(f"pin attestation {att_rel} differs between code_sha and HEAD")
-        att = check_pin_attestation(att_blob, att_rel, pins[name], trust)
-        pins[name].update(signed=att["signed"], attestation=att["provenance"], att_blob=att_blob)
     a, b = pins["evaluator"]["doc"]["head_sha"], pins["markers"]["doc"]["head_sha"]
     if not rio.is_ancestor(reader.repo, a, b):
         raise RecordError(f"evaluator review head_sha {a} is not an ancestor of the markers one")
     if not rio.is_ancestor(reader.repo, b, code_sha):
         raise RecordError(f"markers review head_sha {b} is not an ancestor of code_sha {code_sha}")
-    for rel, key in ((rel_a, "blob"), (att_a, "att_blob")):
-        if rio.git_show(reader.repo, b, rel) != pins["evaluator"][key]:
-            raise RecordError(f"{rel} differs between the markers review {b} and HEAD")
+    if rio.git_show(reader.repo, b, rel_a) != pins["evaluator"]["blob"]:
+        raise RecordError(f"{rel_a} differs between the markers review {b} and HEAD")
     note = {**note, "plan_revision_records": str(plan_revision_records(plan_at_code))}
     return pins, note
 
@@ -1335,8 +1273,6 @@ def context(
     smokes: str,
     markers_pin: str = MARKERS_PIN,
     markers: str = MARKERS,
-    review_attestation: str = REVIEW_ATTESTATION,
-    markers_attestation: str = MARKERS_ATTESTATION,
     environment_seal: str = ENV_SEAL,
 ) -> Context:
     reader = rio.CommittedReader(repo)
@@ -1348,10 +1284,8 @@ def context(
     rels = [reader.rel(p) for p in (records, smokes, review_pin, markers_pin, manifest)]
     records_rel, smoke_rel, pin_a, pin_b, man_rel = rels
     trust, trust_info = rio.committed_trust(reader)
-    att_a, att_b, env_rel = (
-        reader.rel(p) for p in (review_attestation, markers_attestation, environment_seal)
-    )
-    pins, note = load_pins(reader, pin_a, pin_b, code_sha, trust, att_a, att_b)
+    env_rel = reader.rel(environment_seal)
+    pins, note = load_pins(reader, pin_a, pin_b, code_sha, trust)
     reviewed = pins["evaluator"]["doc"]["head_sha"]
     markers_reviewed = pins["markers"]["doc"]["head_sha"]
     seal_shas = {"code_sha": code_sha, "the evaluator review head_sha": reviewed}
@@ -1502,13 +1436,10 @@ def load_run(ctx: Context, bundle: str, run_id: str, records: str | None = None)
     if exp.smoke:
         check_smoke_sha(ctx, code_sha)
         after, after_what = ctx.pins["evaluator"]["finished"], "the evaluator review pin's"
-        signed, signed_what = ctx.pins["evaluator"]["signed"], "the evaluator review"
     else:
         if code_sha != ctx.code_sha:
             raise RecordError(f"record code_sha {code_sha} != --code-sha {ctx.code_sha}")
         after, after_what = ctx.runs_after, "both review pins'"
-        signed = max(p["signed"] for p in ctx.pins.values())
-        signed_what = "the markers review"
     started = rio._parse_time(result["started_at"], f"{run_id} started_at")
     finished = rio._parse_time(result["finished_at"], f"{run_id} finished_at")
     if started > finished:
@@ -1516,11 +1447,6 @@ def load_run(ctx: Context, bundle: str, run_id: str, records: str | None = None)
     if not started > after:
         raise RecordError(
             f"reference_started {result['started_at']} is not after {after_what} finished_at"
-        )
-    if not started > signed:
-        raise RecordError(
-            f"reference_started {result['started_at']} is not after {signed_what} attestation's "
-            "signed_at_utc"
         )
     if exp.smoke and not finished < ctx.pins["markers"]["started"]:
         raise RecordError(
@@ -2068,8 +1994,6 @@ def evaluate(
     smokes: str,
     markers_pin: str = MARKERS_PIN,
     markers: str = MARKERS,
-    review_attestation: str = REVIEW_ATTESTATION,
-    markers_attestation: str = MARKERS_ATTESTATION,
     environment_seal: str = ENV_SEAL,
     archive_sha256: str | None = None,
     member_sha256: dict[str, str] | None = None,
@@ -2086,8 +2010,6 @@ def evaluate(
         smokes=smokes,
         markers_pin=markers_pin,
         markers=markers,
-        review_attestation=review_attestation,
-        markers_attestation=markers_attestation,
         environment_seal=environment_seal,
     )
     stepping = stepping_model_check()
@@ -2371,8 +2293,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--review-pin", default=REVIEW_PIN)
     ap.add_argument("--markers-pin", default=MARKERS_PIN)
     ap.add_argument("--markers", default=MARKERS)
-    ap.add_argument("--review-attestation", default=REVIEW_ATTESTATION)
-    ap.add_argument("--markers-attestation", default=MARKERS_ATTESTATION)
     ap.add_argument("--environment-seal", default=ENV_SEAL)
     ap.add_argument("--repo", type=Path, default=gen.REPO_ROOT)
     ap.add_argument("--archive", type=Path, required=True)
@@ -2391,8 +2311,6 @@ def main(argv: list[str] | None = None) -> int:
         smokes=a.smokes,
         markers_pin=a.markers_pin,
         markers=a.markers,
-        review_attestation=a.review_attestation,
-        markers_attestation=a.markers_attestation,
         environment_seal=a.environment_seal,
     )
     a.output_dir.mkdir(parents=True, exist_ok=True)

@@ -2253,3 +2253,14 @@ at the infrastructure level: **V3-INFRA-006** (signed codex-worker review record
 at 7dfab634 after two passed Codex reviews and green CI; the service restart that activates it is requested from the
 operator by the narrow intervention **IR-20261116-132756-B6F2C2** (record in `reference_requests/interventions/`); once
 active, the evaluator's pin rule will consume the service-signed record (next revision). Not a clinical claim.
+
+**Revision 11 of amendment I3-FU-1 (2026-11-16, orchestrator; closes the review-provenance finding at the infrastructure
+level; before any run).** With V3-INFRA-006 merged into `v3/develop` (7dfab634) and into this branch (merge 2b5e278), the
+two review pins A and B must be the codex-worker-SIGNED review records as returned by the review service (verbatim JSON
+with the `attestation` block); the evaluator verifies each pin with `infrastructure.validation.review_records.verify_review_record`
+against the committed trust map and accepts only the status `verified` (unsigned, untrusted-key, tampered, inconsistent,
+wrong-task or wrong-experiment records fail closed), requires `status` passed and verdict pass, and takes the chronology
+from the signed `started_at`/`finished_at`. The validation-manager-embedded attestation files of revision 4 are removed
+(superseded by the service signature). Until the codex-worker public key is published in the trust map (after the
+service restart requested by IR-20261116-132756-B6F2C2, via the V3-INFRA-003/005 procedure), the evaluator cannot run,
+as intended. The sealed code closure now includes every `infrastructure.*` module loaded. Not a clinical claim.

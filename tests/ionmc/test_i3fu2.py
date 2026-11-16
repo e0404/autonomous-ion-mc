@@ -50,10 +50,10 @@ SYN_HISTORIES = 1000
 ROW_NOISE = 0.004  # relative spread of the synthetic exit energies
 TABLE_FACTOR = 1.05  # synthetic ICRU73_NEW = ionmc model x this factor (s ~ +5 %)
 KEY_SEED = bytes(range(32))  # synthetic reference-runner key
-VM_SEED = bytes(range(1, 33))  # synthetic validation-manager key (trusted in the temp repos)
-ROGUE_SEED = bytes(range(2, 34))  # a validation-manager key nobody trusts
-ATT_A_SIGNED = "2026-11-16T12:02:00+00:00"  # pin A attestation (before the smokes)
-ATT_B_SIGNED = "2026-11-16T12:35:00+00:00"  # pin B attestation (before the evidence runs)
+CW_SEED = bytes(range(3, 35))  # synthetic codex-worker key (trusted in the temp repos)
+ROGUE_SEED = bytes(range(2, 34))  # a codex-worker key nobody trusts
+RID_A = "REVIEW-" + "a" * 32  # pin A (evaluator review)
+RID_B = "REVIEW-" + "b" * 32  # pin B (markers review)
 PIN_A_STARTED = "2026-11-16T11:50:00+00:00"  # evaluator review (pin A)
 PIN_A_FINISHED = "2026-11-16T12:00:00+00:00"
 SMOKE_STARTED = "2026-11-16T12:05:00+00:00"  # smokes: after pin A, before pin B starts
@@ -1077,63 +1077,41 @@ def _archive(tmp: Path, factor: float) -> tuple[Path, str, dict[str, str]]:
     return path, hashlib.sha256(path.read_bytes()).hexdigest(), members
 
 
-def _review(review_id: str, head: str, started: str, finished: str, **over: Any) -> dict[str, Any]:
-    """A synthetic passed codex-worker review record (schema of ``ss-seal-review.json``)."""
-    doc = {
-        "base_sha": "0" * 40,
-        "experiment_id": "experiment-v3",
-        "finished_at": finished,
-        "head_sha": head,
-        "report": {"findings": [], "head_sha": head, "summary": "synthetic", "verdict": "pass"},
-        "report_sha256": hashlib.sha256(review_id.encode()).hexdigest(),
-        "review_id": review_id,
-        "started_at": started,
-        "status": "passed",
-        "task_id": "V3-008",
-        "tool": "codex exec",
-    }
-    doc.update(over)
-    return doc
-
-
-def _attestation(
-    review: dict[str, Any],
-    signed_at: str,
+def _review(
+    review_id: str,
+    head: str,
+    started: str,
+    finished: str,
     *,
-    seed: bytes = VM_SEED,
-    details: dict[str, Any] | None = None,
+    seed: bytes | None = CW_SEED,
+    verdict: str = "pass",
     **over: Any,
 ) -> dict[str, Any]:
-    """A validation-manager local-validation record carrying ``review`` under
-    ``details.review_record``, signed at ``signed_at`` (the layout of ``VAL-*.json``)."""
-    at = IO.attest_module()
-    rec: dict[str, Any] = {
+    """A codex-worker-signed review record in the layout the review service produces
+    (``review.build_record`` + ``attest.sign_record``, as ``inspect_codex_review`` returns it);
+    ``over`` changes the payload before signing; ``seed`` None: unsigned."""
+    report = {"head_sha": head, "verdict": verdict, "summary": "synthetic", "findings": []}
+    payload = {
         "schema_version": 1,
-        "validation_id": f"VAL-syn-{review['review_id']}",
+        "review_id": review_id,
         "task_id": "V3-008",
-        "recorded_at_utc": signed_at,
-        "suite": "I3-FU-1 step-2 review pin",
+        "head_sha": head,
+        "base_sha": "0" * 40,
         "status": "passed",
-        "summary": "synthetic pin record",
-        "details": {"review_record": review} if details is None else details,
-        "git_branch": "task/v3-008",
-        "git_sha": review["head_sha"],
-        "worktree": "/synthetic",
+        "started_at": started,
+        "finished_at": finished,
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "tool": "codex exec",
+        "experiment_id": ev.review_records_module().current_experiment_id(),
+        "report_sha256": hashlib.sha256(json.dumps(report).encode()).hexdigest(),
+        "report": report,
     }
-    rec.update(over)
-    key = at.keypair_from_seed(seed)
-    message = at.signed_message(rec, "validation-manager", signed_at, key.key_id)
-    rec["attestation"] = {
-        "schema": at.SCHEMA,
-        "alg": at.ALG,
-        "signer": "validation-manager",
-        "key_id": key.key_id,
-        "public_key": key.public_key.hex(),
-        "signed_at_utc": signed_at,
-        "payload_sha256": hashlib.sha256(at.canonical_payload(rec)).hexdigest(),
-        "signature": at.sign(message, key.seed).hex(),
-    }
-    return rec
+    payload.update(over)
+    if seed is None:
+        return payload
+    at = IO.attest_module()
+    return dict(at.sign_record(payload, at.keypair_from_seed(seed), "codex-worker"))
 
 
 def _note(eval_id: str, eval_sha: str, markers_id: str, markers_sha: str) -> str:
@@ -1154,7 +1132,8 @@ def _sealed_copy_list() -> list[str]:
     rels = set(ev.executable_closure()) | set(ev.SEALED_FILES)
     rels |= {
         p.relative_to(ROOT).as_posix()
-        for p in (ROOT / "src" / "ionmc").rglob("*.py")
+        for top in ("src/ionmc", "infrastructure")
+        for p in (ROOT / top).rglob("*.py")
         if "__pycache__" not in p.parts
     }
     return sorted(rels)
@@ -1177,12 +1156,12 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     gen.generate(bundles, histories=SYN_HISTORIES)
     (repo / ev.MANIFEST).write_text(gen.manifest_text(bundles))
     kp = IO.attest_module().keypair_from_seed(KEY_SEED)
-    vm = IO.attest_module().keypair_from_seed(VM_SEED)
+    cw = IO.attest_module().keypair_from_seed(CW_SEED)
     _write_json(
         repo / IO.DEFAULT_TRUST,
         {
             "reference-runner": [{"key_id": kp.key_id, "public_key": kp.public_key.hex()}],
-            "validation-manager": [{"key_id": vm.key_id, "public_key": vm.public_key.hex()}],
+            "codex-worker": [{"key_id": cw.key_id, "public_key": cw.public_key.hex()}],
         },
     )
     seal = repo / ev.ENV_SEAL
@@ -1191,18 +1170,15 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / ev.PLAN_PATH).parent.mkdir(parents=True, exist_ok=True)
     (repo / ev.PLAN_PATH).write_text("# synthetic acceptance plan\n")
     reviewed = _commit(repo, "sealed evaluator and bundles")
-    pin_a = _review("REVIEW-syn-a", reviewed, PIN_A_STARTED, PIN_A_FINISHED)
+    pin_a = _review(RID_A, reviewed, PIN_A_STARTED, PIN_A_FINISHED)
     _write_json(repo / ev.REVIEW_PIN, pin_a)
-    _write_json(repo / ev.REVIEW_ATTESTATION, _attestation(pin_a, ATT_A_SIGNED))
     pin_a_sha = _commit(repo, "pin A and its signed validation record")
     _write_json(repo / ev.MARKERS, TEST_MARKERS)
     markers_sha = _commit(repo, "markers from the smoke logs")
-    pin_b = _review("REVIEW-syn-b", markers_sha, PIN_B_STARTED, PIN_B_FINISHED)
+    pin_b = _review(RID_B, markers_sha, PIN_B_STARTED, PIN_B_FINISHED)
     _write_json(repo / ev.MARKERS_PIN, pin_b)
-    _write_json(repo / ev.MARKERS_ATTESTATION, _attestation(pin_b, ATT_B_SIGNED))
     (repo / ev.PLAN_PATH).write_text(
-        "# synthetic acceptance plan\n\n"
-        + _note("REVIEW-syn-a", reviewed, "REVIEW-syn-b", markers_sha)
+        "# synthetic acceptance plan\n\n" + _note(RID_A, reviewed, RID_B, markers_sha)
     )
     code_sha = _commit(repo, "pin B and plan note")
     archive, sha, members = _archive(root, TABLE_FACTOR)
@@ -1647,7 +1623,7 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
     assert set(prov["smokes"]) == set(ev.ALL_SMOKES)
     assert {v["code_sha"] for v in prov["smokes"].values()} == {base["pin_a_sha"]}
     pins = prov["review_pins"]
-    assert pins["evaluator"]["review_id"] == "REVIEW-syn-a"
+    assert pins["evaluator"]["review_id"] == RID_A
     assert pins["evaluator"]["head_sha"] == base["reviewed"]
     assert pins["markers"]["head_sha"] == base["markers_sha"]
     assert pins["markers"]["finished_at"] == PIN_B_FINISHED
@@ -1674,9 +1650,11 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
         env["runtime_after"]["stdlib_modules_verified"] >= env["runtime"]["stdlib_modules_verified"]
     )
     assert "validation/scripts/stopping/sealed_launch.py" in sealed
-    for name, signed in (("evaluator", ATT_A_SIGNED), ("markers", ATT_B_SIGNED)):
+    cw_key = IO.attest_module().keypair_from_seed(CW_SEED).key_id
+    for name in ("evaluator", "markers"):
         att = pins[name]["attestation"]
-        assert att["signed_at_utc"] == signed and att["validation_id"].startswith("VAL-syn-")
+        assert att["signer"] == "codex-worker" and att["key_id"] == cw_key
+        assert len(att["signed_at_utc"]) > 10
     assert doc["amendment"] == f"I3-FU-1 step 2 (revision {ev.AMENDMENT_REVISION})"
     assert f"I3-FU-1 step 2 (revision {ev.AMENDMENT_REVISION})" in (ev.__doc__ or "")
     assert prov["plan_revision_records"] == 0  # the synthetic plan holds no revision record
@@ -2154,17 +2132,11 @@ def test_environment_must_match_the_lock(
 
 
 def _repin(base: dict[str, Any], tmp: Path, *, pin_a: Any = None, pin_b: Any = None,
-           note: str | None = None, att_a: Any = None,
-           att_b: Any = None) -> dict[str, Any]:  # fmt: skip
-    """A copy of the base repository whose pins / attestations / plan note are rewritten in ONE
-    new commit, which then serves as code_sha."""
+           note: str | None = None) -> dict[str, Any]:  # fmt: skip
+    """A copy of the base repository whose pins / plan note are rewritten in ONE new commit,
+    which then serves as code_sha."""
     w = _world(base, tmp)
-    for rel, doc in (
-        (ev.REVIEW_PIN, pin_a),
-        (ev.MARKERS_PIN, pin_b),
-        (ev.REVIEW_ATTESTATION, att_a),
-        (ev.MARKERS_ATTESTATION, att_b),
-    ):
+    for rel, doc in ((ev.REVIEW_PIN, pin_a), (ev.MARKERS_PIN, pin_b)):
         if doc is not None:
             _write_json(w["repo"] / rel, doc)
     if note is not None:
@@ -2173,44 +2145,66 @@ def _repin(base: dict[str, Any], tmp: Path, *, pin_a: Any = None, pin_b: Any = N
     return w
 
 
+def _tampered(doc: dict[str, Any]) -> dict[str, Any]:
+    return {**doc, "finished_at": "2026-11-16T10:00:00+00:00"}  # changed after signing
+
+
+@pytest.mark.parametrize("which", ["a", "b"])
 @pytest.mark.parametrize(
-    "which, over, match",
+    "kind, match",
     [
-        ("a", {"status": "failed"}, "status 'failed' is not 'passed'"),
-        ("b", {"status": "running"}, "status 'running' is not 'passed'"),
-        ("a", {"report": {"verdict": "changes_required"}}, "verdict 'changes_required'"),
-        ("b", {"report": {"verdict": "changes_required"}}, "verdict 'changes_required'"),
-        ("a", {"report": {"summary": "x"}}, "missing record field"),
-        ("a", {"report": None}, "missing record field"),
-        ("b", {"finished_at": None}, "missing record field"),
-        ("a", {"task_id": "V3-005"}, "task_id"),
-        ("b", {"finished_at": "yesterday"}, "ISO-8601"),
-        ("a", {"head_sha": "abc"}, "40-hex"),
-        ("a", {"report_sha256": "abc"}, "report_sha256 is not a 64-hex"),
-        ("b", {"report_sha256": None}, "missing record field"),
-        ("a", {"started_at": PIN_A_FINISHED}, "started_at is not before finished_at"),
-        ("b", {"started_at": "2026-11-16T13:00:00+00:00"}, "started_at is not before"),
+        ("untrusted", "codex-worker review record unverified"),
+        ("unsigned", "codex-worker review record unverified"),
+        ("tampered", "codex-worker review record invalid"),
+        ("changes_required", "status 'changes_required' is not 'passed'"),
+        ("verdict_mismatch", "codex-worker review record invalid: status 'passed' inconsistent"),
+        ("wrong_task", "signed identity mismatch: task_id"),
+        ("wrong_experiment", "signed identity mismatch: experiment_id"),
     ],
 )
-def test_review_record_must_be_a_passed_review(
-    base: dict[str, Any], tmp_path: Path, which: str, over: dict[str, Any], match: str
+def test_review_pin_must_be_a_verified_passed_codex_worker_record(
+    base: dict[str, Any], tmp_path: Path, which: str, kind: str, match: str
 ) -> None:
-    a = _review("REVIEW-syn-a", base["reviewed"], PIN_A_STARTED, PIN_A_FINISHED)
-    b = _review("REVIEW-syn-b", base["markers_sha"], PIN_B_STARTED, PIN_B_FINISHED)
-    if which == "a":
-        a.update(over)
-    else:
-        b.update(over)
-    w = _repin(base, tmp_path, pin_a=a if which == "a" else None, pin_b=b if which == "b" else None)
+    """Rev13: the pins are codex-worker-signed review records verified with
+    ``review_records.verify_review_record`` against the committed trust map; anything but
+    ``verified`` (untrusted key, unsigned, tampered, inconsistent, foreign identity) and any
+    non-passed review fails closed."""
+    rid, head, st, fin = (
+        (RID_A, base["reviewed"], PIN_A_STARTED, PIN_A_FINISHED)
+        if which == "a"
+        else (RID_B, base["markers_sha"], PIN_B_STARTED, PIN_B_FINISHED)
+    )
+    doc = {
+        "untrusted": lambda: _review(rid, head, st, fin, seed=ROGUE_SEED),
+        "unsigned": lambda: _review(rid, head, st, fin, seed=None),
+        "tampered": lambda: _tampered(_review(rid, head, st, fin)),
+        "changes_required": lambda: _review(
+            rid, head, st, fin, verdict="changes_required", status="changes_required"
+        ),
+        "verdict_mismatch": lambda: _review(rid, head, st, fin, verdict="changes_required"),
+        "wrong_task": lambda: _review(rid, head, st, fin, task_id="V3-005"),
+        "wrong_experiment": lambda: _review(rid, head, st, fin, experiment_id="experiment-v2"),
+    }[kind]()
+    w = _repin(base, tmp_path, pin_a=doc) if which == "a" else _repin(base, tmp_path, pin_b=doc)
     with pytest.raises(ev.RecordError, match=match):
         _ctx(base, w, code_sha=w["code_sha"])
 
 
+def test_review_pin_chronology_uses_the_signed_times(base: dict[str, Any], tmp_path: Path) -> None:
+    """Runs starting before a pin's signed finished_at are refused (the times are inside the
+    signed payload, so they cannot be moved without breaking the signature)."""
+    w = _world(base, tmp_path, started="2026-11-16T12:29:59+00:00")  # before pin B finished
+    with pytest.raises(ev.RecordError, match="not after both review pins"):
+        _check(base, w)
+    pin = json.loads((w["repo"] / ev.MARKERS_PIN).read_text())
+    assert pin["finished_at"] == PIN_B_FINISHED and "attestation" in pin
+
+
 def test_pins_must_be_named_by_the_plan_note(base: dict[str, Any], tmp_path: Path) -> None:
-    ok = ("REVIEW-syn-a", base["reviewed"], "REVIEW-syn-b", base["markers_sha"])
+    ok = (RID_A, base["reviewed"], RID_B, base["markers_sha"])
     for i, (bad, match) in enumerate(
         (
-            (("REVIEW-other", *ok[1:]), "not the evaluator review named"),
+            (("REVIEW-" + "c" * 32, *ok[1:]), "not the evaluator review named"),
             ((*ok[:3], base["reviewed"]), "not the markers review named"),
             ((ok[0], base["markers_sha"], *ok[2:]), "not the evaluator review named"),
         )
@@ -2227,7 +2221,7 @@ def test_pins_must_be_named_by_the_plan_note(base: dict[str, Any], tmp_path: Pat
     # the note at code_sha differs from HEAD's (rewritten after the runs)
     w = _world(base, tmp_path / "later")
     (w["repo"] / ev.PLAN_PATH).write_text(
-        "# synthetic acceptance plan\n\n" + _note("REVIEW-syn-a", ok[1], "REVIEW-syn-b", ok[1])
+        "# synthetic acceptance plan\n\n" + _note(RID_A, ok[1], RID_B, ok[1])
     )
     _commit(w["repo"], "plan note rewritten after the runs")
     with pytest.raises(ev.RecordError, match="plan note differs between code_sha"):
@@ -2335,88 +2329,6 @@ def test_missing_or_late_smokes_raise_in_the_evaluation(
 
 
 # --- review pins bound to signed validation records (Codex REVIEW-c4f3fdd1 finding 1) --------
-
-
-def _att_variant(base: dict[str, Any], which: str, kind: str) -> dict[str, Any]:
-    pin = base["pin_a"] if which == "a" else base["pin_b"]
-    signed = ATT_A_SIGNED if which == "a" else ATT_B_SIGNED
-    if kind == "altered":  # the review inside the details changed after signing
-        doc = _attestation(pin, signed)
-        doc["details"]["review_record"] = {**pin, "summary": "forged"}
-        return doc
-    if kind == "untrusted":
-        return _attestation(pin, signed, seed=ROGUE_SEED)
-    if kind == "git_sha":
-        return _attestation(pin, signed, git_sha="f" * 40)
-    if kind == "status":
-        return _attestation(pin, signed, status="failed")
-    if kind == "task":
-        return _attestation(pin, signed, task_id="V3-005")
-    if kind == "other_review":  # validly signed, but for a different review record
-        return _attestation(pin, signed, details={"review_record": {**pin, "summary": "other"}})
-    if kind == "early":  # signed before the review finished
-        return _attestation(pin, "2026-11-16T11:00:00+00:00")
-    raise ValueError(kind)
-
-
-@pytest.mark.parametrize("which", ["a", "b"])
-@pytest.mark.parametrize(
-    "kind, match",
-    [
-        ("altered", "attestation invalid: payload hash mismatch"),
-        ("untrusted", "attestation unverified"),
-        ("git_sha", "git_sha is not the pin's head_sha"),
-        ("status", "status 'failed' is not passed"),
-        ("task", "task_id 'V3-005'"),
-        ("other_review", "does not carry the committed review pin"),
-        ("early", "not after the review's finished_at"),
-    ],
-)
-def test_pin_attestation_tampering_raises(
-    base: dict[str, Any], tmp_path: Path, which: str, kind: str, match: str
-) -> None:
-    doc = _att_variant(base, which, kind)
-    w = _repin(base, tmp_path, att_a=doc) if which == "a" else _repin(base, tmp_path, att_b=doc)
-    with pytest.raises(ev.RecordError, match=match):
-        _ctx(base, w, code_sha=w["code_sha"])
-
-
-def test_pin_attestation_layouts_and_missing(base: dict[str, Any], tmp_path: Path) -> None:
-    """The listed layout (``{"validation": record}`` with the service's derived fields) is
-    accepted; a missing attestation file is a RecordError."""
-    rec = _attestation(base["pin_b"], ATT_B_SIGNED)
-    wrapped = {"validation": {**rec, "attestation_status": "verified", "attestation_reason": "ok"}}
-    w = _repin(base, tmp_path / "wrapped", att_b=wrapped)
-    ctx = _ctx(base, w, code_sha=w["code_sha"])
-    assert ctx.pins["markers"]["attestation"]["signed_at_utc"] == ATT_B_SIGNED
-    w = _world(base, tmp_path / "missing")
-    (w["repo"] / ev.MARKERS_ATTESTATION).unlink()
-    w["code_sha"] = _commit(w["repo"], "attestation removed")
-    with pytest.raises(ev.RecordError, match="not committed"):
-        _ctx(base, w, code_sha=w["code_sha"])
-    w = _world(base, tmp_path / "moved")  # pin A's record rewritten after the markers review
-    _write_json(
-        w["repo"] / ev.REVIEW_ATTESTATION, _attestation(base["pin_a"], ATT_A_SIGNED, summary="x")
-    )
-    w["code_sha"] = _commit(w["repo"], "pin A record re-signed later")
-    with pytest.raises(ev.RecordError, match="differs between the markers review"):
-        _ctx(base, w, code_sha=w["code_sha"])
-
-
-def test_runs_must_start_after_the_pin_attestations(base: dict[str, Any], tmp_path: Path) -> None:
-    """Signed after the runs: smokes must start after pin A's signed_at_utc, evidence runs after
-    pin B's (the pins' signed times are set later than the synthetic runs)."""
-    w = _world(base, tmp_path)
-    ctx = _ctx(base, w)
-    ctx.pins["evaluator"]["signed"] = IO._parse_time("2026-11-16T12:07:00+00:00", "t")
-    smoke = ev.STEP_SMOKES[0]
-    with pytest.raises(ev.RecordError, match="not after the evaluator review attestation"):
-        ev.check_smoke(ctx, smoke, ctx.smoke_index[smoke])
-    ctx = _ctx(base, w)
-    ctx.pins["markers"]["signed"] = IO._parse_time("2026-11-16T13:30:00+00:00", "t")
-    with pytest.raises(ev.RecordError, match="not after the markers review attestation"):
-        ev.check_run(ctx, w["bundle"], w["run_id"])
-    assert ev.check_smoke(ctx, smoke, ctx.smoke_index[smoke])["ok"]  # smokes depend on pin A
 
 
 def test_environment_seal_mismatch_raises(
