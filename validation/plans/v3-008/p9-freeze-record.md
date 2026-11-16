@@ -1519,9 +1519,9 @@ placeholder scorer output was deleted unread.
 | File | sha256 |
 |---|---|
 | `validation/scripts/stopping/i3_band_diagnostic.py` | `137c8414a4e0dcefaac883c16758efb18e3170cce97881267fc2e310c9ebd435` |
-| `tests/ionmc/test_i3_band_diagnostic.py` | `0a9740cd493d0a1034ca6f9336aa892eed156934bd4ad551cc197e3a822e63d8` |
+| `tests/ionmc/test_i3_band_diagnostic.py` | `8501dd97dc547313a1c17c44651e2e5213e2e14dc1567b80b1fa257a24a21607` |
 | `validation/scripts/stopping/gen_i3fu2_bundles.py` | `46200570d35f40143902c1dffc7245c39700459c453b0b3a21ae75f87251b17b` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `68a8a31d43fd4f35e43e67842c28083b1167d08cd5a00e1ee41d64c8e70aa958` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `21620118705fdd11c8425d03d1154926563e9a9aee4f627a8f39fb1953b3cdfc` |
 | `tests/ionmc/test_i3fu2.py` | `4ffa01fa41d63baa187e1abcb5fbd931d6e258cb7b31c9cc0de7a8e9b4922adc` |
 | `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `cb4664944d7f6f25a3b3acd059cdd93834d3b9e92a99f4cee6d579f20cdfd971` |
 
@@ -1556,7 +1556,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/sealed_launch.py` | `4008eddfe5021c9546c418393237b082deab22793b7fbdb6b76b484ad40b6063` |
+| `validation/scripts/stopping/sealed_launch.py` | `dd48e7a9bbaa786578e37eea245d26a46c03bce699f7ab5bd2d9b24c051a776e` |
 | `reference_requests/interventions/IR-20261116-123921-312B59/ADDENDUM-1.md` | `1aff8b47aaf9870862df3dfbe5fabc807a6e032fb4946028a4c112905110864c` |
 
 
@@ -1566,9 +1566,11 @@ placeholder scorer output was deleted unread.
 
 **Dated note (2026-11-16, orchestrator) — revision 11 of amendment I3-FU-1 (codex-worker-signed review pins): evaluator and test revised; rows above carry the revision-11 hashes; bundles and manifest unchanged.**
 
-**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/stopping/i3_band_diagnostic.py` 001d290a… → 137c8414…; `tests/ionmc/test_i3_band_diagnostic.py` cf1077cd… → 0a9740cd…; `validation/scripts/stopping/i3fu2_evaluate.py` a26aa9ef… → a324da23…; `tests/ionmc/test_i3fu2.py` 71f1662b… → 94a5d678…; `validation/scripts/stopping/env_seal.py` 6fcc4115… → 06ac9a82…; `validation/scripts/stopping/sealed_launch.py` 4c3ed40b… → 4008eddf…. All other entries unchanged (recomputed).
+**Dated note (2026-11-16, orchestrator) — revision 12 of amendment I3-FU-1 (launcher trusted bootstrap): launcher, step-1 test and evaluator revision constant revised; rows above carry the revision-12 hashes; bundles and manifest unchanged.**
 
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/stopping/i3fu2_evaluate.py` a324da23… → 68a8a31d…; `tests/ionmc/test_i3fu2.py` 94a5d678… → 4ffa01fa…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_i3_band_diagnostic.py` 0a9740cd… → 8501dd97…; `validation/scripts/stopping/i3fu2_evaluate.py` 68a8a31d… → 21620118…; `validation/scripts/stopping/sealed_launch.py` 4008eddf… → dd48e7a9…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

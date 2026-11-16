@@ -1117,7 +1117,9 @@ def _wrapper(tmp_path: Path, body: str) -> Path:
 
 
 def test_sealed_launcher_refuses_a_foreign_import_hook(tmp_path: Path) -> None:
-    """A wrapper installs a foreign meta_path finder before the launcher's checks run."""
+    """A wrapper installs a foreign meta_path finder and runs the launcher in-process: refused
+    (the launcher is not __main__ / has a caller frame); the machinery check itself is unit-tested
+    in test_machinery_check_by_identity."""
     body = (
         "class Hook:\n"
         "    @staticmethod\n"
@@ -1126,15 +1128,105 @@ def test_sealed_launcher_refuses_a_foreign_import_hook(tmp_path: Path) -> None:
         "sys.meta_path.insert(0, Hook())\n"
     )
     proc = _launch_py(tmp_path, _wrapper(tmp_path, body))
-    assert proc.returncode == 2 and "sys.meta_path is not the standard finder list" in proc.stderr
+    assert proc.returncode == 2 and "module frame has a caller" in proc.stderr
+
+
+def test_machinery_check_by_identity() -> None:
+    import importlib.machinery
+    import zipimport
+
+    launcher = importlib.util.spec_from_file_location("_t_launch", LAUNCHER)
+    assert launcher is not None and launcher.loader is not None
+    lmod = importlib.util.module_from_spec(launcher)
+    launcher.loader.exec_module(lmod)
+    std = [
+        importlib.machinery.BuiltinImporter,
+        importlib.machinery.FrozenImporter,
+        importlib.machinery.PathFinder,
+    ]
+    hooks = [zipimport.zipimporter, sys.path_hooks[-1]]
+
+    class Hook:
+        pass
+
+    assert not [p for p in lmod.machinery_problems(std, hooks) if "meta_path" in p]
+    assert any("meta_path" in p for p in lmod.machinery_problems([Hook(), *std], hooks))
+    assert any("path_hooks" in p for p in lmod.machinery_problems(std, [zipimport.zipimporter]))
 
 
 def test_sealed_launcher_refuses_a_pre_imported_numpy(tmp_path: Path) -> None:
     """A wrapper imports (and could monkeypatch) numpy, then invokes the launcher in-process."""
     body = f"sys.path.append({str(SITE)!r})\nimport numpy\nnumpy.sum = None\n"
     proc = _launch_py(tmp_path, _wrapper(tmp_path, body))
-    assert proc.returncode == 2 and "modules already imported before the launch" in proc.stderr
+    assert proc.returncode == 2 and "non-stdlib modules loaded before the launcher" in proc.stderr
     assert "'numpy'" in proc.stderr and "usage" not in proc.stdout
+
+
+@pytest.mark.parametrize(
+    "name, patch",
+    [
+        (
+            "compile",
+            "import builtins\n_c = builtins.compile\n"
+            "builtins.compile = lambda *a, **k: _c(*a, **k)\n",
+        ),
+        (
+            "open",
+            "import builtins\n_o = builtins.open\nbuiltins.open = lambda *a, **k: _o(*a, **k)\n",
+        ),
+        ("exec", "import builtins\nbuiltins.exec = builtins.eval\n"),
+    ],
+)
+def test_sealed_launcher_refuses_patched_builtins(tmp_path: Path, name: str, patch: str) -> None:
+    """A wrapper monkeypatches a builtin and runs the launcher in-process: refused, with the
+    builtin named (and the in-process launch detected)."""
+    proc = _launch_py(tmp_path, _wrapper(tmp_path, patch))
+    assert proc.returncode == 2 and "usage" not in proc.stdout
+    assert f"builtins.{name} is not the genuine built-in function" in proc.stderr
+    assert "module frame has a caller" in proc.stderr
+
+
+def _target_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """A git repository holding a copy of the launcher and a tiny committed target at the
+    allowed path of the step-1 script."""
+    repo = tmp_path / "repo"
+    scripts = repo / "validation" / "scripts" / "stopping"
+    scripts.mkdir(parents=True)
+    launcher = scripts / "sealed_launch.py"
+    launcher.write_bytes(LAUNCHER.read_bytes())
+    target = scripts / "i3_band_diagnostic.py"
+    target.write_text("import sys\nprint('ran', __name__, sys.argv[1:])\n")
+    _git(repo, "init", "-q", "-b", "main")
+    _commit(repo, "launcher and target")
+    return repo, launcher, target
+
+
+def test_launcher_runs_a_committed_target_and_refuses_a_modified_one(tmp_path: Path) -> None:
+    """(3) the target is authenticated against the committed bytes BEFORE execution."""
+    repo, launcher, target = _target_repo(tmp_path)
+    proc = _launch_py(tmp_path, launcher, str(target), "x")
+    assert proc.returncode == 0 and "ran __main__ ['x']" in proc.stdout, proc.stderr
+    target.write_text("print('tampered')\n")  # modified on disk, not committed
+    proc = _launch_py(tmp_path, launcher, str(target))
+    assert proc.returncode == 2 and "has an uncommitted change" in proc.stderr
+    assert "tampered" not in proc.stdout
+    _git(repo, "add", str(target))  # staged but not committed
+    proc = _launch_py(tmp_path, launcher, str(target))
+    assert proc.returncode == 2 and "has an uncommitted change" in proc.stderr
+    _git(repo, "reset", "-q", "--", str(target))
+    # hide the change from git status: the byte comparison with HEAD still refuses
+    _git(repo, "update-index", "--assume-unchanged", str(target))
+    proc = _launch_py(tmp_path, launcher, str(target))
+    assert proc.returncode == 2 and "differs from the committed bytes at HEAD" in proc.stderr
+    assert "tampered" not in proc.stdout
+
+
+def test_launcher_refuses_an_untracked_target(tmp_path: Path) -> None:
+    repo, launcher, _target = _target_repo(tmp_path)
+    other = repo / "validation" / "scripts" / "stopping" / "i3fu2_evaluate.py"
+    other.write_text("print('ran')\n")  # allowed path, never committed
+    proc = _launch_py(tmp_path, launcher, str(other))
+    assert proc.returncode == 2 and "git show" in proc.stderr and "ran" not in proc.stdout
 
 
 def test_stdlib_module_missing_or_altered_in_the_seal(mod) -> None:  # type: ignore[no-untyped-def]

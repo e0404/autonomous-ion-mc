@@ -2264,3 +2264,15 @@ from the signed `started_at`/`finished_at`. The validation-manager-embedded atte
 (superseded by the service signature). Until the codex-worker public key is published in the trust map (after the
 service restart requested by IR-20261116-132756-B6F2C2, via the V3-INFRA-003/005 procedure), the evaluator cannot run,
 as intended. The sealed code closure now includes every `infrastructure.*` module loaded. Not a clinical claim.
+
+**Revision 12 of amendment I3-FU-1 (2026-11-16, orchestrator; Codex REVIEW-7dd89694 on 681cb60f — the review-provenance
+finding is closed by the service-signed pins; one launcher finding remained; before any run).** Trusted bootstrap of the
+sealed launcher: it refuses to run unless it is the interpreter's own entry point (its module is `__main__`, `sys.argv[0]`
+and the `__main__` file resolve to the launcher, its module frame has no caller, and no module outside the standard
+library is loaded), unless `compile`, `exec`, `open` and `__import__` are the genuine built-in functions captured by its
+first statements and the `builtins`/`sys`/`io` modules are the real ones, and unless the target is byte-identical to its
+committed version at HEAD (checked with `git show`, a clean `git status` for the target, and the captured `open`) BEFORE it
+is compiled and executed with the captured builtins. Trust model (docstring): the trusted base is the interpreter binary
+(hashed in the seal and verified after start), the git binary used for the bootstrap comparison, the kernel and libc;
+the stdlib modules imported before the launcher's checks are recorded and verified afterwards against the seal. The
+evaluator's revision constant follows the plan (12); no evaluator logic changed in this revision. Not a clinical claim.

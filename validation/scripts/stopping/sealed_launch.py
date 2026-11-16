@@ -42,7 +42,29 @@ imported after start-up). The launcher
     target's file name) as ``__main__`` in a fresh module (``__file__`` = the target path), so
     the hashed and the executed bytes are the same.
 
+(0) before anything else (Codex REVIEW-7dd89694): the launcher must BE the interpreter's
+    ``__main__`` (its ``__file__`` and ``sys.argv[0]`` are this file, ``__name__`` is
+    ``__main__``), its module frame has no caller frame (it was not run in-process by a wrapper),
+    and every loaded module with a ``__file__`` lies in the stdlib directory (built-in and frozen
+    modules have none), so no wrapper can have run Python code in this process before it;
+    ``builtins.compile`` / ``exec`` / ``__import__`` / ``open`` are the genuine built-in functions
+    (captured as the very first statements and checked by type, owner module and name;
+    ``io.open is builtins.open``; ``sys.modules['builtins']`` / ``['sys']`` are the genuine
+    modules);
+(g) authenticates the target BEFORE execution against the committed bytes: ``git rev-parse
+    HEAD``, ``git status --porcelain --untracked-files=no -- <target>`` empty and ``git show
+    HEAD:<target>`` equal to the bytes read from disk (list-form subprocess, no shell); records
+    ``head_sha`` and ``target_committed``; compiles and executes exactly those bytes with the
+    captured, verified ``compile`` / ``exec``.
+
 Any failed check: a message on stderr and exit status 2; the target is not run.
+
+Trust model: the trusted base is the interpreter binary (hashed in the environment seal and
+verified by the diagnostics after start), the git binary used for the bootstrap comparison,
+the operating-system kernel and libc. Everything else is either checked before the target runs
+(the flags, the empty bytecode prefix, the import machinery, the builtins, the absence of any
+earlier Python code, the target's committed bytes) or recorded and verified afterwards against
+the seal (the stdlib modules imported before the launcher's checks).
 
 Binding, honestly stated: the interpreter start-up and the stdlib modules imported before this
 launcher's own checks (including those it imports itself) are verified only after the fact:
@@ -54,16 +76,29 @@ explicit ``sys.path`` and the sealed sources checked by the diagnostics.
 
 from __future__ import annotations
 
-import builtins
-import hashlib
-import importlib.machinery
-import os
-import sys
-import sysconfig
-import types
-import zipimport
-from pathlib import Path
-from typing import Any
+# First statements (Codex REVIEW-7dd89694): capture the builtins used to read, compile and run the
+# target and whether this module's frame has a caller, before anything else can run here.
+import builtins as _builtins_at_start
+
+_COMPILE = _builtins_at_start.compile
+_EXEC = _builtins_at_start.exec
+_OPEN = _builtins_at_start.open
+_IMPORT = _builtins_at_start.__import__
+_HAS_CALLER_FRAME = _IMPORT("sys")._getframe(0).f_back is not None
+
+import builtins  # noqa: E402
+import hashlib  # noqa: E402
+import importlib.machinery  # noqa: E402
+import io  # noqa: E402
+import os  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+import sysconfig  # noqa: E402
+import types  # noqa: E402
+import zipimport  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any  # noqa: E402
 
 RECORD_NAME = "__ionmc_sealed_launch__"
 ORIGIN = "validation/scripts/stopping/sealed_launch.py"
@@ -166,6 +201,73 @@ def loaded_stdlib_hashes() -> dict[str, str]:
     return dict(sorted(out.items()))
 
 
+def bootstrap_problems() -> list[str]:
+    """(0) No wrapper ran Python code in this process before the launcher, and the builtins
+    used to read, compile and run the target are genuine (Codex REVIEW-7dd89694)."""
+    out = []
+    own = Path(__file__).resolve()
+    main = sys.modules.get("__main__")
+    main_file = getattr(main, "__file__", None)
+    if __name__ != "__main__" or main_file is None or Path(main_file).resolve() != own:
+        out.append("the launcher is not the interpreter's __main__ module")
+    if not sys.argv or Path(sys.argv[0]).resolve() != own:
+        out.append("sys.argv[0] is not the launcher")
+    if _HAS_CALLER_FRAME:
+        out.append("the launcher's module frame has a caller (run in-process by a wrapper)")
+    base = stdlib_dir()
+    foreign = sorted(
+        name
+        for name, mod in list(sys.modules.items())
+        if name != "__main__"
+        and getattr(mod, "__file__", None)
+        and not Path(str(mod.__file__)).resolve().is_relative_to(base)
+    )
+    if foreign:
+        out.append(f"non-stdlib modules loaded before the launcher: {foreign}")
+    want = {
+        "compile": (_COMPILE, builtins),
+        "exec": (_EXEC, builtins),
+        "__import__": (_IMPORT, builtins),
+        "open": (_OPEN, sys.modules.get("_io")),
+    }
+    for name, (func, owner) in want.items():
+        genuine = (
+            type(func) is types.BuiltinFunctionType
+            and getattr(func, "__self__", None) is owner
+            and getattr(func, "__name__", None) == name
+            and getattr(builtins, name) is func
+        )
+        if not genuine:
+            out.append(f"builtins.{name} is not the genuine built-in function")
+    if sys.modules.get("builtins") is not builtins or sys.modules.get("sys") is not sys:
+        out.append("sys.modules['builtins'] / ['sys'] are not the genuine modules")
+    if io.open is not _OPEN:
+        out.append("io.open is not builtins.open")
+    return out
+
+
+def committed_target(rel: str) -> tuple[bytes, str]:
+    """(3): the target's bytes committed at HEAD of the repository and HEAD itself, via the git
+    binary (list-form subprocess, no shell); the target must have no uncommitted change.
+    RuntimeError otherwise."""
+    git = shutil.which("git")
+    if git is None:
+        raise RuntimeError("git not found (needed to authenticate the target)")
+
+    def run(*args: str) -> bytes:
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [git, "-C", str(REPO), *args], capture_output=True, check=False
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"git {' '.join(args)} failed: {proc.stderr.decode().strip()}")
+        return proc.stdout
+
+    head = run("rev-parse", "HEAD").decode().strip()
+    if run("status", "--porcelain", "--untracked-files=no", "--", rel).strip():
+        raise RuntimeError(f"the target {rel} has an uncommitted change")
+    return run("show", f"HEAD:{rel}"), head
+
+
 def preimport_problems(modules: dict[str, Any] | None = None) -> list[str]:
     """(e): no numpy / ionmc / repository-script module may be loaded before the target."""
     mods = sys.modules if modules is None else modules
@@ -195,7 +297,7 @@ def target_rel(target: Path) -> str:
     return rel
 
 
-def launch_record(target: Path, blob: bytes) -> dict[str, Any]:
+def launch_record(target: Path, blob: bytes, head_sha: str) -> dict[str, Any]:
     """Run checks (a)-(e); raise RuntimeError on any problem; return the record."""
     problems = flag_problems() + machinery_problems() + preimport_problems()
     if problems:
@@ -214,6 +316,8 @@ def launch_record(target: Path, blob: bytes) -> dict[str, Any]:
         "target": target_rel(target),
         "target_path": str(target.resolve()),
         "target_sha256": hashlib.sha256(blob).hexdigest(),
+        "head_sha": head_sha,
+        "target_committed": True,
         "sys_modules_at_launch": sorted(sys.modules),
         "python_executable": str(Path(sys.executable).resolve()),
         "flags": {
@@ -239,10 +343,17 @@ def main(argv: list[str]) -> int:
         return 2
     target = Path(argv[0]).resolve()
     try:
-        target_rel(target)
-        blob = target.read_bytes()  # hashed and executed bytes are the same (f)
-        record = launch_record(target, blob)
-        code = compile(blob, str(target), "exec", dont_inherit=True)
+        problems = bootstrap_problems() + flag_problems() + machinery_problems()
+        if problems:
+            raise RuntimeError("; ".join(problems))
+        rel = target_rel(target)
+        with _OPEN(target, "rb") as fh:  # the verified builtin open
+            blob = fh.read()  # hashed, authenticated and executed bytes are the same
+        committed, head_sha = committed_target(rel)
+        if blob != committed:
+            raise RuntimeError(f"the target {rel} differs from the committed bytes at HEAD")
+        record = launch_record(target, blob, head_sha)
+        code = _COMPILE(blob, str(target), "exec", dont_inherit=True)
     except (RuntimeError, OSError, SyntaxError) as exc:
         print(f"sealed_launch: refused: {exc}", file=sys.stderr)
         return 2
@@ -252,7 +363,7 @@ def main(argv: list[str]) -> int:
     module.__file__ = str(target)
     module.__builtins__ = builtins  # type: ignore[attr-defined]
     sys.modules["__main__"] = module
-    exec(code, module.__dict__)  # noqa: S102 - the hashed, allowed target
+    _EXEC(code, module.__dict__)  # the verified builtin exec; the authenticated target
     return 0
 
 
