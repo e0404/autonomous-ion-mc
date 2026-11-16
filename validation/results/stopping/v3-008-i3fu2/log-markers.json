@@ -1,0 +1,7 @@
+{
+  "fluct_on_marker": "^(?:G4WT\\d+ > )?Fluctuations of dE/dx are enabled\\s+1\\s*$\\n(?:G4WT\\d+ > )?Type of fluctuation model for leptons and hadrons\\s+\\S+\\s*$\\n(?!(?:G4WT\\d+ > )?Fluctuations of dE/dx are disabled in G4Regions:)",
+  "fluct_off_marker": "^(?:G4WT\\d+ > )?Fluctuations of dE/dx are disabled in G4Regions:\\s+DefaultRegionForTheWorld\\s*$",
+  "step_line_re": "^(?:G4WT\\d+ > )?\\s*(?P<step>\\d+)\\s+[-+0-9.eE]+\\s+[-+0-9.eE]+\\s+(?P<z>[-+0-9.eE]+)\\s+[-+0-9.eE]+\\s+[-+0-9.eE]+\\s+[-+0-9.eE]+\\s+[-+0-9.eE]+\\s+\\S+\\s+\\S+\\s*$",
+  "track_header_re": "^(?:G4WT\\d+ > )?\\* G4Track Information:\\s+Particle = \\S+,\\s+Track ID = (?P<track>\\d+),\\s+Parent ID = (?P<parent>\\d+)\\s*$",
+  "step_limiter_marker": "^(?:G4WT\\d+ > )?\\s*\\d+\\s+(?:[-+0-9.eE]+\\s+){7}Water\\s+StepLimiter\\s*$"
+}

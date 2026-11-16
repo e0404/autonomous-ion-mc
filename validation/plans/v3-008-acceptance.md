@@ -2332,3 +2332,38 @@ key_id b53b2800f81a4e64; verified against the committed trust map), committed ve
 `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json`. The step-1 run and the five step-2 smokes follow at the
 commit carrying this note (X in the amendment's order), after pin A's signed `finished_at`; the one-line "I3-FU-1 step-2
 review pins" note naming both pins is written at commit Z, after pin B. Not a clinical claim.
+
+### Dated results note — I3-FU-1 step 1 run once at 5999f789, and the five step-2 smokes (2026-11-16, orchestrator)
+
+**Step 1 (band and z-scan diagnostic; no gate; row I3 stays FAIL).** Executed once by the host-runner service at the pin-A
+commit 5999f789 through the sealed launcher (signed host-run record RUN-20261116T164519Z-ad778a16, verified against the
+published host-runner key, exit 0, output-manifest sha256 05c5191b…, argv = the direct invocation prescribed by revision 14;
+record committed as `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T164519Z-ad778a16.json`; result
+committed verbatim as `validation/results/stopping/v3-008-i3fu1/icru73_band_diagnostic.json`, sha256 e8d55ad7…; `--expect-i3`
+matched the committed row-I3 file; environment, launch and sealed-source checks passed in the script).
+- **Rule 1a verdict (computed by the script): WITHDRAWN.** Eight of the nine quoted quantities match exactly at 0.1 pp (C/O
+  band means −8.6/−12.2, −4.3/−7.5, −1.8/−3.9, −0.3/−0.8 %; C [50,1000] rounded mean 0.0); the oxygen [50,1000] rounded band
+  mean is −0.1 pp, outside the quoted max-type bound of 0.06 % as the rule reads it. By the pre-declared rule the hypothesis
+  as recorded is withdrawn in this plan, decision 0043 and the ledger; the committed result stands; no re-computation with
+  another convention is made. The band-wise deficit profile of C/O itself is what the committed diagnostic records.
+- **Rule 1b (z-scan over Z = 3–10, per band; interpretive):** [2,5): not attributed (best shape barkas_like ∝ z, r² 0.993,
+  RMS ratio 0.53 > 0.5); [5,10): not attributed (best bloch_like ∝ z², r² 0.986, ratio 0.66); [10,20): **attributed to
+  bloch_like (∝ z²)** (r² 0.995, ratio 0.36); [20,50): not attributed (best bloch_like, r² 0.978, ratio 0.61); the rounded d_z
+  have one common (negative) sign in every band. Z = 1, 2 are informative only (lineage OPEN): their band means lie within
+  ±0.8 pp of zero in every band. I3b (model-only): no option variant of the Bethe model moves the low bands by the size of
+  the deficit except switching the effective charge off (C [2,5) ratio 1.119 to the default) or the Bloch term off (1.069);
+  the LS variants change the low bands by ≤ 0.7 %. Reading: the deficit is not a single-term rescaling; the committed
+  model's low-energy terms are of the right order but not the right size. Not a grade.
+**Step-2 smokes (five, at 5999f789, after pin A's signed finished_at 16:37:28 UTC; signed reference-runner records and
+artifact listings committed under `validation/results/stopping/v3-008-i3fu2/topas-smokes/`):** 20600440
+REF-6264dc380b486ed2240f-e4e90893, 20600441 (fluctuations off) REF-798ba2e990172c7bc938-18f49de3, 20600443 (C 2.4 MeV/u
+steps) REF-97679af903cad9800b2f-bacda12c, 20600444 (C 50 MeV/u steps) REF-e10a8a4ec29899e00afc-638d757e, 20600445 (fine
+steps) REF-02585a61132fb2de1155-ac89fa51; all succeeded (2000 / 2000 / 50 / 50 / 50 primaries scored at the far face).
+**Marker file** `validation/results/stopping/v3-008-i3fu2/log-markers.json` (sha256 a9aaff40…), derived from these logs: the
+fluctuation markers identify the Geant4 `G4EmParameters` printout ("Fluctuations of dE/dx are enabled 1" not followed by
+the regional "disabled" line, resp. "disabled in G4Regions: DefaultRegionForTheWorld"), the step and track-header lines the
+`TrackingVerbosity = 1` step table, the step-limiter marker a `Water StepLimiter` step line. Cheap pre-check in the sandbox
+with the evaluator's own parser (the authoritative check is the evaluator's at Z): the markers discriminate on/off over all
+five smokes and match no native input; both step-count smokes give exactly one slab step per primary (50/50), each ending at
+the far face; the fine-step smoke gives 20 slab steps per primary. No evidence run has been made; nothing is graded. Not a
+clinical claim.

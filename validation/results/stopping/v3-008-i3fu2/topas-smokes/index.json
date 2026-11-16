@@ -1,0 +1,44 @@
+{
+  "runs": [
+    {
+      "bundle": "i3fu2-smoke-carbon-water-10mevu",
+      "run_id": "REF-6264dc380b486ed2240f-e4e90893",
+      "seed": 20600440,
+      "code_sha": "5999f7891f8e6c5027578fd141cc41ea7b723e9f",
+      "started_at": "2026-11-16T16:46:05.498863+00:00",
+      "finished_at": "2026-11-16T16:46:06.322048+00:00"
+    },
+    {
+      "bundle": "i3fu2-smoke-carbon-water-10mevu-fluct-off",
+      "run_id": "REF-798ba2e990172c7bc938-18f49de3",
+      "seed": 20600441,
+      "code_sha": "5999f7891f8e6c5027578fd141cc41ea7b723e9f",
+      "started_at": "2026-11-16T16:46:29.791081+00:00",
+      "finished_at": "2026-11-16T16:46:30.562833+00:00"
+    },
+    {
+      "bundle": "i3fu2-smoke-carbon-water-2p4mevu-steps",
+      "run_id": "REF-97679af903cad9800b2f-bacda12c",
+      "seed": 20600443,
+      "code_sha": "5999f7891f8e6c5027578fd141cc41ea7b723e9f",
+      "started_at": "2026-11-16T16:46:58.908593+00:00",
+      "finished_at": "2026-11-16T16:46:59.680621+00:00"
+    },
+    {
+      "bundle": "i3fu2-smoke-carbon-water-50mevu-steps",
+      "run_id": "REF-e10a8a4ec29899e00afc-638d757e",
+      "seed": 20600444,
+      "code_sha": "5999f7891f8e6c5027578fd141cc41ea7b723e9f",
+      "started_at": "2026-11-16T16:47:13.772213+00:00",
+      "finished_at": "2026-11-16T16:47:14.493945+00:00"
+    },
+    {
+      "bundle": "i3fu2-smoke-carbon-water-2p4mevu-finesteps",
+      "run_id": "REF-02585a61132fb2de1155-ac89fa51",
+      "seed": 20600445,
+      "code_sha": "5999f7891f8e6c5027578fd141cc41ea7b723e9f",
+      "started_at": "2026-11-16T16:47:46.054102+00:00",
+      "finished_at": "2026-11-16T16:47:46.829322+00:00"
+    }
+  ]
+}

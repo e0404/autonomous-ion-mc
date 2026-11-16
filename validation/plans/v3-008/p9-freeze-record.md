@@ -1603,6 +1603,26 @@ placeholder scorer output was deleted unread.
 |---|---|
 | `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` | `0c93bd1fd6006106fc8662cb379d1834336561358169b5aa2ebe46b2c2e8a5ce` |
 
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-1 result and its signed host-run record (run at 5999f789), the step-2 marker file and the five signed smoke records with their artifact listings, bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu1/icru73_band_diagnostic.json` | `e8d55ad7c904825ec5b74a7af4bb0a498d00ee0e2c12dfaadfbffb05ed1fe323` |
+| `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T164519Z-ad778a16.json` | `6c724cc13aec870093705b55af3bb461b1e833fbce2c3a97ff87f825bd6d68a6` |
+| `validation/results/stopping/v3-008-i3fu2/log-markers.json` | `a9aaff40736d2ebf07fc180d4cc513600b6f60b480c229c40d03ed16c8a8c3fc` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `4b3608688ee7a6afde0257b3b4904549f46f8662a20761e4892467b95c265984` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-02585a61132fb2de1155-ac89fa51/record.json` | `3a86638d15fbac37043cd88b1dff115e26c52e5c1a631b3b86067af9a07b0b36` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-02585a61132fb2de1155-ac89fa51/artifacts.json` | `d2e96941c78c7e910ded48f80f9323718d4cd73ba4e25dc3a71725b66518370e` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6264dc380b486ed2240f-e4e90893/record.json` | `1172a79924e4d178b6123415516f6155cf1663f1334d122ba93f999809266ee2` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6264dc380b486ed2240f-e4e90893/artifacts.json` | `638317d1831c4c6dd3434546d16a3311b5a3dcda7d9b6e309b54ea3a8df0c691` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-798ba2e990172c7bc938-18f49de3/record.json` | `f1c68844a39657cfc5e5c2aea20e1e8fdcfae67036276272856b12c5f5bb38fc` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-798ba2e990172c7bc938-18f49de3/artifacts.json` | `5d31bec108819571e48f191b3d381bd97aa60a2fb1d48ea36e1c785025e4c79b` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-97679af903cad9800b2f-bacda12c/record.json` | `a81b89b6f72a4e5e8ea3c8ee885ee75d1010bc74a3027a7bc811a50afcb47aa4` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-97679af903cad9800b2f-bacda12c/artifacts.json` | `4985fd1e70dfd3e96125d9fd44aa421fbfc7593c96616925468c3d96b4c56db0` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-e10a8a4ec29899e00afc-638d757e/record.json` | `62827279d944fc9ab721d95cf253fa95420cec4a46e20504a11a180b329d3c02` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-e10a8a4ec29899e00afc-638d757e/artifacts.json` | `d92d4badcc07dd3626ec62881a6edad3e1ef4e4ee4191bf46304b266496da8df` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
