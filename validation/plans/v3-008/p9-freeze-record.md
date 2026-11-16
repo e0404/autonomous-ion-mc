@@ -1556,7 +1556,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/sealed_launch.py` | `f7965215d1dee3638ed28ab8cd206b3ff0b325254ce6d22f5c61f49511ad5306` |
+| `validation/scripts/stopping/sealed_launch.py` | `b25e0d514a6871e809b82f09fe710e4f948eef0578760708da1eab5d3dc06eff` |
 | `reference_requests/interventions/IR-20261116-123921-312B59/ADDENDUM-1.md` | `1aff8b47aaf9870862df3dfbe5fabc807a6e032fb4946028a4c112905110864c` |
 
 
@@ -1572,7 +1572,7 @@ placeholder scorer output was deleted unread.
 
 **Dated note (2026-11-16, orchestrator) — revision 14 of amendment I3-FU-1 (host-runner reconciliation; host-written environment seal): launcher, environment helper, tests, evaluator revision constant and the environment seal revised; rows above carry the revision-14 hashes; bundles and manifest unchanged.**
 
-**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_i3_band_diagnostic.py` 8501dd97… → fa317f12…; `validation/scripts/stopping/i3fu2_evaluate.py` 21620118… → 053914b2…; `validation/scripts/stopping/env_seal.py` 06ac9a82… → 934ac22e…; `validation/scripts/stopping/sealed_launch.py` dd48e7a9… → 583c90bb…. All other entries unchanged (recomputed).
+**Dated note (2026-11-16, orchestrator) — docstring wording of the launcher (Codex REVIEW-c54d24ab minor finding on b012f3e5, which passed): rows above carry the current hash.**
 
 **Dated note (2026-11-16, orchestrator) — files added by revision 14 of amendment I3-FU-1: the three signed host-run records of the environment-seal run on the host (sha256 as committed):**
 
@@ -1584,6 +1584,8 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `tests/ionmc/test_i3_band_diagnostic.py` fa317f12… → de0ba74e…; `validation/scripts/stopping/i3fu2_evaluate.py` 053914b2… → b6422f2b…; `tests/ionmc/test_i3fu2.py` 4ffa01fa… → 7eaacdaf…; `validation/scripts/stopping/env_seal.py` 934ac22e… → c05501da…; `validation/results/stopping/v3-008-i3fu1/environment-seal.json` 2d173286… → 41663668…; `validation/scripts/stopping/sealed_launch.py` 583c90bb… → f7965215…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/stopping/sealed_launch.py` f7965215… → b25e0d51…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

@@ -10,7 +10,7 @@ path is refused (Codex REVIEW-e0d37216).
 
 ``-I`` (isolated: no PYTHON* environment variables, no user site, no script directory on the
 path), ``-S`` (no ``site``: no ``.pth`` files, no ``sitecustomize`` / ``usercustomize``), ``-B``
-(no bytecode written) and a fresh empty ``pycache_prefix`` (no bytecode read for any module
+(no bytecode written) and an absent-or-empty ``pycache_prefix`` (no bytecode read for any module
 imported after start-up). The launcher
 
 (a) checks ``sys.flags.isolated == 1``, ``sys.flags.no_site == 1``,
@@ -83,7 +83,7 @@ Binding, honestly stated: the interpreter start-up and the stdlib modules import
 launcher's own checks (including those it imports itself) are verified only after the fact:
 they are recorded here (``stdlib_modules_at_launch``) and checked against the environment seal
 by the diagnostics (record-and-detect). The target and everything it imports are bound before
-execution: the target by its hash, its imports through the fresh empty bytecode prefix, the
+execution: the target by its hash, its imports through the absent-or-empty bytecode prefix, the
 explicit ``sys.path`` and the sealed sources checked by the diagnostics.
 """
 
@@ -138,14 +138,14 @@ def _sha256(path: Path) -> str:
 
 
 def flag_problems() -> list[str]:
-    """(a): isolation flags and the fresh empty pycache_prefix."""
+    """(a): isolation flags and the absent-or-empty pycache_prefix."""
     out = []
     for name in ("isolated", "no_site", "dont_write_bytecode"):
         if getattr(sys.flags, name) != 1:
             out.append(f"sys.flags.{name} is not 1 (launch with python -I -S -B)")
     state = prefix_state()
     if state == "unset":
-        out.append("sys.pycache_prefix is not set (-X pycache_prefix=<fresh empty directory>)")
+        out.append("sys.pycache_prefix is not set (-X pycache_prefix=<absent or empty directory>)")
     elif state == "not-a-directory":
         out.append("the pycache_prefix path exists but is not a directory")
     elif state == "non-empty":
