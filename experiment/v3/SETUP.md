@@ -134,7 +134,9 @@ block so that a repository-authored copy can be told apart from a real record.
   (including `stdout_sha256`, `stderr_sha256` and `output_manifest_sha256`) and
   stores it as `record.json` (and `result.json`) in the run directory;
   `reference-runner` (V3-INFRA-004) signs each `REF-...` reference-run record
-  (see "Signed reference-run records" below).
+  (see "Signed reference-run records" below); `codex-worker` (V3-INFRA-006)
+  signs each finished `REVIEW-...` Codex review record (see "Signed Codex
+  review records" below).
 - **Block shape:** `{"schema": "ionmc-attestation-1", "alg": "ed25519", "signer",
   "key_id" (sha256(public key)[:16]), "public_key" (hex), "signed_at_utc",
   "payload_sha256", "signature" (hex)}`.
@@ -331,6 +333,67 @@ R2-TOPAS-4) without trusting the orchestrator's copy. Deriving the start from
   rotated by the same procedure (a pure branch replacing it with one new,
   evidenced key); a branch that removes or empties a signer the integration
   trust file lists fails the gate (`trust_problem`), for every signer.
+
+## Signed Codex review records (V3-INFRA-006)
+
+The codex-worker review service (`infrastructure/experiment_v3/review.py`,
+`start_codex_review` / `inspect_codex_review`) signs every finished review with
+the service-held `codex-worker` key, so that a review's outcome and its
+controlled timestamps (e.g. "reference run started after review X finished")
+can be verified without trusting the orchestrator's copy.
+
+- **Record (schema_version 1, `<state>/reviews/<REVIEW-id>/record.json`, next
+  to `report.json` and `job.json`):** `review_id`, `task_id`, `head_sha`,
+  `base_sha`, `status` (`passed` / `changes_required` / `failed`),
+  `started_at` (written by `start`), `finished_at` (written by the worker when
+  the review ends; both UTC from the service, never from the caller), `model`,
+  `provider`, `tool`, `experiment_id`; for a review with a structured report
+  also `report_sha256` (sha256 of `report.json` as written by Codex) and
+  `report` (the parsed report: head_sha, verdict, summary, findings); a failed
+  review carries `error` instead; plus `attestation` (`ionmc-attestation-1`,
+  signer `codex-worker`). It is exactly the dict `inspect_codex_review`
+  returned before, plus `schema_version` and `attestation`.
+- **inspect:** returns the signed record unchanged after verifying on read
+  that its signature is intact (signer `codex-worker`), that it equals the
+  record rebuilt from `job.json` and that `report.json` still has the recorded
+  hash; otherwise it raises (so `require_review`, and thus the merge, fails).
+  Trust in the key is the consumer's decision. A review finished before this
+  change (no `record.json`) is returned as before with `attestation: null`; if
+  signing fails the review outcome stands, `job.json` carries `record_error`
+  and the record is returned with `attestation: null`.
+- **Verifier:** `infrastructure/validation/review_records.py`:
+  `load_review_record(path)` and `verify_review_record(record, trusted=None,
+  *, expected_task_id=None, expected_head_sha=None, expected_base_sha=None,
+  report_path=None)` returning `(status, reason)`: `verified`, `unverified`
+  (no attestation or key not in the trust file) or `invalid` (bad signature,
+  wrong signer, schema_version != 1, malformed review_id/SHAs, blank
+  task/model/provider/tool/experiment_id, a signed `experiment_id` other
+  than the current experiment's (`paths.EXPERIMENT_ID`, or
+  `expected_experiment_id`), status not finished, `started_at` /
+  `finished_at` not timezone-aware or `started_at` not earlier than
+  `finished_at`, missing `report_sha256`, a report that fails the review-report
+  schema or whose verdict/findings contradict `status`, a failed review
+  without `error`, a signed identity differing from an expected value, or a
+  `report.json` whose sha256 differs). CLI: `python -m
+  infrastructure.validation.review_records <record.json> [--trust-file F]
+  [--task-id T] [--head-sha S] [--base-sha B] [--experiment-id E]` (checks the adjacent
+  `report.json` when present; exit 0 only when verified). Chronology gates must
+  accept only `verified`.
+- **Trust file / gate:** `codex-worker` is an optional signer (absent or `[]`
+  until published; its records are then `unverified`). The local-validation
+  gate keeps requiring only `validation-manager` and `host-runner`; when a pure
+  key-publication branch lists a `codex-worker` key (exactly one), the gate
+  also requires a verified, passed review record of that task and SHA
+  (`key_publication_evidence` gains a `codex-worker` entry).
+- **Operator steps:** (a) merge the V3-INFRA-006 change and restart the
+  codex-worker MCP service (the key is created on the first finished review).
+  (b) Discovery: one finished review reveals `attestation.key_id` /
+  `attestation.public_key` (unverified, not evidence); cross-check with
+  `python infrastructure/experiment_v3/attest.py --print-public-key
+  codex-worker` outside the agent sandbox and check key_id = sha256(public
+  key)[:16]. (c) Key-publication branch adding exactly that entry, validation
+  recorded at its SHA as for the other keys, Codex review of the same SHA (the
+  evidence), push, CI, merge; see `infrastructure/keys/README.md`.
 
 ## Recovering archived host-run records
 

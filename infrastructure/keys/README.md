@@ -11,7 +11,9 @@ evidenced by a verified successful reference run referenced from a passing
 validation record in `details.reference_runs`; see `experiment/v3/SETUP.md`,
 "Signed reference-run records"). A signer that the integration copy lists
 (any signer, optional ones included) may never be removed or emptied by a
-branch; it can only be rotated. After the servers are restarted, the operator (or the
+branch; it can only be rotated. `codex-worker` (V3-INFRA-006, signs
+`REVIEW-...` Codex review records) is optional in the same way; see "Publishing
+the codex-worker key" below. After the servers are restarted, the operator (or the
 orchestrator in a reviewed commit) adds each published public key
 (`python infrastructure/experiment_v3/attest.py --print-public-key <signer>`) as
 `{"key_id": ..., "public_key": ..., "added": "YYYY-MM-DD", "note": ...}`.
@@ -32,6 +34,31 @@ the gate (`trust_problem`) even when the integration copy already trusts a key.
 The CI test `test_committed_trust_file_is_empty_or_strictly_published` accepts
 both committed states (empty, or exactly one valid key per signer). See
 `experiment/v3/SETUP.md` (Signed attestations) for the exact rules.
+
+**Publishing the codex-worker key (V3-INFRA-006).** The codex-worker MCP
+service creates `<share root>/attestation/codex-worker.key` on first use, when
+the first review finishes after the operator restarted the service with the
+V3-INFRA-006 change, and signs every finished review as
+`<state>/reviews/<REVIEW-id>/record.json`. Until a `"codex-worker"` entry is
+published here (absent or `[]`), those records are "unverified (key not
+trusted)"; the local-validation gate does not require the signer and stays
+green. Publication procedure: (a) after the restart, let one review finish (a
+discovery review; its record is unverified and not evidence) and read the
+`attestation.key_id` and `attestation.public_key` of its signed record
+(`inspect_codex_review` returns the record with its attestation block); check
+key_id = sha256(public key)[:16] and cross-check with `python
+infrastructure/experiment_v3/attest.py --print-public-key codex-worker` run by
+the operator outside the agent sandbox. (b) Make a pure key-publication branch
+whose only change adds exactly that entry under `"codex-worker"` (`added`, and a
+`note` naming the discovery REVIEW record). (c) Record validation at that
+commit's SHA as for every key publication, and obtain a Codex review of the
+same SHA: the gate then requires, next to the evidence of the other published
+keys, a verified, passed review record of this task and SHA signed by the
+published key (`key_publication_evidence` gains a `codex-worker` entry). (d)
+Push, CI, merge. Reviews finished before the restart have no `record.json` and
+are returned with `attestation: null`. Verify a record with `python -m
+infrastructure.validation.review_records <record.json>` (exit 0 only when
+verified).
 
 ## Enforcement
 
