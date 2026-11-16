@@ -2,7 +2,8 @@
 
 Usage::
 
-    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -X pycache_prefix="$(mktemp -d)" \
+    .venv/bin/python -I -S -B -X pycache_prefix="$(mktemp -d)" \
+        validation/scripts/stopping/sealed_launch.py \
         validation/scripts/stopping/i3_band_diagnostic.py --archive PATH \
         --output-dir DIR --code-sha "$(git rev-parse HEAD)" \
         [--expect-i3 validation/results/stopping/v3-008-i3/icru73_comparison.json] [--repo DIR]
@@ -93,17 +94,23 @@ and before the output is written):
   ``sys.version`` and ``platform.platform()`` must equal the seal (recorded as
   ``provenance.environment.seal``). ``--write-environment-seal`` writes the seal of the running
   environment to ``--repo/--environment-seal`` and exits (run once by the orchestrator and
-  committed with the review pin). Launch control (Codex REVIEW-8081e0e7 finding 3): the script
-  must be started with ``python -B -X pycache_prefix=<fresh empty directory>``;
-  ``env_seal.capture_launch`` runs as the first statement after the stdlib imports (before
-  numpy or ionmc is imported) and ``main`` enforces it before any computation, so no bytecode
-  can have been read for any module imported after it. Runtime controls (Codex
-  REVIEW-183057ce finding 3), after the computation and just before writing (lazily imported
-  modules included): every loaded numpy module resolves under the verified distribution root
-  and is hashed in its RECORD; as a second line of defence only, no sealed or numpy module has
-  its ``__cached__`` bytecode file on disk (this cannot prove that none was executed; the
-  launch control can). Recorded as ``provenance.environment.runtime`` (with the launch
-  record).
+  committed with the review pin). Launch control (Codex REVIEW-8081e0e7 finding 3,
+  REVIEW-cf6fa397): the script must be started through the stdlib-only launcher, ``python -I
+  -S -B -X pycache_prefix=<fresh empty directory> validation/scripts/stopping/sealed_launch.py
+  validation/scripts/stopping/i3_band_diagnostic.py ...`` (also for
+  ``--write-environment-seal``); ``env_seal.capture_launch`` runs as the first statement after
+  the stdlib imports (before numpy or ionmc is imported) and ``main`` enforces it first
+  (``env_seal.check_launch``: the launcher record present, -I -S -B, a prefix that held no file,
+  the standard import machinery by identity, ``sys.path`` = the launcher's explicit list); the
+  launcher's recorded sha256 must equal its committed (sealed) bytes. Runtime controls, after
+  the computation and just before writing (lazily imported modules included): every loaded
+  stdlib module is in the environment seal with a matching hash, every loaded numpy module
+  resolves under the verified distribution root and is hashed in its RECORD; as a second line
+  of defence only, no sealed or numpy module has its ``__cached__`` bytecode file on disk.
+  Recorded as ``provenance.environment.runtime`` (with the launch record). What is sealed: the
+  interpreter binary, the stdlib modules loaded, the numpy distribution, the ionmc closure and
+  the scripts, the launcher; what remains outside (disclosed): the kernel, libc and the C
+  runtime the interpreter links against.
 * Sealed sources after the computation (the import closure is then complete, including the
   lazily loaded ``compare_icru73`` and anything ``BetheStoppingSource`` imports): every module
   in ``sys.modules`` of the ``ionmc`` package with a ``__file__`` (path relative to the root
@@ -923,6 +930,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     repo = Path(args.repo)
+    launch = ENV.check_launch(LAUNCH)  # before anything else (also for writing the seal)
     if args.write_environment_seal:
         target = repo / args.environment_seal
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -933,16 +941,17 @@ def main() -> int:
                if getattr(args, k) is None]  # fmt: skip
     if missing:
         parser.error(f"the following arguments are required: {', '.join(missing)}")
-    launch = ENV.check_launch(LAUNCH)  # before any computation
     verify_checkout(repo, args.code_sha)
     environment = check_environment(committed_bytes(repo, args.code_sha, "uv.lock"))
-    environment["seal"] = ENV.verify_environment(
-        committed_bytes(repo, args.code_sha, args.environment_seal)
-    )
+    seal_raw = committed_bytes(repo, args.code_sha, args.environment_seal)
+    environment["seal"] = ENV.verify_environment(seal_raw)
+    stdlib_seal = ENV.parse_seal(seal_raw)[ENV.STDLIB_KEY]
     i3_raw = committed_bytes(repo, args.code_sha, args.expect_i3)
     result = run(Path(args.archive), args.code_sha)
     # after the computation: the import closure is complete (nothing written before this passes)
-    sealed, from_repo = seal_sources(repo, args.code_sha, (args.environment_seal,))
+    sealed, from_repo = seal_sources(repo, args.code_sha, (args.environment_seal, ENV.LAUNCHER_REL))
+    if launch["launcher_record"].get("launcher_sha256") != sealed[ENV.LAUNCHER_REL]:
+        raise RuntimeError("the launcher that started this run is not the sealed sealed_launch.py")
     sealed_modules = {
         name: mod
         for name, mod in sys.modules.items()
@@ -953,6 +962,7 @@ def main() -> int:
     }
     environment["runtime"] = {
         "launch": launch,
+        **ENV.stdlib_modules_check(stdlib_seal),  # after the computation: lazy imports included
         **ENV.numpy_modules_check(),
         **ENV.bytecode_check({**sealed_modules, **ENV.numpy_modules()}),
     }

@@ -2208,3 +2208,34 @@ asks the operator to choose between (A) proceeding under the disclosed limitatio
 (B) building signed review records first (V3-INFRA-006; operator restart of the codex-worker service) and (C) stopping the
 follow-up. Until the answer: no step-1 run, no smoke, no evidence run; the commits of 2026-11-16 stay unpushed (the
 per-commit push gate requires a passed review); PR #84 stays open, not merged (row I3 FAIL). Not a clinical claim.
+
+**Dated note (2026-11-16, later, orchestrator; Codex REVIEW-cf6fa397 on 2703383b).** The review of the intervention commit
+retained the two trust-boundary findings and added a third: the intervention's option (A) asks the operator to weaken the
+pre-registered passed-review gate, which the protocol does not allow, and option (B) covers only the review signing, not
+the launch finding; the reviewer asks that both trust boundaries be resolved autonomously and that only the external
+restart/deployment action be requested from the operator. **Disposition (orchestrator):** accepted. Option (A) of
+IR-20261116-123921-312B59 is withdrawn by the orchestrator (addendum in the request directory); the autonomous route is
+taken: (1) task **V3-INFRA-006** — signed, timestamped codex-worker review records (signer "codex-worker", pattern of
+V3-INFRA-004) with a verifier helper and tests, on its own task branch; its key publication follows the V3-INFRA-003/005
+pattern after a service restart, which is the only operator action and will be requested narrowly when the merge is
+ready; (2) on this branch, revision 9 of the amendment: an isolated sealed launcher (`sealed_launch.py`, `python -I -S -B`
+with a fresh bytecode-cache prefix, standard import machinery verified by identity, explicit `sys.path`, every loaded
+stdlib module bound to the committed environment seal by hash) through which both diagnostics must be started; the
+evaluator's pin rule stays "passed review" and will consume the codex-worker-signed record once V3-INFRA-006 is deployed.
+No run, no push, PR #84 open and unmerged. Not a clinical claim.
+
+**Revision 9 of amendment I3-FU-1 (2026-11-16, orchestrator; Codex REVIEW-cf6fa397 finding 2 and the autonomous route of
+the dated note above; before any run).** Sealed isolated launcher: both diagnostics must be started as
+`python -I -S -B -X pycache_prefix=<fresh empty dir> validation/scripts/stopping/sealed_launch.py <script> …`; the
+stdlib-only launcher refuses to run the target unless the isolation, no-site and no-bytecode flags are set, the cache
+prefix holds no file, `sys.meta_path` consists exactly of the three standard importers and `sys.path_hooks` of the two
+standard hooks (compared by identity), and every path-importer-cache entry is a standard finder; it then sets `sys.path`
+explicitly to the repository `src`, the scripts directory and the virtual environment's site-packages (derived from the
+interpreter path, since `-S` ignores `pyvenv.cfg`) plus the stdlib entries, records its own sha256, the interpreter, the
+flags and the sha256 of every stdlib module loaded so far, and executes the target as `__main__`. The diagnostics
+enforce the launcher record (origin, flags, machinery check, `sys.path`) and require the recorded launcher hash to equal
+the committed `sealed_launch.py` (a sealed file). The committed environment seal (schema 2) now also binds
+`sys.prefix`/`sys.base_prefix`, a digest of the stdlib file listing and the sha256 of every stdlib `.py`/`.so` file
+(≈ 830); every stdlib module loaded by a diagnostic must be present with a matching hash, checked at start and again
+after the computation. What remains outside the seal: the kernel, libc and the C runtime of the interpreter (disclosed).
+The seal was regenerated through the launcher at this revision. Not a clinical claim.

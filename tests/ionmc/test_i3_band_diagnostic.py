@@ -568,7 +568,10 @@ def cli_repo(mod, model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dic
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
     sources = [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / "src/ionmc").rglob("*.py")]
-    for rel in [*sources, mod.SCRIPT_REL, mod.I3_SCRIPT_REL, mod.ENV_SCRIPT_REL, *mod.LOCK_FILES]:
+    for rel in [
+        *sources, mod.SCRIPT_REL, mod.I3_SCRIPT_REL, mod.ENV_SCRIPT_REL, mod.ENV.LAUNCHER_REL,
+        *mod.LOCK_FILES,
+    ]:  # fmt: skip
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         (repo / rel).write_bytes((REPO_ROOT / rel).read_bytes())
     seal = repo / mod.ENV.SEAL_REL
@@ -591,6 +594,29 @@ _ENVIRONMENT: dict[str, Any] = {}
 
 
 _REAL_BYTECODE_CHECK: list[Any] = []
+LAUNCHER = REPO_ROOT / "validation/scripts/stopping/sealed_launch.py"
+
+
+def _valid_launch(mod) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+    """A launch record as sealed_launch.py + env_seal.capture_launch produce it."""
+    path = ["/synthetic/src", "/synthetic/scripts", "/synthetic/site-packages"]
+    return {
+        "dont_write_bytecode_flag": 1,
+        "pycache_prefix": "/synthetic/empty-prefix",
+        "pycache_prefix_exists": True,
+        "pycache_prefix_files_at_start": 0,
+        "isolated_flag": 1,
+        "no_site_flag": 1,
+        "meta_path": ["BuiltinImporter", "FrozenImporter", "PathFinder"],
+        "machinery_problems": [],
+        "sys_path_at_capture": list(path),
+        "launcher_record": {
+            "origin": mod.ENV.LAUNCHER_REL,
+            "launcher_sha256": hashlib.sha256(LAUNCHER.read_bytes()).hexdigest(),
+            "sys_path": list(path),
+            "stdlib_modules_at_launch": {},
+        },
+    }
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -613,12 +639,7 @@ def _bytecode_stub(mod) -> Any:  # type: ignore[no-untyped-def]
         mp.setattr(
             mod,
             "LAUNCH",
-            {
-                "dont_write_bytecode_flag": 1,
-                "pycache_prefix": "/synthetic/empty-prefix",
-                "pycache_prefix_exists": True,
-                "pycache_prefix_files_at_start": 0,
-            },
+            _valid_launch(mod),
         )
         yield
 
@@ -662,6 +683,7 @@ def test_cli_success_records_sealed_sources_and_committed_i3(  # type: ignore[no
         if (name == "ionmc" or name.startswith("ionmc.")) and getattr(m, "__file__", None)
     }
     expected = closure | {mod.SCRIPT_REL, mod.I3_SCRIPT_REL, mod.ENV_SCRIPT_REL, mod.ENV.SEAL_REL}
+    expected |= {mod.ENV.LAUNCHER_REL}
     expected |= {"uv.lock", "pyproject.toml"}
     assert set(sealed) == expected
     assert {
@@ -879,7 +901,8 @@ def test_record_verification_fails_on_a_planted_mismatch(  # type: ignore[no-unt
 def test_environment_seal_round_trip_and_mismatch(mod) -> None:  # type: ignore[no-untyped-def]
     raw = mod.ENV.seal_text(_ENVIRONMENT).encode()
     doc = json.loads(raw)
-    assert sorted(doc) == sorted(("schema", *mod.ENV.SEAL_FIELDS))
+    assert sorted(doc) == sorted(("schema", *mod.ENV.SEAL_FIELDS, mod.ENV.STDLIB_KEY))
+    assert len(doc[mod.ENV.STDLIB_KEY]) > 500
     out = mod.ENV.verify_environment(raw, _ENVIRONMENT)
     assert out["match"] is True and out["seal_sha256"] == hashlib.sha256(raw).hexdigest()
     for key in mod.ENV.SEAL_FIELDS:
@@ -979,29 +1002,130 @@ def test_launch_capture_and_check(  # type: ignore[no-untyped-def]
     rec = env.capture_launch()
     assert rec["pycache_prefix"] == str(empty) and rec["pycache_prefix_exists"] is True
     assert rec["pycache_prefix_files_at_start"] == 0
-    assert rec["dont_write_bytecode_flag"] == int(sys.flags.dont_write_bytecode)
     assert rec["isolated_flag"] == int(sys.flags.isolated)
     assert rec["no_site_flag"] == int(sys.flags.no_site)
-    assert rec["meta_path"] == [
-        f.__name__ if isinstance(f, type) else type(f).__name__ for f in sys.meta_path
-    ]
-    assert "PathFinder" in rec["meta_path"]
-    good = {**rec, "dont_write_bytecode_flag": 1}
-    assert env.check_launch(good)["launch_ok"] is True
-    with pytest.raises(env.EnvironmentSealError, match="python -B"):
-        env.check_launch({**good, "dont_write_bytecode_flag": 0})  # -B missing
+    assert "PathFinder" in rec["meta_path"] and rec["sys_path_at_capture"] == sys.path
+    assert rec["launcher_record"] is None  # pytest is not started through the launcher
+    with pytest.raises(env.EnvironmentSealError, match="not launched through sealed_launch.py"):
+        env.check_launch(rec)
+    good = _valid_launch(mod)
+    out = env.check_launch(good)
+    assert out["launch_ok"] is True and out["launcher_record"]["stdlib_modules_at_launch"] == 0
+    for bad, match in (
+        ({"dont_write_bytecode_flag": 0}, "python -B"),
+        ({"isolated_flag": 0}, "python -I -S"),
+        ({"no_site_flag": 0}, "python -I -S"),
+        ({"pycache_prefix_files_at_start": 1}, "was not empty"),
+        ({"pycache_prefix_exists": False}, "does not exist"),
+        ({"pycache_prefix": None}, "pycache_prefix=<fresh empty directory>"),
+        ({"machinery_problems": ["x"]}, "import machinery"),
+        ({"sys_path_at_capture": ["/x"]}, "explicit list"),
+    ):
+        with pytest.raises(env.EnvironmentSealError, match=match):
+            env.check_launch({**good, **bad})
     (empty / "sub").mkdir()
     (empty / "sub" / "x.cpython-312.pyc").write_bytes(b"old")
-    rec = env.capture_launch()
-    assert rec["pycache_prefix_files_at_start"] == 1
-    with pytest.raises(env.EnvironmentSealError, match="was not empty"):  # non-empty prefix
-        env.check_launch({**rec, "dont_write_bytecode_flag": 1})
-    monkeypatch.setattr(sys, "pycache_prefix", str(tmp_path / "missing"))
-    with pytest.raises(env.EnvironmentSealError, match="does not exist"):
-        env.check_launch({**env.capture_launch(), "dont_write_bytecode_flag": 1})
-    monkeypatch.setattr(sys, "pycache_prefix", None)
-    with pytest.raises(env.EnvironmentSealError, match="pycache_prefix=<fresh empty directory>"):
-        env.check_launch({**env.capture_launch(), "dont_write_bytecode_flag": 1})
+    assert env.capture_launch()["pycache_prefix_files_at_start"] == 1
+
+
+def _launch(tmp_path: Path, target_text: str, *flags: str, prefix: Path | None = None) -> Any:
+    target = tmp_path / "target.py"
+    target.write_text(target_text)
+    if prefix is None:
+        prefix = tmp_path / "prefix"
+        prefix.mkdir(exist_ok=True)
+    cmd = [
+        sys.executable,
+        *flags,
+        "-X",
+        f"pycache_prefix={prefix}",
+        str(LAUNCHER),
+        str(target),
+        "a1",
+    ]
+    return subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=tmp_path)
+
+
+TINY_TARGET = """import builtins, json, sys
+r = getattr(builtins, "__ionmc_sealed_launch__")
+print(json.dumps({"argv": sys.argv[1:], "origin": r["origin"], "path": r["sys_path"],
+                  "flags": r["flags"], "n": len(r["stdlib_modules_at_launch"]),
+                  "name": __name__}))
+"""
+
+
+def test_sealed_launcher_runs_the_target(tmp_path: Path) -> None:
+    proc = _launch(tmp_path, TINY_TARGET, "-I", "-S", "-B")
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out["argv"] == ["a1"] and out["name"] == "__main__"
+    assert out["origin"] == "validation/scripts/stopping/sealed_launch.py"
+    assert out["flags"] == {"isolated": 1, "no_site": 1, "dont_write_bytecode": 1}
+    assert out["path"][:2] == [
+        str(REPO_ROOT / "src"),
+        str(REPO_ROOT / "validation/scripts/stopping"),
+    ]
+    assert out["path"][2].endswith("site-packages") and out["n"] > 5
+
+
+@pytest.mark.parametrize(
+    "flags, match",
+    [
+        (("-B",), "sys.flags.isolated is not 1"),
+        (("-I", "-B"), "sys.flags.no_site is not 1"),
+        (("-I", "-S"), "sys.flags.dont_write_bytecode is not 1"),
+    ],
+)
+def test_sealed_launcher_refuses_without_isolation(
+    tmp_path: Path, flags: tuple[str, ...], match: str
+) -> None:
+    proc = _launch(tmp_path, TINY_TARGET, *flags)
+    assert proc.returncode == 2 and match in proc.stderr and proc.stdout == ""
+
+
+def test_sealed_launcher_refuses_a_non_empty_prefix(tmp_path: Path) -> None:
+    prefix = tmp_path / "used"
+    prefix.mkdir()
+    (prefix / "old.pyc").write_bytes(b"x")
+    proc = _launch(tmp_path, TINY_TARGET, "-I", "-S", "-B", prefix=prefix)
+    assert proc.returncode == 2 and "not empty" in proc.stderr
+
+
+def test_sealed_launcher_refuses_a_foreign_import_hook(tmp_path: Path) -> None:
+    """A wrapper installs a foreign meta_path finder before the launcher's checks run."""
+    wrapper = tmp_path / "wrapper.py"
+    wrapper.write_text(
+        "import runpy, sys\n"
+        "class Hook:\n"
+        "    @staticmethod\n"
+        "    def find_spec(*a, **k):\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, Hook())\n"
+        f"sys.argv = [{str(LAUNCHER)!r}, *sys.argv[1:]]\n"
+        f"runpy.run_path({str(LAUNCHER)!r}, run_name='__main__')\n"
+    )
+    target = tmp_path / "t.py"
+    target.write_text(TINY_TARGET)
+    prefix = tmp_path / "p"
+    prefix.mkdir()
+    cmd = [sys.executable, "-I", "-S", "-B", "-X", f"pycache_prefix={prefix}", str(wrapper),
+           str(target)]  # fmt: skip
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=tmp_path)
+    assert proc.returncode == 2 and "sys.meta_path is not the standard finder list" in proc.stderr
+
+
+def test_stdlib_module_missing_or_altered_in_the_seal(mod) -> None:  # type: ignore[no-untyped-def]
+    env = mod.ENV
+    import wave  # noqa: F401 - a stdlib module that is surely loaded now
+
+    seal = env.stdlib_files()
+    assert "wave.py" in seal and len(seal) > 500
+    assert env.stdlib_modules_check(seal)["stdlib_modules_verified"] > 20
+    with pytest.raises(env.EnvironmentSealError, match="wave.py is not in the environment seal"):
+        env.stdlib_modules_check({k: v for k, v in seal.items() if k != "wave.py"})
+    with pytest.raises(env.EnvironmentSealError, match="wave.py differs from the environment seal"):
+        env.stdlib_modules_check({**seal, "wave.py": "0" * 64})
+    assert len(env.stdlib_listing_sha256()) == 64
 
 
 def test_cli_refuses_a_bad_launch(  # type: ignore[no-untyped-def]

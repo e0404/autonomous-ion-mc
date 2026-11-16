@@ -73,11 +73,25 @@ TEST_MARKERS = {
     "step_limiter_marker": r"^Step limiter process: StepLimiter$",
 }
 LIMITER_LINE = "Step limiter process: StepLimiter\n"
-VALID_LAUNCH = {
+_SYN_PATH = ["/synthetic/src", "/synthetic/scripts", "/synthetic/site-packages"]
+VALID_LAUNCH = {  # a launch record as sealed_launch.py + env_seal.capture_launch produce it
     "dont_write_bytecode_flag": 1,
     "pycache_prefix": "/synthetic/empty-prefix",
     "pycache_prefix_exists": True,
     "pycache_prefix_files_at_start": 0,
+    "isolated_flag": 1,
+    "no_site_flag": 1,
+    "meta_path": ["BuiltinImporter", "FrozenImporter", "PathFinder"],
+    "machinery_problems": [],
+    "sys_path_at_capture": list(_SYN_PATH),
+    "launcher_record": {
+        "origin": "validation/scripts/stopping/sealed_launch.py",
+        "launcher_sha256": hashlib.sha256(
+            (ROOT / "validation/scripts/stopping/sealed_launch.py").read_bytes()
+        ).hexdigest(),
+        "sys_path": list(_SYN_PATH),
+        "stdlib_modules_at_launch": {},
+    },
 }
 
 
@@ -1647,6 +1661,13 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
     assert seal["path"] == ev.ENV_SEAL and seal["match"] is True
     assert seal["numpy_version"] == np.__version__ and seal["numpy_record_files_verified"] > 100
     assert seal["seal_sha256"] == sealed[ev.ENV_SEAL]
+    assert seal["stdlib_modules_in_seal"] > 500 and seal["stdlib_modules_verified"] > 20
+    assert seal["sys_prefix"] == sys.prefix and seal["sys_base_prefix"] == sys.base_prefix
+    assert env["runtime"]["stdlib_modules_verified"] > 20
+    assert (
+        env["runtime_after"]["stdlib_modules_verified"] >= env["runtime"]["stdlib_modules_verified"]
+    )
+    assert "validation/scripts/stopping/sealed_launch.py" in sealed
     for name, signed in (("evaluator", ATT_A_SIGNED), ("markers", ATT_B_SIGNED)):
         att = pins[name]["attestation"]
         assert att["signed_at_utc"] == signed and att["validation_id"].startswith("VAL-syn-")
@@ -2460,11 +2481,19 @@ def test_launch_record_is_enforced(
     base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     w = _world(base, tmp_path)
+    record = VALID_LAUNCH["launcher_record"]
+    assert isinstance(record, dict)
     for bad, match in (
         ({"dont_write_bytecode_flag": 0}, "python -B"),
         ({"pycache_prefix": None}, "pycache_prefix=<fresh empty directory>"),
         ({"pycache_prefix_exists": False}, "does not exist"),
         ({"pycache_prefix_files_at_start": 3}, "was not empty"),
+        ({"isolated_flag": 0}, "python -I -S"),
+        ({"no_site_flag": 0}, "python -I -S"),
+        ({"launcher_record": None}, "not launched through sealed_launch.py"),
+        ({"machinery_problems": ["foreign finder"]}, "import machinery"),
+        ({"sys_path_at_capture": ["/elsewhere"]}, "explicit list"),
+        ({"launcher_record": {**record, "launcher_sha256": "0" * 64}}, "not the sealed"),
     ):
         monkeypatch.setattr(ev, "LAUNCH", {**VALID_LAUNCH, **bad})
         with pytest.raises(ev.RecordError, match=match):
@@ -2526,3 +2555,25 @@ def test_amendment_revision_matches_the_plan() -> None:
     found = [int(n) for n in re.findall(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", plan, re.M)]
     assert found and max(found) == ev.AMENDMENT_REVISION == ev.plan_revision_records(plan)
     assert ev.plan_revision_records("no records") == 0
+
+
+def test_lazily_imported_stdlib_module_must_be_in_the_seal(
+    base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stdlib module loaded during the computation but missing from (or differing from) the
+    environment seal stops the evaluation at the post-computation recheck."""
+    w = _world(base, tmp_path)
+    ctx = _ctx(base, w)
+    import wave  # noqa: F401 - any stdlib module; present in the seal
+
+    seal = dict(ctx.stdlib_seal)
+    rel = "wave.py"
+    assert rel in seal
+    seal.pop(rel)
+    with pytest.raises(
+        ev.RecordError, match="stdlib module wave.py is not in the environment seal"
+    ):
+        ev.runtime_checks(seal)
+    with pytest.raises(ev.RecordError, match="stdlib module wave.py differs"):
+        ev.runtime_checks({**ctx.stdlib_seal, rel: "0" * 64})
+    assert ev.runtime_checks(ctx.stdlib_seal)["stdlib_modules_verified"] > 20

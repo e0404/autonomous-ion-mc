@@ -1518,11 +1518,11 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/i3_band_diagnostic.py` | `e774c8570f8613858e7a1793b7cc1948658ff3e34100c6a1de0e03a8f22ace35` |
-| `tests/ionmc/test_i3_band_diagnostic.py` | `47024d1e0ce8def63889cc7be79cd9cf72062ff94792d9476ff8b1827e0dffe5` |
+| `validation/scripts/stopping/i3_band_diagnostic.py` | `001d290ab8666bcccd952aee0884a0d8db9757e8c2cd07d1c395e5d6ece512fe` |
+| `tests/ionmc/test_i3_band_diagnostic.py` | `cf1077cd6570154bb9d9ddfd7f0a3b4ce9ae309db1034b8554bab1bbdffd18f7` |
 | `validation/scripts/stopping/gen_i3fu2_bundles.py` | `46200570d35f40143902c1dffc7245c39700459c453b0b3a21ae75f87251b17b` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `b705a0a3a69da0bd8437bbc8188bce7413ff5cfee5824f428a004395cc0164bc` |
-| `tests/ionmc/test_i3fu2.py` | `f9c425e99bf70dfe96b679841f987709a2bd2caa8d27df5aafd7f9c97c8b308b` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `a26aa9ef4d876cf52c320ddc5a7fc2a50f9d26f5cd294a46b13ca6264859dfcb` |
+| `tests/ionmc/test_i3fu2.py` | `71f1662bcdf0b7e972d704471105aaa1048d0c8304c347c5ef0eec96ed12ba36` |
 | `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `cb4664944d7f6f25a3b3acd059cdd93834d3b9e92a99f4cee6d579f20cdfd971` |
 
 
@@ -1536,8 +1536,8 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/env_seal.py` | `8ca77dd5e3b9949eecfddadff56834a8e70d1cb1da2676f2d9c3f22dd8445874` |
-| `validation/results/stopping/v3-008-i3fu1/environment-seal.json` | `486ef12d69d59493a51f19a2ec0a4893f64c11c5cbdf5273bc7d5f4d018b2435` |
+| `validation/scripts/stopping/env_seal.py` | `6fcc4115783c18db47f6d63ca0fb17f34ff05957a1d8b3008a76c55979252854` |
+| `validation/results/stopping/v3-008-i3fu1/environment-seal.json` | `2d173286b270a32a715f23efae5134896b8a3365d3967f76f837d9f6053053db` |
 | `validation/plans/v3-008/p13-i3fu2-stepping-bound.md` | `d72b29b8689f3f57908d5a5e01d03f754d73fbaa8404cbdf037aae3ba763ccc7` |
 | `validation/plans/v3-008/p13-scripts/p13.py` | `39e5ffa71b9045ad9ab44faaab050be0a613f4b2a879867d11706ed6c8360c90` |
 
@@ -1551,6 +1551,20 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — revision 7 of amendment I3-FU-1 (Codex REVIEW-0b05e7e4 and the SR-3 fifth pass of 62059510): text and constant edits of the evaluator, the environment helper, their tests and the P13 record before any run; rows above carry the revision-7 hashes (earlier hashes in the previous commits of the day); bundles and manifest unchanged (121 bundles).**
 
 **Dated note (2026-11-16, orchestrator) — revision 8 of amendment I3-FU-1 (Codex REVIEW-54dc7554 on eea08d3c): the evaluator's revision constant coupled to the plan by a test; rows above carry the revision-8 hashes; bundles and manifest unchanged (121 bundles).**
+
+**Dated note (2026-11-16, orchestrator) — files added by revision 9 of amendment I3-FU-1 (the sealed isolated launcher) and the intervention addendum (sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/scripts/stopping/sealed_launch.py` | `4c3ed40b0a411a56170bec76ef5021db5a794c7af50fc9ee74704caac2aa73cc` |
+| `reference_requests/interventions/IR-20261116-123921-312B59/ADDENDUM-1.md` | `1aff8b47aaf9870862df3dfbe5fabc807a6e032fb4946028a4c112905110864c` |
+
+
+**Dated note (2026-11-16, orchestrator) — revision 9 of amendment I3-FU-1: the diagnostics, the environment helper, their tests and the environment seal (schema 2, regenerated through the launcher) revised before any run; rows above carry the revision-9 hashes; bundles and manifest unchanged (121 bundles).**
+
+**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/stopping/i3fu2_evaluate.py` cd2287e3… → d1f56908…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/scripts/stopping/i3fu2_evaluate.py` d1f56908… → a26aa9ef…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

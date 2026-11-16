@@ -2,7 +2,8 @@
 
 Usage::
 
-    PYTHONDONTWRITEBYTECODE=1 python -B -X pycache_prefix="$(mktemp -d)" \
+    .venv/bin/python -I -S -B -X pycache_prefix="$(mktemp -d)" \
+        validation/scripts/stopping/sealed_launch.py \
         validation/scripts/stopping/i3fu2_evaluate.py --runs DIR --archive PATH \
         --code-sha SHA --smokes DIR \
         [--records validation/results/stopping/v3-008-i3fu2/topas-runs] \
@@ -12,16 +13,20 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 8)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 9)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
-**Launch (Codex REVIEW-8081e0e7 finding 3).** The evaluator must be started as
-``python -B -X pycache_prefix=<fresh empty directory> i3fu2_evaluate.py ...``:
-:data:`LAUNCH` is captured by ``env_seal.capture_launch`` as the first statement after the
-stdlib imports (before numpy or ionmc is imported) and enforced by :func:`context`
-(``env_seal.check_launch``: ``sys.flags.dont_write_bytecode`` 1, ``sys.pycache_prefix`` an
-existing directory that held no file at the capture), so no bytecode can have been read for any
-module imported after it.
+**Launch (Codex REVIEW-8081e0e7 finding 3, REVIEW-cf6fa397).** The evaluator must be started
+through the stdlib-only launcher: ``python -I -S -B -X pycache_prefix=<fresh empty directory>
+validation/scripts/stopping/sealed_launch.py validation/scripts/stopping/i3fu2_evaluate.py
+...``. :data:`LAUNCH` is captured by ``env_seal.capture_launch`` as the first statement after
+the stdlib imports (before numpy or ionmc is imported) and enforced by :func:`context`
+(``env_seal.check_launch``): the launcher record present, -I -S -B, a prefix that held no file,
+the standard import machinery by identity, ``sys.path`` = the launcher's explicit list, and the
+launcher's recorded sha256 equal to the sealed ``sealed_launch.py``. What is sealed: the
+interpreter binary, every loaded stdlib module (against the environment seal), the numpy
+distribution, the ionmc and script closure, the launcher; what remains outside (disclosed):
+the kernel, libc and the C runtime the interpreter links against.
 
 **Inputs.** ``--repo`` (default: this checkout) is read only as committed at its HEAD
 (``r2_io.CommittedReader``: a working copy that differs fails closed); ``--records``,
@@ -367,7 +372,7 @@ SCRIPT_MODULES = (
     "infrastructure.experiment_v3.attest",
 )
 #: Non-module files sealed with the closure (the dependency lock and the project metadata).
-SEALED_FILES = ("uv.lock", "pyproject.toml")
+SEALED_FILES = ("uv.lock", "pyproject.toml", "validation/scripts/stopping/sealed_launch.py")
 REPO_ROOT: Path = gen.REPO_ROOT
 ZEPS_MM = 1e-12  # float guard of the printed-precision comparisons [mm]
 POST_STEP_MIN_TOL_MM = 1e-6  # the counted step must end at >= slab - max(tol, this) [mm]
@@ -431,7 +436,7 @@ FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 8  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
+AMENDMENT_REVISION = 9  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
 #: the plan's revision records of this amendment (counted in the plan committed at code_sha)
 PLAN_REVISION_RE = re.compile(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", re.M)
 REDISTRIBUTION_NOTE = (
@@ -946,6 +951,7 @@ class Context:
     environment: dict[str, Any]
     bundles: dict[str, tuple[int, int]] = field(default_factory=dict)
     _committed: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
+    stdlib_seal: dict[str, str] = field(default_factory=dict)
 
     @property
     def runs_after(self) -> Any:
@@ -1021,12 +1027,14 @@ def closure_modules() -> dict[str, ModuleType]:
     }
 
 
-def runtime_checks() -> dict[str, Any]:
-    """Revision 5 runtime controls (``env_seal``): every loaded numpy module verified against
-    the numpy RECORD and no bytecode cache file for any sealed or numpy module, with
-    ``sys.dont_write_bytecode`` true; any failure is a ``RecordError``."""
+def runtime_checks(stdlib_seal: dict[str, str] | None = None) -> dict[str, Any]:
+    """Runtime controls (``env_seal``): every loaded numpy module verified against the numpy
+    RECORD, every loaded stdlib module in the environment seal with a matching hash
+    (``stdlib_seal``) and no bytecode cache file for any sealed or numpy module; any failure is
+    a ``RecordError``."""
     try:
         return {
+            **(env_seal.stdlib_modules_check(stdlib_seal) if stdlib_seal is not None else {}),
             **env_seal.numpy_modules_check(),
             **env_seal.bytecode_check({**closure_modules(), **env_seal.numpy_modules()}),
         }
@@ -1355,13 +1363,18 @@ def context(
             )
     try:
         launch = env_seal.check_launch(LAUNCH)
-        env_record = env_seal.verify_environment(reader.read(env_rel))
+        seal_raw = reader.read(env_rel)
+        env_record = env_seal.verify_environment(seal_raw)
+        stdlib_seal = dict(env_seal.parse_seal(seal_raw)[env_seal.STDLIB_KEY])
     except env_seal.EnvironmentSealError as exc:
         raise RecordError(f"environment seal {env_rel}: {exc}") from exc
+    launcher_rel = env_seal.LAUNCHER_REL
+    if launch["launcher_record"].get("launcher_sha256") != sealed.get(launcher_rel):
+        raise RecordError("the launcher that started this run is not the sealed sealed_launch.py")
     environment = {
         "lock": environment_check(reader.read("uv.lock").decode("utf-8")),
         "seal": {"path": env_rel, **env_record},
-        "runtime": {"launch": launch, **runtime_checks()},
+        "runtime": {"launch": launch, **runtime_checks(stdlib_seal)},
     }
     return Context(
         repo=reader.repo,
@@ -1384,6 +1397,7 @@ def context(
         index=load_index(reader, records_rel),
         smoke_index=load_smoke_index(reader, smoke_rel),
         environment=environment,
+        stdlib_seal=stdlib_seal,
         bundles=run_bundles(),
     )
 
@@ -2232,7 +2246,8 @@ def evaluate(
         reasons.append(CONVENTION_REASON)
     conclusive = not reasons
     late = sorted(set(executable_closure()) - set(ctx.sealed))
-    ctx.environment["runtime_after"] = runtime_checks()  # lazily imported modules included
+    # lazily imported modules (numpy, stdlib, closure) included
+    ctx.environment["runtime_after"] = runtime_checks(ctx.stdlib_seal)
     if late:
         raise RecordError(f"modules imported after the seal: {late}")
     try:
