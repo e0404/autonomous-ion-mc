@@ -1628,7 +1628,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json` | `12e2616c221e0419f9fbbb7461f2288be8f1add1c3f1a78a34e53cf2af1f6c8e` |
+| `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json` | `9c8a2c0d070dcba8e2b6d7892109cf8a9751facea8972609589a8e906acb069f` |
 
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-2 evidence records: the 58 signed reference-runner records of the evidence bundles run at c8102e89 (`record.json` + `artifacts.json` each) and `topas-runs/index.json`, bound as committed:**
@@ -1787,6 +1787,8 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` 4b360868… → d380d352…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin B replaced after revision 15 (REVIEW-ba7d4c76 of 2727578d, verbatim, verified); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json` 12e2616c… → 9c8a2c0d…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
