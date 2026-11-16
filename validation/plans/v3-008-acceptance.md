@@ -2459,7 +2459,7 @@ evaluator's own smoke logic in the sandbox (the authoritative check is the evalu
 over all five and match no native input, the step-limiter marker (process-list line) is present. The marker file is
 unchanged since 067bd91f. Nothing graded. Not a clinical claim.
 
-**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-c801dd374d824eb7a324ffe630ab1103 at 0a915106e32af78f3f02ec807690c4fbe4762bb5; markers review REVIEW-ba7d4c76244d4392a63a8e372a0c569f at 2727578d8a0fb2524da097f6beba03f78397d56e. Pin B (signed, passed, no findings; started 18:36:04 UTC, after the five smokes finished at 18:30:35 UTC; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`, replacing the superseded pin REVIEW-d3d88ac3) reviewed the commit that holds the re-run smoke records, the marker file and pin A; the 58 evidence runs follow at the commit carrying this note (Z'), after pin B's signed finished_at 18:40:02 UTC, one at a time. Not a clinical claim.
+**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins — SUPERSEDED by revision 16, see the STOP note of the c223f5e5 evaluation; kept as history).** evaluator review REVIEW-c801dd374d824eb7a324ffe630ab1103 at 0a915106e32af78f3f02ec807690c4fbe4762bb5; markers review REVIEW-ba7d4c76244d4392a63a8e372a0c569f at 2727578d8a0fb2524da097f6beba03f78397d56e. Pin B (signed, passed, no findings; started 18:36:04 UTC, after the five smokes finished at 18:30:35 UTC; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`, replacing the superseded pin REVIEW-d3d88ac3) reviewed the commit that holds the re-run smoke records, the marker file and pin A; the 58 evidence runs follow at the commit carrying this note (Z'), after pin B's signed finished_at 18:40:02 UTC, one at a time. Not a clinical claim.
 
 **Dated results note — I3-FU-1 step-2 evidence runs (58) at c223f5e5, second attempt after revision 15 (2026-11-16,
 orchestrator; records only, nothing graded).** The 58 evidence bundles of the re-frozen manifest were run once each, one at
@@ -2516,3 +2516,12 @@ Execution chain as before: this commit reviewed (signed) = new pin A; the five s
 after its `finished_at`, with the pre-check now covering `validity_problems` and `measure_outputs` on the materialized
 smokes; new pin B; new one-line pins note; the 58 evidence runs; records; evaluator; repeats per the evaluator's trigger.
 The INCONCLUSIVE result above stays committed until the next evaluation replaces it (history). Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; I3-FU-1 pin A after revision 16).** Pin A is now the codex-worker-signed, passed
+review REVIEW-9d042ed77c274628b71d1cf7914fdeb3 of 8d589e29294abea64cb2f627d15a801d37c97491 (revision 16; no findings; signed
+2026-11-16T19:26:19Z; verified against the committed trust map), committed verbatim as
+`validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` (replacing the superseded pin REVIEW-c801dd37). The five
+smokes follow at the commit carrying this note, after this pin's signed `finished_at`, the fine-step smoke first; the
+pre-check of every materialized smoke now applies the evaluator's `validity_problems`, `config_problems`,
+`native_marker_problems`, `measure_outputs` and (for the step smokes) `count_slab_steps` / `parse_exit_energies`. Not a
+clinical claim.

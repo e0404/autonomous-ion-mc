@@ -1601,7 +1601,7 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` | `ea0963052fd79c74a525faf2d8471509fc7f8da7e1cd590ccaa087d684565f4c` |
+| `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` | `853340ad99d7c9ae96af33a109efa0055678369fbd6042bbb043c2a9a07dad4d` |
 
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-1 result and its signed host-run record (run at 5999f789), the step-2 marker file and the five signed smoke records with their artifact listings, bound as committed:**
@@ -1924,6 +1924,8 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 revision 16 (stderr banner rule, single-bin EDep parser, regression tests on the real logs) rebound; entries that changed:** `validation/scripts/stopping/i3fu2_evaluate.py` be4515cf… → c67a9723…; `tests/ionmc/test_i3fu2.py` 9230b886… → b1645748…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin A replaced after revision 16 (REVIEW-9d042ed7 of 8d589e29, verbatim, verified); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` ea096305… → 853340ad…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
