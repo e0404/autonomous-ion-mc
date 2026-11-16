@@ -1,0 +1,31 @@
+{
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "b53b2800f81a4e64",
+    "payload_sha256": "d776d1e8237795b4d7f6ed57ead5745bbb34eae0616356a692d526ae4e82ca8c",
+    "public_key": "2fa323ebc164551322a8268176a463563f8036a2a91cf6de02d7a1ebfe407bfe",
+    "schema": "ionmc-attestation-1",
+    "signature": "77834eea1ffb9a51e433f67756d7f74211ea5f853ccb05a43674bbae9eb9f9e946fb7665e2ce5c68f175114aecaafd7e6ec1ca9f2deae610a7af292a9af7ad0b",
+    "signed_at_utc": "2026-11-16T17:03:54.610728+00:00",
+    "signer": "codex-worker"
+  },
+  "base_sha": "8dfbeb37ec200fa6d9044aef69c0e4bb9a5d7a24",
+  "experiment_id": "experiment-v3",
+  "finished_at": "2026-11-16T17:03:54.608059+00:00",
+  "head_sha": "d21f01b548da597035a744d8234b77fc62058a58",
+  "model": "gpt-5.6-sol",
+  "provider": "openai",
+  "report": {
+    "findings": [],
+    "head_sha": "d21f01b548da597035a744d8234b77fc62058a58",
+    "summary": "The prior host-runner incompatibility is resolved. The launcher safely accepts only GIT_WORK_TREE resolving to its own repository while retaining sanitized Git subprocesses, with appropriate regression coverage. The committed environment seal and diagnostic reproduce their signed output-manifest digests; review, host-runner, and reference-runner records are consistently bound to trusted keys and the stated SHAs. The new diagnostic preserves the I3 failure and accurately leaves step 2 pending. Review was read-only and tests were not executed as instructed.",
+    "verdict": "pass"
+  },
+  "report_sha256": "02aec2cc7a5090dea187e017f3589c13dd883eaa085951fc138c24e956479e73",
+  "review_id": "REVIEW-d3d88ac3bc774119bf24147899bf5d9e",
+  "schema_version": 1,
+  "started_at": "2026-11-16T16:57:23.280763+00:00",
+  "status": "passed",
+  "task_id": "V3-008",
+  "tool": "codex exec"
+}

@@ -2367,3 +2367,5 @@ with the evaluator's own parser (the authoritative check is the evaluator's at Z
 five smokes and match no native input; both step-count smokes give exactly one slab step per primary (50/50), each ending at
 the far face; the fine-step smoke gives 20 slab steps per primary. No evidence run has been made; nothing is graded. Not a
 clinical claim.
+
+**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-c35482f470fb4b5f874ef5d91f0d067b at 38019380f3584a1d895bdb8922b17b3af326a67e; markers review REVIEW-d3d88ac3bc774119bf24147899bf5d9e at d21f01b548da597035a744d8234b77fc62058a58. Pin B (signed, passed, no findings; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`) reviewed the commit that added the marker file, the smoke records and pin A; the 58 evidence runs follow at the commit carrying this note (Z), after pin B's signed finished_at 17:03:54 UTC, one at a time. Not a clinical claim.

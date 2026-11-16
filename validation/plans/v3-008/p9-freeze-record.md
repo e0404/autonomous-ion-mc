@@ -1623,6 +1623,13 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-e10a8a4ec29899e00afc-638d757e/record.json` | `62827279d944fc9ab721d95cf253fa95420cec4a46e20504a11a180b329d3c02` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-e10a8a4ec29899e00afc-638d757e/artifacts.json` | `d92d4badcc07dd3626ec62881a6edad3e1ef4e4ee4191bf46304b266496da8df` |
 
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin B (the codex-worker-signed, passed review REVIEW-d3d88ac3bc774119bf24147899bf5d9e of d21f01b5, verbatim; verified against the committed trust map), bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json` | `12e2616c221e0419f9fbbb7461f2288be8f1add1c3f1a78a34e53cf2af1f6c8e` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
