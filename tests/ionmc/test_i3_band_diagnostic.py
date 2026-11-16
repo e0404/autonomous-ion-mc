@@ -590,6 +590,28 @@ def cli_repo(mod, model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dic
 _ENVIRONMENT: dict[str, Any] = {}
 
 
+_REAL_BYTECODE_CHECK: list[Any] = []
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _bytecode_stub(mod) -> Any:  # type: ignore[no-untyped-def]
+    """The test interpreter's venv and worktree hold ``__pycache__`` files (removed only before
+    the real run), so the CLI tests use the ``sys.dont_write_bytecode`` part of the
+    bytecode-cache control; the full control is unit-tested below."""
+    _REAL_BYTECODE_CHECK[:] = [mod.ENV.bytecode_check]
+
+    def stub(modules: Any) -> dict[str, Any]:
+        return {
+            "dont_write_bytecode": sys.dont_write_bytecode,
+            "modules_without_bytecode_cache": len(modules),
+            "test_stub": True,
+        }
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(mod.ENV, "bytecode_check", stub)
+        yield
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _environment(mod) -> None:  # type: ignore[no-untyped-def]
     """The running environment's seal fields, computed once (RECORD verification ~0.5 s)."""
@@ -883,3 +905,51 @@ def test_cli_refuses_an_environment_that_differs_from_the_seal(  # type: ignore[
     with pytest.raises(RuntimeError, match="python_executable_sha256"):
         _cli(mod, monkeypatch, env, "--code-sha", head)
     assert not env["out"].exists()
+
+
+# --- runtime controls (Codex REVIEW-183057ce finding 3) --------------------------------------
+
+
+def test_loaded_numpy_modules_are_verified(mod, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    from types import ModuleType
+
+    out = mod.ENV.numpy_modules_check()
+    assert out["numpy_modules_verified"] > 10
+    shadow = ModuleType("numpy._shadow")
+    shadow.__file__ = str(tmp_path / "shadow.py")
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="loaded from outside"):
+        mod.ENV.numpy_modules_check(modules={**mod.ENV.numpy_modules(), "numpy._shadow": shadow})
+    a = b"x = 1\n"
+    info = _fake_dist(
+        tmp_path, {"numpy/a.py": a, "numpy/b.py": b"y = 2\n"}, [_row("numpy/a.py", a)]
+    )
+    listed, unlisted = ModuleType("numpy"), ModuleType("numpy.b")
+    listed.__file__ = str(tmp_path / "numpy/a.py")
+    unlisted.__file__ = str(tmp_path / "numpy/b.py")
+    assert mod.ENV.numpy_modules_check(info, {"numpy": listed}) == {"numpy_modules_verified": 1}
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="numpy.b .* is not hashed in RECORD"):
+        mod.ENV.numpy_modules_check(info, {"numpy": listed, "numpy.b": unlisted})
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="no loaded numpy module"):
+        mod.ENV.numpy_modules_check(info, {})
+
+
+def test_bytecode_cache_control(  # type: ignore[no-untyped-def]
+    mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import ModuleType
+
+    check = _REAL_BYTECODE_CHECK[0]
+    m = ModuleType("sealed_example")
+    m.__cached__ = str(tmp_path / "sealed_example.cpython-312.pyc")  # type: ignore[attr-defined]
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    assert check({"sealed_example": m}) == {
+        "dont_write_bytecode": True,
+        "modules_without_bytecode_cache": 1,
+    }
+    Path(m.__cached__).write_bytes(b"stale")
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="bytecode cache files exist for"):
+        check({"sealed_example": m})
+    Path(m.__cached__).unlink()
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
+    with pytest.raises(mod.ENV.EnvironmentSealError, match="dont_write_bytecode is false"):
+        check({"sealed_example": m})

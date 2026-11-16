@@ -33,6 +33,7 @@
     "slab_mm": 0.003328,
     "thickness_factor": 0.048,
     "kind": "smoke",
-    "fluctuations": true
+    "fluctuations": true,
+    "max_step_um": null
   }
 }

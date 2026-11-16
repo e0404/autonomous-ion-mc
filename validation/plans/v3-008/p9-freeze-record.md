@@ -1518,12 +1518,12 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/i3_band_diagnostic.py` | `8a386eb2a7c6a388b67ff350c875595f2daf6894a3eae5e4b3897ac8a161abe1` |
-| `tests/ionmc/test_i3_band_diagnostic.py` | `6cda72ee2a8321accbed3e8b74d0ca85396442279f884dbb24ad7c7d42aecbc8` |
-| `validation/scripts/stopping/gen_i3fu2_bundles.py` | `f633521f8a29edc46d27e07b7787cab2ff974c83c2d7d378c3c20b5da4be7c89` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `b3d0dd0a64199bee70cc54ebff9318cfcbaa636197446c93fe71390f3e694595` |
-| `tests/ionmc/test_i3fu2.py` | `e59fef377eee82115c5084148a3c432c751623e86a2dc42de76dd57fe5f99d8b` |
-| `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `078195aa9ce3f8f78084387a30cab48f3c41a08db8def44eda1347c104e06877` |
+| `validation/scripts/stopping/i3_band_diagnostic.py` | `ccc1d6bae54f298df89f29713ce031f2b1db9d807259413181169423808f00ec` |
+| `tests/ionmc/test_i3_band_diagnostic.py` | `b028f35006c706ff4f1bf8e17a6655c18ebfbfec6413c7999848a3e34af6624e` |
+| `validation/scripts/stopping/gen_i3fu2_bundles.py` | `46200570d35f40143902c1dffc7245c39700459c453b0b3a21ae75f87251b17b` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `f181b05891581eddf1408ec9fdc7e2daf4009afa8a1d45509ea8e520615856b3` |
+| `tests/ionmc/test_i3fu2.py` | `8266452002f4efe8d943b9cfbeece50f9f367af076fb9936671127ca124e3fdc` |
+| `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `cb4664944d7f6f25a3b3acd059cdd93834d3b9e92a99f4cee6d579f20cdfd971` |
 
 
 **Dated note (2026-11-16, orchestrator) — revision 1 of amendment I3-FU-1 (Codex REVIEW-cfdff398 and the independent review SR-3 of 777b4561): the six files bound by the previous note were revised before any run and their rows above now carry the revised hashes (the 777b4561 hashes are in that commit); the i3fu2 manifest now binds 84 bundles (40 evidence, 40 frozen repeats, 4 smokes; 168 files).**
@@ -1536,13 +1536,15 @@ placeholder scorer output was deleted unread.
 
 | File | sha256 |
 |---|---|
-| `validation/scripts/stopping/env_seal.py` | `b5d7925bbddbaef8f09a1fe6c920d6f0ab6000f7fe07af4b42ce3b2fab54d259` |
+| `validation/scripts/stopping/env_seal.py` | `450936010f0a374ef74f60aeb1c6b1cf0829f217ddc38c26e17bf7c417b62847` |
 | `validation/results/stopping/v3-008-i3fu1/environment-seal.json` | `486ef12d69d59493a51f19a2ec0a4893f64c11c5cbdf5273bc7d5f4d018b2435` |
-| `validation/plans/v3-008/p13-i3fu2-stepping-bound.md` | `3ea0ca704b936186ae04bdde8b6ac0946f707017085f2a87f96176d72370cd95` |
+| `validation/plans/v3-008/p13-i3fu2-stepping-bound.md` | `33832826801f5d75dfdcf4241dad47e59123d855f5a1a0712f0a5da0468b912e` |
 | `validation/plans/v3-008/p13-scripts/p13.py` | `39e5ffa71b9045ad9ab44faaab050be0a613f4b2a879867d11706ed6c8360c90` |
 
 
 **Dated note (2026-11-16, orchestrator) — revision 4 of amendment I3-FU-1 (Codex REVIEW-c4f3fdd1 on 2aaf1b67): the two diagnostic scripts and their tests revised again before any run; rows above carry the revision-4 hashes (earlier hashes in the previous commits of the day).**
+
+**Dated note (2026-11-16, orchestrator) — revision 5 of amendment I3-FU-1 (Codex REVIEW-183057ce on 9706fd01): instruments revised again before any run; rows above carry the revision-5 hashes (earlier hashes in the previous commits of the day); the i3fu2 manifest now binds 121 bundles (58 evidence, 58 repeats, 5 smokes; 242 files).**
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

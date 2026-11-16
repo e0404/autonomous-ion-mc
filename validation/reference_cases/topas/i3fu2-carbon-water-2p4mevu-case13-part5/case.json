@@ -33,6 +33,7 @@
     "slab_mm": 0.00208,
     "thickness_factor": 0.03,
     "kind": "evidence",
-    "fluctuations": false
+    "fluctuations": false,
+    "max_step_um": null
   }
 }

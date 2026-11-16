@@ -14,7 +14,13 @@ numerical runtime of the diagnostics by content:
 * the committed environment seal (``validation/results/stopping/v3-008-i3fu1/
   environment-seal.json``, :data:`SEAL_FIELDS`), written once from the reviewed environment by
   ``i3_band_diagnostic.py --write-environment-seal``; both diagnostics require every field of the
-  running environment to equal it (:func:`verify_environment`).
+  running environment to equal it (:func:`verify_environment`);
+* runtime controls (Codex REVIEW-183057ce finding 3): every loaded numpy module resolves under the
+  verified distribution root and its file is listed with a hash in RECORD (hence verified;
+  :func:`numpy_modules_check`), and the diagnostics run with ``sys.dont_write_bytecode`` true
+  and no ``__cached__`` bytecode file present for any sealed or numpy module
+  (:func:`bytecode_check`; the orchestrator removes the ``__pycache__`` directories before the
+  run, so the interpreter compiles the verified sources).
 
 Declared limitation: shared libraries outside the numpy distribution (libc, the system
 libraries the interpreter links against) and the operating system are not sealed beyond
@@ -33,7 +39,9 @@ import io
 import json
 import platform
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 SEAL_REL = "validation/results/stopping/v3-008-i3fu1/environment-seal.json"
@@ -177,3 +185,67 @@ def verify_environment(raw: bytes, env: dict[str, Any] | None = None) -> dict[st
         "seal_sha256": hashlib.sha256(raw).hexdigest(),
         "match": True,
     }
+
+
+def _hashed_paths(dist_info: Path) -> set[Path]:
+    """Resolved paths of the RECORD rows that carry a hash."""
+    base = dist_info.parent
+    out = set()
+    for row in csv.reader(io.StringIO((dist_info / "RECORD").read_text(encoding="utf-8"))):
+        if len(row) == 3 and row[1]:
+            out.add((base / row[0]).resolve())
+    return out
+
+
+def numpy_modules_check(
+    dist_info: Path | None = None, modules: Mapping[str, ModuleType] | None = None
+) -> dict[str, Any]:
+    """Every loaded numpy module with a ``__file__`` resolves under the distribution root
+    (``dist_info.parent``) and is listed with a hash in RECORD (``verify_record`` hashes it):
+    else :class:`EnvironmentSealError`. ``modules`` defaults to ``sys.modules``."""
+    dist_info = numpy_dist_info() if dist_info is None else dist_info
+    root = dist_info.parent.resolve()
+    hashed = _hashed_paths(dist_info)
+    mods = sys.modules if modules is None else modules
+    n = 0
+    for name, mod in sorted(mods.items()):
+        if name != "numpy" and not name.startswith("numpy."):
+            continue
+        f = getattr(mod, "__file__", None)
+        if not f:
+            continue
+        path = Path(f).resolve()
+        if not path.is_relative_to(root):
+            raise EnvironmentSealError(f"numpy module {name} is loaded from outside {root}")
+        if path not in hashed:
+            raise EnvironmentSealError(f"numpy module {name} ({path.name}) is not hashed in RECORD")
+        n += 1
+    if n == 0:
+        raise EnvironmentSealError("no loaded numpy module found")
+    return {"numpy_modules_verified": n}
+
+
+def numpy_modules(modules: Mapping[str, ModuleType] | None = None) -> dict[str, ModuleType]:
+    mods = sys.modules if modules is None else modules
+    return {k: v for k, v in mods.items() if k == "numpy" or k.startswith("numpy.")}
+
+
+def bytecode_check(modules: Mapping[str, ModuleType]) -> dict[str, Any]:
+    """``sys.dont_write_bytecode`` must be true and no module of ``modules`` may have its
+    ``__cached__`` bytecode file on disk (the verified sources are compiled in memory):
+    else :class:`EnvironmentSealError`."""
+    if not sys.dont_write_bytecode:
+        raise EnvironmentSealError(
+            "sys.dont_write_bytecode is false (set PYTHONDONTWRITEBYTECODE=1)"
+        )
+    stale = sorted(
+        name
+        for name, mod in modules.items()
+        if getattr(mod, "__cached__", None) and Path(str(mod.__cached__)).exists()
+    )
+    if stale:
+        raise EnvironmentSealError(
+            f"bytecode cache files exist for {stale[:5]}{' ...' if len(stale) > 5 else ''} "
+            "(remove the __pycache__ directories before the run)"
+        )
+    return {"dont_write_bytecode": True, "modules_without_bytecode_cache": len(modules)}

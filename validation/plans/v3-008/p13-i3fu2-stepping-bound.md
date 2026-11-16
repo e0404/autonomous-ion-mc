@@ -23,13 +23,24 @@ Status: complete except the items in section 7 (OPEN), which the coordinator ask
 - Cached (`.ionmc-cache/reference/<sha256>`, hashes as D-4 section 1): [VELP] G4VEnergyLossProcess.cc `2f53a58c...`;
   [LS] G4LindhardSorensenIonModel.cc `e16ed6cd...`; [BB] G4BetheBlochModel.cc `5dc2a900...`; [IEC]
   G4ionEffectiveCharge.cc `891854a9...`; [OPT4] `04337300...`; [EMP] G4EmParameters.cc `aaa143c1...`.
-- Fetched for P13 (raw.githubusercontent.com/Geant4/geant4/v11.4.2/source/..., sha256 of the fetched bytes; NOT in the
-  provenance cache — see the status paragraph):
-  [VELPh] utils/include/G4VEnergyLossProcess.hh `23e9dd28...0e69e4`; [LTB] utils/src/G4LossTableBuilder.cc
-  `71c24723...a9aed`; [LTBh] utils/include/G4LossTableBuilder.hh `5dd6fcd7...c7549`; [LTM] utils/src/G4LossTableManager.cc
-  `80211e54...abf0`; [PVi] global/management/include/G4PhysicsVector.icc `7cb2f124...8047ae8f`; [PVc]
-  global/management/src/G4PhysicsVector.cc `6d1437c9...e66de943`; [BR] standard/src/G4BraggModel.cc `ceb5158a...be858`;
-  [ETU] utils/src/G4EmTableUtil.cc `41a2f7ba...7eadc`.
+- Fetched for P13 (raw.githubusercontent.com/Geant4/geant4/v11.4.2/source/processes/electromagnetic/... unless noted;
+  full sha256 of the fetched bytes, computed by the orchestrator on the researcher's copies; NOT in the provenance
+  cache — see the status paragraph):
+  | Tag | Path (under source/) | sha256 |
+  |---|---|---|
+  | [VELPh] | processes/electromagnetic/utils/include/G4VEnergyLossProcess.hh | 23e9dd285fbae71c1a11e682542ca790d745a68580a732cd4cb7962adf9769e4 |
+  | [LTB] | processes/electromagnetic/utils/src/G4LossTableBuilder.cc | 71c24723f3eaddd14642f2a38e714151998b04afa1c183e98a54d9a8fd4b9aed |
+  | [LTBh] | processes/electromagnetic/utils/include/G4LossTableBuilder.hh | 5dd6fcd762c2af045c9a8b7ffc22e82ddeb36ce33b5771301b1d26b06c8b7549 |
+  | [LTM] | processes/electromagnetic/utils/src/G4LossTableManager.cc | 80211e548c33d656e44e041362bdb63a1e4a4f4e444f1fad6adc9cdb563aabf0 |
+  | [PVi] | global/management/include/G4PhysicsVector.icc | 7cb2f12424df6598ff6ba320666dbd29510d1a727fbdac6a49d3fbac0047ae8f |
+  | [PVc] | global/management/src/G4PhysicsVector.cc | 6d1437c9d23ed63ecbabc96ed09d8fd68789e5f4bb0575542dbd9756d66de943 |
+  | [PVh] | global/management/include/G4PhysicsVector.hh | 275ad147aca9f75a65a44160ca4884b0f866c30e391eadac71cd9a8ebd37adc9 |
+  | [BR] | processes/electromagnetic/standard/src/G4BraggModel.cc | ceb5158a646dc1d3ae3a0be345eae8f363bfcf964615b8c7c06e9623f05be858 |
+  | [BRI] | processes/electromagnetic/standard/src/G4BraggIonModel.cc | 77fd6989ae2ea79fe124781a8c6d918e57763d7a4665a8fe8fe073d19c31f1dd |
+  | [ETU] | processes/electromagnetic/utils/src/G4EmTableUtil.cc | 41a2f7ba0a8739e36028dbe036cb15b063bb318aa07e8037a3b8307e3e30eadc |
+  | [EMC] | processes/electromagnetic/utils/src/G4EmCorrections.cc | a357d07617816f4e3ef1c7558890cf4966ac55bf85ba4ad2392713b10b52d3c7 |
+  | [LSh] | processes/electromagnetic/standard/include/G4LindhardSorensenIonModel.hh | f888df1a2e5e93556fa80e0d0e92d758c11310a13eec35c1760a824d4fec4fe6 |
+  | [VEM] | processes/electromagnetic/utils/src/G4VEmModel.cc | 623d8fbb92c6b3b5d7619baa603a6e7061dd9e80147f0502036cc117c58ffb51 |
 - Model arithmetic: `validation/plans/v3-008/p13-scripts/p13.py` (ionmc at worktree HEAD 2aaf1b67; model-only).
 
 ## 2. The algorithm as executed (FACT unless marked)

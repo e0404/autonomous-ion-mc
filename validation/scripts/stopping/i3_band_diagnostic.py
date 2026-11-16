@@ -92,7 +92,11 @@ and before the output is written):
   ``sys.version`` and ``platform.platform()`` must equal the seal (recorded as
   ``provenance.environment.seal``). ``--write-environment-seal`` writes the seal of the running
   environment to ``--repo/--environment-seal`` and exits (run once by the orchestrator and
-  committed with the review pin).
+  committed with the review pin). Runtime controls (Codex REVIEW-183057ce finding 3), after
+  the computation: every loaded numpy module resolves under the verified distribution root and
+  is hashed in its RECORD, ``sys.dont_write_bytecode`` is true (PYTHONDONTWRITEBYTECODE=1) and
+  no sealed or numpy module has its ``__cached__`` bytecode file on disk (the ``__pycache__``
+  directories are removed before the run); recorded as ``provenance.environment.runtime``.
 * Sealed sources after the computation (the import closure is then complete, including the
   lazily loaded ``compare_icru73`` and anything ``BetheStoppingSource`` imports): every module
   in ``sys.modules`` of the ``ionmc`` package with a ``__file__`` (path relative to the root
@@ -925,6 +929,18 @@ def main() -> int:
     result = run(Path(args.archive), args.code_sha)
     # after the computation: the import closure is complete (nothing written before this passes)
     sealed, from_repo = seal_sources(repo, args.code_sha, (args.environment_seal,))
+    sealed_modules = {
+        name: mod
+        for name, mod in sys.modules.items()
+        if getattr(mod, "__file__", None)
+        and (
+            name == "ionmc" or name.startswith("ionmc.") or mod in (sys.modules[__name__], I3, ENV)
+        )
+    }
+    environment["runtime"] = {
+        **ENV.numpy_modules_check(),
+        **ENV.bytecode_check({**sealed_modules, **ENV.numpy_modules()}),
+    }
     result["provenance"]["sealed_sources"] = sealed
     result["provenance"]["ionmc_loaded_from_repo"] = from_repo
     result["provenance"]["environment"] = environment

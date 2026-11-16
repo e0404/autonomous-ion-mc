@@ -1,4 +1,4 @@
-"""Generate the V3-008 amendment I3-FU-1 step 2 TOPAS bundles: 40 + 40 repeat parts + 4 smokes.
+"""Generate the V3-008 amendment I3-FU-1 step 2 TOPAS bundles: 58 + 58 repeat parts + 5 smokes.
 
 Single source of ``validation/reference_cases/topas/i3fu2-*`` and of their frozen manifest
 ``validation/reference_cases/topas/i3fu2-frozen-manifest.json`` (plan
@@ -9,18 +9,23 @@ no validation claim.
 Thin-slab mean energy loss of 12C, 16O (and a 4He control) in G4_WATER at E0 = 2.4-50 MeV/u
 (TOPAS cases 13-21, :data:`CASES`; amendment I3-FU-1 revision 1). Evidence parts (:data:`PARTS`):
 0 = C slab t, 1 = C slab 1.6t, 2 = O slab t, 3 = O slab 1.6t (all nine cases), 4 = He slab t (cases
-17, 21), 5 = C slab t with energy-loss fluctuations disabled (cases 13, 21): 40 bundles. The
-pre-declared repeat is frozen now: part + 8 (:data:`REPEAT_OFFSET`) for every evidence bundle,
-same configuration (8 = C t, 9 = C 1.6t, 10 = O t, 11 = O 1.6t, 12 = He t, 13 = C fluct. off;
-kind "repeat", run only on the repeat trigger of the evaluator's repeat rule): 40 bundles. Parts
-6, 7 and 14-19 reserved (Codex REVIEW-22f384ed finding 5: repeats renumbered to leave room).
-Seed = 20619000 + 100*part + case (unchanged formula). Four execution smokes
+17, 21), 5 = C slab t with energy-loss fluctuations disabled (cases 13, 21), 6 = C slab t and
+7 = O slab t with the TOPAS per-component step limit ``d:Ge/Water/MaxStepSize`` = t/20 (fine-step
+runs, direct Geant4 evidence at fine stepping; Codex REVIEW-183057ce finding 2, amendment
+revision 5; all nine cases): 58 bundles. The pre-declared repeat is frozen now: part + 8
+(:data:`REPEAT_OFFSET`) for every evidence bundle, same configuration (8 = C t, 9 = C 1.6t,
+10 = O t, 11 = O 1.6t, 12 = He t, 13 = C fluct. off, 14 = C fine, 15 = O fine; kind "repeat", run
+only on the repeat trigger of the evaluator's repeat rule): 58 bundles. Parts 16-19 reserved.
+MaxStepSize is written in um (t/20 = 50 t um, an exact decimal).
+Seed = 20619000 + 100*part + case (unchanged formula). Five execution smokes
 (:data:`SMOKES`): C 10 MeV/u, slab t, 2000 primaries at rehearsal seed 20600440 (standard lines)
 and 20600441 (the fluctuation-off line), so that every parameter line of an evidence bundle is
 exercised by a smoke; and two step-count smokes, C 2.4 and 50 MeV/u, slab 1.6t, 50 primaries,
 ``i:Ts/TrackingVerbosity = 1`` (seeds 20600443, 20600444), from whose step printout the
-orchestrator counts the ionIoni steps per track inside the slab (expected: one) before the
-evidence runs. 20600442 is reserved by the plan for one re-smoke (not generated).
+evaluator counts the steps per primary inside the slab (expected: one) before the evidence runs;
+and the fine-step smoke, C 2.4 MeV/u, slab t with MaxStepSize t/20, 50 primaries,
+TrackingVerbosity 1 (seed 20600445; expected >= 15 steps in the slab per primary, i.e. the step
+limiter acts on GenericIon). 20600442 is reserved by the plan for one re-smoke (not generated).
 
 Slab thickness from ionmc's own default Bethe model (``bethe_mass_stopping`` default options,
 ``water(78.0)``): t_mm = 10 * 0.03 * E0 * A / S(E0) (Delta E / E = 3 % at the entrance energy),
@@ -98,10 +103,14 @@ PARTS: dict[int, tuple[str, int, bool, tuple[int, ...]]] = {
     3: ("oxygen", 2, True, ALL_CASES),
     4: ("he", 1, True, (17, 21)),
     5: ("carbon", 1, False, (13, 21)),
+    6: ("carbon", 1, True, ALL_CASES),  # fine-step: MaxStepSize t/20
+    7: ("oxygen", 1, True, ALL_CASES),  # fine-step: MaxStepSize t/20
 }
+FINE_PARTS = (6, 7)  # slab t with the per-component step limit MaxStepSize = t / FINE_DIVISOR
+FINE_DIVISOR = 20
 REPEAT_OFFSET = 8  # repeat part = evidence part + 8 (frozen, same configuration)
-REPEAT_PARTS = tuple(p + REPEAT_OFFSET for p in PARTS)  # 8-13
-RESERVED_PARTS = (6, 7, *range(14, 20))  # not generated
+REPEAT_PARTS = tuple(p + REPEAT_OFFSET for p in PARTS)  # 8-15
+RESERVED_PARTS = tuple(range(16, 20))  # not generated
 HISTORIES = 50_000
 DELTA_E_FRACTION = 0.03  # Delta E / E at E0 by the ionmc model (slab t)
 #: slab index -> (multiple of t, thickness factor f = Delta E / E by design); exact decimals
@@ -119,6 +128,7 @@ SMOKES: dict[str, tuple[int, int, int, int, int]] = {
     "i3fu2-smoke-carbon-water-10mevu-fluct-off": (20600441, 5, 17, 2000, 0),
     "i3fu2-smoke-carbon-water-2p4mevu-steps": (20600443, 1, 13, 50, 1),
     "i3fu2-smoke-carbon-water-50mevu-steps": (20600444, 1, 21, 50, 1),
+    "i3fu2-smoke-carbon-water-2p4mevu-finesteps": (20600445, 6, 13, 50, 1),
 }
 SMOKE_NAME = "i3fu2-smoke-carbon-water-10mevu"
 RESERVED_RESMOKE_SEED = 20600442  # plan: one re-smoke if a parameter name is wrong; not generated
@@ -176,7 +186,7 @@ def e_tag(case: int) -> str:
 
 
 def base_part(part: int) -> int:
-    """Evidence part whose configuration ``part`` (evidence 0-5 or repeat 8-13) runs."""
+    """Evidence part whose configuration ``part`` (evidence 0-7 or repeat 8-15) runs."""
     if part in PARTS:
         return part
     if part in REPEAT_PARTS:
@@ -190,12 +200,12 @@ def bundle_name(case: int, part: int) -> str:
 
 
 def evidence_keys() -> list[tuple[int, int]]:
-    """(case, part) of the 40 evidence bundles."""
+    """(case, part) of the 58 evidence bundles."""
     return [(c, p) for p, spec in PARTS.items() for c in spec[3]]
 
 
 def repeat_keys() -> list[tuple[int, int]]:
-    """(case, part + 8) of the 40 frozen repeat bundles."""
+    """(case, part + 8) of the 58 frozen repeat bundles."""
     return [(c, p + REPEAT_OFFSET) for c, p in evidence_keys()]
 
 
@@ -239,6 +249,13 @@ def exit_energy_per_u(ion: str, case: int, multiple: int) -> float:
     return e / a
 
 
+def max_step_size_um(ion: str, case: int) -> str:
+    """MaxStepSize of a fine-step run: t / :data:`FINE_DIVISOR` in um (= 50 t_mm um), as an exact
+    decimal string (t has 3 significant digits)."""
+    t = Decimal(fmt_mm(slab_mm(ion, case, 1)))
+    return format((t * 1000 / FINE_DIVISOR).normalize(), "f")
+
+
 def fmt_mm(x: float) -> str:
     """Length in mm with at most 6 decimals; must be exact at that precision."""
     s = f"{x:.6f}".rstrip("0").rstrip(".")
@@ -257,9 +274,10 @@ def build(
     case: int, part: int, seed: int, histories: int, kind: str, tracking: int = 0
 ) -> tuple[dict[str, Any], str]:
     """(case.json dict, input.txt text) of one bundle; ``kind`` "evidence", "repeat" (``part``
-    8-13, the configuration of ``part`` - 8) or "smoke" (``part`` the evidence part whose
+    8-15, the configuration of ``part`` - 8) or "smoke" (``part`` the evidence part whose
     configuration it runs)."""
     ion, mult, fluct, _cases = PARTS[base_part(part)]
+    fine = base_part(part) in FINE_PARTS
     if (kind == "repeat") != (part in REPEAT_PARTS):
         raise ValueError(f"kind {kind!r} does not fit part {part}")
     _proj, z, a, particle = IONS[ion]
@@ -271,8 +289,9 @@ def build(
     hlz = fmt_mm(round(t / 2.0, 6))
     t_txt = fmt_mm(t)
     total = beam_energy(ion, case)
-    slab_word = "1.6t" if mult == 2 else "t"
+    slab_word = ("1.6t" if mult == 2 else "t") + (" fine-step" if fine else "")
     fl_word = "on" if fluct else "OFF"
+    max_step_um = max_step_size_um(ion, case) if fine else None
     if kind == "repeat":
         orig = part - REPEAT_OFFSET
         head = (
@@ -302,6 +321,21 @@ def build(
             f"of {ion} at E0 = {e0} MeV/u in G4_WATER, case {case}, part {part} (slab "
             f"{slab_word} = {t_txt} mm, fluctuations {fl_word}), seed 20619000 + 100*{part} + "
             f"{case} = {seed}; diagnostic, no validation claim"
+        )
+    elif kind == "smoke" and tracking and fine:
+        head = (
+            "I3-FU-1 step 2 FINE-STEP SMOKE (TrackingVerbosity 1: count the steps per track "
+            "inside the slab, expected >= 15 with MaxStepSize t/20; not evidence): case "
+            f"{case} configuration ({ion} {e0} MeV/u, slab {slab_word} = {t_txt} mm, "
+            f"MaxStepSize {max_step_um} um), rehearsal seed {seed}."
+        )
+        rationale = (
+            "V3-008 amendment I3-FU-1 step 2 fine-step smoke: Ts/TrackingVerbosity 1 prints "
+            "every step; the evaluator counts the steps per primary inside the slab (expected "
+            f">= 15: the step limiter acts on GenericIon); {ion} {e0} MeV/u slab {slab_word} = "
+            f"{t_txt} mm, MaxStepSize {max_step_um} um, fluctuations {fl_word}, rehearsal seed "
+            f"{seed} (20600442 reserved for one re-smoke); energies never used; not evidence; "
+            "diagnostic, no validation claim"
         )
     elif kind == "smoke" and tracking:
         head = (
@@ -361,6 +395,15 @@ def build(
         "d:Ge/Water/HLY = 60 mm",
         f"d:Ge/Water/HLZ = {hlz} mm",
         f"d:Ge/Water/TransZ = {hlz} mm",
+        *(
+            [
+                "# Fine-step run: TOPAS per-component step limit (G4StepLimiter) in the slab, "
+                f"t/{FINE_DIVISOR}.",
+                f"d:Ge/Water/MaxStepSize = {max_step_um} um",
+            ]
+            if fine
+            else []
+        ),
         's:Ge/Source/Parent = "World"',
         's:Ge/Source/Type = "Group"',
         "d:Ge/Source/TransZ = -0.001 mm",
@@ -412,7 +455,8 @@ def build(
         "geometry": f"G4_WATER slab 120 x 120 x {t_txt} mm (x,y centred on the beam axis; z from "
         f"0 to {t_txt} mm) in a vacuum world 400 x 400 x 800 mm; slab {slab_word}, t from the "
         "ionmc default Bethe model (78 eV) for Delta E / E = 3 % at E0, 3 significant digits"
-        + ("; 1.6t = exactly 1.6 x t" if mult == 2 else ""),
+        + ("; 1.6t = exactly 1.6 x t" if mult == 2 else "")
+        + (f"; fine-step: MaxStepSize = t/{FINE_DIVISOR} = {max_step_um} um" if fine else ""),
         "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
         "cuts": "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (no delta electrons); "
         "EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7",
@@ -438,6 +482,7 @@ def build(
             "thickness_factor": float(SLABS[mult][1]),
             "kind": kind,
             "fluctuations": fluct,
+            "max_step_um": None if max_step_um is None else float(max_step_um),
         },
     }
     return case_doc, "\n".join(inp)
@@ -451,7 +496,7 @@ def write(out: Path, name: str, case_doc: dict[str, Any], inp: str) -> None:
 
 
 def generate(out: Path | str, histories: int = HISTORIES) -> list[tuple[str, int]]:
-    """Write the 40 evidence bundles, the 40 repeat bundles and the four smokes under ``out``;
+    """Write the 58 evidence bundles, the 58 repeat bundles and the five smokes under ``out``;
     return [(name, seed)]. ``histories`` (evidence and repeat bundles) differs from
     :data:`HISTORIES` only in tests."""
     out = Path(out)

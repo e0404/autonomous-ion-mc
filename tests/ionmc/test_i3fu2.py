@@ -89,11 +89,34 @@ gen_ss = _load("gen_ss_bundles", SCRIPTS / "ion_em" / "gen_ss_bundles.py")
 seeds = _load("_v3_008_seed_guard", ROOT / "tests" / "ionmc" / "test_v3_008_seed_families.py")
 IO = ev.rio
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _bytecode_stub() -> Any:
+    """The test interpreter's venv and worktree hold ``__pycache__`` files (the orchestrator
+    removes them only before the real run), so the bytecode-cache control is replaced by its
+    ``sys.dont_write_bytecode`` part here; the full control is unit-tested in
+    ``test_i3_band_diagnostic.py`` and :func:`test_runtime_checks_fail_closed`."""
+    real = ev.env_seal.bytecode_check
+
+    def stub(modules: Any) -> dict[str, Any]:
+        return {
+            "dont_write_bytecode": sys.dont_write_bytecode,
+            "modules_without_bytecode_cache": len(modules),
+            "test_stub": True,
+        }
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(ev.env_seal, "bytecode_check", stub)
+        mp.setattr(ev, "_REAL_BYTECODE_CHECK", real, raising=False)
+        yield
+
+
 BUNDLES = sorted(d for d in TOPAS.iterdir() if d.is_dir() and d.name.startswith("i3fu2-"))
 SMOKES = [d for d in BUNDLES if d.name in gen.SMOKES]
-STEP_SMOKES = {  # step-count smokes: name -> case (configuration of part 1, slab 1.6 t)
-    "i3fu2-smoke-carbon-water-2p4mevu-steps": 13,
-    "i3fu2-smoke-carbon-water-50mevu-steps": 21,
+STEP_SMOKES = {  # TrackingVerbosity-1 smokes: name -> (case, part whose configuration it runs)
+    "i3fu2-smoke-carbon-water-2p4mevu-steps": (13, 1),  # slab 1.6 t: one step expected
+    "i3fu2-smoke-carbon-water-50mevu-steps": (21, 1),
+    "i3fu2-smoke-carbon-water-2p4mevu-finesteps": (13, 6),  # slab t, MaxStepSize t/20
 }
 RUNS = [d for d in BUNDLES if d.name not in gen.SMOKES]
 
@@ -114,18 +137,19 @@ def _case(d: Path) -> dict[str, Any]:
 
 
 def test_bundle_set() -> None:
-    assert len(BUNDLES) == 84 and len(RUNS) == 80 and len(SMOKES) == 4
+    assert len(BUNDLES) == 121 and len(RUNS) == 116 and len(SMOKES) == 5
     assert [d.name for d in BUNDLES] == gen.bundle_names()
     evidence = sorted(
-        [(c, p) for p in (0, 1, 2, 3) for c in range(13, 22)]
+        [(c, p) for p in (0, 1, 2, 3, 6, 7) for c in range(13, 22)]
         + [(c, 4) for c in (17, 21)]
         + [(c, 5) for c in (13, 21)]
     )
-    assert sorted(gen.evidence_keys()) == evidence and len(evidence) == 40
+    assert sorted(gen.evidence_keys()) == evidence and len(evidence) == 58
     assert gen.REPEAT_OFFSET == 8
     assert sorted(gen.repeat_keys()) == sorted((c, p + 8) for c, p in evidence)
-    assert gen.REPEAT_PARTS == (8, 9, 10, 11, 12, 13)  # Codex REVIEW-22f384ed: part + 8
-    assert gen.RESERVED_PARTS == (6, 7, 14, 15, 16, 17, 18, 19)
+    assert gen.REPEAT_PARTS == tuple(range(8, 16))  # part + 8 for parts 0-7
+    assert gen.RESERVED_PARTS == (16, 17, 18, 19)
+    assert gen.FINE_PARTS == (6, 7) and gen.FINE_DIVISOR == 20
     assert not set(gen.PARTS) & set(gen.RESERVED_PARTS)
     assert not set(gen.REPEAT_PARTS) & set(gen.RESERVED_PARTS)
     energies = {c: float(e) for c, e in gen.CASES.items()}
@@ -144,6 +168,17 @@ def test_bundle_set() -> None:
         kinds[kind] += 1
         base = part - 8 if part >= 8 else part
         assert info["thickness_factor"] == (0.048 if base in (1, 3) else 0.03)
+        if base in gen.FINE_PARTS:  # MaxStepSize = t / 20 in um, exactly
+            t_um = info["slab_mm"] * 1000.0
+            assert info["max_step_um"] == pytest.approx(t_um / 20, rel=1e-12), d.name
+            assert (
+                _native(d, "d:Ge/Water/MaxStepSize")
+                == f"{gen.max_step_size_um(info['ion'], info['case'])} um"
+            )
+            assert info["slab_mm"] == gen.slab_mm(info["ion"], info["case"], 1)
+        else:
+            assert info["max_step_um"] is None
+            assert "MaxStepSize" not in (d / "input.txt").read_text()
         if part >= 8:  # a repeat is byte-identical to its original except seed and wording
             orig = _case(TOPAS / gen.bundle_name(info["case"], base))
             for key in ("physics", "source", "geometry", "histories", "scorers", "units"):
@@ -151,16 +186,15 @@ def test_bundle_set() -> None:
             assert {k: v for k, v in info.items() if k not in ("part", "kind")} == {
                 k: v for k, v in orig["i3fu2"].items() if k not in ("part", "kind")
             }
-    assert kinds == {"evidence": 40, "repeat": 40}
+    assert kinds == {"evidence": 58, "repeat": 58}
     for d in SMOKES:
         info = _case(d)["i3fu2"]
         assert info["kind"] == "smoke" and info["ion"] == "carbon"
         if d.name in STEP_SMOKES:
-            assert (info["case"], info["part"], info["thickness_factor"]) == (
-                STEP_SMOKES[d.name],
-                1,
-                0.048,
-            )
+            case, part = STEP_SMOKES[d.name]
+            factor = 0.048 if part == 1 else 0.03
+            assert (info["case"], info["part"], info["thickness_factor"]) == (case, part, factor)
+            assert (info["max_step_um"] is not None) == (part == 6)
         else:
             assert info["case"] == 17 and info["thickness_factor"] == 0.03
 
@@ -175,7 +209,7 @@ def test_regeneration_is_byte_identical_and_manifest(tmp_path: Path) -> None:
     assert gen.check(TOPAS, MANIFEST)
     m = json.loads(MANIFEST.read_text())
     assert m["schema"] == "ionmc-i3fu2-frozen-bundles-1"
-    assert m["bundle_count"] == 84 and m["file_count"] == 168
+    assert m["bundle_count"] == 121 and m["file_count"] == 242
     assert ev.manifest_digest(m["bundles"]) == m["bundle_set_digest"]
     for d in BUNDLES:
         for f in ("case.json", "input.txt"):
@@ -197,7 +231,7 @@ def test_seeds_formula_and_reservation() -> None:
         assert s in topas and s in seeds.V3_008_RESERVED
         assert case_no in seeds.TOPAS_CASES and part in seeds.TOPAS_PARTS
         used.append(s)
-    assert len(set(used)) == 80 and min(used) == 20619013 and max(used) == 20620321
+    assert len(set(used)) == 116 and min(used) == 20619013 and max(used) == 20620521
     smoke_seeds = {}
     for d in SMOKES:
         c = _case(d)
@@ -211,8 +245,9 @@ def test_seeds_formula_and_reservation() -> None:
         "i3fu2-smoke-carbon-water-10mevu-fluct-off": [20600441],
         "i3fu2-smoke-carbon-water-2p4mevu-steps": [20600443],
         "i3fu2-smoke-carbon-water-50mevu-steps": [20600444],
+        "i3fu2-smoke-carbon-water-2p4mevu-finesteps": [20600445],
     }
-    for s in (20600440, 20600441, 20600442, 20600443, 20600444):
+    for s in (20600440, 20600441, 20600442, 20600443, 20600444, 20600445):
         assert s in seeds.REHEARSAL_8 and s in seeds.V3_008_RESERVED
     assert gen.RESERVED_RESMOKE_SEED == 20600442
     all_text = "".join((d / "input.txt").read_text() for d in BUNDLES)
@@ -279,9 +314,9 @@ def test_physics_block_identical_to_td_em() -> None:
     # step-count smokes: the part-1 configuration of their case; only the seed, the histories
     # and i:Ts/TrackingVerbosity (smoke-only, 1) differ
     skip = ("i:Ts/Seed", "i:So/Beam/NumberOfHistoriesInRun", "i:Ts/TrackingVerbosity", "#")
-    for name, case in STEP_SMOKES.items():
+    for name, (case, part) in STEP_SMOKES.items():
         smoke = (TOPAS / name / "input.txt").read_text().splitlines()
-        ref = (TOPAS / gen.bundle_name(case, 1) / "input.txt").read_text().splitlines()
+        ref = (TOPAS / gen.bundle_name(case, part) / "input.txt").read_text().splitlines()
         assert [ln for ln in smoke if not ln.startswith(skip)] == [
             ln for ln in ref if not ln.startswith(skip)
         ]
@@ -511,34 +546,31 @@ def test_frozen_charge_stopping_is_exact_at_the_pre_step_energy() -> None:
     assert ev.effective_charge_sq(proj, 2.4) < 36.0
 
 
-def test_planted_algorithm_bias_is_consistent_and_extrapolates() -> None:
-    """A TOPAS bias equal to the model's g(f) passes the consistency check and the
-    extrapolation recovers the planted r0 up to exactly the modelled residual (1 + r0) R_model
-    (|R_model| <= 3.5e-4, P13 record); a bias of the opposite sign fails the check at the low
-    points."""
+def test_planted_algorithm_bias_passes_the_checks() -> None:
+    """TOPAS with the model's one-step bias g(f) on the slab-t / 1.6 t runs and none on the
+    fine-step run passes the emulation check (i) (g_meas = g_model exactly) and the
+    extrapolation check (ii) (|r_0 - r_fine| = |(1 + r0) R_model| <= 3.5e-4); a bias of the
+    opposite sign fails check (i) at the low-energy points (|2 g| > 0.15 %)."""
     fails = []
     for ion in ("carbon", "oxygen"):
+        parts = ev.TRIPLE_PARTS[ion]
         for case in gen.ALL_CASES:
             m = ev.stepping_bias(ion, case)
             for r0 in (0.05, -0.04):
-                r1 = (1 + r0) * (1 + m["g1"]) - 1
-                r2 = (1 + r0) * (1 + m["g2"]) - 1
-                assert abs((r2 - r1) - m["d_pred"]) <= ev.CONSISTENCY_TOL
-                got = ev.richardson(r1, r2)
-                assert abs(got - (r0 + (1 + r0) * m["r_model"])) < 1e-12
-                assert abs(got - r0) < 3.5e-4
-                pt = ev.resolve_point(
-                    {gen.bundle_name(case, 0): _fake(r=r1), gen.bundle_name(case, 1): _fake(r=r2)},
-                    case,
-                    (0, 1),
-                    _ratios,
-                    m["d_pred"],
-                )
-                assert pt.valid
-            anti = (0.05 - m["g1"], 0.05 - m["g2"])
-            if abs((anti[1] - anti[0]) - m["d_pred"]) > ev.CONSISTENCY_TOL:
+                rs = [(1 + r0) * (1 + m["g1"]) - 1, (1 + r0) * (1 + m["g2"]) - 1, r0]
+                runs = {
+                    gen.bundle_name(case, p): _fake(r=r) for p, r in zip(parts, rs, strict=True)
+                }
+                assert ev.emulation_residual([{"r_M": r} for r in rs], m) < 1e-12
+                d = ev.extrapolation_difference([{"r_M": r} for r in rs])
+                assert d == pytest.approx((1 + r0) * m["r_model"], abs=1e-12)
+                assert abs(d) < 3.5e-4
+                assert ev.resolve_point(runs, case, parts, _ratios, m).valid
+            anti = [{"r_M": 0.05 - m["g1"]}, {"r_M": 0.05 - m["g2"]}, {"r_M": 0.05}]
+            if ev.emulation_residual(anti, m) > ev.EMULATION_TOL:
                 fails.append((ion, case))
-    assert ("carbon", 13) in fails and ("oxygen", 13) in fails and ("oxygen", 14) in fails
+    assert ("carbon", 13) in fails and ("oxygen", 13) in fails and ("oxygen", 15) in fails
+    assert ("carbon", 21) not in fails  # 50 MeV/u: g is negligible either way
 
 
 def test_model_residual_above_limit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -547,7 +579,7 @@ def test_model_residual_above_limit_raises(monkeypatch: pytest.MonkeyPatch) -> N
         ev.stepping_model_check()
 
 
-# --- repeat rule (Codex REVIEW-22f384ed finding 5) -------------------------------------------
+# --- repeat rule (deterministic; revision 5: the triple) -------------------------------------
 
 
 def _fake(valid: bool = True, reason: str | None = None, r: float = 0.0) -> dict[str, Any]:
@@ -558,54 +590,72 @@ def _ratios(run: dict[str, Any]) -> dict[str, Any]:
     return {"r_M": run["r"]}
 
 
+def test_check_formulas() -> None:
+    m = {"g1": 0.003, "g2": 0.005, "d_pred": 0.002, "r_model": -0.0}
+    rs = [{"r_M": 0.0531}, {"r_M": 0.05525}, {"r_M": 0.05}]
+    g1 = 1.0531 / 1.05 - 1
+    g2 = 1.05525 / 1.05 - 1
+    assert ev.emulation_residual(rs, m) == pytest.approx(max(abs(g1 - 0.003), abs(g2 - 0.005)))
+    r0 = (0.048 * 0.0531 - 0.03 * 0.05525) / 0.018
+    assert ev.extrapolation_difference(rs) == pytest.approx(r0 - 0.05)
+    assert (ev.EMULATION_TOL, ev.EXTRAPOLATION_TOL) == (0.0015, 0.002)
+
+
 def test_repeat_rule_unit() -> None:
     n = gen.bundle_name
-    d = 0.001  # predicted difference
+    m = {"g1": 0.003, "g2": 0.005, "d_pred": 0.002, "r_model": 0.0}
+    parts = (0, 1, 6)
+    reps = (8, 9, 14)
 
-    def res(runs: dict[str, Any], case: int = 15, parts: tuple[int, ...] = (0, 1)) -> Any:
-        return ev.resolve_point(runs, case, parts, _ratios, d if len(parts) == 2 else None)
+    def res(runs: dict[str, Any], case: int = 15, prt: tuple[int, ...] = parts) -> Any:
+        return ev.resolve_point(runs, case, prt, _ratios, m if len(prt) == 3 else None)
 
-    ok = {n(15, 0): _fake(r=0.01), n(15, 1): _fake(r=0.012)}
+    def triple(r1: float, r2: float, rf: float, ps: tuple[int, ...] = parts) -> dict[str, Any]:
+        return {n(15, p): _fake(r=r) for p, r in zip(ps, (r1, r2, rf), strict=True)}
+
+    ok = triple(0.003, 0.005, 0.0)  # g_meas = g_model; r0 - rfine = R_model = -1/3000
     pt = res(ok)
-    assert pt.valid and pt.used == {} and pt.thickness_difference() == pytest.approx(0.002)
-    assert pt.consistency_residual() == pytest.approx(0.001)
-    for extra in (n(15, 8), n(15, 9)):  # a repeat without a recorded failure
+    assert pt.valid and pt.used == {} and pt.emulation_residual() == pytest.approx(0.0, abs=1e-12)
+    assert pt.extrapolation_difference() == pytest.approx(-1.0 / 3000.0, rel=1e-9)
+    assert pt.thickness_difference() == pytest.approx(0.002)
+    assert pt.consistency_residual() == pytest.approx(0.0, abs=1e-12)
+    for extra in reps:  # a repeat without a recorded failure
         with pytest.raises(ev.RecordError, match="without a recorded failure"):
-            res({**ok, extra: _fake()})
+            res({**ok, n(15, extra): _fake()})
     # validity failure of one run: exactly that run is repeated
-    bad_t = {n(15, 0): _fake(False, "deficit"), n(15, 1): _fake(r=0.012)}
-    pt = res(bad_t)
+    bad = {**ok, n(15, 6): _fake(False, "deficit")}
+    pt = res(bad)
     assert not pt.valid and pt.reason == "invalid run; no repeat"
-    pt = res({**bad_t, n(15, 8): _fake(r=0.011)})
-    assert pt.valid and pt.used == {n(15, 8): f"original {n(15, 0)} invalid: deficit"}
-    with pytest.raises(ev.RecordError, match="is valid"):  # repeat of the valid 1.6t run
-        res({**bad_t, n(15, 8): _fake(r=0.011), n(15, 9): _fake()})
-    with pytest.raises(ev.RecordError, match="is valid"):
-        res({**bad_t, n(15, 9): _fake()})
-    pt = res({**bad_t, n(15, 8): _fake(False, "killed")})
+    pt = res({**bad, n(15, 14): _fake(r=0.0)})
+    assert pt.valid and pt.used == {n(15, 14): f"original {n(15, 6)} invalid: deficit"}
+    with pytest.raises(ev.RecordError, match="is valid"):  # repeat of a valid run
+        res({**bad, n(15, 14): _fake(r=0.0), n(15, 8): _fake(r=0.003)})
+    pt = res({**bad, n(15, 14): _fake(False, "killed")})
     assert not pt.valid and "second failure" in str(pt.reason)
-    pt = res({**bad_t, n(15, 8): _fake(r=0.0)})  # repeat valid but the new pair inconsistent
-    assert not pt.valid and str(pt.reason).startswith(ev.CONSISTENCY_REASON)
-    assert "second failure" in str(pt.reason)
-    both_bad = {n(15, 0): _fake(False, "deficit"), n(15, 1): _fake(False, "killed")}
-    with pytest.raises(ev.RecordError, match="partial repeat set"):
-        res({**both_bad, n(15, 8): _fake(r=0.01)})
-    assert res({**both_bad, n(15, 8): _fake(r=0.01), n(15, 9): _fake(r=0.011)}).valid
-    # consistency failure (|0.01 - 0.001| > 0.003): BOTH slabs are repeated, the pair replaced
-    incons = {n(15, 0): _fake(r=0.0), n(15, 1): _fake(r=0.01)}
-    pt = res(incons)
-    assert not pt.valid and pt.thickness_difference() == pytest.approx(0.01)
-    assert pt.reason == f"{ev.CONSISTENCY_REASON}; no repeat"
-    for rep in (n(15, 8), n(15, 9)):
+    pt = res({**bad, n(15, 14): _fake(r=0.004)})  # valid repeat, but the triple fails (i)
+    assert not pt.valid and str(pt.reason).startswith(ev.EMULATION_REASON)
+    # check (i) failure: the WHOLE triple is repeated and replaced
+    emul = triple(0.003, 0.0075, 0.0)  # g_meas(f2) off by 0.0025
+    pt = res(emul)
+    assert not pt.valid and pt.reason == f"{ev.EMULATION_REASON}; no repeat"
+    assert pt.emulation_residual() == pytest.approx(0.0025, rel=1e-6)
+    for drop in reps:
+        partial = {**emul, **{n(15, p): _fake(r=0.0) for p in reps if p != drop}}
         with pytest.raises(ev.RecordError, match="partial repeat set"):
-            res({**incons, rep: _fake(r=0.0)})
-    pt = res({**incons, n(15, 8): _fake(r=0.02), n(15, 9): _fake(r=0.021)})
-    assert pt.valid and set(pt.used) == {n(15, 8), n(15, 9)}
-    assert pt.thickness_difference() == pytest.approx(0.001)
-    pt = res({**incons, n(15, 8): _fake(r=0.0), n(15, 9): _fake(r=0.02)})
+            res(partial)
+    good = {**emul, **triple(0.013, 0.015, 0.01, reps)}
+    pt = res(good)
+    assert pt.valid and set(pt.used) == {n(15, p) for p in reps}
+    assert all(ev.EMULATION_REASON in v for v in pt.used.values())
+    again = {**emul, **triple(0.003, 0.0075, 0.0, reps)}
+    pt = res(again)
     assert not pt.valid and "second failure" in str(pt.reason)
-    pt = res({**incons, n(15, 8): _fake(False, "deficit"), n(15, 9): _fake(r=0.0)})
-    assert not pt.valid and "second failure" in str(pt.reason)
+    # check (ii) failure alone: g_meas within 0.12 % of the model but r_0 - r_fine = 0.52 %
+    extrap = triple(0.0042, 0.0038, 0.0)
+    assert ev.emulation_residual([{"r_M": r} for r in (0.0042, 0.0038, 0.0)], m) <= 0.0015
+    pt = res(extrap)
+    assert not pt.valid and pt.reason == f"{ev.EXTRAPOLATION_REASON}; no repeat"
+    assert abs(pt.extrapolation_difference() or 0.0) > ev.EXTRAPOLATION_TOL
     # single-run points (He, fluctuations off)
     with pytest.raises(ev.RecordError, match="missing"):
         res({n(17, 12): _fake()}, 17, (4,))
@@ -613,8 +663,10 @@ def test_repeat_rule_unit() -> None:
     assert res({n(17, 4): _fake(False, "x"), n(17, 12): _fake(r=0.0)}, 17, (4,)).valid
     with pytest.raises(ev.RecordError, match="without a recorded failure"):
         res({n(17, 4): _fake(), n(17, 12): _fake()}, 17, (4,))
-    with pytest.raises(ValueError, match="predicted"):
-        ev.resolve_point(ok, 15, (0, 1), _ratios)
+    with pytest.raises(ValueError, match="triple"):
+        ev.resolve_point(ok, 15, parts, _ratios)
+    with pytest.raises(ValueError, match="triple"):
+        ev.resolve_point(ok, 15, (0, 1), _ratios, m)
 
 
 # --- step-count parser (Codex REVIEW-22f384ed finding 3) -------------------------------------
@@ -653,6 +705,37 @@ def _track(
         )
     lines.append("    :----- List of 2ndaries - #SpawnInStep=  0(Rest= 0,Along= 0,Post= 0)")
     return "\n".join(lines) + "\n"
+
+
+def _fine_track(slab_mm: float, n_steps: int = 20) -> str:
+    """A primary crossing the slab in ``n_steps`` equal limiter steps (fine-step smoke)."""
+    lines = [
+        "* G4Track Information:   Particle = C12,   Track ID = 1,   Parent ID = 0",
+        "    0      0 fm      0 fm     -1 um   28.8 MeV   0 eV   0 fm   0 fm   World initStep",
+        "    1      0 fm      0 fm      0 fm   28.8 MeV   0 eV   1 um   1 um   Water Transp",
+    ]
+    for k in range(1, n_steps + 1):
+        z_um = slab_mm * 1000.0 * k / n_steps
+        lines.append(
+            f"    {k + 1}      0 fm      0 fm   {z_um:.6g} um   27 MeV   1 keV   1 nm   1 um   "
+            + ("World Transportation" if k == n_steps else "Water StepLimiter")
+        )
+    lines.append(
+        f"    {n_steps + 2}      0 fm      0 fm     40 cm   27 MeV   0 eV   1 cm   1 cm   Out T"
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _fine_stdout(n: int, slab_mm: float, *, coarse: int = -1) -> str:
+    """Fine-step smoke stdout: every primary 20 steps in the slab, primary ``coarse`` 1 step."""
+    return _stdout(n) + "".join(_fine_track(slab_mm, 1 if i == coarse else 20) for i in range(n))
+
+
+def test_count_slab_steps_fine_steps() -> None:
+    slab = 0.00208
+    counts = ev.count_slab_steps(_fine_stdout(4, slab, coarse=2), slab, STEP_RE, TRACK_RE)
+    assert [c["steps"] for c in counts.values()] == [20, 20, 1, 20]
+    assert all(c["traverses"] for c in counts.values())
 
 
 def _step_stdout(
@@ -1094,7 +1177,8 @@ def _write_run(
     (odir / "stderr.txt").write_text(stderr)
     for name in ("case.json", "input.txt"):
         shutil.copy(bdir / name, odir / "work" / name)
-    g = _g(info) if plant_g and info["kind"] != "smoke" else 0.0
+    one_step = info["kind"] != "smoke" and info.get("max_step_um") is None
+    g = _g(info) if plant_g and one_step else 0.0  # the fine-step run carries no one-step bias
     h, rows, tot = _phase_space(
         doc, base["de_m"][bundle] * (1.0 + r) * (1.0 + g), rng, noise=noise, deficit=deficit
     )
@@ -1174,12 +1258,14 @@ def _write_smokes(
     split: str = "",
     stop: str = "",
     deficit: str = "",
+    coarse: bool = False,
     only: tuple[str, ...] = ev.ALL_SMOKES,
     over: dict[str, dict[str, Any]] | None = None,
 ) -> None:
-    """The four smokes (``<label>-smokes``), run at the pin-A commit between the two reviews.
+    """The five smokes (``<label>-smokes``), run at the pin-A commit between the two reviews.
     Step-count smokes: ``split`` / ``stop``: that smoke's primary 7 takes two steps / stops in
-    the slab; ``deficit``: that smoke's phase space misses a row. ``over``: per-smoke keywords."""
+    the slab; ``deficit``: that smoke's phase space misses a row; ``coarse``: primary 7 of the
+    fine-step smoke crosses the slab in one step. ``over``: per-smoke keywords."""
     entries: dict[str, str] = {}
     for name in only:
         info = base["cases"][name]["i3fu2"]
@@ -1195,6 +1281,8 @@ def _write_smokes(
                 stop=7 if name == stop else -1,
             )  # fmt: skip
             kw["deficit"] = 1 if name == deficit else 0
+        if name == ev.FINE_SMOKE:
+            kw["stdout"] = _fine_stdout(n, float(info["slab_mm"]), coarse=7 if coarse else -1)
         kw.update((over or {}).get(name, {}))
         rng = np.random.default_rng(len(entries))
         entries[name] = _write_run(base, repo, f"{label}-smokes", name, 0.0, rng, **kw)
@@ -1256,7 +1344,7 @@ def _r_icru(c: int, p: int) -> float:
     """TOPAS = the table, except C 10-15 MeV/u 3 % above it (class H) and He = model."""
     if p == 4:
         return 0.0
-    if p in (0, 1, 5) and c in (17, 18):
+    if p in (0, 1, 5, 6) and c in (17, 18):
         return TABLE_FACTOR * 1.03 - 1.0
     return S
 
@@ -1266,7 +1354,7 @@ def _r_model(c: int, p: int) -> float:
 
 
 def _r_mixed(c: int, p: int) -> float:
-    return S if p in (0, 1, 5) else 0.0  # C sides with the table, O with the model
+    return S if p in (0, 1, 5, 6) else 0.0  # C sides with the table, O with the model
 
 
 def _r_he_fail(c: int, p: int) -> float:
@@ -1278,13 +1366,13 @@ def _r_fragile(c: int, p: int) -> float:
     return 0.0 if p == 4 else TABLE_FACTOR * 1.004 - 1.0
 
 
-R0, B_LIN = 0.05, 0.1  # Richardson scenario: r = R0 + B_LIN f exactly (noise free, no g)
-
-
-def _r_linear(c: int, p: int) -> float:
+def _r_extrapolation(c: int, p: int) -> float:
+    """O 20 MeV/u: the one-step pair off by +0.09 % (t) and -0.09 % (1.6 t) relative to the
+    model's one-step bias: check (i) passes (<= 0.15 %), check (ii) fails (|r_0 - r_fine| ~
+    0.37 %)."""
     if p == 4:
         return 0.0
-    return R0 + B_LIN * (0.048 if p in (1, 3) else 0.03)
+    return S + {(19, 2): 0.0009, (19, 3): -0.0009}.get((c, p), 0.0)
 
 
 def _r_inconsistent(c: int, p: int) -> float:
@@ -1302,8 +1390,9 @@ def _both_lines(n: int, fluct: bool) -> str:
 
 
 RESULT_LABELS = (
-    "icru", "model", "mixed", "he_fail", "linear", "invalid", "second_invalid", "repeat_ok",
-    "split", "stopped", "smoke_deficit", "off_hits_on", "on_hits_off", "fragile",
+    "icru", "model", "mixed", "he_fail", "extrapolation", "invalid", "second_invalid",
+    "repeat_ok", "split", "stopped", "smoke_deficit", "off_hits_on", "on_hits_off", "fragile",
+    "coarse",
 )  # fmt: skip
 
 
@@ -1314,7 +1403,7 @@ def results(base: dict[str, Any]) -> dict[str, dict[str, Any]]:
     _scenario(base, "model", _r_model)
     _scenario(base, "mixed", _r_mixed)
     _scenario(base, "he_fail", _r_he_fail)
-    _scenario(base, "linear", _r_linear, noise=0.0, plant_g=False)
+    _scenario(base, "extrapolation", _r_extrapolation)
     _scenario(base, "invalid", _r_icru, run_kw={c15: BAD})
     _scenario(  # C 5 MeV/u invalid + an invalid repeat; O 20 MeV/u inconsistent, no repeat
         base,
@@ -1323,12 +1412,12 @@ def results(base: dict[str, Any]) -> dict[str, dict[str, Any]]:
         run_kw={c15: BAD, gen.bundle_name(15, 8): BAD},
         repeats={gen.bundle_name(15, 8): S},
     )
-    _scenario(  # both restored: C part 8 for the invalid run; O 20 MeV/u BOTH slabs (10, 11)
+    _scenario(  # both restored: C part 8 for the invalid run; O 20 MeV/u the whole triple
         base,
         "repeat_ok",
         _r_inconsistent,
         run_kw={c15: BAD},
-        repeats={gen.bundle_name(15, 8): S, gen.bundle_name(19, 10): S, gen.bundle_name(19, 11): S},
+        repeats={gen.bundle_name(15, 8): S, **{gen.bundle_name(19, p): S for p in (10, 11, 15)}},
     )
     _scenario(base, "split", _r_icru, smoke_kw={"split": ev.STEP_SMOKES[1]})
     _scenario(base, "stopped", _r_icru, smoke_kw={"stop": ev.STEP_SMOKES[0]})
@@ -1346,6 +1435,7 @@ def results(base: dict[str, Any]) -> dict[str, dict[str, Any]]:
         run_kw={gen.bundle_name(21, 5): {"stdout": _both_lines(SYN_HISTORIES, False)}},  # fmt: skip
     )
     _scenario(base, "fragile", _r_fragile)
+    _scenario(base, "coarse", _r_icru, smoke_kw={"coarse": True})
     _commit(base["repo"], "records")
     out = {lab: _evaluate(base, lab) for lab in RESULT_LABELS}
     assert o19_2t in out["second_invalid"]["provenance"]["runs"]
@@ -1366,9 +1456,11 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
             assert v["mean_s"] == pytest.approx(S, abs=4e-3)
             assert v["x_b"] == 0.01
             assert v["n"] == {"[2,5)": 2, "[5,10)": 2, "[10,20)": 2, "[20,50]": 3}[b]
-            assert v["sigma_b"] == pytest.approx(np.hypot(v["se_b"], 0.0025))
-            assert 1e-4 < v["se_b"] < 6e-4  # 0.4 % row noise, 1000 rows, extrapolated points
+            assert v["sigma_b"] == pytest.approx(np.hypot(v["se_b"], 0.002))
+            assert 3e-5 < v["se_b"] < 3e-4  # 0.4 % row noise, 1000 rows, fine-step points
             assert v["max_abs_consistency_residual"] < 2e-3  # planted g: Delta_meas ~ Delta_pred
+            assert v["max_abs_emulation_residual"] < 1e-3  # planted g: g_meas ~ g_model
+            assert v["max_abs_extrapolation_difference"] < 1.5e-3
             assert 0.0 <= v["max_abs_model_residual"] < 3.5e-4
             assert v["max_abs_predicted_difference"] < 3.5e-3
             if (ion, b) != ("carbon", "[10,20)"):
@@ -1395,6 +1487,13 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
         "traversing_primaries": 50,
         "phase_space_complete": True,
     }
+    assert doc["fine_step_premise"] == {
+        "primaries": 50,
+        "min_steps_in_slab": 20,
+        "traversing_primaries": 50,
+        "phase_space_complete": True,
+        "pass": True,
+    }
     assert doc["one_step_premise"] == {
         "checked": True,
         "smokes": dict.fromkeys(ev.STEP_SMOKES, one),
@@ -1402,7 +1501,7 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dic
     }
     prov = doc["provenance"]
     runs = prov["runs"]
-    assert len(runs) == 40 and set(runs) == {gen.bundle_name(c, p) for c, p in gen.evidence_keys()}
+    assert len(runs) == 58 and set(runs) == {gen.bundle_name(c, p) for c, p in gen.evidence_keys()}
     assert all(
         v["scored"] == SYN_HISTORIES and v["run_id"].startswith("REF-") for v in runs.values()
     )
@@ -1478,16 +1577,33 @@ def test_failed_control_is_inconclusive(results: dict[str, dict[str, Any]]) -> N
     assert doc["controls"]["fluctuations_off"]["pass"] is True
 
 
-def test_richardson_removes_a_planted_linear_bias(results: dict[str, dict[str, Any]]) -> None:
-    doc = results["linear"]
-    assert doc["conclusive"]
-    for ion in ("carbon", "oxygen"):
-        for v in doc["bands"][ion].values():
-            assert v["mean_r_M"] == R0  # written rounded; the planted value is exact at 0.1 pp
-            assert v["se_b"] < 1e-9
-            assert v["max_abs_thickness_difference"] == pytest.approx(B_LIN * 0.018, abs=1e-9)
-    # fluctuation control: same planted r as C slab t -> zero difference
-    assert doc["controls"]["fluctuations_off"]["max_abs_difference"] < 1e-9
+def test_extrapolation_check_failure_is_inconclusive(results: dict[str, dict[str, Any]]) -> None:
+    """Check (ii) alone: the pair within 0.15 % of the model's g but r_0 - r_fine ~ 0.37 %."""
+    doc = results["extrapolation"]
+    assert doc["pattern"] == "INCONCLUSIVE" and doc["pattern_before_controls"] == "ICRU"
+    assert doc["invalid_points"] == {"oxygen case 19": f"{ev.EXTRAPOLATION_REASON}; no repeat"}
+    o = doc["bands"]["oxygen"]["[20,50]"]
+    assert o["n"] == 2 and o["max_abs_emulation_residual"] <= ev.EMULATION_TOL
+    assert o["max_abs_extrapolation_difference"] > ev.EXTRAPOLATION_TOL
+
+
+def test_points_are_the_fine_step_runs(results: dict[str, dict[str, Any]]) -> None:
+    """The band means are those of the fine-step runs (no one-step bias, no extrapolation): in
+    the ICRU scenario r_I of the fine runs is 0 up to noise, also where |R_model| ~ 3e-4."""
+    doc = results["icru"]
+    assert abs(doc["bands"]["oxygen"]["[2,5)"]["mean_r_I"]) <= 0.001
+    assert doc["method"]["method_systematic"] == 0.002
+    assert doc["method"]["method_systematic_robustness"] == 0.004
+    assert doc["method"]["emulation_tolerance"] == 0.0015
+    assert doc["method"]["extrapolation_tolerance"] == 0.002
+
+
+def test_fine_step_premise_failure_is_inconclusive(results: dict[str, dict[str, Any]]) -> None:
+    doc = results["coarse"]
+    assert doc["pattern"] == "INCONCLUSIVE" and doc["inconclusive_reasons"] == ["fine_step_premise"]
+    fine = doc["fine_step_premise"]
+    assert fine["pass"] is False and fine["min_steps_in_slab"] == 1
+    assert fine["traversing_primaries"] == 49 and fine["primaries"] == 50
 
 
 def test_invalid_run_without_repeat_is_inconclusive(results: dict[str, dict[str, Any]]) -> None:
@@ -1507,29 +1623,31 @@ def test_second_invalid_and_consistency_failure(results: dict[str, dict[str, Any
     assert set(doc["invalid_runs"]) == {gen.bundle_name(15, 0), gen.bundle_name(15, 8)}
     assert doc["invalid_points"] == {
         "carbon case 15": "repeat run invalid (second failure of the point)",
-        "oxygen case 19": f"{ev.CONSISTENCY_REASON}; no repeat",
+        "oxygen case 19": f"{ev.EMULATION_REASON}; no repeat",
     }
     assert list(doc["repeats_used"]) == [gen.bundle_name(15, 8)]
     o = doc["bands"]["oxygen"]["[20,50]"]  # 20 MeV/u
     assert o["n"] == 2 and o["max_abs_consistency_residual"] == pytest.approx(0.01, abs=2e-3)
+    assert o["max_abs_emulation_residual"] == pytest.approx(0.01, abs=2e-3)
 
 
 def test_valid_repeats_restore_conclusiveness(results: dict[str, dict[str, Any]]) -> None:
     doc = results["repeat_ok"]
     assert doc["conclusive"] and doc["pattern"] == "ICRU"
     assert doc["invalid_points"] == {} and list(doc["invalid_runs"]) == [gen.bundle_name(15, 0)]
-    cons = f"{ev.CONSISTENCY_REASON}"
+    cons = ev.EMULATION_REASON
     assert doc["repeats_used"] == {
         gen.bundle_name(15, 8): f"original {gen.bundle_name(15, 0)} invalid: "
         + doc["invalid_runs"][gen.bundle_name(15, 0)],
         gen.bundle_name(19, 10): f"original {gen.bundle_name(19, 2)} invalid: {cons}",
         gen.bundle_name(19, 11): f"original {gen.bundle_name(19, 3)} invalid: {cons}",
+        gen.bundle_name(19, 15): f"original {gen.bundle_name(19, 7)} invalid: {cons}",
     }
     assert (
         doc["bands"]["carbon"]["[5,10)"]["n"] == 2 and doc["bands"]["oxygen"]["[20,50]"]["n"] == 3
     )
     assert doc["bands"]["oxygen"]["[20,50]"]["max_abs_consistency_residual"] < 2e-3
-    assert len(doc["provenance"]["runs"]) == 43
+    assert len(doc["provenance"]["runs"]) == 62
 
 
 @pytest.mark.parametrize(
@@ -1584,6 +1702,7 @@ def test_aggregates_only_and_table_relative_values_rounded(
     list or value) and every table-relative aggregate is written rounded to 0.1 pp."""
     band_keys = {
         "n", "mean_r_M", "mean_r_I", "mean_s", "se_b", "sigma_b", "x_b", "class",
+        "max_abs_emulation_residual", "max_abs_extrapolation_difference",
         "max_abs_thickness_difference", "max_abs_consistency_residual",
         "max_abs_predicted_difference", "max_abs_model_residual",
     }  # fmt: skip
@@ -1615,8 +1734,12 @@ def test_aggregates_only_and_table_relative_values_rounded(
             assert set(s) == {
                 "primaries", "max_steps_in_slab", "traversing_primaries", "phase_space_complete",
             }  # fmt: skip
+        assert set(doc["fine_step_premise"]) == {
+            "primaries", "min_steps_in_slab", "traversing_primaries", "phase_space_complete",
+            "pass",
+        }  # fmt: skip
         for reason in [*doc["invalid_runs"].values(), *doc["invalid_points"].values()]:
-            rest = reason.replace(ev.CONSISTENCY_REASON, "")
+            rest = reason.replace(ev.EMULATION_REASON, "").replace(ev.EXTRAPOLATION_REASON, "")
             assert not re.search(r"\d\.\d{3,}", rest), reason  # reasons carry no values
         text = json.dumps(doc)
         for bad in ("r_i_per", 'delta_e"', "de_m", "de_i", "exit_energy", "differences", '"g1"'):
@@ -1627,17 +1750,18 @@ def test_classes_use_full_precision_values() -> None:
     """A band whose rounded mean would flip the class keeps the full-precision class."""
     pts = [
         {"e0": 2.4, "valid": True, "r_M": 0.0, "r_I": 0.0, "s": 0.0304, "se_rel": 0.0,
-         "d_thick": None, "d_resid": None, "d_pred": 0.0, "r_model": 0.0},
+         "d_thick": None, "d_resid": None, "d_pred": 0.0, "r_model": 0.0, "d_emul": None,
+         "d_extra": None},
     ]  # fmt: skip
     band = ev.band_aggregates(pts)["[2,5)"]
-    # X = 0.0304 / 3 = 0.010133 -> capped 0.01; |r_I| + k = 0.0041 <= X: I
+    # X = 0.0304 / 3 = 0.010133 -> capped 0.01; k = 1.645 x 0.002 = 0.00329; |r_I| + k <= X: I
     assert band["class"] == "I" and band["mean_s"] == 0.03 and band["x_b"] == 0.01
-    pts[0]["r_I"] = 0.0056  # full: 0.0097 <= 0.01 (I); rounded 0.006: 0.0101 > 0.01 (N)
+    pts[0]["r_I"] = 0.0066  # full: 0.00989 <= 0.01 (I); rounded 0.007: 0.01029 > 0.01 (N)
     band = ev.band_aggregates(pts)["[2,5)"]
-    assert band["mean_r_I"] == 0.006 and band["class"] == "I"
-    assert ev.band_classes(pts, 0.0025)["[2,5)"] == "I"
-    assert ev.band_classes(pts, 0.005)["[2,5)"] == "M"  # the robustness re-classification
-    assert ev.band_classes([], 0.0025) == dict.fromkeys(("[2,5)", "[5,10)", "[10,20)", "[20,50]"),
+    assert band["mean_r_I"] == 0.007 and band["class"] == "I"
+    assert ev.band_classes(pts, 0.002)["[2,5)"] == "I"
+    assert ev.band_classes(pts, 0.004)["[2,5)"] == "M"  # the robustness re-classification
+    assert ev.band_classes([], 0.002) == dict.fromkeys(("[2,5)", "[5,10)", "[10,20)", "[20,50]"),
                                                         "none")  # fmt: skip
 
 
@@ -1988,6 +2112,8 @@ def test_smokes_authenticated_with_markers(base: dict[str, Any], tmp_path: Path)
     for n in ev.STEP_SMOKES:
         assert out[n]["ok"] and out[n]["traversing_primaries"] == 50
         assert out[n]["code_sha"] == base["pin_a_sha"]
+    fine = out[ev.FINE_SMOKE]
+    assert fine["ok"] and fine["min_steps_in_slab"] == 20 and fine["traversing_primaries"] == 50
 
 
 @pytest.mark.parametrize(
@@ -2033,7 +2159,7 @@ def test_missing_or_late_smokes_raise_in_the_evaluation(
     _commit(repo, "records")
     with pytest.raises(ev.RecordError, match="not before the markers review"):
         _evaluate(w, "late", repo)
-    with pytest.raises(ev.RecordError, match="lacks .*all four smokes are required"):
+    with pytest.raises(ev.RecordError, match="lacks .*all five smokes are required"):
         _evaluate(w, "three", repo)
 
 
@@ -2135,3 +2261,25 @@ def test_environment_seal_mismatch_raises(
             _ctx(base, w)
     monkeypatch.setattr(ev.env_seal, "current_environment", lambda: real)
     assert _ctx(base, w).environment["seal"]["match"] is True
+
+
+def test_runtime_checks_fail_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Revision 5 (Codex REVIEW-183057ce finding 3): a numpy module loaded from outside the
+    verified distribution, and an existing bytecode cache file of a sealed module, refuse."""
+    out = ev.runtime_checks()
+    assert out["numpy_modules_verified"] > 10 and out["dont_write_bytecode"] is True
+    shadow = ModuleType("numpy._shadow_for_test")
+    shadow.__file__ = str(tmp_path / "shadow.py")
+    monkeypatch.setitem(sys.modules, "numpy._shadow_for_test", shadow)
+    with pytest.raises(ev.RecordError, match="numpy._shadow_for_test is loaded from outside"):
+        ev.runtime_checks()
+    monkeypatch.delitem(sys.modules, "numpy._shadow_for_test")
+    real = ev._REAL_BYTECODE_CHECK
+    cached = tmp_path / "gen.cpython-312.pyc"
+    cached.write_bytes(b"stale")
+    monkeypatch.setattr(ev.gen, "__cached__", str(cached))
+    monkeypatch.setattr(ev.env_seal, "bytecode_check", real)
+    monkeypatch.setattr(ev.env_seal, "numpy_modules", lambda: {})
+    monkeypatch.setattr(ev, "closure_modules", lambda: {"gen_i3fu2_bundles": ev.gen})
+    with pytest.raises(ev.RecordError, match="bytecode cache files exist for .*gen_i3fu2_bundles"):
+        ev.runtime_checks()

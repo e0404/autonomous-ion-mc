@@ -33,6 +33,7 @@
     "slab_mm": 0.00174,
     "thickness_factor": 0.03,
     "kind": "repeat",
-    "fluctuations": true
+    "fluctuations": true,
+    "max_step_um": null
   }
 }

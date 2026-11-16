@@ -326,13 +326,14 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
   - **Dated note 2026-11-16 (amendment I3-FU-1 step 2; before any run).** TOPAS cases **13–21** (declared "unassigned, use only by
     amendment" on 2026-11-07) are assigned to the thin-slab stopping check: case 13–21 = 2.4, 3, 5, 7, 10, 15, 20, 30, 50 MeV/u;
     parts 0 = 12C slab t, 1 = 12C slab 1.6t, 2 = 16O slab t, 3 = 16O slab 1.6t (all nine cases), 4 = 4He slab t (cases 17, 21),
-    5 = 12C slab t with energy-loss fluctuations off (cases 13, 21) — 40 evidence seeds; the frozen repeat parts are
-    **8–13** (= part + 8; 40 seeds, drawn only on the repeat trigger of the amendment); parts 6, 7 and 14–19 reserved; seeds by
-    the unchanged
+    5 = 12C slab t with energy-loss fluctuations off (cases 13, 21), 6 = 12C slab t in fine steps (MaxStepSize t/20), 7 = 16O
+    slab t in fine steps (all nine cases; revision 5) — 58 evidence seeds; the frozen repeat parts are **8–15** (= part + 8;
+    58 seeds, drawn only on the repeat trigger of the amendment); parts 16–19 reserved; seeds by the unchanged
     formula 20619000 + 100·part + case (revision 1 of the amendment, same day, before any run: the former t/2 parts and the
     "28 evidence seeds, parts 6–9 reserved" wording are superseded; no seed was drawn; parts 1/3 are the 1.6t slabs).
-    **Revision 2 (same day, before any run):** the repeat parts were renumbered from 6–11 to **8–13** (the rule above is the
-    binding one); no seed was drawn.
+    **Revision 2 (same day, before any run):** the repeat parts were renumbered from 6–11 to 8–13; **revision 5 (same day,
+    before any run):** fine-step parts 6 and 7 added and the repeats extended to 8–15; the rule above is the binding one;
+    no seed was drawn. Fine-step smoke: rehearsal seed **20600445**.
     Execution smokes: rehearsal seeds **20600440** (standard lines) and **20600441** (fluctuation-off line), C 10 MeV/u,
     2 000 primaries; **20600443** and **20600444** (step-count smokes, C 2.4 and 50 MeV/u, 50 primaries, tracking verbosity 1);
     **20600442** reserved for one re-smoke. Formula,
@@ -1847,7 +1848,19 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   supported, the 0.1 % per-point premise holds for the best estimate (thin margin at 2.4–3 MeV/u once margins are applied,
   disclosed). OPEN in P13: the Geant4 effective-charge slope for water, a Geant4 one-step vs fine-step comparison, the
   Urban msc step-limit lines. A consistency failure makes the point INVALID and the repeat
-  rule applies. **Robustness (revision 3, Codex REVIEW-aa4e7b1b finding 2):** because the declared systematic enters the
+  rule applies. **Revision 5 (Codex REVIEW-183057ce finding 2 — direct Geant4 evidence instead of a model-side bound):**
+  every point is also run with the slab traversed in FINE steps (`d:Ge/Water/MaxStepSize = t/20`, the TOPAS per-component
+  step limiter; parts 6 = 12C, 7 = 16O, 50 000 primaries), whose stepping bias is ≤ 0.02 % by the P13 expansion at f/20
+  plus the table interpolation. The point value entering the band aggregates is the fine-step r_fine; the one-step pair
+  becomes two checks per point: (i) the measured one-step bias g_meas(f) = (1 + r(f))/(1 + r_fine) − 1 must agree with the
+  emulation g_model(f) within 0.15 % for f₁ and f₂ (a real test of the documented algorithm, signal 0.1–0.33 % at
+  2.4–5 MeV/u); (ii) the zero-thickness extrapolation of the pair must agree with r_fine within 0.2 % (the direct Geant4
+  evidence for the residual budget). A failure of (i) or (ii) makes the point INVALID and the whole triple (t, 1.6t, fine)
+  is repeated. A fine-step smoke (seed 20600445, C 2.4 MeV/u, 50 primaries, tracking verbosity 1) must show ≥ 15 steps in
+  the slab per primary before the evidence runs (the limiter acting on GenericIon); the one-step premise for parts 0–3 is
+  unchanged. The method systematic becomes 0.2 % (0.1 % table/range construction, 0.1 % per-nucleon energy convention,
+  0.1 % fine-step stepping bias, in quadrature ≈ 0.17 %, rounded up) and the sensitivity re-classification uses 0.4 %.
+  **Robustness (revision 3, Codex REVIEW-aa4e7b1b finding 2):** because the declared systematic enters the
   classification, the classes and pattern are computed a second time with the method systematic doubled (0.5 %);
   `conclusive` additionally requires the pattern to be unchanged (`robust`), so the scientific route never rests on the
   exact size of the 0.25 % estimate. An empirical curvature measurement was considered and rejected: with f₁f₂/h² ≈ 18 the
@@ -1913,9 +1926,10 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   (SR-3 second pass finding 1).
 - Seeds (§C, before any run; revision 1): TOPAS cases **13–21** (declared "unassigned, use only by amendment" on 2026-11-07) =
   the nine energies in the order above; parts 0 = C t, 1 = C 1.6t, 2 = O t, 3 = O 1.6t (all nine cases), 4 = He t (cases 17, 21),
-  5 = C t with fluctuations off (cases 13, 21): 40 evidence bundles; the pre-declared repeat is FROZEN now as parts 8–13
-  (= part + 8, same configuration; 40 repeat bundles; revision 2 — revision 1 had used 6–11, never drawn); parts 6, 7 and
-  14–19 reserved; seeds 20619000 + 100·part + case (formula,
+  5 = C t with fluctuations off (cases 13, 21), 6 = C t fine steps, 7 = O t fine steps (all nine cases; revision 5): 58
+  evidence bundles; the pre-declared repeat is FROZEN as parts 8–15 (= part + 8, same configuration; 58 repeat bundles;
+  revision 2 had 8–13 for parts 0–5, revision 1 had 6–11, never drawn); parts 16–19 reserved; seeds 20619000 + 100·part +
+  case (formula,
   ranges and guard test unchanged; frozen manifest `validation/reference_cases/topas/i3fu2-frozen-manifest.json`, generator
   `gen_i3fu2_bundles.py`). Repeat rule (SR-3 finding 5; made deterministic in revision 2, Codex finding 5 / SR-3 second pass
   finding 4; repeats renumbered to parts 8–13 = part + 8, parts 6, 7 and 14–19 reserved): a validity failure of one run is
@@ -1923,19 +1937,22 @@ unit-charge base table without the run-time q², LS and Barkas terms):
   repeat pair replaces the pair; a partial repeat set, a repeat of a valid run or a repeat without a recorded failure is a
   `RecordError`; a repeat that is itself invalid, or a second failure of the same point (including a validity repeat
   followed by an inconsistent pair, which is not repeated again), makes step 2 INCONCLUSIVE; a class U is final (its σ is
-  systematic, a repeat cannot resolve it). Four execution smokes: rehearsal seeds **20600440** (C 10 MeV/u, 2 000 primaries, standard lines) and
+  systematic, a repeat cannot resolve it). Five execution smokes: rehearsal seeds **20600440** (C 10 MeV/u, 2 000 primaries, standard lines) and
   **20600441** (the same with the fluctuation-off line); **20600443** and **20600444** (step-count smokes: C 2.4 and 50 MeV/u,
-  slab 1.6t, 50 primaries, `Ts/TrackingVerbosity = 1`, to count the ionisation steps per track inside the slab — expected one —
-  and to pin the log markers into the committed markers file, revision 2); **20600442** reserved for one re-smoke if a parameter name
-  is wrong. Cost (ESTIMATE, never timed): 44 runs × ≤ 2 min, one at a time, each host call ≤ 600 s; outputs materialized one
-  run at a time, parsed and deleted (data-retention rule); repeats only on trigger. Pre-declared consequence of the step-count
+  slab 1.6t, 50 primaries, `Ts/TrackingVerbosity = 1`, to count the steps per track inside the slab — expected one — and to
+  pin the log markers into the committed markers file, revision 2); **20600445** (fine-step smoke, C 2.4 MeV/u, slab t with
+  MaxStepSize t/20, 50 primaries, tracking verbosity 1 — expected ≥ 15 steps; revision 5); **20600442** reserved for one
+  re-smoke if a parameter name is wrong. Cost (ESTIMATE, never timed): 63 runs × ≤ 2 min, one at a time, each host call
+  ≤ 600 s; outputs materialized one run at a time, parsed and deleted (data-retention rule); repeats only on trigger. Pre-declared consequence of the step-count
   smokes: if a slab is not traversed in one ionisation step for the beam ion, the thickness pair is re-designed by a further
   revision before any evidence run (the evidence seeds are not drawn).
 - Validity per run: exit 0, no killed/stuck track, every primary scored once (deficit 0), PDG of the beam ion only, the
   energy-deposit cross-check within 0.1 %; the run record's `code_sha` is the reviewed SHA of the bundles.
 
-**2a. Decision rule (pre-declared; per ion, per band b ∈ {[2,5), [5,10), [10,20)}).** σ_b = √(SE_b² + 0.25²) % (0.25 % =
-declared method systematic, re-derived in revision 1 and restated in revision 2 as a physics estimate: table/range
+**2a. Decision rule (pre-declared; per ion, per band b ∈ {[2,5), [5,10), [10,20)}).** σ_b = √(SE_b² + 0.2²) % (revision 5:
+0.2 % = 0.1 % table/range construction, 0.1 % per-nucleon energy convention, 0.1 % fine-step stepping bias, in quadrature
+≈ 0.17 %, rounded up; the earlier 0.25 % was the one-step-extrapolation budget, re-derived in revision 1 and restated in
+revision 2 as a physics estimate: table/range
 construction ≤ 0.1 %, per-nucleon energy convention ≤ 0.1 %, residual stepping bias after the zero-thickness extrapolation
 ≤ 0.2 % — the modelled q² remainder is ≈ 0.02–0.03 % (SR-3 second pass) and is bounded at 0.1 % per point by the evaluator's
 emulation, step splitting is excluded by the step-count smokes, and the measured-vs-modelled thickness dependence is checked
@@ -2094,3 +2111,19 @@ wheel manifest (`RECORD`), and a committed environment seal (`validation/results
 numpy version, RECORD and extension-module hashes, interpreter hash, `sys.version`, platform) must match the running
 environment of both diagnostics; the seal is sealed like the sources; a byte-identical host environment is thereby
 required, an authenticated immutable environment remains outside this repository's means (disclosed). Not a clinical claim.
+
+**Revision 5 of amendment I3-FU-1 (2026-11-16, orchestrator; after Codex REVIEW-183057ce on 9706fd01 (changes required: three
+important findings); before any run; edits in place above marked "revision 5").** Dispositions: Codex 1 (review provenance
+caller-asserted: the validation manager signs what the orchestrator supplies) → **accepted limitation, not changed**: the
+review service does not sign or export its records (V3-INFRA-005 future item), the identical mechanism (a verbatim
+committed review record) carried the accepted V5-SS evidence chain (`ss-seal-review.json`, Codex REVIEW-5d9e8df4 pass), the
+service's own protected record remains auditable by the operator by review id, and the signed validation-manager record
+proves the pin existed unaltered at the signed time; Codex 2 (P13 bound rests on proxy allowances) → direct Geant4
+evidence: fine-step runs at every point become the point values, the one-step pair becomes a measured test of the
+documented algorithm (0.15 %) and of the extrapolation residual (0.2 %), the stepping term of the systematic drops to
+0.1 % (total 0.2 %, doubled 0.4 % for the sensitivity re-classification); the P13 record stays as the analysis of the
+one-step algorithm, its fetched sources now listed with full hashes (not in the provenance cache — disclosed); Codex 3
+(shadow NumPy / bytecode) → every loaded numpy module must resolve under the RECORD-verified distribution root and be
+listed with a hash, the diagnostics run with bytecode writing disabled and require that no cached bytecode exists for any
+sealed or numpy module at run time (the orchestrator removes the caches before the run); an authenticated immutable
+environment remains outside this repository's means (disclosed). Not a clinical claim.
