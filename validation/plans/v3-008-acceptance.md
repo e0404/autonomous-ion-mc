@@ -2460,3 +2460,18 @@ over all five and match no native input, the step-limiter marker (process-list l
 unchanged since 067bd91f. Nothing graded. Not a clinical claim.
 
 **Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-c801dd374d824eb7a324ffe630ab1103 at 0a915106e32af78f3f02ec807690c4fbe4762bb5; markers review REVIEW-ba7d4c76244d4392a63a8e372a0c569f at 2727578d8a0fb2524da097f6beba03f78397d56e. Pin B (signed, passed, no findings; started 18:36:04 UTC, after the five smokes finished at 18:30:35 UTC; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`, replacing the superseded pin REVIEW-d3d88ac3) reviewed the commit that holds the re-run smoke records, the marker file and pin A; the 58 evidence runs follow at the commit carrying this note (Z'), after pin B's signed finished_at 18:40:02 UTC, one at a time. Not a clinical claim.
+
+**Dated results note — I3-FU-1 step-2 evidence runs (58) at c223f5e5, second attempt after revision 15 (2026-11-16,
+orchestrator; records only, nothing graded).** The 58 evidence bundles of the re-frozen manifest were run once each, one at
+a time, at commit Z' (c223f5e5, which carries both new review pins and the one-line pins note), through the
+reference-runner service (engine topas), all after pin B's signed `finished_at` 18:40:02 UTC (first run started
+18:42:48 UTC, last finished 19:02:50 UTC); every signed record reports `succeeded` true, exit 0, no
+timeout, no missing output, `code_sha` = c223f5e5. All 58 runs were executed by a reference-worker agent in four resumed
+segments (13 + 15 + 15 + 15) under the procedure of the first attempt. The signed records and artifact listings are
+committed verbatim under `validation/results/stopping/v3-008-i3fu2/topas-runs/<run_id>/` with `index.json` (bundle, case,
+part, run_id, seed, code_sha, signed start/finish), replacing the superseded records of c8102e89 (history); 117 files,
+directory digest 211eb52b367ff6a372ae07c3f5e66f08a4691a2a28148b758ddca1309a12577f. Run metadata only: every one of the 18 fine-step
+runs now reports every primary reaching the far-face phase space (the revision-15 fix of the limiter/boundary
+coincidence). Outputs are materialized in the ignored task cache for the evaluator and are deleted after it has run. No
+run has been read, parsed or graded by hand; the evaluator (host-runner, sealed launcher, `--code-sha c223f5e5`) grades
+them once at a later commit. Not a clinical claim.

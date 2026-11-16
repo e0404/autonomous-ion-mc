@@ -4,581 +4,581 @@
       "bundle": "i3fu2-carbon-water-2p4mevu-case13-part0",
       "case": 13,
       "part": 0,
-      "run_id": "REF-9de3d373490c979dfc56-864db1ae",
+      "run_id": "REF-c4549ffbbceebebdb854-9f1dab21",
       "seed": 20619013,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:14:13.831320+00:00",
-      "finished_at": "2026-11-16T17:14:15.712408+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:42:48.222821+00:00",
+      "finished_at": "2026-11-16T18:42:49.750009+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-3mevu-case14-part0",
       "case": 14,
       "part": 0,
-      "run_id": "REF-467a896006cf38f5fd96-0ea64082",
+      "run_id": "REF-2077de164180376c8f98-e89b6485",
       "seed": 20619014,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:14:35.572571+00:00",
-      "finished_at": "2026-11-16T17:14:37.048815+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:43:08.895006+00:00",
+      "finished_at": "2026-11-16T18:43:10.371022+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-5mevu-case15-part0",
       "case": 15,
       "part": 0,
-      "run_id": "REF-98c448f503bfd05f8257-1b1ecf31",
+      "run_id": "REF-6d3f8303474c37fd4b7b-01814953",
       "seed": 20619015,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:14:54.886374+00:00",
-      "finished_at": "2026-11-16T17:14:56.363728+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:43:29.020249+00:00",
+      "finished_at": "2026-11-16T18:43:30.546909+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-7mevu-case16-part0",
       "case": 16,
       "part": 0,
-      "run_id": "REF-dd41c68f54fb89576caa-8932df98",
+      "run_id": "REF-0f40f66d441e0a5cd69a-5a5c683e",
       "seed": 20619016,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:15:15.471850+00:00",
-      "finished_at": "2026-11-16T17:15:16.948120+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:43:49.455818+00:00",
+      "finished_at": "2026-11-16T18:43:50.933548+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-10mevu-case17-part0",
       "case": 17,
       "part": 0,
-      "run_id": "REF-7f11dd21335792c68f28-629499f9",
+      "run_id": "REF-aa3f5426c81e9099740a-c47b7d78",
       "seed": 20619017,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:15:34.101064+00:00",
-      "finished_at": "2026-11-16T17:15:35.577200+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:44:09.329065+00:00",
+      "finished_at": "2026-11-16T18:44:10.805326+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-15mevu-case18-part0",
       "case": 18,
       "part": 0,
-      "run_id": "REF-e7299f7b5e4a64e1ca7d-1d329d77",
+      "run_id": "REF-640d82528bc8c48db2fb-0f78ffc9",
       "seed": 20619018,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:15:53.426015+00:00",
-      "finished_at": "2026-11-16T17:15:54.952503+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:44:29.272160+00:00",
+      "finished_at": "2026-11-16T18:44:30.798453+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-20mevu-case19-part0",
       "case": 19,
       "part": 0,
-      "run_id": "REF-6d560ab4d7cde2e8666c-73094c7d",
+      "run_id": "REF-545eb832c5723e1616d4-0e2c0f7e",
       "seed": 20619019,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:16:12.570121+00:00",
-      "finished_at": "2026-11-16T17:16:14.046460+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:44:49.302378+00:00",
+      "finished_at": "2026-11-16T18:44:50.829033+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-30mevu-case20-part0",
       "case": 20,
       "part": 0,
-      "run_id": "REF-7aaed09b6c0bfcfa547b-8ce10b75",
+      "run_id": "REF-5243418ea4fbafec8403-7be4a80a",
       "seed": 20619020,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:16:31.817422+00:00",
-      "finished_at": "2026-11-16T17:16:33.293664+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:45:08.803962+00:00",
+      "finished_at": "2026-11-16T18:45:10.280287+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-50mevu-case21-part0",
       "case": 21,
       "part": 0,
-      "run_id": "REF-5d8fa799f4bf87c12286-51c52301",
+      "run_id": "REF-2dcda2a8853ef5b76392-36b5c8ca",
       "seed": 20619021,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:16:51.302097+00:00",
-      "finished_at": "2026-11-16T17:16:52.728603+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:45:29.100257+00:00",
+      "finished_at": "2026-11-16T18:45:30.576984+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-2p4mevu-case13-part1",
       "case": 13,
       "part": 1,
-      "run_id": "REF-dedabac69ae1e2292b79-dd0f085d",
+      "run_id": "REF-7e5290964aae718ac546-b08641e3",
       "seed": 20619113,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:17:10.630834+00:00",
-      "finished_at": "2026-11-16T17:17:12.107331+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:45:50.480784+00:00",
+      "finished_at": "2026-11-16T18:45:51.957507+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-3mevu-case14-part1",
       "case": 14,
       "part": 1,
-      "run_id": "REF-e9bee80ded377634992d-6faa7418",
+      "run_id": "REF-1dd631254d272df2fca9-6a76a0d1",
       "seed": 20619114,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:17:30.034178+00:00",
-      "finished_at": "2026-11-16T17:17:31.510292+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:46:11.650077+00:00",
+      "finished_at": "2026-11-16T18:46:13.126762+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-5mevu-case15-part1",
       "case": 15,
       "part": 1,
-      "run_id": "REF-866253ae976b71c6caa2-a2f6b973",
+      "run_id": "REF-5e624897e37fa612a23f-da2b1b54",
       "seed": 20619115,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:17:49.950443+00:00",
-      "finished_at": "2026-11-16T17:17:51.426647+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:46:31.132389+00:00",
+      "finished_at": "2026-11-16T18:46:32.609147+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-7mevu-case16-part1",
       "case": 16,
       "part": 1,
-      "run_id": "REF-34cc4ec00e24dbaf46d9-54b96b39",
+      "run_id": "REF-20c87d6c9e4bfd5f5d86-283c9a0a",
       "seed": 20619116,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:18:09.074105+00:00",
-      "finished_at": "2026-11-16T17:18:10.600158+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:46:52.127530+00:00",
+      "finished_at": "2026-11-16T18:46:53.604016+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-10mevu-case17-part1",
       "case": 17,
       "part": 1,
-      "run_id": "REF-79f47a130d33b206aff7-91fddff2",
+      "run_id": "REF-ecf87c5579de6d2c787b-c192f099",
       "seed": 20619117,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:18:28.987993+00:00",
-      "finished_at": "2026-11-16T17:18:30.514317+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:47:12.163212+00:00",
+      "finished_at": "2026-11-16T18:47:13.639741+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-15mevu-case18-part1",
       "case": 18,
       "part": 1,
-      "run_id": "REF-bfeeb254910fda6e60f9-7babfd0f",
+      "run_id": "REF-650a08699cb34fa97cb2-de72571a",
       "seed": 20619118,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:19:07.939508+00:00",
-      "finished_at": "2026-11-16T17:19:09.465927+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:47:41.929813+00:00",
+      "finished_at": "2026-11-16T18:47:43.406734+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-20mevu-case19-part1",
       "case": 19,
       "part": 1,
-      "run_id": "REF-64cca1d8d164953c07c9-acf11bf8",
+      "run_id": "REF-187552a90c8c42a8d21b-9477c6a0",
       "seed": 20619119,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:19:27.179090+00:00",
-      "finished_at": "2026-11-16T17:19:28.655260+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:48:01.339081+00:00",
+      "finished_at": "2026-11-16T18:48:02.866077+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-30mevu-case20-part1",
       "case": 20,
       "part": 1,
-      "run_id": "REF-2aec99e0ce4470c69dc3-9f0b4df5",
+      "run_id": "REF-73d6a352d6e9ee8ddcce-257935ac",
       "seed": 20619120,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:20:07.827183+00:00",
-      "finished_at": "2026-11-16T17:20:09.353335+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:48:21.760888+00:00",
+      "finished_at": "2026-11-16T18:48:23.287377+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-50mevu-case21-part1",
       "case": 21,
       "part": 1,
-      "run_id": "REF-94323c8df6e68d63c326-ed9bfba0",
+      "run_id": "REF-072c369aeef97a26eaa4-ec2d5071",
       "seed": 20619121,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:20:30.088383+00:00",
-      "finished_at": "2026-11-16T17:20:31.614795+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:48:42.291159+00:00",
+      "finished_at": "2026-11-16T18:48:43.767712+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-2p4mevu-case13-part2",
       "case": 13,
       "part": 2,
-      "run_id": "REF-c9ab440c46bed4beb2cf-0048b04c",
+      "run_id": "REF-90d40d39a1e7fe7ea8b6-963c9675",
       "seed": 20619213,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:20:50.394171+00:00",
-      "finished_at": "2026-11-16T17:20:51.921797+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:49:02.635765+00:00",
+      "finished_at": "2026-11-16T18:49:04.112830+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-3mevu-case14-part2",
       "case": 14,
       "part": 2,
-      "run_id": "REF-b03e48331d7fd0060c99-f2a499a2",
+      "run_id": "REF-588ebc6aeb4bc199d9f4-f013833d",
       "seed": 20619214,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:21:09.900506+00:00",
-      "finished_at": "2026-11-16T17:21:11.427092+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:49:22.568059+00:00",
+      "finished_at": "2026-11-16T18:49:24.044996+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-5mevu-case15-part2",
       "case": 15,
       "part": 2,
-      "run_id": "REF-8debc7da75e4f1c4dc95-eef3d760",
+      "run_id": "REF-c23b0cbf6fb3e4a0ed18-09b56821",
       "seed": 20619215,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:21:29.279741+00:00",
-      "finished_at": "2026-11-16T17:21:30.756103+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:49:41.812671+00:00",
+      "finished_at": "2026-11-16T18:49:43.339151+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-7mevu-case16-part2",
       "case": 16,
       "part": 2,
-      "run_id": "REF-aa72df9f6e2ce3ab378d-4e863d7d",
+      "run_id": "REF-0bc7ed78645b7ef87810-5957ab62",
       "seed": 20619216,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:21:47.869250+00:00",
-      "finished_at": "2026-11-16T17:21:49.345983+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:50:03.541661+00:00",
+      "finished_at": "2026-11-16T18:50:05.068253+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-10mevu-case17-part2",
       "case": 17,
       "part": 2,
-      "run_id": "REF-f0a690352eec4c53a56d-7488d6c4",
+      "run_id": "REF-75a4d906ce5d916bf540-f7dd4c7a",
       "seed": 20619217,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:22:06.295802+00:00",
-      "finished_at": "2026-11-16T17:22:07.822330+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:50:23.999608+00:00",
+      "finished_at": "2026-11-16T18:50:25.476472+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-15mevu-case18-part2",
       "case": 18,
       "part": 2,
-      "run_id": "REF-853d31578e545716f7f8-134d77cc",
+      "run_id": "REF-44ad28e342e4a7d69929-35d785cc",
       "seed": 20619218,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:22:25.533165+00:00",
-      "finished_at": "2026-11-16T17:22:27.009616+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:50:43.998869+00:00",
+      "finished_at": "2026-11-16T18:50:45.525371+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-20mevu-case19-part2",
       "case": 19,
       "part": 2,
-      "run_id": "REF-92459b70462ba337b0c3-8d3ce35e",
+      "run_id": "REF-7b0f0e207f3cfcc6bf9b-4692f7f1",
       "seed": 20619219,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:22:44.362049+00:00",
-      "finished_at": "2026-11-16T17:22:45.888385+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:51:04.103443+00:00",
+      "finished_at": "2026-11-16T18:51:05.579966+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-30mevu-case20-part2",
       "case": 20,
       "part": 2,
-      "run_id": "REF-7242f5a677f093ac7678-da77add2",
+      "run_id": "REF-0306201118e9acf9a2ae-e9d02f01",
       "seed": 20619220,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:23:03.557780+00:00",
-      "finished_at": "2026-11-16T17:23:05.084675+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:51:24.316906+00:00",
+      "finished_at": "2026-11-16T18:51:25.843653+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-50mevu-case21-part2",
       "case": 21,
       "part": 2,
-      "run_id": "REF-495746cbd0d3142a36c3-83521897",
+      "run_id": "REF-8449321af09235a335f2-d0204790",
       "seed": 20619221,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:23:21.290420+00:00",
-      "finished_at": "2026-11-16T17:23:22.817576+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:51:43.977101+00:00",
+      "finished_at": "2026-11-16T18:51:45.503614+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-2p4mevu-case13-part3",
       "case": 13,
       "part": 3,
-      "run_id": "REF-d32afec7602ce02ffebd-b9b22f7b",
+      "run_id": "REF-a76be128cad27e8e0f67-b1a42935",
       "seed": 20619313,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:23:39.575055+00:00",
-      "finished_at": "2026-11-16T17:23:41.051570+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:52:03.928051+00:00",
+      "finished_at": "2026-11-16T18:52:05.404568+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-3mevu-case14-part3",
       "case": 14,
       "part": 3,
-      "run_id": "REF-f1d3b62e354c3d2b713d-2b86d1e8",
+      "run_id": "REF-b8b277f32a640166cd6d-c08ecc32",
       "seed": 20619314,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:24:44.695435+00:00",
-      "finished_at": "2026-11-16T17:24:46.221778+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:52:23.778080+00:00",
+      "finished_at": "2026-11-16T18:52:25.255983+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-5mevu-case15-part3",
       "case": 15,
       "part": 3,
-      "run_id": "REF-bf804ae07a34ec63a3f9-b8725a13",
+      "run_id": "REF-c3ad459c84298a6843aa-b223e2e1",
       "seed": 20619315,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:25:02.659564+00:00",
-      "finished_at": "2026-11-16T17:25:04.188076+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:52:52.403789+00:00",
+      "finished_at": "2026-11-16T18:52:53.880807+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-7mevu-case16-part3",
       "case": 16,
       "part": 3,
-      "run_id": "REF-47d45144d12817d36a0b-6a22a353",
+      "run_id": "REF-46ed789d388d2200d314-03053f4b",
       "seed": 20619316,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:25:21.862479+00:00",
-      "finished_at": "2026-11-16T17:25:23.388684+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:53:11.634148+00:00",
+      "finished_at": "2026-11-16T18:53:13.111056+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-10mevu-case17-part3",
       "case": 17,
       "part": 3,
-      "run_id": "REF-1b70d6b2aaaca8e32b0d-d4742964",
+      "run_id": "REF-68f33b2223496cacf37e-8c1758af",
       "seed": 20619317,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:25:40.781002+00:00",
-      "finished_at": "2026-11-16T17:25:42.257066+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:53:31.142384+00:00",
+      "finished_at": "2026-11-16T18:53:32.668827+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-15mevu-case18-part3",
       "case": 18,
       "part": 3,
-      "run_id": "REF-59fa38475500eb347f61-5e5ed915",
+      "run_id": "REF-51eeb8dda58938bc4758-0fc0450c",
       "seed": 20619318,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:26:00.220170+00:00",
-      "finished_at": "2026-11-16T17:26:01.696593+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:53:51.419956+00:00",
+      "finished_at": "2026-11-16T18:53:52.897075+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-20mevu-case19-part3",
       "case": 19,
       "part": 3,
-      "run_id": "REF-a49c754091afb84d418f-6a08d1ea",
+      "run_id": "REF-968515be8ebbc3fd69fc-d8c3a77c",
       "seed": 20619319,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:26:17.651882+00:00",
-      "finished_at": "2026-11-16T17:26:19.178052+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:54:11.245160+00:00",
+      "finished_at": "2026-11-16T18:54:12.721664+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-30mevu-case20-part3",
       "case": 20,
       "part": 3,
-      "run_id": "REF-d344f9fab703be61dba3-b25946f1",
+      "run_id": "REF-960980cbb9af3f0c8974-3816ac23",
       "seed": 20619320,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:26:36.249812+00:00",
-      "finished_at": "2026-11-16T17:26:37.776711+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:54:31.141800+00:00",
+      "finished_at": "2026-11-16T18:54:32.618423+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-50mevu-case21-part3",
       "case": 21,
       "part": 3,
-      "run_id": "REF-64114988a45885ae0b8b-37e38d78",
+      "run_id": "REF-b5d9c2064837764017c2-9e3c93a8",
       "seed": 20619321,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:26:54.142203+00:00",
-      "finished_at": "2026-11-16T17:26:55.618405+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:54:50.313394+00:00",
+      "finished_at": "2026-11-16T18:54:51.789870+00:00"
     },
     {
       "bundle": "i3fu2-he-water-10mevu-case17-part4",
       "case": 17,
       "part": 4,
-      "run_id": "REF-9ad1e54a971c9aa92c0f-8892b7c1",
+      "run_id": "REF-2dc3efbae7a953ab605f-d7583d6c",
       "seed": 20619417,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:27:13.539458+00:00",
-      "finished_at": "2026-11-16T17:27:14.915670+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:55:11.027908+00:00",
+      "finished_at": "2026-11-16T18:55:12.354244+00:00"
     },
     {
       "bundle": "i3fu2-he-water-50mevu-case21-part4",
       "case": 21,
       "part": 4,
-      "run_id": "REF-9c7b3e49f507bd9c1060-41820c51",
+      "run_id": "REF-8d54b3e56c332d0f9bfa-25cfe465",
       "seed": 20619421,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:27:31.676669+00:00",
-      "finished_at": "2026-11-16T17:27:33.002693+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:55:30.341148+00:00",
+      "finished_at": "2026-11-16T18:55:31.668191+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-2p4mevu-case13-part5",
       "case": 13,
       "part": 5,
-      "run_id": "REF-8d45e2ecf8f373167d63-ebaf84a5",
+      "run_id": "REF-21c4367261b90c0dd57f-056caccb",
       "seed": 20619513,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:27:50.311847+00:00",
-      "finished_at": "2026-11-16T17:27:51.838278+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:55:50.345887+00:00",
+      "finished_at": "2026-11-16T18:55:51.822576+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-50mevu-case21-part5",
       "case": 21,
       "part": 5,
-      "run_id": "REF-852040b842ce3dd7e2a7-d36bf150",
+      "run_id": "REF-29af088b7c0af2cff673-447e7773",
       "seed": 20619521,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:28:08.773961+00:00",
-      "finished_at": "2026-11-16T17:28:10.250579+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:56:10.621906+00:00",
+      "finished_at": "2026-11-16T18:56:12.098387+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-2p4mevu-case13-part6",
       "case": 13,
       "part": 6,
-      "run_id": "REF-c197ea12e6953ab0409a-9006da1b",
+      "run_id": "REF-043ae3c71ac7e4894ffa-a89cc697",
       "seed": 20619613,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:28:28.748873+00:00",
-      "finished_at": "2026-11-16T17:28:31.777336+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:56:30.633703+00:00",
+      "finished_at": "2026-11-16T18:56:33.612804+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-3mevu-case14-part6",
       "case": 14,
       "part": 6,
-      "run_id": "REF-55639fc4af925ba9e2b6-dacdcbd2",
+      "run_id": "REF-4ac1dab6d747f9d1e807-9627ff05",
       "seed": 20619614,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:28:49.455509+00:00",
-      "finished_at": "2026-11-16T17:28:52.485374+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:56:52.451383+00:00",
+      "finished_at": "2026-11-16T18:56:55.531127+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-5mevu-case15-part6",
       "case": 15,
       "part": 6,
-      "run_id": "REF-7a0312129c5ee000b36e-d5c25223",
+      "run_id": "REF-4ea48384681641b9bd21-571b1011",
       "seed": 20619615,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:29:10.174870+00:00",
-      "finished_at": "2026-11-16T17:29:13.153820+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:57:14.424557+00:00",
+      "finished_at": "2026-11-16T18:57:17.403858+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-7mevu-case16-part6",
       "case": 16,
       "part": 6,
-      "run_id": "REF-00790000a2db67d2927a-edd3a736",
+      "run_id": "REF-b10287ffc5927292bf59-1ddd9b95",
       "seed": 20619616,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:29:40.393571+00:00",
-      "finished_at": "2026-11-16T17:29:43.473722+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:57:35.850835+00:00",
+      "finished_at": "2026-11-16T18:57:38.880351+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-10mevu-case17-part6",
       "case": 17,
       "part": 6,
-      "run_id": "REF-a79d4a19c1984c2ea1d0-4cb174ba",
+      "run_id": "REF-efb143b59ff25d434f49-cf0916b7",
       "seed": 20619617,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:30:00.755481+00:00",
-      "finished_at": "2026-11-16T17:30:03.885217+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:58:05.772271+00:00",
+      "finished_at": "2026-11-16T18:58:08.801624+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-15mevu-case18-part6",
       "case": 18,
       "part": 6,
-      "run_id": "REF-48dbc5e3549cb8cf4cfb-34f20b42",
+      "run_id": "REF-2b3aa055be1a9d0f4e1e-a884047e",
       "seed": 20619618,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:30:21.343334+00:00",
-      "finished_at": "2026-11-16T17:30:24.522733+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:58:27.807537+00:00",
+      "finished_at": "2026-11-16T18:58:30.937402+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-20mevu-case19-part6",
       "case": 19,
       "part": 6,
-      "run_id": "REF-209f6e6f135320848854-bbbecc05",
+      "run_id": "REF-f1a0770920779870d332-45342c2e",
       "seed": 20619619,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:30:41.167385+00:00",
-      "finished_at": "2026-11-16T17:30:44.497193+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:58:49.412344+00:00",
+      "finished_at": "2026-11-16T18:58:52.592254+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-30mevu-case20-part6",
       "case": 20,
       "part": 6,
-      "run_id": "REF-a33674f579b8c5df87dc-ad21f3f1",
+      "run_id": "REF-029223f2ecece35783c0-b86967be",
       "seed": 20619620,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:31:01.612107+00:00",
-      "finished_at": "2026-11-16T17:31:04.942783+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:59:11.582478+00:00",
+      "finished_at": "2026-11-16T18:59:14.711833+00:00"
     },
     {
       "bundle": "i3fu2-carbon-water-50mevu-case21-part6",
       "case": 21,
       "part": 6,
-      "run_id": "REF-5177fadd9c2f125d5034-224dff82",
+      "run_id": "REF-35241e7d3eb09508aef8-9fe7dc5a",
       "seed": 20619621,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:31:22.362520+00:00",
-      "finished_at": "2026-11-16T17:31:25.391944+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:59:32.737769+00:00",
+      "finished_at": "2026-11-16T18:59:35.667624+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-2p4mevu-case13-part7",
       "case": 13,
       "part": 7,
-      "run_id": "REF-1c1767c2d8cff04ae0a9-55b95e52",
+      "run_id": "REF-807612ac731b12f03cb5-81231ee5",
       "seed": 20619713,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:31:43.192269+00:00",
-      "finished_at": "2026-11-16T17:31:46.171593+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T18:59:54.375504+00:00",
+      "finished_at": "2026-11-16T18:59:57.354890+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-3mevu-case14-part7",
       "case": 14,
       "part": 7,
-      "run_id": "REF-7faed5f607bc2e283c6b-3da425bf",
+      "run_id": "REF-bae79d87bee451cea72d-7fd898ef",
       "seed": 20619714,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:32:03.919711+00:00",
-      "finished_at": "2026-11-16T17:32:06.948198+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T19:00:15.766967+00:00",
+      "finished_at": "2026-11-16T19:00:18.746390+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-5mevu-case15-part7",
       "case": 15,
       "part": 7,
-      "run_id": "REF-7f0a04e2353bc83a0320-b9271900",
+      "run_id": "REF-dac7825f1f04fbf0fcaf-30f0c86f",
       "seed": 20619715,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:32:24.567069+00:00",
-      "finished_at": "2026-11-16T17:32:27.545788+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T19:00:36.885054+00:00",
+      "finished_at": "2026-11-16T19:00:39.864559+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-7mevu-case16-part7",
       "case": 16,
       "part": 7,
-      "run_id": "REF-cdcc4291ddb04409a907-ab96ee5e",
+      "run_id": "REF-9d56a791025f5faacfb0-b2be8f46",
       "seed": 20619716,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:32:44.759421+00:00",
-      "finished_at": "2026-11-16T17:32:47.788366+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T19:00:58.072990+00:00",
+      "finished_at": "2026-11-16T19:01:01.052783+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-10mevu-case17-part7",
       "case": 17,
       "part": 7,
-      "run_id": "REF-4e86223098de897367c0-7c0d4474",
+      "run_id": "REF-8c1c6ef4133d7f9dcc65-355cc708",
       "seed": 20619717,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:33:04.599669+00:00",
-      "finished_at": "2026-11-16T17:33:07.579229+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T19:01:18.996109+00:00",
+      "finished_at": "2026-11-16T19:01:21.975728+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-15mevu-case18-part7",
       "case": 18,
       "part": 7,
-      "run_id": "REF-3156de281f1079212af7-a04a0def",
+      "run_id": "REF-a884e88f5a22fb861b92-c07d1cf4",
       "seed": 20619718,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:33:23.787993+00:00",
-      "finished_at": "2026-11-16T17:33:26.867276+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T19:01:41.189243+00:00",
+      "finished_at": "2026-11-16T19:01:44.268880+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-20mevu-case19-part7",
       "case": 19,
       "part": 7,
-      "run_id": "REF-959b9d8e727d6cfe066d-ef54a3dd",
+      "run_id": "REF-60aa0d8a7ce185f4d665-1d51a3ef",
       "seed": 20619719,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:33:43.147955+00:00",
-      "finished_at": "2026-11-16T17:33:46.277204+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T19:02:03.204146+00:00",
+      "finished_at": "2026-11-16T19:02:06.283466+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-30mevu-case20-part7",
       "case": 20,
       "part": 7,
-      "run_id": "REF-10750f57e32b104e1d29-1989624b",
+      "run_id": "REF-6ebb8a7d82cf97b682b0-4d476a43",
       "seed": 20619720,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:34:03.490067+00:00",
-      "finished_at": "2026-11-16T17:34:06.721020+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T19:02:25.854500+00:00",
+      "finished_at": "2026-11-16T19:02:29.033997+00:00"
     },
     {
       "bundle": "i3fu2-oxygen-water-50mevu-case21-part7",
       "case": 21,
       "part": 7,
-      "run_id": "REF-421434884a87e1eb643b-b2b75e28",
+      "run_id": "REF-6908ade6ecf51de5f5ac-11c4db26",
       "seed": 20619721,
-      "code_sha": "c8102e897ebe1199f7d329e39c10964b6686854a",
-      "started_at": "2026-11-16T17:34:47.917014+00:00",
-      "finished_at": "2026-11-16T17:34:51.197717+00:00"
+      "code_sha": "c223f5e5ab23db1dab0f6ab142197366d90559e9",
+      "started_at": "2026-11-16T19:02:47.372678+00:00",
+      "finished_at": "2026-11-16T19:02:50.552201+00:00"
     }
   ]
 }
