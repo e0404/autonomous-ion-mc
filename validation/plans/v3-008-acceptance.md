@@ -2446,3 +2446,15 @@ findings; signed 2026-11-16T18:23:03Z; verified against the committed trust map)
 smokes follow at the commit carrying this note, after this pin's signed `finished_at`, the fine-step smoke first with the
 full `check_smoke` pre-check (phase space complete, ≥ 15 slab steps per primary); the new pin B, the new one-line pins
 note and the 58 evidence runs follow. Not a clinical claim.
+
+**Dated results note — the five step-2 smokes re-run at 35b2ef56 after the new pin A (2026-11-16, orchestrator; records only).**
+Fine-step smoke first (seed 20600445, regenerated bundle with MaxStepSize 0.0515 t): REF-0254f3fa182628ec877d-f7f384a1, started
+18:29:15 UTC; then 20600440 REF-382ca30c01b354aa6f38-78c9bd23, 20600441 (fluctuations off) REF-630235343ca8303d1f82-a859e12e,
+20600443 (C 2.4 MeV/u steps) REF-c41909fecb9f7d09bd4c-f12dda89, 20600444 (C 50 MeV/u steps) REF-28cdfa0dbdb00c06ffce-a6cc47dc;
+all after pin A's signed `finished_at` 18:23:03 UTC, all succeeded, signed records and artifact listings committed under
+`validation/results/stopping/v3-008-i3fu2/topas-smokes/` (replacing the superseded smokes of 5999f789). Pre-check with the
+evaluator's own smoke logic in the sandbox (the authoritative check is the evaluator's): the fine-step smoke now scores
+50 of 50 primaries at the far face with exactly 20 slab steps each (19 limited + the boundary step), both step-count smokes
+50 of 50 with exactly one slab step ending at the far face and complete phase spaces, the fluctuation markers discriminate
+over all five and match no native input, the step-limiter marker (process-list line) is present. The marker file is
+unchanged since 067bd91f. Nothing graded. Not a clinical claim.

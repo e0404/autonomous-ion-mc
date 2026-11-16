@@ -1611,7 +1611,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu1/icru73_band_diagnostic.json` | `e8d55ad7c904825ec5b74a7af4bb0a498d00ee0e2c12dfaadfbffb05ed1fe323` |
 | `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T164519Z-ad778a16.json` | `6c724cc13aec870093705b55af3bb461b1e833fbce2c3a97ff87f825bd6d68a6` |
 | `validation/results/stopping/v3-008-i3fu2/log-markers.json` | `c079f5fb1e38063864759c61e0aeb9ce2ad505ba4915141a07012414f725511a` |
-| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `4b3608688ee7a6afde0257b3b4904549f46f8662a20761e4892467b95c265984` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `d380d352ac4bb41f73407933025564fc71759071b549fb9a26daebe3285d4ee6` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-02585a61132fb2de1155-ac89fa51/record.json` | `3a86638d15fbac37043cd88b1dff115e26c52e5c1a631b3b86067af9a07b0b36` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-02585a61132fb2de1155-ac89fa51/artifacts.json` | `d2e96941c78c7e910ded48f80f9323718d4cd73ba4e25dc3a71725b66518370e` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6264dc380b486ed2240f-e4e90893/record.json` | `1172a79924e4d178b6123415516f6155cf1663f1334d122ba93f999809266ee2` |
@@ -1768,6 +1768,25 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — revision 15 corrected for Codex REVIEW-3500cb18 (scaled fine-step sequence preserved; regression test); entries that changed:** `validation/scripts/stopping/i3fu2_evaluate.py` 0dad742e… → be4515cf…; `tests/ionmc/test_i3fu2.py` 12a159bc… → 9230b886…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 pin A replaced after revision 15 (REVIEW-c801dd37 of 0a915106, verbatim, verified); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2-review.json` 0c93bd1f… → ea096305…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step-2 smokes re-run at 35b2ef56 after the new pin A (revision 15): the five signed reference-runner records with their artifact listings and `topas-smokes/index.json`, bound as committed (the entries of the superseded smokes at 5999f789 above are history):**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-0254f3fa182628ec877d-f7f384a1/artifacts.json` | `0cfa197b9b72c310d6f06a589a7ed0d9f1e823c4ea1461767f867797a400711c` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-0254f3fa182628ec877d-f7f384a1/record.json` | `fc943b5ad8890e100f4c64c1129734eb6ea00892874625c89b7a91c477244e4a` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-28cdfa0dbdb00c06ffce-a6cc47dc/artifacts.json` | `44395f73a1d3626a7b5e96cd3635905616ec346d60bac615ac6ba7cb7d788ec7` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-28cdfa0dbdb00c06ffce-a6cc47dc/record.json` | `8724054cba43c61a82c47924efdd87e2e3cf6e0285a490b23f857487daceb070` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-382ca30c01b354aa6f38-78c9bd23/artifacts.json` | `ffca52b1faf958a62d666d426a90cbdf5755546b9faeeea075c9679e2d095ba1` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-382ca30c01b354aa6f38-78c9bd23/record.json` | `23abb2a6ccecc64a73ea075f4a7f2f6778560decd40bbb9590e8f461e076bcf2` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-630235343ca8303d1f82-a859e12e/artifacts.json` | `29f77e8b2a2d5b6f2e62d54c0bef1e72270d794cb40ea7c98831015b4f5dbcec` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-630235343ca8303d1f82-a859e12e/record.json` | `04a3957f714956f2c68c6cb56808b9d180f1c68dd46e63a4365c56757147e2f4` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-c41909fecb9f7d09bd4c-f12dda89/artifacts.json` | `473e594316ae11a3866828aa9e61006db18d3453842e5aa9b6ded5cf0539ffe0` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-c41909fecb9f7d09bd4c-f12dda89/record.json` | `9edb6e3c791756382c0793dc0b55468651cf88e26e46d8b1a8e9c61c58d80979` |
+| `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `d380d352ac4bb41f73407933025564fc71759071b549fb9a26daebe3285d4ee6` |
+
+
+**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` 4b360868… → d380d352…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
