@@ -29,7 +29,7 @@ MeV/u, gates, the range-construction statement and the I-value note; **FAIL** fo
 gate passes) — recorded verbatim in the plan results note of 2026-11-15 and decision 0043; never re-graded. Both files hold
 aggregates only (no table values, per-energy deviations or ratios). Not a clinical claim.
 
-# V3-008 amendment I3-FU-1 (2026-11-16; step 1 run at 5999f789 — `v3-008-i3fu1/` holds its result, the environment seal and the signed host-run records; `v3-008-i3fu2/` holds the review pins, the marker file and the signed smoke records under `topas-smokes/`; the step-2 result is added when step 2 runs)
+# V3-008 amendment I3-FU-1 (2026-11-16; step 1 run at 5999f789 — `v3-008-i3fu1/` holds its result, the environment seal and the signed host-run records; `v3-008-i3fu2/` holds the review pins, the marker file and the signed smoke records under `topas-smokes/`; `v3-008-i3fu2/i3fu2_result.json` currently holds the first complete evaluation at code_sha c223f5e5 — INCONCLUSIVE on two instrument defects, see the plan's STOP note of 2026-11-16 — and is replaced when the revision-16 chain is evaluated; the signed host-run records of every evaluator attempt are under `v3-008-i3fu2/host-records/`)
 
 `v3-008-i3fu1/icru73_band_diagnostic.json` (step 1, `i3_band_diagnostic.py`): band means of ionmc Bethe (78 eV) vs libdEdx
 ICRU73_NEW water for Z = 1–10, a four-shape z-scan over Z = 3–10, row I3b as model-only quantities; `--expect-i3` ties it to

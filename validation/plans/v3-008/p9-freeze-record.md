@@ -1521,8 +1521,8 @@ placeholder scorer output was deleted unread.
 | `validation/scripts/stopping/i3_band_diagnostic.py` | `137c8414a4e0dcefaac883c16758efb18e3170cce97881267fc2e310c9ebd435` |
 | `tests/ionmc/test_i3_band_diagnostic.py` | `de0ba74e279ebf1d3ccedb552f1a6bfdf3466cbd19f202fbffcba5edc00031dd` |
 | `validation/scripts/stopping/gen_i3fu2_bundles.py` | `d478be6fe561fcf61b9c3731df898133ea9012aa965342d94e16ce758cfdfd22` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `be4515cfddb55c776fdc263769a6c09eab3070000fd95269b8ee9166c825d057` |
-| `tests/ionmc/test_i3fu2.py` | `9230b886fa468aa9ef2fa5f551528953fc6b7e09862ec711e6a4172186eebf5c` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `c67a972393980a098a9d66e879d61670715b6c709aaba1115f24996ed4b1dce8` |
+| `tests/ionmc/test_i3fu2.py` | `b16457489d293b1130fc7ff57e0e5b4ccae0cc96f769d30e64aadf208167a1ab` |
 | `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `d9b2dd205921bdd0cff7481293b9cfee6daf57d73df03ca534b8665424f2f0ee` |
 
 
@@ -1914,6 +1914,16 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` b967e827… → 30d3a525…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 step 2 graded once at code_sha c223f5e5 (INCONCLUSIVE on two instrument defects; STOP note) — the result and the signed host-run record of the evaluator run, bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json` | `1c131b09b2191b8c1c6375554d389ebb7d6bb0db994531bbd324881fd4e519fc` |
+| `validation/results/stopping/v3-008-i3fu2/host-records/RUN-20261116T190358Z-aa434fec.json` | `07a3289e71a2bf34efb844d5158ac76898e86cfb0fb5934c819cf310ff918329` |
+
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 revision 16 (stderr banner rule, single-bin EDep parser, regression tests on the real logs) rebound; entries that changed:** `validation/scripts/stopping/i3fu2_evaluate.py` be4515cf… → c67a9723…; `tests/ionmc/test_i3fu2.py` 9230b886… → b1645748…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

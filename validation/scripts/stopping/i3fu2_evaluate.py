@@ -13,7 +13,7 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 15)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 16)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
 **Launch (Codex REVIEW-8081e0e7 finding 3, REVIEW-cf6fa397).** The evaluator must be started
@@ -141,11 +141,16 @@ and the EM-only check of ``r2_io.module_check`` (configuration "idd-em"), the fr
 lines of the bundle and an ``ionIoni:  for <GenericIon | alpha>`` block.
 
 **Run validity (an INVALID run is recorded with its reason and triggers the repeat rule).** stderr
-empty, no stdout line outside "Begin processing" mentions killed or stuck tracks, every ``Particle
+empty or holding only the Geant4 modular-physics construction banner (revision 16, 2026-11-16:
+every run of the EM-only modular configuration prints ``-#- CONSTRUCTING PROCESS -#- stepLimiter``
+and ``... G4EmStandard_opt4``, optionally prefixed ``G4WT<n> > ``; the single-scattering
+campaign's runs had an empty stderr, hence the inherited rule; any other stderr content still
+invalidates the run), no stdout line outside "Begin processing" mentions killed or stuck tracks, every ``Particle
 source Beam: Total number of histories: N`` equals the bundle's histories; phase space: every
 primary scored exactly once (deficit 0), only the beam ion's PDG code, Z at the far face, finite
 values, first-scored flag 1, forward direction, 0 < <Delta E> < 20 % of the entrance energy; the
-energy-deposit cross check |EDep Sum / N / <Delta E>_T - 1| <= 0.1 %.
+energy-deposit cross check (the single-bin EnergyDeposit CSV as TOPAS writes it, without
+bin-structure header lines) |EDep Sum / N / <Delta E>_T - 1| <= 0.1 %.
 
 **One-step premise (step-count smokes).** For both step-count smokes: every one of the 50
 primaries has exactly one step whose pre-step point lies in the Water slab (0 <= z_pre < slab
@@ -294,7 +299,6 @@ from ionmc.physics.stopping import (  # noqa: E402
     kinematics,
     pierce_blann_charge,
 )
-from ionmc.reference.parsers import ParseError, parse_topas_csv  # noqa: E402
 
 gen = _load("gen_i3fu2_bundles", HERE / "gen_i3fu2_bundles.py")
 icru = _load("compare_icru73", HERE / "compare_icru73.py")
@@ -420,7 +424,7 @@ FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 15  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
+AMENDMENT_REVISION = 16  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
 #: the plan's revision records of this amendment (counted in the plan committed at code_sha)
 PLAN_REVISION_RE = re.compile(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", re.M)
 REDISTRIBUTION_NOTE = (
@@ -718,19 +722,39 @@ def parse_exit_energies(
     return np.asarray(e, dtype=np.float64)
 
 
+_EDEP_HEADER = re.compile(r"^#\s*EnergyDeposit \( (?P<unit>\S+) \) : (?P<cols>.+)$")
+
+
 def edep_per_history(text: str, histories: int) -> float:
-    """Mean energy deposit per history [MeV] of the 1 x 1 x 1 EnergyDeposit CSV scorer."""
+    """Mean energy deposit per history [MeV] of the 1 x 1 x 1 EnergyDeposit CSV scorer.
+
+    Revision 16: TOPAS omits the "X in N bins" header lines for a 1 x 1 x 1 scorer, so the file is
+    parsed as written: '#' header lines (exactly one ``EnergyDeposit ( unit ) : Sum ...`` column
+    line) and exactly one data line with one numeric field per column.
+    """
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    heads = [m for ln in lines if ln.startswith("#") and (m := _EDEP_HEADER.match(ln))]
+    data = [ln for ln in lines if not ln.startswith("#")]
+    if len(heads) != 1:
+        raise RecordError("edep.csv must have exactly one EnergyDeposit column header")
+    cols = heads[0].group("cols").split()
+    if not cols or cols[0] != "Sum":
+        raise RecordError("edep.csv columns must start with Sum")
+    if heads[0].group("unit") != "MeV":
+        raise RecordError(f"edep.csv unit {heads[0].group('unit')!r} is not MeV")
+    if len(data) != 1:
+        raise RecordError("edep.csv must have exactly one data line")
+    fields = [f.strip() for f in data[0].split(",")]
+    if len(fields) != len(cols):
+        raise RecordError("edep.csv data fields do not match the columns")
     try:
-        s = parse_topas_csv(text, "edep.csv")
-    except ParseError as exc:
-        raise RecordError(str(exc)) from exc
-    if s.bins != (1, 1, 1) or "Sum" not in s.values:
-        raise RecordError("edep.csv must be a single bin with a Sum")
-    if s.unit != "MeV":
-        raise RecordError(f"edep.csv unit {s.unit!r} is not MeV")
-    v = float(s.values["Sum"][0, 0, 0])
+        v = float(fields[0])
+        for f in fields[1:]:
+            float(f)
+    except ValueError as exc:
+        raise RecordError("edep.csv holds a non-numeric value") from exc
     if not math.isfinite(v) or v <= 0.0:
-        raise RecordError("edep.csv Sum is missing or not positive")
+        raise RecordError("edep.csv Sum is not finite and positive")
     return v / histories
 
 
@@ -757,11 +781,25 @@ def measure_outputs(header: str, rows: str, edep_text: str, case_doc: dict[str, 
     return {"de": de, "se": float(np.std(e, ddof=1)) / math.sqrt(n), "scored": n}
 
 
+STDERR_ALLOWED_LINE = re.compile(
+    r"^(?:G4WT\d+ > )? -#- CONSTRUCTING PROCESS -#- (?:stepLimiter|G4EmStandard_opt4)\s*$"
+)
+
+
+def stderr_problems(stderr: bytes) -> list[str]:
+    """stderr problems (revision 16, 2026-11-16). Empty stderr is fine; so is stderr whose every
+    non-blank line is the Geant4 modular-physics construction banner, which every run of the
+    EM-only modular configuration prints (the single-scattering campaign's runs had an empty
+    stderr, hence the inherited rule). Any other stderr content invalidates the run."""
+    lines = [ln for ln in stderr.decode("utf-8", errors="replace").splitlines() if ln.strip()]
+    if all(STDERR_ALLOWED_LINE.match(ln) for ln in lines):
+        return []
+    return ["stderr holds lines other than the Geant4 modular-physics construction banner"]
+
+
 def validity_problems(stdout: str, stderr: bytes, histories: int) -> list[str]:
     """Log-level run-validity problems (as ``ss_evaluate.log_checks`` / ``r2_io.run_checks``)."""
-    problems = []
-    if stderr.strip():
-        problems.append("stderr is not empty")
+    problems = stderr_problems(stderr)
     bad = [ln for ln in stdout.splitlines() if rio._KILLED.search(ln) and not rio._BEGIN.search(ln)]
     if bad:
         problems.append(f"stdout reports killed/stuck tracks ({len(bad)} line(s))")

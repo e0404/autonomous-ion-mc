@@ -884,3 +884,11 @@ smoke, 57–100 % in the evidence runs), which the evaluator would have classifi
 reviewed before any new run) sets `MaxStepSize = 0.0515 t` (19 limited steps, then a boundary-limited step), regenerates
 the fine-step bundles and emulation, and repeats the pins, smokes and evidence runs. Nothing graded; I3 stays FAIL. Not a
 clinical claim.
+
+**Dated note (2026-11-16, orchestrator; amendment I3-FU-1 step 2 graded once at c223f5e5: INCONCLUSIVE; revision 16).** The
+first complete evaluation (host-runner record RUN-20261116T190358Z-aa434fec) returned INCONCLUSIVE because every run was
+invalid under the inherited "stderr empty" rule (the EM-only modular physics list prints the Geant4 construction banner
+to stderr in every run) and, behind it, because the single-bin energy-deposit CSV lacks the bin-structure header the
+shared parser requires. Revision 16 (prospective, reviewed before any new run) admits exactly that banner and parses the
+single-bin CSV; nothing scientific changes; the chain (pins, smokes, evidence runs, evaluation) is repeated. Nothing
+graded as evidence; I3 stays FAIL. Not a clinical claim.

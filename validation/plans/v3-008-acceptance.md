@@ -2475,3 +2475,44 @@ runs now reports every primary reaching the far-face phase space (the revision-1
 coincidence). Outputs are materialized in the ignored task cache for the evaluator and are deleted after it has run. No
 run has been read, parsed or graded by hand; the evaluator (host-runner, sealed launcher, `--code-sha c223f5e5`) grades
 them once at a later commit. Not a clinical claim.
+
+### Dated results note and STOP — I3-FU-1 step 2 graded once at code_sha c223f5e5: INCONCLUSIVE on two instrument defects (2026-11-16, orchestrator)
+
+**Result (committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json`, sha256 1c131b09…; evaluator run
+by the host-runner at 9592bcde through the sealed launcher with `--code-sha c223f5e5`, signed record
+RUN-20261116T190358Z-aa434fec, exit 0, output-manifest sha256 73270926…, committed under `host-records/`).** `pattern =
+INCONCLUSIVE`, `conclusive = false`, reasons "a control failed or is incomplete" and "an evidence point is invalid
+without a valid repeat": every one of the 58 evidence and control runs is INVALID with the single reason "stderr is not
+empty" (`invalid_runs`); consequently every point is "invalid run; no repeat", both controls are incomplete, every band
+has class `none` with n = 0, and no stopping ratio was aggregated. Both premises passed on the smokes (one slab step per
+primary in both step-count smokes, 20 in the fine-step smoke, complete phase spaces); the markers discriminate. The
+evaluator behaved as designed; the outcome is a validity-rule mismatch, not a measurement: every run of this EM-only
+modular-physics configuration writes the Geant4 construction banner (` -#- CONSTRUCTING PROCESS -#- stepLimiter` /
+`G4EmStandard_opt4`, twice, 196 bytes, byte-identical in all 63 i3fu2 logs, sha256 1e2d958a…) to stderr, whereas the rule
+"stderr empty", inherited from the single-scattering evaluator whose TOPAS runs had an empty stderr, admits nothing.
+**Second defect found by a sandbox shadow evaluation (diagnostic only, not evidence; the committed evaluator with the
+launch stubs of its test suite, the committed environment seal and the stderr rule relaxed to the banner):** the
+energy-deposit cross-check cannot parse the 1 x 1 x 1 EnergyDeposit CSV because TOPAS omits the X/Y/Z bin-structure header
+lines for a single bin and `ionmc.reference.parsers.parse_topas_csv` requires them ("edep.csv: header lacks X/Y/Z bin
+structure"), so every run would have been invalid on that ground next. With both tolerated in the shadow, the controls
+pass, 57 of 58 runs are valid, one point (oxygen 2.4 MeV/u) fails the same-slab emulation check |e₁| > 0.15 % (the
+pre-declared repeat trigger), and the shadow pattern reads MIXED — these shadow figures are NOT a result and are not
+carried anywhere; they only establish that no third instrument defect is waiting. **Process failures recorded:** both
+defects were visible in the first smoke's `stderr.txt` and `edep.csv` and were missed because the orchestrator's smoke
+pre-checks exercised the evaluator's `check_smoke` logic but not its run-validity (`validity_problems`) and measurement
+(`measure_outputs`) paths; Codex REVIEW-e6892fd9 on 9592bcde found the stderr defect independently ("changes_required")
+and prescribes the same remedy. Not a clinical claim.
+
+**Revision 16 of amendment I3-FU-1 (2026-11-16, orchestrator; prospective, before any new run; in force once the commit
+carrying it has passed Codex review).** (1) Run validity, stderr: a run's stderr is valid iff it is empty or EVERY
+non-blank line matches the Geant4 modular-physics construction banner `^(?:G4WT\d+ > )? -#- CONSTRUCTING PROCESS -#-
+(?:stepLimiter|G4EmStandard_opt4)\s*$` (a constant of the evaluator, sealed); any other stderr content still invalidates
+the run. This is a run-validity instrument rule, not a scientific tolerance; no gate, class rule or control changes.
+(2) The energy-deposit cross-check parses the single-bin EnergyDeposit CSV as TOPAS writes it (header lines, exactly one
+`# EnergyDeposit ( MeV ) : Sum …` line, exactly one numeric data line; unit MeV; Sum finite and positive), replacing the
+binned-scorer parser; the cross-check tolerance is unchanged. (3) Regression tests with the real stderr bytes and the
+real `edep.csv` text; the synthetic scenario runs of the test suite carry the real banner. (4) `AMENDMENT_REVISION` = 16.
+Execution chain as before: this commit reviewed (signed) = new pin A; the five smokes re-run at the commit carrying it,
+after its `finished_at`, with the pre-check now covering `validity_problems` and `measure_outputs` on the materialized
+smokes; new pin B; new one-line pins note; the 58 evidence runs; records; evaluator; repeats per the evaluator's trigger.
+The INCONCLUSIVE result above stays committed until the next evaluation replaces it (history). Not a clinical claim.

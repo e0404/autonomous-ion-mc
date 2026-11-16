@@ -429,11 +429,21 @@ EDEP_TEMPLATE = """# TOPAS Version: 4.3
 # Parameter File: input.txt
 # Results for scorer: EDep
 # Scored in component: Water
-# X in 1 bin  of 12 cm
-# Y in 1 bin  of 12 cm
-# Z in 1 bin  of {z_cm} cm
 # EnergyDeposit ( MeV ) : Sum   Standard_Deviation
-0, 0, 0, {total!r}, {sd:.6g}
+{total!r}, {sd:.6g}
+"""  # exactly the real 1 x 1 x 1 layout: TOPAS writes no X/Y/Z bin-structure lines (revision 16)
+REAL_STDERR = (
+    b" -#- CONSTRUCTING PROCESS -#- stepLimiter\n"
+    b" -#- CONSTRUCTING PROCESS -#- G4EmStandard_opt4\n"
+    b"G4WT0 >  -#- CONSTRUCTING PROCESS -#- stepLimiter\n"
+    b"G4WT0 >  -#- CONSTRUCTING PROCESS -#- G4EmStandard_opt4\n"
+)
+REAL_EDEP = """# TOPAS Version: 4.3
+# Parameter File: input.txt
+# Results for scorer: EDep
+# Scored in component: Water
+# EnergyDeposit ( MeV ) : Sum   Standard_Deviation
+7369.9912109375, 0.1185540180238465
 """
 
 
@@ -1033,6 +1043,46 @@ def _edep(case_doc: dict[str, Any], total: float) -> str:
     return EDEP_TEMPLATE.format(z_cm=case_doc["i3fu2"]["slab_mm"] / 10.0, total=total, sd=total)
 
 
+def test_real_stderr_banner_is_valid_other_stderr_is_not() -> None:
+    import hashlib as _h
+
+    assert len(REAL_STDERR) == 196
+    assert (
+        _h.sha256(REAL_STDERR).hexdigest()
+        == "1e2d958ae60809fc8e8f3a3ae167f23f779906160bd73153c8c9593a5ee2cea4"
+    )
+    stdout = _stdout(SYN_HISTORIES)
+    n = SYN_HISTORIES
+    assert ev.validity_problems(stdout, REAL_STDERR, n) == []
+    assert ev.validity_problems(stdout, b"", n) == []
+    extra = REAL_STDERR + b"G4Exception: something went wrong\n"
+    for bad in (extra, b"a single unrelated line\n"):
+        probs = ev.validity_problems(stdout, bad, n)
+        assert any("stderr holds lines other than" in p for p in probs)
+
+
+def test_real_edep_csv_parses_and_deviations_raise() -> None:
+    want = 7369.9912109375 / 2000
+    assert ev.edep_per_history(REAL_EDEP, 2000) == pytest.approx(want, rel=1e-12)
+    extra_head = REAL_EDEP.replace(
+        "# EnergyDeposit", "# X in 1 bin  of 12 cm\n# Y in 1 bin  of 12 cm\n# EnergyDeposit"
+    )
+    assert ev.edep_per_history(extra_head, 2000) == pytest.approx(want, rel=1e-12)
+    bad = {
+        "no Sum": REAL_EDEP.replace("Sum   Standard_Deviation", "Mean"),
+        "two data lines": REAL_EDEP + "1.0, 0.1\n",
+        "non-numeric": REAL_EDEP.replace("7369.9912109375", "abc"),
+        "unit": REAL_EDEP.replace("( MeV )", "( keV )"),
+        "zero Sum": REAL_EDEP.replace("7369.9912109375", "0.0"),
+        "no data": "\n".join(REAL_EDEP.splitlines()[:-1]) + "\n",
+        "field count": REAL_EDEP.replace(", 0.1185540180238465", ""),
+    }
+    for name, text in bad.items():
+        with pytest.raises(ev.RecordError, match="edep.csv"):
+            ev.edep_per_history(text, 2000)
+        assert name
+
+
 def test_measure_outputs_validity() -> None:
     doc = _case(TOPAS / gen.bundle_name(17, 0))
     doc["histories"] = 400
@@ -1307,7 +1357,7 @@ def _write_run(
     noise: float = ROW_NOISE,
     deficit: int = 0,
     stdout: str | None = None,
-    stderr: str = "",
+    stderr: str = REAL_STDERR.decode(),
     started: str = STARTED,
     finished: str = FINISHED,
     code_sha: str | None = None,
@@ -2055,7 +2105,7 @@ def test_tampering_raises(
 def test_altered_artifact_bytes_raise(base: dict[str, Any], tmp_path: Path) -> None:
     w = _world(base, tmp_path)
     edep = w["root"] / f"out-{w['label']}" / w["run_id"] / "work" / "edep.csv"
-    edep.write_text(edep.read_text().replace("0, 0, 0, ", "0, 0, 0, 1"))
+    edep.write_text(edep.read_text() + "# altered\n")
     with pytest.raises(ev.RecordError, match="sha256 mismatch"):
         _check(base, w)
 
@@ -2300,6 +2350,11 @@ def test_log_validity_failure_is_invalid_not_error(base: dict[str, Any], tmp_pat
     w = _world(base, tmp_path, stdout=_stdout(SYN_HISTORIES) + "G4Exception: track stuck\n")
     out = _check(base, w)
     assert out["valid"] is False and "killed/stuck" in out["reason"]
+
+
+def test_empty_stderr_run_is_still_valid(base: dict[str, Any], tmp_path: Path) -> None:
+    out = _check(base, _world(base, tmp_path, stderr=""))
+    assert out["valid"] and out["scored"] == SYN_HISTORIES
 
 
 def test_repeat_without_recorded_failure_raises(base: dict[str, Any], tmp_path: Path) -> None:
