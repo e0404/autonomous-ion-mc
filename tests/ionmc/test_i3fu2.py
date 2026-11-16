@@ -662,6 +662,42 @@ def test_fine_step_lengths_pattern() -> None:
     assert gen.fine_step_lengths_mm(1.0, 0.25) == pytest.approx([0.25] * 4)  # exact divisor
 
 
+def test_scaled_stopping_equals_scaled_steps() -> None:
+    """Codex REVIEW-3500cb18: the equivalent-thickness transform must keep Geant4's 20-step
+    sequence. Independent construction: the fine-step Euler scheme with the stopping scaled by
+    (1 + r) over the NOMINAL steps equals ``fine_algorithm_loss`` on the slab scaled by (1 + r) with
+    every nominal step scaled by (1 + r) (``scaled_fine_steps``); re-partitioning the scaled slab
+    with the nominal limiter gives a different step count and a different loss."""
+    differing_counts = 0
+    for ion, case, r in (("carbon", 13, 0.12), ("oxygen", 21, -0.09), ("carbon", 17, 0.03)):
+        proj, _z, a, _p = gen.IONS[ion]
+        e0 = float(gen.CASES[case])
+        full, base = ev.model_stopping(proj), ev.base_stopping_per_q2(proj)
+        e = a * e0
+        for step_mm in ev.nominal_fine_steps(ion, case):  # stopping scaled, nominal steps
+            length_cm = step_mm / 10.0
+            e_u = e / a
+            table = (
+                ev.RHO_G_CM3 * length_cm * (1 + r) * ev.effective_charge_sq(proj, e_u) * base(e_u)
+            )
+            mid_u = max(e_u - table / a / 2.0, e_u / 2.0)
+            corr = (1 + r) * (full(mid_u) - ev.effective_charge_sq(proj, mid_u) * base(mid_u))
+            e -= table + ev.RHO_G_CM3 * length_cm * corr
+        independent = a * e0 - e
+        t_scaled = gen.slab_mm(ion, case, 1) * (1 + r)
+        steps = ev.scaled_fine_steps(ion, case, 1 + r)
+        assert len(steps) == 20 and sum(steps) == pytest.approx(t_scaled, rel=1e-12)
+        scaled = ev.fine_algorithm_loss(proj, a, e0, t_scaled, ion, steps)
+        assert scaled == pytest.approx(independent, rel=1e-12), (ion, case, r)
+        nominal_step = float(gen.max_step_size_um(ion, case)) / 1000.0
+        repartitioned = gen.fine_step_lengths_mm(t_scaled, nominal_step)
+        if len(repartitioned) != 20:  # r = 0.12 -> 22 steps, r = -0.09 -> 18 steps
+            differing_counts += 1
+            wrong = ev.fine_algorithm_loss(proj, a, e0, t_scaled, ion, repartitioned)
+            assert wrong != pytest.approx(independent, rel=1e-9), (ion, case, r)
+    assert differing_counts == 2
+
+
 def test_fine_step_linear_branch_bias() -> None:
     """b_fine (19 + 1 forward-Euler steps): -0.04 to -0.07 %, negative at every C/O point."""
     for ion in ("carbon", "oxygen"):
@@ -704,9 +740,9 @@ def test_check_formulas() -> None:
     proj, a = gen.IONS["oxygen"][0], 16
     t = gen.slab_mm("oxygen", 13, 1) * 1.1
     exact = ev.slab_energy_loss(a * 2.4, a, t, ev.model_stopping(proj))
-    step = float(gen.max_step_size_um("oxygen", 13)) / 1000.0
     b_s = (
-        ev.fine_algorithm_loss(proj, a, 2.4, t, "oxygen", gen.fine_step_lengths_mm(t, step)) / exact
+        ev.fine_algorithm_loss(proj, a, 2.4, t, "oxygen", ev.scaled_fine_steps("oxygen", 13, 1.1))
+        / exact
         - 1
     )
     g_s = ev.algorithm_loss(proj, a, 2.4, t, "oxygen") / exact - 1
@@ -725,8 +761,7 @@ def test_planted_algorithm_losses_pass_the_gate() -> None:
             de_m = ev.predicted_loss(f"model:{ion}", ev.model_stopping(proj), a, e0, t)
             for r0 in (0.05, -0.04):
                 one = ev.algorithm_loss(proj, a, e0, t * (1 + r0), ion)
-                step = float(gen.max_step_size_um(ion, case)) / 1000.0
-                lengths = gen.fine_step_lengths_mm(t * (1 + r0), step)
+                lengths = ev.scaled_fine_steps(ion, case, 1 + r0)
                 fine = ev.fine_algorithm_loss(proj, a, e0, t * (1 + r0), ion, lengths)
                 rs = [{"r_M": one / de_m - 1}, {"r_M": 0.0}, {"r_M": fine / de_m - 1}]
                 assert abs(ev.emulation_residuals(rs, m)[0]) < 1e-5, (ion, case, r0)
@@ -1247,9 +1282,8 @@ def _planted_loss(info: dict[str, Any], de_m: float, r: float) -> float:
         t = float(info["slab_mm"]) * (1.0 + r)
         e0 = float(info["e0_per_u_mev"])
         if fine:
-            max_step_mm = float(gen.max_step_size_um(ion, case)) / 1000.0
             _PLANTED[key] = ev.fine_algorithm_loss(
-                proj, a, e0, t, ion, gen.fine_step_lengths_mm(t, max_step_mm)
+                proj, a, e0, t, ion, ev.scaled_fine_steps(ion, case, 1.0 + r)
             )
         else:
             _PLANTED[key] = ev.algorithm_loss(proj, a, e0, t, ion)

@@ -588,6 +588,21 @@ def fine_algorithm_loss(
     return a * e0 - e
 
 
+def nominal_fine_steps(ion: str, case: int) -> list[float]:
+    """Geant4's step pattern [mm] of the fine-step run of (ion, case): 19 limited steps of
+    MaxStepSize (0.0515 t) and the boundary-limited remainder, on the NOMINAL slab t."""
+    t = gen.slab_mm(ion, case, 1)
+    return gen.fine_step_lengths_mm(t, float(gen.max_step_size_um(ion, case)) / 1000.0)
+
+
+def scaled_fine_steps(ion: str, case: int, scale: float) -> list[float]:
+    """The same step SEQUENCE under the equivalent-thickness transform (Codex REVIEW-3500cb18,
+    revision 15): a stopping (1 + r) x ionmc's over each Geant4 step of length L loses what ionmc's
+    stopping loses over L (1 + r), so every nominal step is scaled by ``scale`` = 1 + r and the
+    step count (20) is preserved; the sequence is NOT re-partitioned on the scaled slab."""
+    return [length * scale for length in nominal_fine_steps(ion, case)]
+
+
 @functools.lru_cache(maxsize=4096)  # a pure function of its arguments (called per check)
 def expected_g_meas(ion: str, case: int, r_fine: float) -> tuple[float, float]:
     """(g*(f1), g*(f2)): the expected g_meas = (1 + r_M(f)) / (1 + r_M,fine) - 1 at the MEASURED
@@ -602,8 +617,7 @@ def expected_g_meas(ion: str, case: int, r_fine: float) -> tuple[float, float]:
     scale = 1.0 + r_fine
     t = gen.slab_mm(ion, case, 1) * scale
     exact_t = slab_energy_loss(a * e0, a, t, full)
-    max_step_mm = float(gen.max_step_size_um(ion, case)) / 1000.0  # nominal slab's absolute step
-    b_s = fine_algorithm_loss(proj, a, e0, t, ion, gen.fine_step_lengths_mm(t, max_step_mm)) / exact_t - 1.0
+    b_s = fine_algorithm_loss(proj, a, e0, t, ion, scaled_fine_steps(ion, case, scale)) / exact_t - 1.0
     out = []
     for mult in (1, 2):
         tm = gen.slab_mm(ion, case, mult) * scale
@@ -627,10 +641,8 @@ def stepping_bias(ion: str, case: int) -> dict[str, float]:
             t = gen.slab_mm(ion, case, mult)
             de_exact = predicted_loss(f"model:{ion}", exact, a, e0, t)
             g.append(algorithm_loss(proj, a, e0, t, ion) / de_exact - 1.0)
-        t1 = gen.slab_mm(ion, case, 1)
-        max_step_mm = float(gen.max_step_size_um(ion, case)) / 1000.0
         de_fine = fine_algorithm_loss(
-            proj, a, e0, t1, ion, gen.fine_step_lengths_mm(t1, max_step_mm)
+            proj, a, e0, gen.slab_mm(ion, case, 1), ion, nominal_fine_steps(ion, case)
         )
         _STEPPING[key] = {
             "g1": g[0],

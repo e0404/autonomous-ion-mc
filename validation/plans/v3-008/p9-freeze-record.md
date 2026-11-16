@@ -1521,8 +1521,8 @@ placeholder scorer output was deleted unread.
 | `validation/scripts/stopping/i3_band_diagnostic.py` | `137c8414a4e0dcefaac883c16758efb18e3170cce97881267fc2e310c9ebd435` |
 | `tests/ionmc/test_i3_band_diagnostic.py` | `de0ba74e279ebf1d3ccedb552f1a6bfdf3466cbd19f202fbffcba5edc00031dd` |
 | `validation/scripts/stopping/gen_i3fu2_bundles.py` | `d478be6fe561fcf61b9c3731df898133ea9012aa965342d94e16ce758cfdfd22` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `0dad742eacdd6a243b7ca9072388a83d1def87f5a133471339b51ab2a31b7aa6` |
-| `tests/ionmc/test_i3fu2.py` | `12a159bc8b75f4d12ae9446c777f91991fb4c607b3ac8398596e33a49a0eb9bf` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `be4515cfddb55c776fdc263769a6c09eab3070000fd95269b8ee9166c825d057` |
+| `tests/ionmc/test_i3fu2.py` | `9230b886fa468aa9ef2fa5f551528953fc6b7e09862ec711e6a4172186eebf5c` |
 | `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `d9b2dd205921bdd0cff7481293b9cfee6daf57d73df03ca534b8665424f2f0ee` |
 
 
@@ -1764,6 +1764,8 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 revision 15 (fine-step limit 0.0515 t, emulation over the actual step pattern, regenerated fine-step bundles and manifest, marker file with the step limiter's process-list line) rebound; entries that changed:** `validation/scripts/stopping/gen_i3fu2_bundles.py` 46200570… → d478be6f…; `validation/scripts/stopping/i3fu2_evaluate.py` b6422f2b… → 0dad742e…; `tests/ionmc/test_i3fu2.py` 7eaacdaf… → 9192e394…; `validation/reference_cases/topas/i3fu2-frozen-manifest.json` cb466494… → d9b2dd20…; `validation/results/stopping/v3-008-i3fu2/log-markers.json` a9aaff40… → c079f5fb…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — ruff formatting (pre-commit) of the revision-15 test file before the commit; entries that changed:** `tests/ionmc/test_i3fu2.py` 9192e394… → 12a159bc…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — revision 15 corrected for Codex REVIEW-3500cb18 (scaled fine-step sequence preserved; regression test); entries that changed:** `validation/scripts/stopping/i3fu2_evaluate.py` 0dad742e… → be4515cf…; `tests/ionmc/test_i3fu2.py` 12a159bc… → 9230b886…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

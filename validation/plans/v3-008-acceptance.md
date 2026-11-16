@@ -2429,3 +2429,12 @@ commit reviewed (signed) = new pin A (the manifest is sealed at pin A); the five
 count ≥ 15 per primary before anything else is run — the evaluator's own `check_smoke` logic, applied in the sandbox to the
 materialized smoke, is the pre-check); markers file reviewed (signed) = new pin B; new one-line pins note; the 58
 evidence runs re-run; records; evaluator by the host-runner. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; revision 15 corrected before any run — Codex REVIEW-3500cb18 on 067bd91f, important).**
+The revision-15 emulation had re-partitioned the (1 + r_fine)-scaled slab with the nominal limiter, which changes the step
+count (e.g. 22 or 18 steps instead of 20) and therefore b_s, g* and the 0.15 % gate. Corrected: under the equivalent-thickness
+transform every nominal Geant4 step (19 x 0.0515 t and the 0.0215 t boundary step) is scaled by (1 + r_fine) and the 20-step
+sequence is preserved (`scaled_fine_steps`); an independently constructed regression (stopping scaled by (1 + r) over the
+nominal steps equals the scaled-steps emulation to 1e-12; the re-partitioned construction differs) is added. The plan text
+of revision 15 above ("the absolute limiter step of the nominal slab is kept and the remainder adjusts") is superseded by
+this note. Not a clinical claim.
