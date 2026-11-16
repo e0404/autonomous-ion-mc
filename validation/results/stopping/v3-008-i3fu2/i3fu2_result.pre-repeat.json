@@ -1,0 +1,1067 @@
+{
+ "amendment": "I3-FU-1 step 2 (revision 17)",
+ "bands": {
+  "carbon": {
+   "[10,20)": {
+    "class": "N",
+    "max_abs_consistency_residual": 0.00026278445110072823,
+    "max_abs_emulation_residual": 0.00015481645179571402,
+    "max_abs_emulation_residual_f2_report_only": 0.00010027425946423918,
+    "max_abs_extrapolation_difference_report_only": 0.0004811852369912559,
+    "max_abs_model_residual": 4.663734238722715e-05,
+    "max_abs_predicted_difference": 0.0003249847509190218,
+    "max_abs_thickness_difference": 0.00058776920201975,
+    "mean_r_I": -0.013,
+    "mean_r_M": 0.006,
+    "mean_s": 0.019,
+    "n": 2,
+    "se_b": 0.00010079832338131518,
+    "sigma_b": 0.002002538464548555,
+    "x_b": 0.006
+   },
+   "[2,5)": {
+    "class": "N",
+    "max_abs_consistency_residual": 0.000635064850449174,
+    "max_abs_emulation_residual": 0.0011169908448895871,
+    "max_abs_emulation_residual_f2_report_only": 0.0009716852280474697,
+    "max_abs_extrapolation_difference_report_only": 0.0016632603529605633,
+    "max_abs_model_residual": 0.000240615349136626,
+    "max_abs_predicted_difference": 0.0023075110066488325,
+    "max_abs_thickness_difference": 0.0029425758570980065,
+    "mean_r_I": -0.057,
+    "mean_r_M": 0.035,
+    "mean_s": 0.098,
+    "n": 2,
+    "se_b": 0.00012423715440765671,
+    "sigma_b": 0.002003855002373004,
+    "x_b": 0.01
+   },
+   "[20,50]": {
+    "class": "U",
+    "max_abs_consistency_residual": 0.00027321677555658397,
+    "max_abs_emulation_residual": 0.00029980914792870905,
+    "max_abs_emulation_residual_f2_report_only": 0.00022964154879501208,
+    "max_abs_extrapolation_difference_report_only": 0.0012530893595985577,
+    "max_abs_model_residual": 1.2265074728734504e-05,
+    "max_abs_predicted_difference": 7.213567577801783e-05,
+    "max_abs_thickness_difference": 0.0003453524513346018,
+    "mean_r_I": -0.002,
+    "mean_r_M": 0.001,
+    "mean_s": 0.003,
+    "n": 3,
+    "se_b": 7.456163549567822e-05,
+    "sigma_b": 0.0020013893767799884,
+    "x_b": 0.001
+   },
+   "[5,10)": {
+    "class": "N",
+    "max_abs_consistency_residual": 0.00011876233661634039,
+    "max_abs_emulation_residual": 0.0005526843942726956,
+    "max_abs_emulation_residual_f2_report_only": 0.0004707545631381649,
+    "max_abs_extrapolation_difference_report_only": 0.0002363660719664172,
+    "max_abs_model_residual": 0.00012157250518307672,
+    "max_abs_predicted_difference": 0.0010045088662329338,
+    "max_abs_thickness_difference": 0.0011232712028492742,
+    "mean_r_I": -0.038,
+    "mean_r_M": 0.014,
+    "mean_s": 0.054,
+    "n": 2,
+    "se_b": 0.0001100709088330636,
+    "sigma_b": 0.002003026611149072,
+    "x_b": 0.01
+   }
+  },
+  "oxygen": {
+   "[10,20)": {
+    "class": "N",
+    "max_abs_consistency_residual": 3.69606846457593e-05,
+    "max_abs_emulation_residual": 0.0002905682565677026,
+    "max_abs_emulation_residual_f2_report_only": 0.00027416136696056803,
+    "max_abs_extrapolation_difference_report_only": 0.00040186330079205676,
+    "max_abs_model_residual": 8.930686712519724e-05,
+    "max_abs_predicted_difference": 0.0006748305049926184,
+    "max_abs_thickness_difference": 0.0006378698203468591,
+    "mean_r_I": -0.031,
+    "mean_r_M": 0.01,
+    "mean_s": 0.042,
+    "n": 2,
+    "se_b": 9.008498144904402e-05,
+    "sigma_b": 0.002002027797979507,
+    "x_b": 0.01
+   },
+   "[2,5)": {
+    "class": "N",
+    "max_abs_consistency_residual": 0.0005530635285251329,
+    "max_abs_emulation_residual": 0.0017507193671417731,
+    "max_abs_emulation_residual_f2_report_only": 0.0016624697238978303,
+    "max_abs_extrapolation_difference_report_only": 0.0019488789338252752,
+    "max_abs_model_residual": 0.00032703839512186067,
+    "max_abs_predicted_difference": 0.0033084085063976865,
+    "max_abs_thickness_difference": 0.0038614720349228193,
+    "mean_r_I": -0.077,
+    "mean_r_M": 0.05,
+    "mean_s": 0.137,
+    "n": 1,
+    "se_b": 0.0001660351644283986,
+    "sigma_b": 0.002006880085064069,
+    "x_b": 0.01
+   },
+   "[20,50]": {
+    "class": "U",
+    "max_abs_consistency_residual": 0.00033235768855699455,
+    "max_abs_emulation_residual": 0.00034837983029833985,
+    "max_abs_emulation_residual_f2_report_only": 0.00022909202617027447,
+    "max_abs_extrapolation_difference_report_only": 0.0009055136360009985,
+    "max_abs_model_residual": 2.9238242709543124e-05,
+    "max_abs_predicted_difference": 0.00018811062202739315,
+    "max_abs_thickness_difference": 0.0005204683105843877,
+    "mean_r_I": -0.005,
+    "mean_r_M": 0.003,
+    "mean_s": 0.008,
+    "n": 3,
+    "se_b": 6.560081576485577e-05,
+    "sigma_b": 0.002001075577540492,
+    "x_b": 0.003
+   },
+   "[5,10)": {
+    "class": "N",
+    "max_abs_consistency_residual": 0.0001866966460655206,
+    "max_abs_emulation_residual": 0.0007538079886453275,
+    "max_abs_emulation_residual_f2_report_only": 0.0006812123403467929,
+    "max_abs_extrapolation_difference_report_only": 0.0005390256605047501,
+    "max_abs_model_residual": 0.00019261144306770205,
+    "max_abs_predicted_difference": 0.001699250705735178,
+    "max_abs_thickness_difference": 0.0018734561019413398,
+    "mean_r_I": -0.065,
+    "mean_r_M": 0.022,
+    "mean_s": 0.094,
+    "n": 2,
+    "se_b": 0.00010161360698202613,
+    "sigma_b": 0.0020025796676097305,
+    "x_b": 0.01
+   }
+  }
+ },
+ "claim": "diagnostic; no gate; no validation claim",
+ "classes_sigma_doubled": {
+  "carbon": {
+   "[10,20)": "U",
+   "[2,5)": "N",
+   "[20,50]": "U",
+   "[5,10)": "N"
+  },
+  "oxygen": {
+   "[10,20)": "N",
+   "[2,5)": "N",
+   "[20,50]": "U",
+   "[5,10)": "N"
+  }
+ },
+ "code_sha": "48b419810ba5de2a98f9e99ad1cf127763648d13",
+ "conclusive": false,
+ "controls": {
+  "controls_pass": true,
+  "fluctuations_off": {
+   "markers_discriminate": true,
+   "max_abs_difference": 0.00010715635324354267,
+   "pass": true
+  },
+  "helium": {
+   "max_abs_r_m": 0.001,
+   "pass": true
+  }
+ },
+ "convention_sensitivity": {
+  "classes_alt": {
+   "carbon": {
+    "[10,20)": "N",
+    "[2,5)": "N",
+    "[20,50]": "U",
+    "[5,10)": "N"
+   },
+   "oxygen": {
+    "[10,20)": "N",
+    "[2,5)": "N",
+    "[20,50]": "U",
+    "[5,10)": "N"
+   }
+  },
+  "invariant": true,
+  "max_abs_delta_r_i_per_band": {
+   "carbon": {
+    "[10,20)": 0.0,
+    "[2,5)": 0.0,
+    "[20,50]": 0.0,
+    "[5,10)": 0.0
+   },
+   "oxygen": {
+    "[10,20)": 0.0,
+    "[2,5)": 0.0,
+    "[20,50]": 0.0,
+    "[5,10)": 0.0
+   }
+  },
+  "pattern_alt": "MIXED"
+ },
+ "fine_step_premise": {
+  "min_steps_in_slab": 20,
+  "pass": true,
+  "phase_space_complete": true,
+  "primaries": 50,
+  "traversing_primaries": 50
+ },
+ "inconclusive_reasons": [
+  "an evidence point is invalid without a valid repeat"
+ ],
+ "invalid_points": {
+  "oxygen case 13": "same-slab emulation check |e1| > 0.0015; no repeat"
+ },
+ "invalid_runs": {},
+ "method": {
+  "consistency_tolerance_reported_only": 0.003,
+  "emulation_tolerance": 0.0015,
+  "energy_convention": "energy per nucleon = E/A, A = mass number; alternative E/(M/u) tested (M the committed ionmc nuclear mass)",
+  "fine_step_fraction": 0.0515,
+  "fine_step_pattern": "19 limited steps of 0.0515 t, then one boundary-limited step of 0.0215 t (revision 15)",
+  "fluctuation_tolerance": 0.002,
+  "he_model_max_abs_r_model": 2.8491045234169116e-07,
+  "he_tolerance": 0.005,
+  "k_one_sided": 1.645,
+  "method_systematic": 0.002,
+  "method_systematic_composition": "0.1 % table/range construction, 0.1 % per-nucleon energy convention, 0.1 % stepping (linear-branch Euler bias of the fine steps, -0.04 to -0.06 %); quadrature 0.17 %, rounded to 0.2 %",
+  "method_systematic_robustness": 0.004,
+  "model": "ionmc bethe_mass_stopping default options, water(78.0)",
+  "model_residual_limit": 0.001,
+  "point": "r_fine: the fine-step run (MaxStepSize 0.0515 t); the one-step pair enters the gate e1 (slab t vs fine) and the report-only quantities e2 and r_0 - r_fine",
+  "quantity": "<Delta E>_T = A E0 - mean(E_exit); predictions RK4 over the slab",
+  "report_only": "e2 (1.6 t vs fine) and r_0 - r_fine carry rho' (the slope of the stopping ratio); not gates",
+  "rk4_steps": 200,
+  "stepping_model": "P13 record: table part q^2(E_pre) S_base(E) integrated over the one-step slab + correction term at the mid-step energy (C/O); He table part with the full model, q frozen; g(f) = Delta E_alg / Delta E_exact - 1",
+  "table": "libdEdx ICRU73_NEW liquid water (target 276), log-log interpolated",
+  "thickness_factors": [
+   0.03,
+   0.048
+  ],
+  "x_cap": 0.01
+ },
+ "one_step_premise": {
+  "checked": true,
+  "pass": true,
+  "smokes": {
+   "i3fu2-smoke-carbon-water-2p4mevu-steps": {
+    "max_steps_in_slab": 1,
+    "phase_space_complete": true,
+    "primaries": 50,
+    "traversing_primaries": 50
+   },
+   "i3fu2-smoke-carbon-water-50mevu-steps": {
+    "max_steps_in_slab": 1,
+    "phase_space_complete": true,
+    "primaries": 50,
+    "traversing_primaries": 50
+   }
+  }
+ },
+ "pattern": "INCONCLUSIVE",
+ "pattern_before_controls": "MIXED",
+ "pattern_sigma_doubled": "MIXED",
+ "provenance": {
+  "archive_sha256": "b941a0c30793daddc4d119a2cc664bfbdd430554c3a4788be04e97ff6fcc0863",
+  "code_sha": "48b419810ba5de2a98f9e99ad1cf127763648d13",
+  "committed_inputs": {
+   "infrastructure/keys/trusted_attestation_keys.json": "6eb14657048b12e2e23fa1df87af2f0a2ec0c3adde2b993dba9d5454045c29f4",
+   "uv.lock": "0d7e79d3b88fd95f7b59d717efa27d6bfb9b78a435fb2ccc5b991e4347d37299",
+   "validation/plans/v3-008-acceptance.md": "aef332ffa6c2c326f8161f26f9219fc3d5d026cbdf1552b857d8a94bf209f0e5",
+   "validation/reference_cases/topas/i3fu2-frozen-manifest.json": "690ff0bf1fddedfec8c4190dab30aa0b1e686589f80b3f0e2679ec295dea4db7",
+   "validation/results/stopping/v3-008-i3fu1/environment-seal.json": "4166366856656e669c7cd4aabbfec3c679203d90af3e9eca24dd1b1eb87991c9",
+   "validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json": "cc403ed090f2f0a6b5e35f273a325fa0311eaff14cc25ad39496182ff93befb7",
+   "validation/results/stopping/v3-008-i3fu2/i3fu2-review.json": "75668d6f61ffc0405d924674be57e31e5eab8fb1a372fa50eb4cd10ff3ebbceb",
+   "validation/results/stopping/v3-008-i3fu2/log-markers.json": "c079f5fb1e38063864759c61e0aeb9ce2ad505ba4915141a07012414f725511a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-01317dd73ff59413a9cb-209f9cb6/artifacts.json": "f047c1b920f6f3cbb82a7470db2550bf1130fb310743425e3d4f6adee4452e6a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-01317dd73ff59413a9cb-209f9cb6/record.json": "41f78755ddc1489f605e5617126a5ef082c6e8aca8829b5a1255790bedb23de5",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-034071647483ca9425e0-a12323cb/artifacts.json": "800f03bc5c33d972361f8c00ffde9ad056d567113ca2c6347b83c35dd5be8278",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-034071647483ca9425e0-a12323cb/record.json": "4ab98b00c2dcdd18ac31c146eb474495ea04cb1507caa16a5c5cf08cb75b5c82",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0346041be5033120ddb5-a903c0cd/artifacts.json": "7cfa755d65c12e6f5cb3f2d830fb75c0875808a8f745e79e91c0a882e78df309",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-0346041be5033120ddb5-a903c0cd/record.json": "01da80d1cd084a155ae43d54be8adfbf8cd732fe6477173a9bd1ef1be91bee88",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-10d71ac91908800cbf78-2aca6057/artifacts.json": "1e8f41b67d0ff7d61441945bdc5698c35db64d60116acaad84d2f66304729b81",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-10d71ac91908800cbf78-2aca6057/record.json": "e80cd27466ebd109c2795a3f3adcd3cff2231e45109f701204415b887605028b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-15e4ddb01abf08b1b23a-964ab83c/artifacts.json": "30b4ef132e08db0982a3fea7b446f72cdff1d8f85dcd6a482b55e38b3f38f416",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-15e4ddb01abf08b1b23a-964ab83c/record.json": "802abe20b605ae9bc3327a643f4216f005c6b106e523322b036c703ffbbfc4c7",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-18157832db84118715c8-e8571d9d/artifacts.json": "272089968affb1cc8c40507f46127de303bf312973548ef1e9c34c8ec42ab72e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-18157832db84118715c8-e8571d9d/record.json": "a732cbb2568293e9d051d82a6a777c5931b399053bb14c7ff58f64ce9e4a19c2",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-193a067c6fd14ce30818-cf6ab82d/artifacts.json": "2a6ec9d3977e9b4a56c636a53c40ddefbe12a162f5d7bea193eebbbbba01154d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-193a067c6fd14ce30818-cf6ab82d/record.json": "7b2cbb75969469272661034fcb29a771e554052e8ed5c11affe9a3d17daf9486",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-1d6fd42a074e7a9419d9-fbde1413/artifacts.json": "0fd22ebb53f67c42df607fa6cd5e1389569f87f295678f11364cdf72550b3943",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-1d6fd42a074e7a9419d9-fbde1413/record.json": "0f05362bff5de243b503bc1bbdf0d956e48306183e6d0667cebfcfd01689b42d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-26519ef6e924c922295f-a2bfea3e/artifacts.json": "7d707195a439a4f7e6dedac119070a0599e6aab6a20764c6daefef8cc9507d6b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-26519ef6e924c922295f-a2bfea3e/record.json": "49ae873a87cfeba5bb6f0cfb7d413bcfcdbb14ddfb90c92fa70ffa967f047441",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2fdf9194535a90964a5a-4c8986ca/artifacts.json": "e4936b2ec5a5b6c56bba59f7730ba1d24371cdad2e69eddab696698197923034",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-2fdf9194535a90964a5a-4c8986ca/record.json": "fbbcadbecbfafea63f9039faf68b8a699cecb7c78d83a096606cf476456eb407",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-334780dc287e397ed197-7dc9ba17/artifacts.json": "2d032ff612ba38317327b2b0f71b5355cc77e9e1f6438c0820dd517e44b4e456",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-334780dc287e397ed197-7dc9ba17/record.json": "cb0ecf27db5e4db096b7623c38b95106533eef0e953521a6344fd4be1872a8e0",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-33e91682b1affa26cc7d-d4bc0d31/artifacts.json": "66c8adc2f57f04b8f45ebf65d328095816e4ce1613ac0ba1aab997efa56aa775",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-33e91682b1affa26cc7d-d4bc0d31/record.json": "cb74c4174b033fc38554c6babf7858b4acaf852afab80292bb1c40c8f6b10fce",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-35421bbb7ad02e182cd6-de2e490b/artifacts.json": "11423eca6f801e5adb5fe069a73d33c344cbfe52404ed52742a69f2f9666e3a8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-35421bbb7ad02e182cd6-de2e490b/record.json": "5dcbae35f56d44ac76a1da5fb94055f105fe7f79230e77ff05ede01f74c36528",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4340e118cc50d146ca3d-db49b62f/artifacts.json": "4c09d0aaf6c3e1a9087c239a708dfcb447a211b3246d2c595887001fb61cb726",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4340e118cc50d146ca3d-db49b62f/record.json": "3ccfce177fec229d00d74a5ed65b0d35c4395d58c5263502863c294490260820",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-44e48724722d710e2179-ac59dc0a/artifacts.json": "cb0aba40209ee3005d5e45a2176c150c898dd0c2f28adc5c565f728da83ec3c8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-44e48724722d710e2179-ac59dc0a/record.json": "353ae09941e2b2ebfbb634a2f5617c3370e880c820812be80349e581349ea4d1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4679e19c41ba80e336e4-477a8a37/artifacts.json": "9864c96dc33685b3d995562d80c995a46ec43b98c3d31effcf926bc5aaf2fea0",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4679e19c41ba80e336e4-477a8a37/record.json": "dae04fa7bb2bd0c363b678d186c20f7aef4e04cf92ab32470eaab3212c07137f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4a49cd6fffa4c83aec1e-04b33c65/artifacts.json": "0a68d9a855dd7d59eedf8a5378302989a523138e61d5d156c19e7310b0ad0805",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-4a49cd6fffa4c83aec1e-04b33c65/record.json": "c641a75844f1fd47d99c301e74016c4bae5a3e95db63fc263cca9deb628fc23a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-507379546467fe79e8b9-c5ab816c/artifacts.json": "6a12fb67af4819bb8e595cad6609476e07210d8fd41f472cfb1ebb15eb5ffd00",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-507379546467fe79e8b9-c5ab816c/record.json": "afd32214e954d3294795c66959b726fa58106a4bc286428e4ddba7480bd8ca86",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-566037c93d07ee627c7c-a2d06b3e/artifacts.json": "3a655fa596947ff9fa5f129d7e98853ab6734503e256e568571e4d8739011703",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-566037c93d07ee627c7c-a2d06b3e/record.json": "e40ad9696120b3ba5b76c839d9492ff9cdacea27e2cc0a7e11ac57442ae91bb4",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57c4b395040b52bfd7dc-dfc51c71/artifacts.json": "a062c6485554113046758e98d00210646d1731329e52d35c6272e8f98aa0ff22",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57c4b395040b52bfd7dc-dfc51c71/record.json": "d79fdd1567a739b768009bcd72450f760d32019551e51554342ad4c49b374315",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5a7cb95751edf90a6b4d-858a3e30/artifacts.json": "6c8a3467379f0ad8787426e81fa53b9f45b5106256c422bb309a216942a7295d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-5a7cb95751edf90a6b4d-858a3e30/record.json": "3e0d9b86eefcd3f871307c02663326577fd866660e38701a5d2884b1d2b8f6f6",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6001cd9b87600f47b472-71338ceb/artifacts.json": "0c645dde97a2c77b4a7687f5c3a715f422212bec9ebf71749071055e1435730b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6001cd9b87600f47b472-71338ceb/record.json": "a99fc7bc21778fdca99d7dd94caf17638f8f558d4b6c950af083fa5d45802d31",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6064c334796ae2785442-b3a1450b/artifacts.json": "ecd6e82f4ae02a74982888322e7b20c5755de862081d9007fb37288bce45fb44",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-6064c334796ae2785442-b3a1450b/record.json": "807605ad8750d9d0c92eff023e50402d5d5b28c21e7fedb1f898eb7709ba7499",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-62330be48505d81acc17-75b64304/artifacts.json": "81e2946b83a45a78c1a34a9b01fefae0a2db2e5ef297e009b42198314ebf6554",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-62330be48505d81acc17-75b64304/record.json": "81266d998e56927eada140eee041608571942b7574aba67d8b954746e6b0d424",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-69fce8cfff75542c1dd8-2cc5081b/artifacts.json": "e5656c5d85e18fa8967a1642a551394df60597f18fd3a0a90a791428acc8a5a9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-69fce8cfff75542c1dd8-2cc5081b/record.json": "14e5e3a70561094cedb23545ead4506a18c41c8442db90f292ca5daaecc5c177",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7b7e1e2da70df86c1c03-385b9a3c/artifacts.json": "9be85fb89aff20529e6fdad588eee230eeb3f894df56f76dc31b18c0ac7a1ea9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7b7e1e2da70df86c1c03-385b9a3c/record.json": "12986130ed0eba9d2cc9f21ae5dbedf080ee45585071fc0e08ee16ec942009ae",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7c8733c503f3d7d02e84-8c4071e8/artifacts.json": "f413a90d4b0a14d0dc2512e571c85b8a3a13281dadbbb074a1dccfefc6a059b8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-7c8733c503f3d7d02e84-8c4071e8/record.json": "4cf2aed820304a0628d983085a7ea1c9289aa987b6a046c371c70c164885911e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-80d9b0b5ce76781cf9c0-7726786e/artifacts.json": "5b2131fe64694e3a6c3467bedb8f01e44ed1286ce3f037235c978cef78beef0d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-80d9b0b5ce76781cf9c0-7726786e/record.json": "1798c531119af40dcce6e7032b66912abe476c55e9ede52d938e2701b737cb41",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-827b9b8015b2dbc7af21-e4fd35b9/artifacts.json": "763f8f4e3da30ca944b07e4f7f74e3453dcba0006952922ed09faeeef625426e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-827b9b8015b2dbc7af21-e4fd35b9/record.json": "fab55355a1e178679550a6d8884d9a911f1074c4ff615e33e5dcab302716275e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-874d0671caa1f081ec1e-342eca3d/artifacts.json": "dbabfc27a5aa0832123b89eb360b6157667c3c33ab9845482a0b290813fc89d1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-874d0671caa1f081ec1e-342eca3d/record.json": "152811fb30e9db84abf6104d497b2af609749e759aa4a5e0704cc91fa21e11ce",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-921d9e36498d33a9c405-f40cd16a/artifacts.json": "75b5719844eaea67d752c017263bf8f333a124febebdce7858b3d47c2a5e7e7d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-921d9e36498d33a9c405-f40cd16a/record.json": "ef5cb83a80e60a624ae90c230b94ed7b078c051bcfcdf77e8bc5bdfafd8235c4",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-966d7e75cd12d21cb800-11c1619b/artifacts.json": "d3f5a4116469a553b310dbd223ffd3e269e8c6ec88e639e2f6a10000459991cb",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-966d7e75cd12d21cb800-11c1619b/record.json": "1fc4a6dc95be27b4a62dc4e10a73006a0983f46b585c39b31c905161a57a5e12",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-96d8d2e37de1c70dfdc0-01c609a8/artifacts.json": "30b8c46f7b3562b6ded7fe304396454d4fff56f821088156729df8cf72008a61",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-96d8d2e37de1c70dfdc0-01c609a8/record.json": "012fe9d25ea7a3819f519a17365139716007715fc916dd0cc08e0efa592fa91b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-9766ce7c9331477f0669-08e1ceb3/artifacts.json": "69b2eddce1a8818f3009b87b380b4cca3c77efbc65d7cd522abe7aa0d6ff19d1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-9766ce7c9331477f0669-08e1ceb3/record.json": "85ffbfa3b1abdfe3969ae8fe920f282941ab3dfb840ef2e5247f4ecd63da52a1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a33cdfedf26584329104-7b2ce079/artifacts.json": "c74c26fa30e50622fc59f91ce861cac2b236facdb5e1e2f36072502b5ebb1582",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a33cdfedf26584329104-7b2ce079/record.json": "9ac037214520f97810f0bb252acaccb174771117e5643d4258ff6d69eb261ed3",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a659830ddc4fc264d546-bcbaf245/artifacts.json": "14f7247f12740b0d29f6d8049ef86e6f224883bf9d92622355c855b057f0ba35",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-a659830ddc4fc264d546-bcbaf245/record.json": "d0f2c447fa14b8281f4c21ca190fce51584be61701abd03fc4dce5e26f58da6f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b00a05e95a1281b5aada-ebee5c76/artifacts.json": "38992a3062db1603f4a4921d3e6a73704c1f4f630eab4e31149b05d677a05a07",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b00a05e95a1281b5aada-ebee5c76/record.json": "303ca935d89d616e88bdfc751ef6a155a3fe26861a190680f4902bbe4d944de3",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b11bd33b39b88fe89c46-af47290f/artifacts.json": "f6d838c40eb3029a173600c45980d5eeb465ea56ef534df454d0612d92be4ecf",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-b11bd33b39b88fe89c46-af47290f/record.json": "6e66a025e14ca2e5eb9c0a43bffcd9b963be605bfa0f2ea5461ad686b533f7aa",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c223850b2b9d77ff7c9e-a4d4a830/artifacts.json": "937b082cee501ee3f88c1da5a6c1060778154909062053b82b9f594848481a51",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c223850b2b9d77ff7c9e-a4d4a830/record.json": "3cad55ff62cee1d63dff41f2dea4889a2da74b3884e392bdcbe640ee22959133",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c688c491b5546e0dbca0-1ef4c4da/artifacts.json": "efa7c5f53c59f18e271081ceb202b71a2b8099069b04f636e86b65314756f895",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c688c491b5546e0dbca0-1ef4c4da/record.json": "b6e6591b3aa31207084972d3d9d1e081bf9066be800ed2a3b5faef46ed16790e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c79507ec342938ca9105-27e8733c/artifacts.json": "fac27f840d114d58fb8fe32d43f859a9b30fdeb5905a3289d259d7d6de5d6309",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-c79507ec342938ca9105-27e8733c/record.json": "e1d6884d71cd69b81f3653f31eb15549f771ca14327f52cf43b39f32f70fa56e",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-cb95ace3daa213279ea0-a500faab/artifacts.json": "81403ca4c8a12f18881b99417fd07858a94547053a3d5798453cbd51af8c43a8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-cb95ace3daa213279ea0-a500faab/record.json": "7eadc290a1840ae580e2fcba6a826108e861b72ea3784084c6404740259c196b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ce9226a5bbfb16eb869e-4f9da79f/artifacts.json": "38caf9786439fc68f84856a60772edc4e92741ad1d319b9ea85c39fa6f5c71d9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ce9226a5bbfb16eb869e-4f9da79f/record.json": "2b56bb7fe8fad0534cffe724f21904a6177cc396d3973acaa917d38a0e793a3a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ced4ce8940e55ef92f13-ae4fb860/artifacts.json": "0d5cac670117b53c0aa98e18e08d64ff75f384698bdc3329d281a71aa5531d9f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ced4ce8940e55ef92f13-ae4fb860/record.json": "7da0ad7e1d3e96f8d97c14a88c4c764b6286fd9e70737acee8006d6092aed1c0",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d299e02a79e9c3b17687-2a9114e6/artifacts.json": "02df0582ed97ba9a9f5f11674830879c63ecc9607528fa427bb553d1f6c1d5c8",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d299e02a79e9c3b17687-2a9114e6/record.json": "293c5037d00cdb2cba93b2c564f0f53faf27412aa37bd79d5f918790f7c68867",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d34b1a6504c7a034d558-92ebdb96/artifacts.json": "81a527cab2e36e73521ee6f512d61f6814d932a59672180a2152bbbad687d4ae",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d34b1a6504c7a034d558-92ebdb96/record.json": "dd6a7a58749e5752b5616b997713cb790e2272ce7ac63cc8c51dd00729a11fb7",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d6528fd2e39314cb9ae2-8fa23bd8/artifacts.json": "682e57ed4ec9b2c2f9ceaec5e2f1f254e7aa517ebf9994632eed617cd4884ccd",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d6528fd2e39314cb9ae2-8fa23bd8/record.json": "d3389620ff9d5795b4bcca3028206e6c1d8f02215403cfdc3652659caf403d6d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d8829979c9380e3bc2de-68e39530/artifacts.json": "25830061738f53c9e096d0d4e34ba2352be10ebdde10fa075b2fab23430eb11f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d8829979c9380e3bc2de-68e39530/record.json": "1b067b30f26ffad9308afe73e1eb184d3b27620f91d7bdbd1435074b0bfc444a",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d9f714e0c3be4e33616b-d74e169f/artifacts.json": "1c4cdceb30705434fd4aea8dac3418ad6bd30dfe75d5a99fedb125b9aa2f11ca",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-d9f714e0c3be4e33616b-d74e169f/record.json": "76db3d73c03557d18b2bda86cfe06e2944070f787e3d67fd52eb7c1fe8b54ee1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-db297f533c47d3347a6e-6fb63f06/artifacts.json": "352625a1d9fcac179d5c27cada583735aa115fdc79ea29dadcd94026eb41196c",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-db297f533c47d3347a6e-6fb63f06/record.json": "f96c88a3e634413b29a1398cf1d2ef0e34d63d6c9fc94fd443eeb514e6932df9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-dbf0fc324d8559a8e0a9-1ac66258/artifacts.json": "570136da2a150a0062a4d89221511215bd97a62a3b6eacb382e39e9fbedad3c4",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-dbf0fc324d8559a8e0a9-1ac66258/record.json": "f699b7db540469f667faa64c7a5ce3d5e93955ed5cced75ae8a20755dc29621f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-de22a48b412d3c97b054-55229681/artifacts.json": "7faac64c8ad352cb4aefb089f806346c0aaeeab2eb839349008d8b83425ffce4",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-de22a48b412d3c97b054-55229681/record.json": "b7e356dde1e3845bfd90c7511c7aa1242d10f1f7462864e77cc695551c5254a5",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-e2bb5445256b7347ad7e-7ed0ce15/artifacts.json": "04e812bafe59ba2b6d4ceaf07c3c2fdd48bec83552668f7e40bcc6fcf9b26d59",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-e2bb5445256b7347ad7e-7ed0ce15/record.json": "1399e8836d88254278d483c4c568f330a7a7ad785b63955d1198a53759c8c9cb",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ed750548af470ae3f7f2-5424ea56/artifacts.json": "8944ffaf017bb1062eafbd7c5be7c7c74c3a73dbaa0a663012f4e6e115a96d9f",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-ed750548af470ae3f7f2-5424ea56/record.json": "46d7d7bde7ab6c3148a858ccce2e5a17815a2836150f3db79b4b85d92d64be1d",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efcd482b29adb96b30f4-7961a9e2/artifacts.json": "136cee279e75f64eac63448c9f07973898afe11fded01851c8d8f5b4d2d603eb",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efcd482b29adb96b30f4-7961a9e2/record.json": "095b87e606035fc30edfcaf820c2d7ca0abdecc8c9dd4b26f776fd317c28ee48",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f2d24653f9406ecb3d14-b09ae72c/artifacts.json": "5f59246c641bb13737af7e3ad35e437be0ccf71f680a149346e2f88959f039d5",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f2d24653f9406ecb3d14-b09ae72c/record.json": "3ceab9ec2f38aa72b22a6cf36ed0c5daf7b5f3924962333db483f376b62561f9",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f56ed9fedb385edb25db-b9053f8f/artifacts.json": "da488248ef0dcd6ae8b3ae8912c9d9e3b2a3865badce0e246c67c123d7890db1",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f56ed9fedb385edb25db-b9053f8f/record.json": "11828ffcb30f6b884ac627daec2f1067d4b623740a911d19eb0576bbfae0c36b",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-fd7d96cd25e2fa3968aa-0452e5f4/artifacts.json": "9ed1edd4aa75ae1e3145b144b256cd05e210fd06674f81566e620506446f0f57",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/REF-fd7d96cd25e2fa3968aa-0452e5f4/record.json": "7f3bff06b3f75dbcd37e13f4b893a3d2c47e59e7af0a04e97ef9f0d5693ae285",
+   "validation/results/stopping/v3-008-i3fu2/topas-runs/index.json": "599027c349c394fa361dbd48cee0acc4f29a198a7375dc72e690b21126a37955",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-12512b1e40611ea4ce3b-7205f9a6/artifacts.json": "7ad2e8f06b095c7aac22288c09b86b26ab7e4535bbaa67db98f984adec9afcea",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-12512b1e40611ea4ce3b-7205f9a6/record.json": "4180b47dd32e8624aad21c0aa94e102d6b6ea0111863fdb6fb890946a9b23c0a",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-48838aba24e41c71ff3b-ed673f25/artifacts.json": "9ad01639868e0cf316d35db8fb1a7c70ac675f72c7709f5268da3e71cf6e397d",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-48838aba24e41c71ff3b-ed673f25/record.json": "6a8a5e5b6ac943d7ccdb7baae416b0b4739544451c6428558d3013918c68f450",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-503044447b5ebdfd6345-90796c02/artifacts.json": "3cb75ab9acd1beb5082bec841a2537bd6911734328503d53a5308cbaf62604fa",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-503044447b5ebdfd6345-90796c02/record.json": "043f95c49c1384e71515b5b39ba3c11ba2c3521bfe828bcd0d4372b5ac45c169",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6af6a37172270d50d8d6-ea73954d/artifacts.json": "5dd07a44d1383f83d7e25dc0eb271385f4089c81c72f35c99e4eb4b028fb67d2",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-6af6a37172270d50d8d6-ea73954d/record.json": "f364cc91e25ed0d5aa9f14561c0b8b9c83a24e0c2ef18adbae9f847e7104ac96",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-cc2800f7530b94ca4564-92db453f/artifacts.json": "a2866e586674cdc9423040302b7a59064a9c6baf7fdbd6686627b961d1478509",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-cc2800f7530b94ca4564-92db453f/record.json": "1e99a799b27d77d7b8c2cdce28139b2673091b0026c615906bca771d7f740c27",
+   "validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json": "f974f388103940e77a1d6098e5c8f0455d3b150895d5e12b9b611bafb7fe1e01"
+  },
+  "environment": {
+   "lock": {
+    "note": "versions against uv.lock; bytes sealed separately (environment seal): the numpy distribution (every RECORD-listed file), the interpreter executable, numpy's _multiarray_umath extension, every loaded stdlib module and the launcher are hashed; only the kernel, libc and the C runtime the interpreter links against are outside",
+    "numpy": "2.5.3",
+    "numpy_locked": "2.5.3",
+    "python": "3.12",
+    "python_locked": "3.12"
+   },
+   "runtime": {
+    "dont_write_bytecode": true,
+    "launch": {
+     "dont_write_bytecode_flag": 1,
+     "isolated_flag": 1,
+     "launch_ok": true,
+     "launcher_record": {
+      "flags": {
+       "dont_write_bytecode": 1,
+       "isolated": 1,
+       "no_site": 1
+      },
+      "git": "/usr/bin/git",
+      "git_common_dir": "/workspace/.git",
+      "git_toplevel": "/workspace",
+      "git_work_tree_env": "/workspace",
+      "head_sha": "accc8f2b83ca13e2ec48794c2038928c286d3948",
+      "launcher_sha256": "24bd01b6a16bb17072064f4a9d9d16fa5c9d55a483703db70fdfb77cf3f35c48",
+      "machinery_ok": true,
+      "origin": "validation/scripts/stopping/sealed_launch.py",
+      "pid": 2,
+      "pycache_prefix": "/workspace/validation/generated/i3fu2-pycache",
+      "pycache_prefix_state": "absent",
+      "python_executable": "/usr/local/bin/python3.12",
+      "stdlib_dir": "/usr/local/lib/python3.12",
+      "stdlib_modules_at_launch": 58,
+      "sys_base_prefix": "/usr/local",
+      "sys_modules_at_launch": [
+       "__future__",
+       "__main__",
+       "_abc",
+       "_blake2",
+       "_codecs",
+       "_collections",
+       "_collections_abc",
+       "_compression",
+       "_frozen_importlib",
+       "_frozen_importlib_external",
+       "_functools",
+       "_hashlib",
+       "_imp",
+       "_io",
+       "_locale",
+       "_operator",
+       "_posixsubprocess",
+       "_signal",
+       "_sre",
+       "_stat",
+       "_sysconfigdata__linux_x86_64-linux-gnu",
+       "_thread",
+       "_typing",
+       "_warnings",
+       "_weakref",
+       "_weakrefset",
+       "abc",
+       "builtins",
+       "codecs",
+       "collections",
+       "collections.abc",
+       "contextlib",
+       "copyreg",
+       "encodings",
+       "encodings.aliases",
+       "encodings.utf_8",
+       "enum",
+       "errno",
+       "fcntl",
+       "fnmatch",
+       "functools",
+       "genericpath",
+       "hashlib",
+       "importlib",
+       "importlib._bootstrap",
+       "importlib._bootstrap_external",
+       "importlib.machinery",
+       "io",
+       "ipaddress",
+       "itertools",
+       "keyword",
+       "locale",
+       "marshal",
+       "math",
+       "ntpath",
+       "operator",
+       "os",
+       "os.path",
+       "pathlib",
+       "posix",
+       "posixpath",
+       "re",
+       "re._casefix",
+       "re._compiler",
+       "re._constants",
+       "re._parser",
+       "reprlib",
+       "select",
+       "selectors",
+       "shutil",
+       "signal",
+       "stat",
+       "subprocess",
+       "sys",
+       "sysconfig",
+       "threading",
+       "time",
+       "types",
+       "typing",
+       "typing.io",
+       "typing.re",
+       "urllib",
+       "urllib.parse",
+       "warnings",
+       "zipimport",
+       "zlib"
+      ],
+      "sys_path": [
+       "/workspace/src",
+       "/workspace/validation/scripts/stopping",
+       "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/lib/python3.12/site-packages",
+       "/usr/local/lib/python312.zip",
+       "/usr/local/lib/python3.12",
+       "/usr/local/lib/python3.12/lib-dynload"
+      ],
+      "sys_prefix": "/usr/local",
+      "target": "validation/scripts/stopping/i3fu2_evaluate.py",
+      "target_committed": true,
+      "target_path": "/workspace/validation/scripts/stopping/i3fu2_evaluate.py",
+      "target_sha256": "49ddc566157e547ac542c9a4cb544be5f47ae4c26f94df719c78a27bd1420a23"
+     },
+     "machinery_problems": [],
+     "meta_path": [
+      "BuiltinImporter",
+      "FrozenImporter",
+      "PathFinder"
+     ],
+     "no_site_flag": 1,
+     "pycache_prefix": "/workspace/validation/generated/i3fu2-pycache",
+     "pycache_prefix_exists": false,
+     "pycache_prefix_files_at_start": null,
+     "sys_path_at_capture": [
+      "/workspace/src",
+      "/workspace/validation/scripts/stopping",
+      "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/lib/python3.12/site-packages",
+      "/usr/local/lib/python312.zip",
+      "/usr/local/lib/python3.12",
+      "/usr/local/lib/python3.12/lib-dynload"
+     ]
+    },
+    "modules_without_bytecode_cache": 113,
+    "numpy_modules_verified": 86,
+    "stdlib_modules_verified": 147
+   },
+   "runtime_after": {
+    "dont_write_bytecode": true,
+    "modules_without_bytecode_cache": 113,
+    "numpy_modules_verified": 86,
+    "stdlib_modules_verified": 148
+   },
+   "seal": {
+    "match": true,
+    "numpy_multiarray_sha256": "ceec5ba13ab88318632307fdd2df74f317fa293ce77be559c4298ddd1f4306b0",
+    "numpy_record_files_verified": 929,
+    "numpy_record_sha256": "596b7c79758f86e74c89f6d2c7917f59e09cf802c7a6d78e94d31bfc27241543",
+    "numpy_version": "2.5.3",
+    "path": "validation/results/stopping/v3-008-i3fu1/environment-seal.json",
+    "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python_executable_sha256": "56bfd38b490ae57cd942ad6a7573cef9ad6c43d1c903bdfba92fa88512953c36",
+    "seal_sha256": "4166366856656e669c7cd4aabbfec3c679203d90af3e9eca24dd1b1eb87991c9",
+    "stdlib_dir_sha256_of_listing": "3bf6d43a6d09ff06899b85f2755cc21753b5481e2b72bd742bbc4b4473b8782e",
+    "stdlib_modules_in_seal": 827,
+    "stdlib_modules_verified": 147,
+    "sys_base_prefix": "/usr/local",
+    "sys_prefix": "/usr/local",
+    "sys_version": "3.12.0 (main, Oct 18 2023, 16:27:16) [GCC 11.4.0]"
+   }
+  },
+  "evaluator_head_sha": "accc8f2b83ca13e2ec48794c2038928c286d3948",
+  "log_markers": {
+   "path": "validation/results/stopping/v3-008-i3fu2/log-markers.json",
+   "sha256": "c079f5fb1e38063864759c61e0aeb9ce2ad505ba4915141a07012414f725511a"
+  },
+  "manifest": {
+   "bundle_set_digest": "a24c5f40d8eb563a5809d3f333e849e2a906cd89e38fd2018639b4cd3d6d0bc0",
+   "path": "validation/reference_cases/topas/i3fu2-frozen-manifest.json",
+   "sha256": "690ff0bf1fddedfec8c4190dab30aa0b1e686589f80b3f0e2679ec295dea4db7"
+  },
+  "member_sha256": {
+   "data/raw/ICRU73_NEW.dat": "749768c1c2de475c928cc2c50a354903577139c11debd4b5948b035ca3a3d87e",
+   "data/raw/icru73_newEng.dat": "8b5b809f5c0cc4f6018f9faa89e9f73c7b9b81a3c588f98bef556712d4c77dd1"
+  },
+  "plan_note": {
+   "line": "**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-77788fd4ea6740f78fdf1fd3d82ee03c at 94b17d30218a9dc5fc3c659a2a15cd4f691aa110; markers review REVIEW-be33eda9d6d34628a5bbbb6544093919 at 054ecbf5b0bf7e6403cb687f67c7558170da8f79",
+   "path": "validation/plans/v3-008-acceptance.md"
+  },
+  "plan_revision_records": 17,
+  "records": "validation/results/stopping/v3-008-i3fu2/topas-runs",
+  "review_pins": {
+   "evaluator": {
+    "attestation": {
+     "key_id": "b53b2800f81a4e64",
+     "signed_at_utc": "2026-11-16T19:52:46.964436+00:00",
+     "signer": "codex-worker"
+    },
+    "finished_at": "2026-11-16T19:52:46.961486+00:00",
+    "head_sha": "94b17d30218a9dc5fc3c659a2a15cd4f691aa110",
+    "path": "validation/results/stopping/v3-008-i3fu2/i3fu2-review.json",
+    "review_id": "REVIEW-77788fd4ea6740f78fdf1fd3d82ee03c",
+    "sha256": "75668d6f61ffc0405d924674be57e31e5eab8fb1a372fa50eb4cd10ff3ebbceb"
+   },
+   "markers": {
+    "attestation": {
+     "key_id": "b53b2800f81a4e64",
+     "signed_at_utc": "2026-11-16T20:07:25.007453+00:00",
+     "signer": "codex-worker"
+    },
+    "finished_at": "2026-11-16T20:07:25.004863+00:00",
+    "head_sha": "054ecbf5b0bf7e6403cb687f67c7558170da8f79",
+    "path": "validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json",
+    "review_id": "REVIEW-be33eda9d6d34628a5bbbb6544093919",
+    "sha256": "cc403ed090f2f0a6b5e35f273a325fa0311eaff14cc25ad39496182ff93befb7"
+   }
+  },
+  "runs": {
+   "i3fu2-carbon-water-10mevu-case17-part0": {
+    "histories": 50000,
+    "run_id": "REF-69fce8cfff75542c1dd8-2cc5081b",
+    "scored": 50000,
+    "seed": 20627217
+   },
+   "i3fu2-carbon-water-10mevu-case17-part1": {
+    "histories": 50000,
+    "run_id": "REF-034071647483ca9425e0-a12323cb",
+    "scored": 50000,
+    "seed": 20627317
+   },
+   "i3fu2-carbon-water-10mevu-case17-part6": {
+    "histories": 50000,
+    "run_id": "REF-18157832db84118715c8-e8571d9d",
+    "scored": 50000,
+    "seed": 20627817
+   },
+   "i3fu2-carbon-water-15mevu-case18-part0": {
+    "histories": 50000,
+    "run_id": "REF-6001cd9b87600f47b472-71338ceb",
+    "scored": 50000,
+    "seed": 20627218
+   },
+   "i3fu2-carbon-water-15mevu-case18-part1": {
+    "histories": 50000,
+    "run_id": "REF-ced4ce8940e55ef92f13-ae4fb860",
+    "scored": 50000,
+    "seed": 20627318
+   },
+   "i3fu2-carbon-water-15mevu-case18-part6": {
+    "histories": 50000,
+    "run_id": "REF-4679e19c41ba80e336e4-477a8a37",
+    "scored": 50000,
+    "seed": 20627818
+   },
+   "i3fu2-carbon-water-20mevu-case19-part0": {
+    "histories": 50000,
+    "run_id": "REF-507379546467fe79e8b9-c5ab816c",
+    "scored": 50000,
+    "seed": 20627219
+   },
+   "i3fu2-carbon-water-20mevu-case19-part1": {
+    "histories": 50000,
+    "run_id": "REF-d34b1a6504c7a034d558-92ebdb96",
+    "scored": 50000,
+    "seed": 20627319
+   },
+   "i3fu2-carbon-water-20mevu-case19-part6": {
+    "histories": 50000,
+    "run_id": "REF-efcd482b29adb96b30f4-7961a9e2",
+    "scored": 50000,
+    "seed": 20627819
+   },
+   "i3fu2-carbon-water-2p4mevu-case13-part0": {
+    "histories": 50000,
+    "run_id": "REF-921d9e36498d33a9c405-f40cd16a",
+    "scored": 50000,
+    "seed": 20627213
+   },
+   "i3fu2-carbon-water-2p4mevu-case13-part1": {
+    "histories": 50000,
+    "run_id": "REF-874d0671caa1f081ec1e-342eca3d",
+    "scored": 50000,
+    "seed": 20627313
+   },
+   "i3fu2-carbon-water-2p4mevu-case13-part5": {
+    "histories": 50000,
+    "run_id": "REF-e2bb5445256b7347ad7e-7ed0ce15",
+    "scored": 50000,
+    "seed": 20627713
+   },
+   "i3fu2-carbon-water-2p4mevu-case13-part6": {
+    "histories": 50000,
+    "run_id": "REF-d8829979c9380e3bc2de-68e39530",
+    "scored": 50000,
+    "seed": 20627813
+   },
+   "i3fu2-carbon-water-30mevu-case20-part0": {
+    "histories": 50000,
+    "run_id": "REF-9766ce7c9331477f0669-08e1ceb3",
+    "scored": 50000,
+    "seed": 20627220
+   },
+   "i3fu2-carbon-water-30mevu-case20-part1": {
+    "histories": 50000,
+    "run_id": "REF-d9f714e0c3be4e33616b-d74e169f",
+    "scored": 50000,
+    "seed": 20627320
+   },
+   "i3fu2-carbon-water-30mevu-case20-part6": {
+    "histories": 50000,
+    "run_id": "REF-a659830ddc4fc264d546-bcbaf245",
+    "scored": 50000,
+    "seed": 20627820
+   },
+   "i3fu2-carbon-water-3mevu-case14-part0": {
+    "histories": 50000,
+    "run_id": "REF-cb95ace3daa213279ea0-a500faab",
+    "scored": 50000,
+    "seed": 20627214
+   },
+   "i3fu2-carbon-water-3mevu-case14-part1": {
+    "histories": 50000,
+    "run_id": "REF-b11bd33b39b88fe89c46-af47290f",
+    "scored": 50000,
+    "seed": 20627314
+   },
+   "i3fu2-carbon-water-3mevu-case14-part6": {
+    "histories": 50000,
+    "run_id": "REF-966d7e75cd12d21cb800-11c1619b",
+    "scored": 50000,
+    "seed": 20627814
+   },
+   "i3fu2-carbon-water-50mevu-case21-part0": {
+    "histories": 50000,
+    "run_id": "REF-ce9226a5bbfb16eb869e-4f9da79f",
+    "scored": 50000,
+    "seed": 20627221
+   },
+   "i3fu2-carbon-water-50mevu-case21-part1": {
+    "histories": 50000,
+    "run_id": "REF-0346041be5033120ddb5-a903c0cd",
+    "scored": 50000,
+    "seed": 20627321
+   },
+   "i3fu2-carbon-water-50mevu-case21-part5": {
+    "histories": 50000,
+    "run_id": "REF-dbf0fc324d8559a8e0a9-1ac66258",
+    "scored": 50000,
+    "seed": 20627721
+   },
+   "i3fu2-carbon-water-50mevu-case21-part6": {
+    "histories": 50000,
+    "run_id": "REF-15e4ddb01abf08b1b23a-964ab83c",
+    "scored": 50000,
+    "seed": 20627821
+   },
+   "i3fu2-carbon-water-5mevu-case15-part0": {
+    "histories": 50000,
+    "run_id": "REF-566037c93d07ee627c7c-a2d06b3e",
+    "scored": 50000,
+    "seed": 20627215
+   },
+   "i3fu2-carbon-water-5mevu-case15-part1": {
+    "histories": 50000,
+    "run_id": "REF-2fdf9194535a90964a5a-4c8986ca",
+    "scored": 50000,
+    "seed": 20627315
+   },
+   "i3fu2-carbon-water-5mevu-case15-part6": {
+    "histories": 50000,
+    "run_id": "REF-26519ef6e924c922295f-a2bfea3e",
+    "scored": 50000,
+    "seed": 20627815
+   },
+   "i3fu2-carbon-water-7mevu-case16-part0": {
+    "histories": 50000,
+    "run_id": "REF-ed750548af470ae3f7f2-5424ea56",
+    "scored": 50000,
+    "seed": 20627216
+   },
+   "i3fu2-carbon-water-7mevu-case16-part1": {
+    "histories": 50000,
+    "run_id": "REF-96d8d2e37de1c70dfdc0-01c609a8",
+    "scored": 50000,
+    "seed": 20627316
+   },
+   "i3fu2-carbon-water-7mevu-case16-part6": {
+    "histories": 50000,
+    "run_id": "REF-de22a48b412d3c97b054-55229681",
+    "scored": 50000,
+    "seed": 20627816
+   },
+   "i3fu2-he-water-10mevu-case17-part4": {
+    "histories": 50000,
+    "run_id": "REF-d6528fd2e39314cb9ae2-8fa23bd8",
+    "scored": 50000,
+    "seed": 20627617
+   },
+   "i3fu2-he-water-50mevu-case21-part4": {
+    "histories": 50000,
+    "run_id": "REF-80d9b0b5ce76781cf9c0-7726786e",
+    "scored": 50000,
+    "seed": 20627621
+   },
+   "i3fu2-oxygen-water-10mevu-case17-part2": {
+    "histories": 50000,
+    "run_id": "REF-c223850b2b9d77ff7c9e-a4d4a830",
+    "scored": 50000,
+    "seed": 20627417
+   },
+   "i3fu2-oxygen-water-10mevu-case17-part3": {
+    "histories": 50000,
+    "run_id": "REF-4a49cd6fffa4c83aec1e-04b33c65",
+    "scored": 50000,
+    "seed": 20627517
+   },
+   "i3fu2-oxygen-water-10mevu-case17-part7": {
+    "histories": 50000,
+    "run_id": "REF-1d6fd42a074e7a9419d9-fbde1413",
+    "scored": 50000,
+    "seed": 20627917
+   },
+   "i3fu2-oxygen-water-15mevu-case18-part2": {
+    "histories": 50000,
+    "run_id": "REF-7b7e1e2da70df86c1c03-385b9a3c",
+    "scored": 50000,
+    "seed": 20627418
+   },
+   "i3fu2-oxygen-water-15mevu-case18-part3": {
+    "histories": 50000,
+    "run_id": "REF-57c4b395040b52bfd7dc-dfc51c71",
+    "scored": 50000,
+    "seed": 20627518
+   },
+   "i3fu2-oxygen-water-15mevu-case18-part7": {
+    "histories": 50000,
+    "run_id": "REF-7c8733c503f3d7d02e84-8c4071e8",
+    "scored": 50000,
+    "seed": 20627918
+   },
+   "i3fu2-oxygen-water-20mevu-case19-part2": {
+    "histories": 50000,
+    "run_id": "REF-193a067c6fd14ce30818-cf6ab82d",
+    "scored": 50000,
+    "seed": 20627419
+   },
+   "i3fu2-oxygen-water-20mevu-case19-part3": {
+    "histories": 50000,
+    "run_id": "REF-c79507ec342938ca9105-27e8733c",
+    "scored": 50000,
+    "seed": 20627519
+   },
+   "i3fu2-oxygen-water-20mevu-case19-part7": {
+    "histories": 50000,
+    "run_id": "REF-33e91682b1affa26cc7d-d4bc0d31",
+    "scored": 50000,
+    "seed": 20627919
+   },
+   "i3fu2-oxygen-water-2p4mevu-case13-part2": {
+    "histories": 50000,
+    "run_id": "REF-5a7cb95751edf90a6b4d-858a3e30",
+    "scored": 50000,
+    "seed": 20627413
+   },
+   "i3fu2-oxygen-water-2p4mevu-case13-part3": {
+    "histories": 50000,
+    "run_id": "REF-b00a05e95a1281b5aada-ebee5c76",
+    "scored": 50000,
+    "seed": 20627513
+   },
+   "i3fu2-oxygen-water-2p4mevu-case13-part7": {
+    "histories": 50000,
+    "run_id": "REF-4340e118cc50d146ca3d-db49b62f",
+    "scored": 50000,
+    "seed": 20627913
+   },
+   "i3fu2-oxygen-water-30mevu-case20-part2": {
+    "histories": 50000,
+    "run_id": "REF-d299e02a79e9c3b17687-2a9114e6",
+    "scored": 50000,
+    "seed": 20627420
+   },
+   "i3fu2-oxygen-water-30mevu-case20-part3": {
+    "histories": 50000,
+    "run_id": "REF-01317dd73ff59413a9cb-209f9cb6",
+    "scored": 50000,
+    "seed": 20627520
+   },
+   "i3fu2-oxygen-water-30mevu-case20-part7": {
+    "histories": 50000,
+    "run_id": "REF-c688c491b5546e0dbca0-1ef4c4da",
+    "scored": 50000,
+    "seed": 20627920
+   },
+   "i3fu2-oxygen-water-3mevu-case14-part2": {
+    "histories": 50000,
+    "run_id": "REF-a33cdfedf26584329104-7b2ce079",
+    "scored": 50000,
+    "seed": 20627414
+   },
+   "i3fu2-oxygen-water-3mevu-case14-part3": {
+    "histories": 50000,
+    "run_id": "REF-35421bbb7ad02e182cd6-de2e490b",
+    "scored": 50000,
+    "seed": 20627514
+   },
+   "i3fu2-oxygen-water-3mevu-case14-part7": {
+    "histories": 50000,
+    "run_id": "REF-f56ed9fedb385edb25db-b9053f8f",
+    "scored": 50000,
+    "seed": 20627914
+   },
+   "i3fu2-oxygen-water-50mevu-case21-part2": {
+    "histories": 50000,
+    "run_id": "REF-62330be48505d81acc17-75b64304",
+    "scored": 50000,
+    "seed": 20627421
+   },
+   "i3fu2-oxygen-water-50mevu-case21-part3": {
+    "histories": 50000,
+    "run_id": "REF-827b9b8015b2dbc7af21-e4fd35b9",
+    "scored": 50000,
+    "seed": 20627521
+   },
+   "i3fu2-oxygen-water-50mevu-case21-part7": {
+    "histories": 50000,
+    "run_id": "REF-10d71ac91908800cbf78-2aca6057",
+    "scored": 50000,
+    "seed": 20627921
+   },
+   "i3fu2-oxygen-water-5mevu-case15-part2": {
+    "histories": 50000,
+    "run_id": "REF-fd7d96cd25e2fa3968aa-0452e5f4",
+    "scored": 50000,
+    "seed": 20627415
+   },
+   "i3fu2-oxygen-water-5mevu-case15-part3": {
+    "histories": 50000,
+    "run_id": "REF-f2d24653f9406ecb3d14-b09ae72c",
+    "scored": 50000,
+    "seed": 20627515
+   },
+   "i3fu2-oxygen-water-5mevu-case15-part7": {
+    "histories": 50000,
+    "run_id": "REF-44e48724722d710e2179-ac59dc0a",
+    "scored": 50000,
+    "seed": 20627915
+   },
+   "i3fu2-oxygen-water-7mevu-case16-part2": {
+    "histories": 50000,
+    "run_id": "REF-6064c334796ae2785442-b3a1450b",
+    "scored": 50000,
+    "seed": 20627416
+   },
+   "i3fu2-oxygen-water-7mevu-case16-part3": {
+    "histories": 50000,
+    "run_id": "REF-db297f533c47d3347a6e-6fb63f06",
+    "scored": 50000,
+    "seed": 20627516
+   },
+   "i3fu2-oxygen-water-7mevu-case16-part7": {
+    "histories": 50000,
+    "run_id": "REF-334780dc287e397ed197-7dc9ba17",
+    "scored": 50000,
+    "seed": 20627916
+   }
+  },
+  "sealed_sources": {
+   "infrastructure/experiment_v3/attest.py": "6bdd4ac655a8cf3a0e1168b6f540838b37b6ff43e73d8d6b5e6cd2b82dce28f7",
+   "infrastructure/experiment_v3/common.py": "10601518b4bf0a6a76479a1eecda0a82ed76e878cb70907fd1338fc16d9c3222",
+   "infrastructure/experiment_v3/paths.py": "5b5c197895c393ba7e488ac851b01cd946a79fa1473738834a9f36bfda7fda4d",
+   "infrastructure/experiment_v3/review.py": "b9e0285714f3269423f9b8c55ea823094edef250a611852863bdc7d061fef47d",
+   "infrastructure/validation/review_records.py": "7cd7b02f87db666fa870e37238be0a639ff20494b8d1d4a8489006d5b6af28fd",
+   "pyproject.toml": "0e73bd64aea5ef153e198c00a67c20efbc8ef1a5061f1f77d2bdab555dda9352",
+   "src/ionmc/__init__.py": "447ddba9973864bbc68ef3986d9964996c3943d959e622391d9e2992e5a8e5d4",
+   "src/ionmc/_version.py": "8df5e1b28f2f4988d543036afa9df37607ae5697a8bc96d74d5916694c27bad9",
+   "src/ionmc/data/__init__.py": "96596b5eec408aced8a3c2075f79b11953869b08416f5633ff2f3c485f2be9bf",
+   "src/ionmc/data/cache.py": "91f3c18434c97d77717ece8fb3d4f90ef26abb8b2ab114262a9ec50d350e9072",
+   "src/ionmc/data/nist_star.py": "cf116e673a4b2f69ecd3e24335715bdadebdff9a7c49b6812538a78791a9189d",
+   "src/ionmc/materials.py": "8dda5bb8bc4c8b18fb7c85787e07bdc25f3cddef56de51e889818221a050e5ff",
+   "src/ionmc/physics/__init__.py": "cd5cfc60df6a66dc7c98a9e61dbb3837255d6558b2b8c805b3db0b58b8571003",
+   "src/ionmc/physics/lindhard_sorensen.py": "800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a",
+   "src/ionmc/physics/projectiles.py": "5b76a14a4d0275ef5d6bddbeaf33e8588d97301655e4e336351979095f202399",
+   "src/ionmc/physics/stopping.py": "4be0934a76219e4e56d3eb7c329137e5781f75ba923899cc44b0d2dc66cd6c08",
+   "src/ionmc/reference/__init__.py": "b9e23862f420bd9a7e4c750ce1c9073bbbb21132ebf626c453f193c019aab65b",
+   "src/ionmc/reference/parsers.py": "0230f2a4384c198734c22955bf478ae1a429fd5d4d9db3a8f21ff60a24b5aee1",
+   "src/ionmc/reference/runs.py": "5ba367127a1dc5571c2937d2463156e360ca057189d3699078110f313bfb0193",
+   "uv.lock": "0d7e79d3b88fd95f7b59d717efa27d6bfb9b78a435fb2ccc5b991e4347d37299",
+   "validation/results/stopping/v3-008-i3fu1/environment-seal.json": "4166366856656e669c7cd4aabbfec3c679203d90af3e9eca24dd1b1eb87991c9",
+   "validation/scripts/ion_em/r2_evaluate.py": "cfd89e2a06e7f33876274d9f4b30ddfaf9587ee7120663dab406cec15258a750",
+   "validation/scripts/ion_em/r2_io.py": "459ed6742610201e3bee261f3b5688b7495ccfe812c4546cf89c971506637b0a",
+   "validation/scripts/ion_em/ss_budget.py": "13158795c32094609188b22ec64b2d612e3037a1d782b392801f5aa53af4e009",
+   "validation/scripts/ion_em/ss_evaluate.py": "4bb8f2eeee81d2ee936921e1e3ea5180bf9b470a01c72c52fb036406cb2f3360",
+   "validation/scripts/ion_em/ss_wrapper_template.py": "a989aa237564e4591f15451706b0bbf29860672f18d3244caa58700bc03422a8",
+   "validation/scripts/stopping/compare_icru73.py": "2dc16272a32a30cdf93a91bc006af8b436b529ead5fa465bccf5351159d6f1e8",
+   "validation/scripts/stopping/env_seal.py": "c05501da207024b36dea916007cf2f25b40ff1285c6c45f8acc031dd857231f7",
+   "validation/scripts/stopping/gen_i3fu2_bundles.py": "5f0113f5fd632a3c94c3d25d240de8f17c69e1808337b8876271312be785d0d5",
+   "validation/scripts/stopping/i3fu2_evaluate.py": "49ddc566157e547ac542c9a4cb544be5f47ae4c26f94df719c78a27bd1420a23",
+   "validation/scripts/stopping/sealed_launch.py": "24bd01b6a16bb17072064f4a9d9d16fa5c9d55a483703db70fdfb77cf3f35c48"
+  },
+  "smoke_records": "validation/results/stopping/v3-008-i3fu2/topas-smokes",
+  "smokes": {
+   "i3fu2-smoke-carbon-water-10mevu": {
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-48838aba24e41c71ff3b-ed673f25",
+    "seed": 20600440
+   },
+   "i3fu2-smoke-carbon-water-10mevu-fluct-off": {
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-12512b1e40611ea4ce3b-7205f9a6",
+    "seed": 20600441
+   },
+   "i3fu2-smoke-carbon-water-2p4mevu-finesteps": {
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-6af6a37172270d50d8d6-ea73954d",
+    "seed": 20600445
+   },
+   "i3fu2-smoke-carbon-water-2p4mevu-steps": {
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-cc2800f7530b94ca4564-92db453f",
+    "seed": 20600443
+   },
+   "i3fu2-smoke-carbon-water-50mevu-steps": {
+    "code_sha": "845e5f10e5cc0c76ac693fbf5e5f6f25861d1047",
+    "run_id": "REF-503044447b5ebdfd6345-90796c02",
+    "seed": 20600444
+   }
+  },
+  "trust_file": {
+   "head_sha": "accc8f2b83ca13e2ec48794c2038928c286d3948",
+   "path": "infrastructure/keys/trusted_attestation_keys.json",
+   "sha256": "6eb14657048b12e2e23fa1df87af2f0a2ec0c3adde2b993dba9d5454045c29f4"
+  },
+  "versions": {
+   "ionmc": null,
+   "numpy": "2.5.3",
+   "python": "3.12.0"
+  }
+ },
+ "redistribution_note": "Aggregates only: no libdEdx/ICRU 73 or Geant4 table values, no per-energy deviations, ratios or TOPAS energy-loss values (decision 0038); the controls are written as pass/fail and maxima, the thickness and stepping checks as maxima per ion and band, reasons without values.",
+ "repeats_used": {},
+ "robust": true,
+ "rounding_note": "mean_r_M, mean_r_I, mean_s, x_b and controls.helium.max_abs_r_m are written rounded to 0.1 percentage point (3 decimals in relative units); the classes and the pattern were computed from the full-precision values (pre-declared).",
+ "schema": "ionmc-i3fu2-result-4",
+ "task_id": "V3-008"
+}

@@ -2576,3 +2576,23 @@ of c223f5e5 (history); 117 files, directory digest 63bb2e0d55f8f4abb6af5a266a4ae
 fine-step run reports every primary reaching the far-face phase space. No run has been read, parsed or graded by hand and
 no shadow evaluation has been or will be made on these runs; the evaluator (host-runner, sealed launcher, `--code-sha
 48b41981`) grades them once at the next commit. Not a clinical claim.
+
+**Dated results note — first evaluation of the revision-17 evidence at code_sha 48b41981: repeat trigger on one point (2026-11-16,
+orchestrator).** The evaluator was run by the host-runner at accc8f2 through the sealed launcher with `--code-sha 48b41981`
+(signed record RUN-20261116T203154Z-68a23558, exit 0, output-manifest sha256 ed7fb6c0…, committed under `host-records/`;
+the written document committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2_result.pre-repeat.json`). Every
+one of the 58 runs is VALID, both premises pass on the smokes, both controls pass (helium model-consistent; fluctuations-off
+difference within tolerance; markers discriminate); exactly one point failed its gate: **oxygen case 13 (2.4 MeV/u), same-slab
+emulation check |e₁| > 0.15 %** — the pre-declared repeat trigger ("invalid run; no repeat" at that stage), so the document
+reads `pattern = INCONCLUSIVE` with the single reason "an evidence point is invalid without a valid repeat"
+(`pattern_before_controls` MIXED). Per the deterministic repeat rule the WHOLE triple of that point is repeated once with
+its frozen repeat bundles (parts 10, 11, 15; seeds 20628213, 20628313, 20628713): REF-947615e93039c09758dc-4e6270dd,
+REF-57cc1c1ccbf63a5ed987-fd5b590c, REF-f920bc43fe2fa0fe56bd-29e689a6, run one at a time at 20:37:51–20:38:27 UTC, all
+succeeded. **Process disclosure:** the repeat rule requires `code_sha` = 48b41981 for repeats as for evidence, but the
+branch head had advanced to the records commit accc8f2 (the evaluator needs the records committed), and the reference
+runner refuses a detached checkout; the orchestrator therefore moved the local branch pointer back to 48b41981 (clean
+worktree, `git reset --hard` to an ancestor; no history rewritten, accc8f2 remained reachable and pushed), ran the three
+repeats, and fast-forwarded the branch back to accc8f2. The repeat records are added to `topas-runs/index.json` (61
+entries) and committed; the evaluator is run again at the next commit with the same `--code-sha`; its document replaces
+`i3fu2_result.json`. The band aggregates of the pre-repeat document were displayed to the orchestrator as the pre-declared
+procedure requires (the repeat rule acts on a recorded gate failure); no other data were inspected. Not a clinical claim.

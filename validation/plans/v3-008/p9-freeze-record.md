@@ -1751,7 +1751,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f0a690352eec4c53a56d-7488d6c4/record.json` | `2658816f0734eb2e03d57248eee74fc0bcf0d1af3acc742761e97d76d5401d3a` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1d3b62e354c3d2b713d-2b86d1e8/artifacts.json` | `789e02b7ec4a430299cf794c0ebfc8179e25537e98b597631239e83447301544` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1d3b62e354c3d2b713d-2b86d1e8/record.json` | `ec1d7bddbe536c89216bdeace89a9c9501785739b5849118a1605f5802943419` |
-| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `599027c349c394fa361dbd48cee0acc4f29a198a7375dc72e690b21126a37955` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `ced952b91275e928a0e1b599fee1a23359566b3e4e47d15f857291e20592119a` |
 
 
 **Dated note (2026-11-16, orchestrator) — the signed host-run record of the first (failed-closed) evaluator attempt of amendment I3-FU-1 step 2 (STOP note), bound as committed:**
@@ -1910,7 +1910,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-efb143b59ff25d434f49-cf0916b7/record.json` | `d0bc53235f6b5488ef4e7dfccab5819eaad095171114383b1f1ceb6403b8876c` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1a0770920779870d332-45342c2e/artifacts.json` | `7578624e32aead49df9b10521a7ba306e0f16159fcbc41da7d5ff420c4214633` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1a0770920779870d332-45342c2e/record.json` | `fb62f13463a40e5f3843fcc9326ec20496554fe67d2657df34733a4382773eea` |
-| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `599027c349c394fa361dbd48cee0acc4f29a198a7375dc72e690b21126a37955` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `ced952b91275e928a0e1b599fee1a23359566b3e4e47d15f857291e20592119a` |
 
 
 **Dated note (2026-11-16, orchestrator) — evidence records index of the revision-17 family rebound; entries that changed:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` b967e827… → 30d3a525…. All other entries unchanged (recomputed).
@@ -2072,10 +2072,26 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f56ed9fedb385edb25db-b9053f8f/record.json` | `11828ffcb30f6b884ac627daec2f1067d4b623740a911d19eb0576bbfae0c36b` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-fd7d96cd25e2fa3968aa-0452e5f4/artifacts.json` | `9ed1edd4aa75ae1e3145b144b256cd05e210fd06674f81566e620506446f0f57` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-fd7d96cd25e2fa3968aa-0452e5f4/record.json` | `7f3bff06b3f75dbcd37e13f4b893a3d2c47e59e7af0a04e97ef9f0d5693ae285` |
-| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `599027c349c394fa361dbd48cee0acc4f29a198a7375dc72e690b21126a37955` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `ced952b91275e928a0e1b599fee1a23359566b3e4e47d15f857291e20592119a` |
 
 
 **Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 30d3a525… → 599027c3…; `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 30d3a525… → 599027c3…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — first evaluation of the revision-17 evidence (repeat trigger on oxygen case 13): the pre-repeat document, its signed host-run record and the three signed repeat records (parts 10, 11, 15 at 48b41981) with their artifact listings, bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/i3fu2_result.pre-repeat.json` | `d865a1cb3bef1bf8966ff27ec5fb9d316676f632e0741b705c368f189ad5cbec` |
+| `validation/results/stopping/v3-008-i3fu2/host-records/RUN-20261116T203154Z-68a23558.json` | `24da142d203ed05b65520643c2a83d3517789b332c0fd480a5267cf045875de0` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-947615e93039c09758dc-4e6270dd/record.json` | `20b223c918624cef94d5af00e8b342969d9c965623bf8c25cc380d7de2256dc7` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-947615e93039c09758dc-4e6270dd/artifacts.json` | `600cabb41284d7f8b4728f8bb3ba5c2e81091dcf7f021ac6716584f8a1c4bf21` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57cc1c1ccbf63a5ed987-fd5b590c/record.json` | `ea26d725cce09df5310053050abdeb35ce41d1ce0fbc21e99b086e347fb8b8ca` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-57cc1c1ccbf63a5ed987-fd5b590c/artifacts.json` | `adb3a59589fe7eeba635ace7f61df146df0f08a0e5cb7c409dd8142a1696c176` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f920bc43fe2fa0fe56bd-29e689a6/record.json` | `0df5a64fd43e91960d5c01c1ffdc46bc1080869805f7952a28a7170261bd1fc2` |
+| `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f920bc43fe2fa0fe56bd-29e689a6/artifacts.json` | `9e5637786b75cb8e79f5325eb265a78b0d032999f3f7f07956df19b92cc2838a` |
+
+
+**Dated note (2026-11-16, orchestrator) — evidence records index extended by the three repeat records; entries that changed:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 599027c3… → ced952b9…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
