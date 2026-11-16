@@ -1513,6 +1513,18 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-15, orchestrator) — entry changed by the session-end status commit (P12 reproducer docstring, REVIEW-62a63c44 minor):** `validation/plans/v3-008/p12-scripts/transport.py` 03b06c10… → 90a54bd3…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-15, orchestrator) — entry changed by the SR-2 re-check commit (the D-3 markdown record):** `validation/results/stopping/v3-008-d3-range-attribution.md` c6f2ec08… → c991f966…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — files added by the amendment I3-FU-1 commit (prospective; step-1 band/z-scan diagnostic and its test; step-2 TOPAS thin-slab bundle generator, evaluator, test and the frozen manifest `i3fu2-frozen-manifest.json`, which binds the 29 `i3fu2-*` bundles (58 files) by sha256 and overall digest; sha256 as committed):**
+
+| File | sha256 |
+|---|---|
+| `validation/scripts/stopping/i3_band_diagnostic.py` | `e0f1249b8a5b06136b18b54d13f1cbff101cb7bac58d62bf0084a48191512cc5` |
+| `tests/ionmc/test_i3_band_diagnostic.py` | `e7cbe18f6cf0d85e6d587be611fc608ee72bd482715e09b3d34567936e496b35` |
+| `validation/scripts/stopping/gen_i3fu2_bundles.py` | `215185f319d892e9e00d17d3794f594dfe10595147774599df8c0e9e409c1769` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `c860a9af40641c8638b6b320a528cc52ba1812dc93f49796d66f4073faa543a4` |
+| `tests/ionmc/test_i3fu2.py` | `e4b7e92a843f5774054c9fdd3b4081f347f6cdc47ffe808572f1ef3cfff4c7eb` |
+| `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `1d4b005b5d86508d5f69abdddd60b3e7a71b24becc6898affa94e2bf63e5e17c` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

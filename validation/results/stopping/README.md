@@ -28,3 +28,12 @@ role evaluation), 32 grid points ≥ 2 MeV/u per ion, aggregates per band, CSDA-
 MeV/u, gates, the range-construction statement and the I-value note; **FAIL** for both ions on the stopping gates (the range
 gate passes) — recorded verbatim in the plan results note of 2026-11-15 and decision 0043; never re-graded. Both files hold
 aggregates only (no table values, per-energy deviations or ratios). Not a clinical claim.
+
+# V3-008 amendment I3-FU-1 (2026-11-16; prospective; result directories to be added when the steps run)
+
+`v3-008-i3fu1/icru73_band_diagnostic.json` (step 1, `i3_band_diagnostic.py`): band means of ionmc Bethe (78 eV) vs libdEdx
+ICRU73_NEW water for Z = 1–10, a four-shape z-scan over Z = 3–10, row I3b as model-only quantities; `--expect-i3` ties it to
+the committed row-I3 file. `v3-008-i3fu2/i3fu2_result.json` (step 2, `i3fu2_evaluate.py` on the TOPAS thin-slab runs of the
+`i3fu2-*` bundles): per ion and band the mean ratios TOPAS/ionmc − 1, TOPAS/ICRU73_NEW − 1 and ICRU73_NEW/ionmc − 1, the
+pre-declared classes and pattern, and the controls. Both are diagnostics (no gate; row I3 stays FAIL) and hold aggregates
+only (no table values, per-energy or per-point deviations or ratios). Not a clinical claim.

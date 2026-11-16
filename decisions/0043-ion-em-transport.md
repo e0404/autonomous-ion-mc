@@ -854,3 +854,16 @@ changed. With I2/I3 every gating row of the
 plan is now graded or declared: section-A rows PASS except I3 FAIL (I2 is a regression guard on SEEN values, not evidence;
 I11-rel keeps its SEEN pre-freeze status; I8b is report-only, reported within the I8 step documents of lv8 steps 02–04);
 TOPAS-agreement main set consumed with FAILs (R2-STOP3), held-out set PASS 12/12; V5-SS PASS 5/5. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; amendment I3-FU-1 of the acceptance plan, prospective).** The follow-up on the I3 FAIL is
+pre-registered before any output exists: step 1 commits and runs once a tested band and z-scan diagnostic (Z = 1–10 of the
+ICRU73_NEW water blocks; band means only; four single-term z-shapes including a z-independent control; row I3b as model-only
+quantities) with a pre-declared rule that CONFIRMS or WITHDRAWS the band-mean hypothesis above; step 2 measures, by a
+thin-slab mean energy-loss reference calculation in the TD-EM TOPAS configuration (12C, 16O at 2.4–50 MeV/u; 4He,
+thickness and fluctuation controls), what stopping the acceptance reference itself carries, with a pre-declared
+classification (ICRU-like / model-like / mixed) — the sentence above that "TOPAS likely carries ICRU 73-like stopping at
+2–20 MeV/u" is thereby downgraded to an unverified hypothesis: the primary reading of the GenericIon path (P2 §3, D-4 §2.6)
+shows one ionisation model (LindhardSorensen) over the whole range, so the inter-model blend P12 cites plausibly does not
+act; step 3 selects, by the pre-declared rule, between a tabulated low-energy source (its own amendment, licence review,
+consumed rows and fresh evidence) and a declared uncertainty followed by a category-4 authorization request to the operator
+on the integration of PR #84 with the FAIL declared. Nothing graded is re-graded; I3 stays FAIL. Not a clinical claim.

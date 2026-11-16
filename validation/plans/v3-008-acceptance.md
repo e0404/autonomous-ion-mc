@@ -323,6 +323,14 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
     cases stay reserved. The ionmc base 20631004 (r 0–7) is consumed (sealed 2026-11-13); it is not re-drawn. Smoke seeds
     20600438/20600439 consumed; no new smoke.
     **Dated note 2026-11-15 (after the block-2 grade):** parts 2–3 of cases 22, 25–31 are **consumed** (block 2, evidence, graded once); parts 4–19 of these cases stay reserved.
+  - **Dated note 2026-11-16 (amendment I3-FU-1 step 2; before any run).** TOPAS cases **13–21** (declared "unassigned, use only by
+    amendment" on 2026-11-07) are assigned to the thin-slab stopping check: case 13–21 = 2.4, 3, 5, 7, 10, 15, 20, 30, 50 MeV/u;
+    parts 0 = 12C slab t, 1 = 12C slab t/2 (cases 13, 17, 21), 2 = 16O slab t, 3 = 16O slab t/2 (cases 13, 17, 21), 4 = 4He slab t
+    (cases 17, 21), 5 = 12C slab t with energy-loss fluctuations off (cases 13, 21); parts 6–9 reserved for one pre-declared
+    repeat, 10–19 reserved; seeds by the unchanged formula 20619000 + 100·part + case (28 evidence seeds, 20619013–20619521).
+    Execution smoke: rehearsal seed **20600440** (C 10 MeV/u, 2 000 primaries); **20600441** reserved for one re-smoke. Formula,
+    ranges and guard test unchanged; no ledger change. These runs are diagnostics (no grade); their seeds are consumed once
+    their outputs are observed.
 - Never 2098xxxx or 2099xxxx. CI tests use fixed small seeds documented in the tests.
 
 **Guard test** `tests/ionmc/test_v3_008_seed_families.py`. It asserts that every V3-008 seed is:
@@ -1699,3 +1707,179 @@ information or an authorization outside the protocol). Not a clinical claim.
   under plan D for every consumed row; or integration by operator directive with the FAIL declared as a limitation.
 - **Housekeeping:** the scratch worktree `v3-008-evalscratch` is to be retired; the materialized reference runs and host-run
   records stay in the ignored task cache (needed by `check-run`/`grade` re-verification). Not a clinical claim.
+
+### Amendment I3-FU-1 (2026-11-16, orchestrator; prospective follow-up on row I3; in force once the commit carrying it, the step-1 script and the step-2 bundles has passed independent review; nothing graded is re-graded)
+
+Status: written before any step-1 or step-2 output exists (planner draft of 2026-11-16 in the orchestrator's scratchpad,
+edited and decided here; method design by the physics researcher, same date). Basis: §A rows I3/I3b, §C, §D (STOP 3 and its
+2026-11-07 note), §E, §F; the results note "rows I2 and I3 run once at 7d0e796b" and the session-end status note of
+2026-11-15; `validation/plans/v3-008/p12-i3-low-energy-stopping.md` (P12); P2 §3 and D-4 §2.6/§3.2 (Geant4 11.4.2 ion
+stopping path); decisions 0038 (data roles, licence precedent) and 0043; operator directives 2026-11-07 (TOPAS agreement is
+the acceptance target; "retain useful complementary checks such as libdedx comparisons"), 2026-11-01 (prospective
+revisions with independent review; intervention only for a genuine external blocker or a reserved operator decision;
+recorded on the V3-005 task branch, `reference_requests/operator-directives/2026-11-01-continue-autonomously.md` at
+266c247) and 2026-10-19 ("return separately for any material scope reduction"; same branch). Not a clinical claim.
+
+#### 0. What this amendment does NOT change (binding)
+- Row I3 stays **FAIL** as graded at 7d0e796b; its tolerances, grid, I-value (78 eV) and evaluator are unchanged.
+- No tolerance, grade, seed of a graded row or consumed base is changed; nothing is re-graded or relabelled; row I3b stays
+  report-only.
+- Steps 1 and 2 are diagnostics: they have no gate and cannot turn I3, TD-EM/TL-EM or any other row into PASS.
+- §D applies unchanged: STOP 3 (a model change after seeing the V/TD/TL rows consumes them), the one-SHA rule, "no parameter
+  is fitted to TOPAS", "no reference prediction is recomputed after a TOPAS output has been seen" (the step-2 predictions
+  of ionmc and ICRU73_NEW are fixed by the committed evaluator before any run).
+- Stopping-results policy (decision 0038): Git holds aggregates only — no libdEdx/ICRU/Geant4 table values, no per-energy
+  deviations or ratios, no per-point TOPAS energy-loss values.
+
+#### 1. Step 1 — committed band diagnostic, z-scan and row I3b (model + the cached libdEdx archive b941a0c3…)
+Instrument: `validation/scripts/stopping/i3_band_diagnostic.py` + `tests/ionmc/test_i3_band_diagnostic.py` (reviewed with
+this amendment; reuses the fail-closed loader of `compare_icru73.py` unchanged). Run once, at the clean reviewed SHA carrying
+this amendment, single process, logged (`telemetry/test-logs/<ts>-v3-008-i3fu1-step1`), with
+`--expect-i3 validation/results/stopping/v3-008-i3/icru73_comparison.json`; output
+`validation/results/stopping/v3-008-i3fu1/icru73_band_diagnostic.json`. Interface (frozen):
+- model = default `BetheOptions` at `water(78.0)`, `ls = "off"`; bands (MeV/u) [2,5), [5,10), [10,20), [20,50), [50,1000] on
+  the table's own grid points (a band with < 2 points raises); per ion and band only `n_points` and
+  `mean_relative_deviation` (S_model/S_table − 1); C and O additionally the two band maxima (2–10, ≥ 10 MeV/u) the row I3 file
+  already publishes, which `--expect-i3` must reproduce at rtol 1e-9 (else the run STOPs and writes nothing: inputs differ).
+- Ions Z = 1–10 of target 276. Z = 1, 2 informative only (`informative_z1_z2`; the table's lineage for Z = 1, 2 is OPEN), never
+  in the fit; Z = 3–10 are the ICRU 73 ions; non-ionmc ions use M ≈ A·u − Z·m_e (`mass_note` with the model-only sensitivity).
+- z-scan per band below 50 MeV/u: no-intercept least squares of d_z over Z = 3–10 against four shapes — `charge` (band mean
+  of 1 − q²/z², q the model's Barkas-125 effective charge), `barkas_like` (z), `bloch_like` (z²) and the z-independent control
+  `constant` (1); outputs coefficient, residual RMS, uncentred r² = 1 − Σres²/Σd², ranking, d_z/d_6.
+- I3b (C, O; report-only): shell, Barkas, Bloch, Mott, effective charge off in turn, `ls ∈ {eff, bare_mixed}`; only the
+  `default` variant carries a table-relative band mean (a duplicate), every variant carries model-only quantities (band mean of
+  S_variant/S_default − 1; CSDA-range shift in mm at C 80/290/430, O 100/350/430 MeV/u). **Disclosed deviation from the
+  frozen I3b wording:** "S per energy" and "range shift per term in mm" are realised as band means and model-only range
+  shifts (results policy: eight table-relative band means at full precision would let the table values of a band with ≤ 8
+  grid points be solved for); the I3b(ii) LS curve per energy exists model-only in `p3-output.json`.
+
+**1a. Hypothesis comparison rule (pre-declared).** The recorded hypothesis (results note of 2026-11-15, scratch, SEEN):
+C/O band means −8.6/−12.2 (2–5), −4.3/−7.5 (5–10), −1.8/−3.9 (10–20), −0.3/−0.8 % (20–50); ≥ 50 MeV/u within ±0.03/±0.06 %.
+- CONFIRMED iff every committed band mean of [2,5) … [20,50) rounds to the quoted value at 0.1 pp (|Δ| ≤ 0.05 pp) and
+  |mean([50,1000])| ≤ 0.03 % (C) / 0.06 % (O). The quoted ≥ 50 MeV/u figure was a max-type statement; a mean checks it only
+  partly, and the record says so.
+- Otherwise the hypothesis is WITHDRAWN in this plan, decision 0043 and the ledger, and the committed result stands. No
+  re-computation with another band convention, grid or option to recover it.
+
+**1b. z-scan rule (pre-declared, per band).** With RMS₁ ≤ RMS₂ ≤ … the residual RMS of the ranked shapes: attributed to
+shape 1 iff RMS₁ ≤ 0.5·RMS₂ and r²₁ ≥ 0.90; otherwise "not attributed" ("no single-term scaling explains the z-dependence in
+this band"); a band whose d_z changes sign over Z = 3–10 is "not attributed" whatever r² says. Reading (interpretive, not a
+grade): `charge` → the effective-charge parameterisation; `barkas_like` → the z³ Barkas term; `bloch_like` → the close-collision
+z⁴ term (Bloch / LS convention, decision 0043 §1); `constant` → a z-independent target-side term (shell, I-value or the
+table's construction). Disclosed limitation: over Z = 3–10 at fixed velocity the shapes are collinear (all monotone in z),
+so "not attributed" is an expected outcome in several bands. Step 1 informs the wording of option (c) and the design of
+option (b); it does not by itself select between them.
+
+#### 2. Step 2 — what stopping does the acceptance reference carry? (thin-slab mean energy loss in TOPAS)
+Rationale: the plan's 2026-11-15 sentence "TOPAS probably carries ICRU 73-like stopping at 2–20 MeV/u" rests on the
+`G4EmModelManager::FillDEDXVector` `(1 + del/e)` blend cited by P12 from v11.2.0. The primary reading of the GenericIon path
+(P2 §3, FACT [LS]; D-4 §2.6 runtime printout: `LindhardSorensen` the single `ionIoni` model over 0 eV–10 GeV) says that above
+escaled = 2 MeV (≈ 1.985 MeV/u) TOPAS uses G4BetheBlochModel × q_eff² with the LS and Barkas terms and reads ICRU 73/90 data
+only below; a blend between models of one model manager cannot act when there is one model (INFERRED; `G4EmModelManager.cc`
+v11.4.2 not pinned — the acquisition tool returned an error twice on 2026-11-16 and the question is settled empirically
+here). The sentence is therefore itself an unverified hypothesis, and step 2 decides it by measurement.
+Method (physics-researcher design note of 2026-11-16; route A — a Geant4 table dump through TOPAS — is not available:
+OpenTOPAS 4.3 passes no free Geant4 UI commands in headless mode, and a stored GenericIon table would hold only the
+unit-charge base table without the run-time q², LS and Barkas terms):
+- Engine OpenTOPAS 4.3 / Geant4 11.4.2 via `run_reference_calculation`; physics block byte-identical to the TD-EM bundles
+  (`Geant4_Modular`, `sv:Ph/Default/Modules = 1 "g4em-standard_opt4"`, `CutForAllParticles` 0.05 mm, `CutForElectron` 1 km,
+  `EMRangeMax` 10 GeV, `ListProcesses`), G4_WATER; printouts `Ts/RunVerbosity 2`, `Ph/Verbosity 1`.
+- Geometry: a water slab of thickness t in vacuum, pencil beam on axis; t from ionmc's own default model so that
+  ΔE/E = 3 % at the entrance energy (t_mm = 10·0.03·E0·A/S_ionmc(E0), 3 significant digits; model-only numbers, committed in
+  the bundles); the slab exit energy stays above 2.0 MeV/u for every point (the lowest point is 2.4 MeV/u, the lowest grid
+  point of the I3 comparison ≥ 2 MeV/u).
+- Points: E0 = 2.4, 3, 5, 7, 10, 15, 20, 30, 50 MeV/u for 12C and 16O, 50 000 primaries each; scorers: the V5-SS ASCII phase
+  space of the primaries leaving the far face (`ss_exit`) and an `EnergyDeposit` Sum/Standard_Deviation scorer on the slab
+  (`edep.csv`) as the cross-check (Sum/N must equal A·E0 − ⟨E_exit⟩ within 0.1 %).
+- Quantity: ⟨ΔE⟩_T = A·E0 − ⟨E_exit⟩ with SE = std/√N; predictions ΔE_M (ionmc default Bethe, water 78 eV) and ΔE_I
+  (ICRU73_NEW, log-log interpolated on its grid) by integrating dE/dx = −ρS(E) along the slab (RK4, ≥ 200 steps);
+  r_M = ΔE_T/ΔE_M − 1, r_I = ΔE_T/ΔE_I − 1, s = ΔE_I/ΔE_M − 1 per point, kept in the materialized cache only.
+- Controls (pre-declared; a failed control makes step 2 INCONCLUSIVE, not a finding): (i) thickness: t and t/2 at
+  2.4, 10 and 50 MeV/u per ion, |r_M(t) − r_M(t/2)| ≤ 0.2 % (bounds the pre-step dE/dx and step-limit bias); (ii) 4He at 10 and
+  50 MeV/u, |r_M| ≤ 0.5 % against ionmc's alpha Bethe (78 eV; I2 SEEN agreement ≤ 0.20 % at ≥ 10 MeV/u; tests the scoring
+  chain, not the GenericIon path; no r_I for He); (iii) energy-loss fluctuations disabled for 12C at 2.4 and 50 MeV/u
+  (`b:Ph/Default/ForRegion/DefaultRegionForTheWorld/EnableEnergyLossFluctuations = "False"`), |r_M(off) − r_M(on)| ≤ 0.2 %
+  (the fluctuation model conserves the mean). A rejected parameter name is recorded as a failed control.
+- Aggregates written to `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json` by the committed evaluator
+  `validation/scripts/stopping/i3fu2_evaluate.py` (tested on synthetic runs): per ion and band b ∈ {[2,5), [5,10), [10,20),
+  [20,50]} over the slab-t points: n, mean r_M, mean r_I, mean s, SE_b = √(Σ SE_rel²)/n, the class below, the three
+  thickness differences, the He r_M values, the fluctuation differences, the controls verdict; nothing per point.
+- Seeds (§C, before any run): TOPAS cases **13–21** (declared "unassigned, use only by amendment" on 2026-11-07) = the nine
+  energies in the order above; parts 0 = C t, 1 = C t/2 (cases 13, 17, 21), 2 = O t, 3 = O t/2 (cases 13, 17, 21), 4 = He t
+  (cases 17, 21), 5 = C t with fluctuations off (cases 13, 21); parts 6–9 reserved for one pre-declared repeat, 10–19
+  reserved; seeds 20619000 + 100·part + case (formula, ranges and guard test unchanged; 28 evidence bundles, frozen manifest
+  `validation/reference_cases/topas/i3fu2-frozen-manifest.json`, generator `gen_i3fu2_bundles.py`). One execution smoke
+  (C 10 MeV/u, 2 000 primaries) at rehearsal seed **20600440**; **20600441** reserved for one re-smoke if a parameter name is
+  wrong. Cost (ESTIMATE, never timed): 29 runs × ≤ 2 min, one at a time, each host call ≤ 600 s; outputs materialized one
+  run at a time, parsed and deleted (data-retention rule).
+- Validity per run: exit 0, no killed/stuck track, every primary scored once (deficit 0), PDG of the beam ion only, the
+  energy-deposit cross-check within 0.1 %; the run record's `code_sha` is the reviewed SHA of the bundles.
+
+**2a. Decision rule (pre-declared; per ion, per band b ∈ {[2,5), [5,10), [10,20)}).** σ_b = √(SE_b² + 0.25²) % (0.25 % =
+declared method systematic: table/range construction ≤ 0.1 %, per-nucleon energy convention ≤ 0.1 %, step/thickness ≤ 0.2 %
+as bounded by control (i)); X_b = min(1.0 %, |s_b|/3) (X ≤ |s|/3 keeps "agrees with ICRU73_NEW" and "agrees with ionmc"
+mutually exclusive with margin; 1.0 % is ≤ 1/4 of the smallest hypothesised 2–10 MeV/u separation (C, 4.3 %) and ≈ 2× the
+expected 1.645σ_b). Classes: **U** if X_b ≤ 1.645σ_b (unresolvable; checked first); **I** if |r_I,b| + 1.645σ_b ≤ X_b;
+**M** if |r_M,b| + 1.645σ_b ≤ X_b; **L** if r_M,b + 1.645σ_b < −X_b; **N** otherwise. Pattern over both ions: **ICRU** iff both
+ions are I in [2,5) and [5,10) and I or U in [10,20) → option (b) is the scientifically indicated route (moving ionmc toward
+ICRU73_NEW also moves it toward the acceptance reference); **MODEL** iff both ions are M or L in [2,5) and [5,10) → option (c)
+(the I3 difference lies between two references and the acceptance reference sides with ionmc or below it); **MIXED**
+(anything else) → option (c) (a tabulated source would move ionmc toward TOPAS in some bands and away in others, and any
+band-selective construction chosen after seeing TOPAS would be fitting to TOPAS, §D). **INCONCLUSIVE** (a control fails, or a
+U class in [2,5) or [5,10) after one pre-declared repeat at parts 6–9) → step 3 decides on step 1 and P12 alone; default (c).
+
+#### 3. Step 3 — decision (orchestrator; dated note before any further action)
+The step-2 pattern selects the indicated option; the orchestrator records the choice verbatim with the step-1 and step-2
+results. Deviating from the indicated option needs a written reason and independent review.
+- **Option (b) — tabulated low-energy C/O stopping blended into Bethe.** Needs its own prospective amendment: a licence
+  review first (precedent 0038: ICRU 90 arrays from `G4ICRU90StoppingData.cc` under the Geant4 licence are a cached
+  *evaluation* reference; a water table from `G4WaterStopping.cc` as *construction* data extends that precedent and conflicts
+  with F.6 "no ICRU/Geant4-data values in Git" unless the data stay in the provenance cache; libdEdx is GPL-3; G4EMLOW is
+  restricted to Geant4); circularity (with ICRU73_NEW lineage as model input, I3 stays FAIL as graded and has no non-circular
+  successor: no ICRU 90 oxygen, ICRU 90 carbon only via lineage-only files, no measured C/O water stopping at therapy
+  energies); rows consumed under STOP 3 (TD-H/TL-H are SEEN, so fresh held-out TOPAS cases and the stopping-dependent A-rows
+  at a new frozen SHA; ESTIMATE from §E: REF ≈ 2–3 h, ionmc samples ≈ 3–4 h, A-rows ≈ 1–2 h, plus implementation and
+  reviews); counter-indication to state: P12 §4 (ESTIMATE) — correcting the deficit raises ionmc's peak-to-entrance ratio by
+  ≈ +1.8–2.8 % at C 290 / O 350, away from TOPAS at the standard points.
+- **Option (c) — declared uncertainty, no model change.** I3 stays FAIL; decision 0043 §1 uncertainty statement and the
+  capability statement gain the declared low-energy C/O stopping uncertainty, with the values of the committed step-1
+  result (never the hypothesis); nothing consumed. Integration then means merging with a gating FAIL that is neither an
+  evidence gap nor removed by amendment — a material scope reduction reserved to the operator (directives 2026-10-19,
+  2026-11-01). The orchestrator files the Appendix-A intervention (EXPERIMENT.md category 4, Authorization: merging with a
+  failed gating row is not pre-authorized by the protocol, and the operator asked to be returned to separately for any
+  material scope reduction) and integration waits for the answer. **Reconciliation:** the 2026-11-15 results-note sentence
+  "No intervention request is filed: EXPERIMENT.md permits none for this (it is scientific work …)" holds for the
+  scientific question (which was and is resolved autonomously by steps 1–3) and is superseded for the integration decision,
+  which is a reserved operator decision once the scientific route has been run to its end.
+
+#### 4. Files touched when carried
+This plan (amendment; §C seed note; dated results notes for steps 1 and 2; step-3 note); `decisions/0043-ion-em-transport.md`
+(dated note; the (b)/(c) outcome entry); ledger rows V1-MUST-005 and V2-ION (I3 status, hypothesis CONFIRMED/WITHDRAWN,
+lineage statement); `validation/results/stopping/README.md`; `validation/plans/v3-008/p9-freeze-record.md` (bind the scripts,
+tests, bundles and manifest by sha256); `validation/reference_cases/topas/i3fu2-*` and the manifest; `tests/ionmc/test_i3fu2.py`.
+
+#### 5. Review gates and order
+1. This amendment + step-1 script/test + step-2 generator/bundles/manifest/evaluator/tests in one commit → Codex review on
+   the exact commit (re-reviewed until passed) → independent reviewer agent (scientific) → exact-SHA local validation record.
+2. Step-1 run once; step-2 smoke, then the 28 runs one at a time (outputs materialized, parsed, deleted); results committed
+   with dated notes → Codex → exact-SHA record → push → CI green at the exact head.
+3. Step-3 decision note → the same chain; then (b) a new prospective amendment, or (c) the intervention of Appendix A.
+
+#### Appendix A — intervention for option (c) (filed only if step 3 selects (c); values filled from the committed results)
+- Identifier assigned by `request_human_intervention`; requesting agent: V3 orchestrator; task V3-008 (PR #84; commit of the
+  step-3 note); category 4 (Authorization; reserved operator decision; material scope reduction).
+- Action required: decide whether V3-008 may be merged with gating row I3 FAILED and declared as a model limitation.
+- Why autonomous resolution is not possible: plan F.6 forbids integration with a gating FAIL that is neither an evidence gap
+  nor removed by amendment; relaxing or relabelling a gate is reserved to the operator. Steps 1–2 showed <pattern> (the
+  acceptance reference carries <ionmc-like / mixed> stopping at 2–20 MeV/u), so the indicated scientific route is a declared
+  uncertainty, not a model change.
+- Exact uncertainty statement to be declared (template): "ionmc's analytic C/O electronic stopping in water lies below the
+  revised ICRU 73 table (libdEdx ICRU73_NEW) by band means of <a>/<b> % (C/O) at 2–5 MeV/u, <c>/<d> % at 5–10, <e>/<f> % at
+  10–20 and <g>/<h> % at 20–50 MeV/u, and within <i> % above 50 MeV/u; the CSDA-range agreement is within 0.26 % (C) /
+  0.39 % (O); row I3 FAILED and is not re-graded. The acceptance reference (TOPAS, opt4) differs from ionmc by <band
+  summary>. Not a clinical claim."
+- Requested input (choose one): (A) merge PR #84 with I3 declared as the limitation above; (B) do not merge; pursue option
+  (b) (tabulated low-energy C/O stopping, licence review, fresh held-out TOPAS evidence; ≈ <cost>); (C) do not merge; keep
+  V3-008 open and continue other tasks.
+- Decisions that depend on it: merge of PR #84; ledger rows V1-MUST-005/V2-ION; decision 0043 capability statement; whether a
+  follow-up task for option (b) is created.
