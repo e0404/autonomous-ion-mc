@@ -2075,7 +2075,7 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `ced952b91275e928a0e1b599fee1a23359566b3e4e47d15f857291e20592119a` |
 
 
-**Dated note (2026-11-16, orchestrator) — hashes regenerated at the freeze commit's parent; entries that changed since f694b747:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 30d3a525… → 599027c3…; `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 30d3a525… → 599027c3…. All other entries unchanged (recomputed).
+**Dated note (2026-11-16, orchestrator) — evidence records index of the revision-17 family rebound (duplicate entry removed, Codex REVIEW-dfe0cc57 minor); entries that changed:** `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` 30d3a525… → 599027c3…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — first evaluation of the revision-17 evidence (repeat trigger on oxygen case 13): the pre-repeat document, its signed host-run record and the three signed repeat records (parts 10, 11, 15 at 48b41981) with their artifact listings, bound as committed:**
 
@@ -2101,6 +2101,14 @@ placeholder scorer output was deleted unread.
 
 
 **Dated note (2026-11-16, orchestrator) — the step-2 result document replaced by the grading at 48b41981 (the attempt-1 document is history); entries that changed:** `validation/results/stopping/v3-008-i3fu2/i3fu2_result.json` 1c131b09… → 497d2d8e…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — the Appendix-A authorization request IR-20261116-204824-29B867 (V3-008 integration scope after amendment I3-FU-1; option (c)), bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `reference_requests/interventions/IR-20261116-204824-29B867/README.md` | `179f171dd51f4a61fbf823f1ceb3305078923e47bc971acfb0c1b15d35dcae25` |
+| `reference_requests/interventions/IR-20261116-204824-29B867/request.json` | `fedecdd09fd426e0ddf76c461fde5a50ffc0bf88422fbc078d7a4ce5d6ad95e8` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

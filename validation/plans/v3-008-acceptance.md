@@ -2645,3 +2645,17 @@ consumed; no deviation from the indicated option, so no further review of the ch
 intervention (EXPERIMENT.md category 4, Authorization; material scope reduction reserved to the operator) is filed with the
 values of the committed results after this commit has passed review; integration of PR #84 waits for the answer. Not a
 clinical claim.
+
+**Dated note (2026-11-16, orchestrator; Appendix-A intervention filed; a failed review disclosed).** The Appendix-A request
+was filed after the step-3 commit d66622aa passed its signed review (REVIEW-dfe0cc57): **IR-20261116-204824-29B867**
+(EXPERIMENT.md category 4, Authorization; record committed under `reference_requests/interventions/`), asking the operator to
+choose (A) amend the V3-008 validation scope so that row I3 becomes a declared model limitation and merge PR #84 through
+the normal gates, (B) do not merge and pursue option (b) in a new task, or (C) do not merge and keep V3-008 open.
+Integration waits for the answer; nothing is merged. **Process failure disclosed:** the signed review
+REVIEW-34658b6474bc4a5ab8c15b303c774beb of the intermediate commit e3cac6fa (repeat records) ended `failed` with
+"Worktree changed during review" because the orchestrator committed the next step (d66622aa) while that review was still
+running; the content of e3cac6fa is contained in d66622aa, whose full-diff review passed (REVIEW-dfe0cc57), and the
+evaluator run RUN-20261116T203950Z-df7c5df4 that graded step 2 was launched from the clean snapshot of e3cac6fa by the
+host-runner and is bound to it by its signed record; the failed review record stays in the service's state. Codex
+REVIEW-dfe0cc57's minor finding (a duplicated `topas-runs/index.json` hash transition in a freeze-record note) is corrected
+in this commit. Not a clinical claim.
