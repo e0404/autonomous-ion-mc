@@ -874,3 +874,13 @@ mean is −0.1 pp against the quoted max-type bound); the committed diagnostic s
 The z-scan attributes the [10,20) MeV/u band to a z²-like shape and no other band to a single-term shape (common negative
 sign over Z = 3–10 in every band); Z = 1, 2 lie within ±0.8 pp. Step 2 (TOPAS thin-slab measurement) follows; nothing graded
 is re-graded; I3 stays FAIL. Not a clinical claim.
+
+**Dated note (2026-11-16, orchestrator; amendment I3-FU-1 step 2: first evaluation attempt STOPPED, revision 15).** The
+first evaluator run (host-runner record RUN-20261116T173700Z-23d22384, at 97f82f7a with code_sha c8102e89) failed closed
+on a marker-file error of the orchestrator (step-limiter marker taken from a verbosity-1 step table); on inspection the
+fine-step runs with `MaxStepSize = t/20` were found to lose part of their primaries at the far-face phase space (the
+twentieth limited step ends exactly on the face and the zero-length boundary step is not always scored: 35 of 50 in the
+smoke, 57–100 % in the evidence runs), which the evaluator would have classified INCONCLUSIVE. Revision 15 (prospective,
+reviewed before any new run) sets `MaxStepSize = 0.0515 t` (19 limited steps, then a boundary-limited step), regenerates
+the fine-step bundles and emulation, and repeats the pins, smokes and evidence runs. Nothing graded; I3 stays FAIL. Not a
+clinical claim.

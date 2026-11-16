@@ -21,8 +21,8 @@ d:Ge/Water/HLX = 60 mm
 d:Ge/Water/HLY = 60 mm
 d:Ge/Water/HLZ = 0.00121 mm
 d:Ge/Water/TransZ = 0.00121 mm
-# Fine-step run: TOPAS per-component step limit (G4StepLimiter) in the slab, t/20.
-d:Ge/Water/MaxStepSize = 0.121 um
+# Fine-step run: TOPAS per-component step limit (G4StepLimiter) in the slab, 0.0515 t.
+d:Ge/Water/MaxStepSize = 0.12463 um
 s:Ge/Source/Parent = "World"
 s:Ge/Source/Type = "Group"
 d:Ge/Source/TransZ = -0.001 mm

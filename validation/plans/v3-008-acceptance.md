@@ -2362,21 +2362,21 @@ steps) REF-02585a61132fb2de1155-ac89fa51; all succeeded (2000 / 2000 / 50 / 50 /
 **Marker file** `validation/results/stopping/v3-008-i3fu2/log-markers.json` (sha256 a9aaff40…), derived from these logs: the
 fluctuation markers identify the Geant4 `G4EmParameters` printout ("Fluctuations of dE/dx are enabled 1" not followed by
 the regional "disabled" line, resp. "disabled in G4Regions: DefaultRegionForTheWorld"), the step and track-header lines the
-`TrackingVerbosity = 1` step table, the step-limiter marker a `Water StepLimiter` step line. Cheap pre-check in the sandbox
+`TrackingVerbosity = 1` step table, the step-limiter marker a `Water StepLimiter` step line [SUPERSEDED by the STOP note below: that line exists only in TrackingVerbosity-1 logs; the marker is now the step limiter's process-list line]. Cheap pre-check in the sandbox
 with the evaluator's own parser (the authoritative check is the evaluator's at Z): the markers discriminate on/off over all
 five smokes and match no native input; both step-count smokes give exactly one slab step per primary (50/50), each ending at
 the far face; the fine-step smoke gives 20 slab steps per primary. No evidence run has been made; nothing is graded. Not a
 clinical claim.
 
-**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review REVIEW-c35482f470fb4b5f874ef5d91f0d067b at 38019380f3584a1d895bdb8922b17b3af326a67e; markers review REVIEW-d3d88ac3bc774119bf24147899bf5d9e at d21f01b548da597035a744d8234b77fc62058a58. Pin B (signed, passed, no findings; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`) reviewed the commit that added the marker file, the smoke records and pin A; the 58 evidence runs follow at the commit carrying this note (Z), after pin B's signed finished_at 17:03:54 UTC, one at a time. Not a clinical claim.
+**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins — SUPERSEDED by revision 15, see the STOP note below; kept as history).** evaluator review REVIEW-c35482f470fb4b5f874ef5d91f0d067b at 38019380f3584a1d895bdb8922b17b3af326a67e; markers review REVIEW-d3d88ac3bc774119bf24147899bf5d9e at d21f01b548da597035a744d8234b77fc62058a58. Pin B (signed, passed, no findings; committed verbatim as `validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json`) reviewed the commit that added the marker file, the smoke records and pin A; the 58 evidence runs follow at the commit carrying this note (Z), after pin B's signed finished_at 17:03:54 UTC, one at a time. Not a clinical claim.
 
 **Dated results note — I3-FU-1 step-2 evidence runs (58) at c8102e89 (2026-11-16, orchestrator; records only, nothing graded).**
 The 58 evidence bundles of the frozen manifest (cases 13–21, parts 0–7 as generated) were run once each, one at a time, at
 commit Z (c8102e89, which carries both review pins and the one-line pins note), through the reference-runner service
 (engine topas), all after pin B's signed `finished_at` (17:03:54 UTC; first run started 17:14:13 UTC, last finished
 17:34:51 UTC); every signed record reports `succeeded` true, exit 0, no timeout, no missing output, `code_sha` =
-c8102e89. The 57 runs after the first 13 were executed by a reference-worker agent under the same procedure; the last one by
-the orchestrator. The signed records and artifact listings are committed verbatim under
+c8102e89. Runs 1–57 were executed by a reference-worker agent in four resumed segments (13 + 14 + 15 + 15) under the same
+procedure; run 58 by the orchestrator [wording corrected for Codex REVIEW-fa6d9308's minor finding]. The signed records and artifact listings are committed verbatim under
 `validation/results/stopping/v3-008-i3fu2/topas-runs/<run_id>/` with `index.json` (bundle, case, part, run_id, seed,
 code_sha, signed start/finish); 117 files, directory digest (sha256 over the sorted `path sha256` lines) 868cbdd2ff07c318d4b126b4ccf841f615bbf2df8bb549e443c5ed1a8c6b60e9.
 Outputs are materialized in the ignored task cache for the evaluator and are deleted after it has run. No run has been
@@ -2387,3 +2387,45 @@ runner resolved Python 3.14 while the sealed diagnostics require the locked lowe
 `UV_PYTHON: "3.12"` for the tests job (no test or gate changed). Codex REVIEW-a92fa005 on c8102e89 (signed, pass) noted
 the "eight of nine" miscount of the step-1 note: corrected to nine of ten (four band means and one high-band check per
 ion) here, in decision 0043 and in both ledger rows; the WITHDRAWN verdict is unchanged. Not a clinical claim.
+
+### STOP note — I3-FU-1 step-2 first evaluation attempt failed closed; fine-step scoring deficit found (2026-11-16, orchestrator)
+
+**What happened.** (1) The evaluator was run by the host-runner at 97f82f7a with `--code-sha c8102e89` (signed record
+RUN-20261116T173700Z-23d22384, exit 1, committed as `validation/results/stopping/v3-008-i3fu2/host-records/RUN-20261116T173700Z-23d22384.json`).
+It stopped, as designed, on the first fine-step evidence run: `run i3fu2-carbon-water-10mevu-case17-part6
+(REF-a79d4a19c1984c2ea1d0-4cb174ba): configuration markers: fine-step run: the step limiter marker is missing from
+stdout`. Cause: the orchestrator had derived `step_limiter_marker` from the fine-step smoke as a `Water StepLimiter`
+step-table line, which exists only in `TrackingVerbosity = 1` logs; evidence runs print no step table. The evaluator's
+documented meaning of that marker is the step limiter's process-list line; the marker file now holds that line
+(`Transportation, StepLimiter, UserSpecialCut, GammaGeneralProc`). Disclosure: TOPAS registers G4StepLimiter for every
+particle, so this line is printed by every run (all 63 i3fu2 logs); the marker verifies the registration, and that the
+limiter acts at the requested size is evidenced by the fine-step smoke's step count (the evaluator's fine-step premise).
+(2) On inspection of the far-face phase-space headers (run metadata, not results): the fine-step SMOKE scored only 35 of
+its 50 primaries, and the 18 fine-step evidence runs at c8102e89 scored 73.4 / 82.7 / 97.1 / 99.7 / 99.97 / 100 / 100 /
+100 / 100 % (C, 2.4 → 50 MeV/u) and 57.5 / 67.9 / 89.6 / 97.3 / 99.7 / 99.99 / 100 / 100 / 100 % (O); every one-step
+run scored 100 %. Mechanism, read from the smoke's step table: with `MaxStepSize = t/20` the twentieth limited step ends
+exactly on the far face (z = t) and the crossing into the world is a zero-length Transportation step, which the surface
+phase-space scorer (`Water/ZPlusSurface`, `OnlyIncludeParticlesGoing = Out`) scores only part of the time. The evaluator
+would have found the fine-step premise failed (phase space incomplete) and every low-energy fine-step point INVALID,
+i.e. `pattern = INCONCLUSIVE`, had the marker check not stopped it first. **Process failure recorded:** the orchestrator's
+sandbox pre-check of the smokes (results note above) covered the step counts but not the phase-space completeness that
+the evaluator's `check_smoke` also requires; the premise failure was visible in the smoke before the 58 evidence runs
+were made. Nothing is graded; the 58 runs at c8102e89 and the five smokes at 5999f789 are superseded (their records
+stay in history and are replaced in `topas-runs/` and `topas-smokes/` by the next records commits); pins A
+(REVIEW-c35482f4) and B (REVIEW-d3d88ac3) are superseded and the one-line pins note is marked so. Not a clinical claim.
+
+**Revision 15 of amendment I3-FU-1 (2026-11-16, orchestrator; prospective, before any new run; in force once the commit
+carrying it has passed Codex review).** The fine-step limit becomes `MaxStepSize = 0.0515 t` (`FINE_STEP_FRACTION`; t/19.42,
+never commensurate with t: 19 limited steps of 0.0515 t = 0.9785 t and then one boundary-limited step of 0.0215 t, so the
+last step inside the slab always ends by Transportation at the far face and is scored like the one-step runs; the
+generator asserts the quotient's fractional part lies in [0.2, 0.8]). The 18 fine-step evidence bundles (parts 6, 7),
+their 18 repeats (parts 14, 15) and the fine-step smoke are regenerated with the new value and the manifest is
+re-frozen; every other bundle is byte-identical. The evaluator's fine-step emulation (`fine_algorithm_loss`) follows the
+actual step pattern (19 steps of 0.0515 t and the remainder; for the slab scaled by (1 + r_fine) the absolute limiter step
+of the nominal slab is kept and the remainder adjusts) instead of 20 equal steps; `MIN_FINE_STEPS` = 15 is unchanged (20
+steps expected); the provenance records `fine_step_fraction` and the pattern. Execution chain (unchanged in form): this
+commit reviewed (signed) = new pin A (the manifest is sealed at pin A); the five smokes re-run after the new pin A's
+`finished_at` at the commit carrying it (the fine-step smoke FIRST, and its phase space must be complete and its step
+count ≥ 15 per primary before anything else is run — the evaluator's own `check_smoke` logic, applied in the sandbox to the
+materialized smoke, is the pre-check); markers file reviewed (signed) = new pin B; new one-line pins note; the 58
+evidence runs re-run; records; evaluator by the host-runner. Not a clinical claim.

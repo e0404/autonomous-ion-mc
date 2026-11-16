@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tarfile
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -148,7 +149,7 @@ SMOKES = [d for d in BUNDLES if d.name in gen.SMOKES]
 STEP_SMOKES = {  # TrackingVerbosity-1 smokes: name -> (case, part whose configuration it runs)
     "i3fu2-smoke-carbon-water-2p4mevu-steps": (13, 1),  # slab 1.6 t: one step expected
     "i3fu2-smoke-carbon-water-50mevu-steps": (21, 1),
-    "i3fu2-smoke-carbon-water-2p4mevu-finesteps": (13, 6),  # slab t, MaxStepSize t/20
+    "i3fu2-smoke-carbon-water-2p4mevu-finesteps": (13, 6),  # slab t, MaxStepSize 0.0515 t
 }
 RUNS = [d for d in BUNDLES if d.name not in gen.SMOKES]
 
@@ -181,7 +182,7 @@ def test_bundle_set() -> None:
     assert sorted(gen.repeat_keys()) == sorted((c, p + 8) for c, p in evidence)
     assert gen.REPEAT_PARTS == tuple(range(8, 16))  # part + 8 for parts 0-7
     assert gen.RESERVED_PARTS == (16, 17, 18, 19)
-    assert gen.FINE_PARTS == (6, 7) and gen.FINE_DIVISOR == 20
+    assert gen.FINE_PARTS == (6, 7) and gen.FINE_STEP_FRACTION == Decimal("0.0515")
     assert not set(gen.PARTS) & set(gen.RESERVED_PARTS)
     assert not set(gen.REPEAT_PARTS) & set(gen.RESERVED_PARTS)
     energies = {c: float(e) for c, e in gen.CASES.items()}
@@ -200,9 +201,10 @@ def test_bundle_set() -> None:
         kinds[kind] += 1
         base = part - 8 if part >= 8 else part
         assert info["thickness_factor"] == (0.048 if base in (1, 3) else 0.03)
-        if base in gen.FINE_PARTS:  # MaxStepSize = t / 20 in um, exactly
+        if base in gen.FINE_PARTS:  # MaxStepSize = 0.0515 t in um, exactly
             t_um = info["slab_mm"] * 1000.0
-            assert info["max_step_um"] == pytest.approx(t_um / 20, rel=1e-12), d.name
+            assert info["max_step_um"] == pytest.approx(t_um * 0.0515, rel=1e-12), d.name
+            assert 0.2 <= (t_um / info["max_step_um"]) % 1.0 <= 0.8, d.name
             assert (
                 _native(d, "d:Ge/Water/MaxStepSize")
                 == f"{gen.max_step_size_um(info['ion'], info['case'])} um"
@@ -603,8 +605,9 @@ def _emulated_g4_losses(
     mid = max(e0 - table / a / 2.0, e0 / 2.0)
     one = table + (t / 10.0) * corr(mid)
     tf, e = gen.slab_mm(ion, case, 1), a * e0
-    step = tf / 10.0 / gen.FINE_DIVISOR
-    for _ in range(gen.FINE_DIVISOR):
+    max_step_mm = float(gen.max_step_size_um(ion, case)) / 1000.0
+    for step_mm in gen.fine_step_lengths_mm(tf, max_step_mm):
+        step = step_mm / 10.0
         eu = e / a
         lt = step * q2(eu) * base_g4(eu)
         e -= lt + step * corr(max(eu - lt / a / 2.0, eu / 2.0))
@@ -648,8 +651,19 @@ def test_same_slab_gate_detects_a_wrong_charge_slope(ion: str, dlam: float) -> N
     assert abs(ev.emulation_residuals(rs, _model(ion, case))[0]) > ev.EMULATION_TOL
 
 
+def test_fine_step_lengths_pattern() -> None:
+    t = gen.slab_mm("carbon", 13, 1)
+    step = float(gen.max_step_size_um("carbon", 13)) / 1000.0
+    lengths = gen.fine_step_lengths_mm(t, step)
+    assert len(lengths) == 20 and lengths[:19] == [step] * 19
+    assert lengths[19] == pytest.approx(0.0215 * t, rel=1e-12)
+    assert sum(lengths) == pytest.approx(t, rel=1e-12)
+    assert gen.fine_step_lengths_mm(1.0, 0.3) == pytest.approx([0.3, 0.3, 0.3, 0.1])
+    assert gen.fine_step_lengths_mm(1.0, 0.25) == pytest.approx([0.25] * 4)  # exact divisor
+
+
 def test_fine_step_linear_branch_bias() -> None:
-    """b_fine (20 forward-Euler steps): -0.04 to -0.07 %, negative at every C/O point."""
+    """b_fine (19 + 1 forward-Euler steps): -0.04 to -0.07 %, negative at every C/O point."""
     for ion in ("carbon", "oxygen"):
         for case in gen.ALL_CASES:
             b = ev.stepping_bias(ion, case)["b_fine"]
@@ -690,7 +704,11 @@ def test_check_formulas() -> None:
     proj, a = gen.IONS["oxygen"][0], 16
     t = gen.slab_mm("oxygen", 13, 1) * 1.1
     exact = ev.slab_energy_loss(a * 2.4, a, t, ev.model_stopping(proj))
-    b_s = ev.fine_algorithm_loss(proj, a, 2.4, t, "oxygen", 20) / exact - 1
+    step = float(gen.max_step_size_um("oxygen", 13)) / 1000.0
+    b_s = (
+        ev.fine_algorithm_loss(proj, a, 2.4, t, "oxygen", gen.fine_step_lengths_mm(t, step)) / exact
+        - 1
+    )
     g_s = ev.algorithm_loss(proj, a, 2.4, t, "oxygen") / exact - 1
     assert g_star[0] == pytest.approx((1 + g_s) / (1 + b_s) - 1, rel=1e-12)
 
@@ -707,7 +725,9 @@ def test_planted_algorithm_losses_pass_the_gate() -> None:
             de_m = ev.predicted_loss(f"model:{ion}", ev.model_stopping(proj), a, e0, t)
             for r0 in (0.05, -0.04):
                 one = ev.algorithm_loss(proj, a, e0, t * (1 + r0), ion)
-                fine = ev.fine_algorithm_loss(proj, a, e0, t * (1 + r0), ion, 20)
+                step = float(gen.max_step_size_um(ion, case)) / 1000.0
+                lengths = gen.fine_step_lengths_mm(t * (1 + r0), step)
+                fine = ev.fine_algorithm_loss(proj, a, e0, t * (1 + r0), ion, lengths)
                 rs = [{"r_M": one / de_m - 1}, {"r_M": 0.0}, {"r_M": fine / de_m - 1}]
                 assert abs(ev.emulation_residuals(rs, m)[0]) < 1e-5, (ion, case, r0)
             g1 = m["g1"]
@@ -1215,7 +1235,7 @@ _PLANTED: dict[tuple[str, int, int, str, float], float] = {}
 
 def _planted_loss(info: dict[str, Any], de_m: float, r: float) -> float:
     """Synthetic TOPAS mean loss: Geant4's emulated algorithms (one-step for slab t / 1.6 t and
-    He, 20-step linear branch for the fine-step runs) with stopping (1 + r) x ionmc's, i.e. on
+    He, 19+1-step linear branch for the fine-step runs) with stopping (1 + r) x ionmc's, i.e. on
     the slab scaled by (1 + r); smokes: the model loss x (1 + r)."""
     if info["kind"] == "smoke":
         return de_m * (1.0 + r)
@@ -1227,7 +1247,10 @@ def _planted_loss(info: dict[str, Any], de_m: float, r: float) -> float:
         t = float(info["slab_mm"]) * (1.0 + r)
         e0 = float(info["e0_per_u_mev"])
         if fine:
-            _PLANTED[key] = ev.fine_algorithm_loss(proj, a, e0, t, ion, gen.FINE_DIVISOR)
+            max_step_mm = float(gen.max_step_size_um(ion, case)) / 1000.0
+            _PLANTED[key] = ev.fine_algorithm_loss(
+                proj, a, e0, t, ion, gen.fine_step_lengths_mm(t, max_step_mm)
+            )
         else:
             _PLANTED[key] = ev.algorithm_loss(proj, a, e0, t, ion)
     return _PLANTED[key]

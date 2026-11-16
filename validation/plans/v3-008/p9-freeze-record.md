@@ -1520,10 +1520,10 @@ placeholder scorer output was deleted unread.
 |---|---|
 | `validation/scripts/stopping/i3_band_diagnostic.py` | `137c8414a4e0dcefaac883c16758efb18e3170cce97881267fc2e310c9ebd435` |
 | `tests/ionmc/test_i3_band_diagnostic.py` | `de0ba74e279ebf1d3ccedb552f1a6bfdf3466cbd19f202fbffcba5edc00031dd` |
-| `validation/scripts/stopping/gen_i3fu2_bundles.py` | `46200570d35f40143902c1dffc7245c39700459c453b0b3a21ae75f87251b17b` |
-| `validation/scripts/stopping/i3fu2_evaluate.py` | `b6422f2b3d8a6bef1136fc373fdc28f9b2c71ce40731b1f4904c48290b03f3fa` |
-| `tests/ionmc/test_i3fu2.py` | `7eaacdaf6d2f8685159aa49d036b37f317d1b192a7cc0a09dc305777c53541a5` |
-| `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `cb4664944d7f6f25a3b3acd059cdd93834d3b9e92a99f4cee6d579f20cdfd971` |
+| `validation/scripts/stopping/gen_i3fu2_bundles.py` | `d478be6fe561fcf61b9c3731df898133ea9012aa965342d94e16ce758cfdfd22` |
+| `validation/scripts/stopping/i3fu2_evaluate.py` | `0dad742eacdd6a243b7ca9072388a83d1def87f5a133471339b51ab2a31b7aa6` |
+| `tests/ionmc/test_i3fu2.py` | `12a159bc8b75f4d12ae9446c777f91991fb4c607b3ac8398596e33a49a0eb9bf` |
+| `validation/reference_cases/topas/i3fu2-frozen-manifest.json` | `d9b2dd205921bdd0cff7481293b9cfee6daf57d73df03ca534b8665424f2f0ee` |
 
 
 **Dated note (2026-11-16, orchestrator) — revision 1 of amendment I3-FU-1 (Codex REVIEW-cfdff398 and the independent review SR-3 of 777b4561): the six files bound by the previous note were revised before any run and their rows above now carry the revised hashes (the 777b4561 hashes are in that commit); the i3fu2 manifest now binds 84 bundles (40 evidence, 40 frozen repeats, 4 smokes; 168 files).**
@@ -1610,7 +1610,7 @@ placeholder scorer output was deleted unread.
 |---|---|
 | `validation/results/stopping/v3-008-i3fu1/icru73_band_diagnostic.json` | `e8d55ad7c904825ec5b74a7af4bb0a498d00ee0e2c12dfaadfbffb05ed1fe323` |
 | `validation/results/stopping/v3-008-i3fu1/host-records/RUN-20261116T164519Z-ad778a16.json` | `6c724cc13aec870093705b55af3bb461b1e833fbce2c3a97ff87f825bd6d68a6` |
-| `validation/results/stopping/v3-008-i3fu2/log-markers.json` | `a9aaff40736d2ebf07fc180d4cc513600b6f60b480c229c40d03ed16c8a8c3fc` |
+| `validation/results/stopping/v3-008-i3fu2/log-markers.json` | `c079f5fb1e38063864759c61e0aeb9ce2ad505ba4915141a07012414f725511a` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/index.json` | `4b3608688ee7a6afde0257b3b4904549f46f8662a20761e4892467b95c265984` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-02585a61132fb2de1155-ac89fa51/record.json` | `3a86638d15fbac37043cd88b1dff115e26c52e5c1a631b3b86067af9a07b0b36` |
 | `validation/results/stopping/v3-008-i3fu2/topas-smokes/REF-02585a61132fb2de1155-ac89fa51/artifacts.json` | `d2e96941c78c7e910ded48f80f9323718d4cd73ba4e25dc3a71725b66518370e` |
@@ -1753,6 +1753,17 @@ placeholder scorer output was deleted unread.
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/REF-f1d3b62e354c3d2b713d-2b86d1e8/record.json` | `ec1d7bddbe536c89216bdeace89a9c9501785739b5849118a1605f5802943419` |
 | `validation/results/stopping/v3-008-i3fu2/topas-runs/index.json` | `b967e8279b51885f91a1aee9d6da093676b74d9af356e5270bb2cc9c8ffecf13` |
 
+
+**Dated note (2026-11-16, orchestrator) — the signed host-run record of the first (failed-closed) evaluator attempt of amendment I3-FU-1 step 2 (STOP note), bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `validation/results/stopping/v3-008-i3fu2/host-records/RUN-20261116T173700Z-23d22384.json` | `a714d5a24eedfcfb91952e129817da4cf3704c672af70dee88eebfdc04a88bee` |
+
+
+**Dated note (2026-11-16, orchestrator) — amendment I3-FU-1 revision 15 (fine-step limit 0.0515 t, emulation over the actual step pattern, regenerated fine-step bundles and manifest, marker file with the step limiter's process-list line) rebound; entries that changed:** `validation/scripts/stopping/gen_i3fu2_bundles.py` 46200570… → d478be6f…; `validation/scripts/stopping/i3fu2_evaluate.py` b6422f2b… → 0dad742e…; `tests/ionmc/test_i3fu2.py` 7eaacdaf… → 9192e394…; `validation/reference_cases/topas/i3fu2-frozen-manifest.json` cb466494… → d9b2dd20…; `validation/results/stopping/v3-008-i3fu2/log-markers.json` a9aaff40… → c079f5fb…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-16, orchestrator) — ruff formatting (pre-commit) of the revision-15 test file before the commit; entries that changed:** `tests/ionmc/test_i3fu2.py` 9192e394… → 12a159bc…. All other entries unchanged (recomputed).
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.

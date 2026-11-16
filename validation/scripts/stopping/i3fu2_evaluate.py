@@ -13,7 +13,7 @@ Usage::
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
-Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 14)
+Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 (revision 15)
 and decision rule 2a; :data:`AMENDMENT_REVISION`); no gate, no validation claim.
 
 **Launch (Codex REVIEW-8081e0e7 finding 3, REVIEW-cf6fa397).** The evaluator must be started
@@ -157,7 +157,7 @@ deficit 0, PDG, far-face z). Otherwise ``conclusive`` is false with the reason
 max_steps_in_slab, traversing_primaries, phase_space_complete}}, pass}`` (counts only).
 
 **Fine-step premise (fine-step smoke, revision 5).** The fine-step smoke (C 2.4 MeV/u, slab t,
-MaxStepSize t/20) must show, for every one of its 50 primaries, at least :data:`MIN_FINE_STEPS`
+MaxStepSize 0.0515 t) must show, for every one of its 50 primaries, at least :data:`MIN_FINE_STEPS`
 steps whose pre-step point lies in the slab, the last of them ending at or beyond the far face,
 and a complete far-face phase space: the step limiter acts on GenericIon. Otherwise the reason
 ``fine_step_premise``. Written: ``fine_step_premise = {primaries, min_steps_in_slab,
@@ -192,10 +192,10 @@ premise fails).
 
 **Points (revision 5, Codex REVIEW-183057ce finding 2).** Per ion and case a triple of runs: slab t
 (C part 0, O part 2), slab 1.6 t (parts 1, 3) and the fine-step run, slab t with the per-component
-step limit MaxStepSize t/20 (parts 6, 7; asserted from ``max_step_um``). The point value entering
+step limit MaxStepSize 0.0515 t (parts 6, 7; asserted from ``max_step_um``). The point value entering
 the band aggregates is the fine-step run: r_M, r_I, s and SE_rel of that run (direct Geant4
 evidence at fine stepping). The fine-step runs lose ~0.15 % per step, i.e. they use Geant4's LINEAR
-branch: emulated by :func:`fine_algorithm_loss` (20 forward-Euler steps of length t/20, q^2 and
+branch: emulated by :func:`fine_algorithm_loss` (forward-Euler steps over Geant4's step pattern, 19 limited steps of 0.0515 t and one boundary-limited step of 0.0215 t, q^2 and
 S_base at each step's pre-step energy, the correction term once per step at its mid energy; He:
 S_full at the pre-step energy), b_fine = Delta E_fine / Delta E_exact - 1 (about -0.04 to -0.06 %,
 the same sign everywhere). The gate (reviewer pass 4, same-slab check): e1 = g_meas(f1) - g*(f1)
@@ -257,7 +257,7 @@ import platform
 import re
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -420,7 +420,7 @@ FINE_PREMISE_REASON = "fine_step_premise"
 PREMISE_REASON = "one_step_premise"
 ROBUST_REASON = "not_robust_to_systematic"
 CONVENTION_REASON = "not_invariant_to_energy_convention"
-AMENDMENT_REVISION = 14  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
+AMENDMENT_REVISION = 15  # = the highest "**Revision N of amendment I3-FU-1" record of the plan
 #: the plan's revision records of this amendment (counted in the plan committed at code_sha)
 PLAN_REVISION_RE = re.compile(r"^\*\*Revision (\d+) of amendment I3-FU-1\b", re.M)
 REDISTRIBUTION_NOTE = (
@@ -563,18 +563,18 @@ def algorithm_loss(proj: Projectile, a: int, e0: float, slab_mm: float, ion: str
 
 
 def fine_algorithm_loss(
-    proj: Projectile, a: int, e0: float, slab_mm: float, ion: str, n_steps: int = 20
+    proj: Projectile, a: int, e0: float, slab_mm: float, ion: str, step_lengths_mm: Sequence[float]
 ) -> float:
-    """Energy loss [MeV] of Geant4's LINEAR branch over ``n_steps`` limiter steps of length
-    slab/n (the fine-step runs lose ~0.15 % per step, below ``linLossLimit``): forward Euler,
+    """Energy loss [MeV] of Geant4's LINEAR branch over the steps ``step_lengths_mm`` (summing to
+    ``slab_mm``; see ``gen.fine_step_lengths_mm``) (the fine-step runs lose ~0.15 % per step, below ``linLossLimit``): forward Euler,
     each step losing length x rho x q^2(E_pre) S_base(E_pre) (q^2 and S_base at the step's
     pre-step energy) plus the correction term once per step at the step's mid energy
     max(E_pre - table loss / 2, E_pre / 2); He: length x rho x S_full(E_pre) (q frozen per step)."""
     full = model_stopping(proj)
     base = base_stopping_per_q2(proj)
-    length_cm = slab_mm / 10.0 / n_steps
     e = a * e0
-    for _ in range(n_steps):
+    for step_mm in step_lengths_mm:
+        length_cm = step_mm / 10.0
         e_u = e / a
         if e_u <= E_MIN_PER_U:
             raise ValueError(f"fine-step emulation leaves the domain: {e_u} MeV/u")
@@ -602,7 +602,8 @@ def expected_g_meas(ion: str, case: int, r_fine: float) -> tuple[float, float]:
     scale = 1.0 + r_fine
     t = gen.slab_mm(ion, case, 1) * scale
     exact_t = slab_energy_loss(a * e0, a, t, full)
-    b_s = fine_algorithm_loss(proj, a, e0, t, ion, gen.FINE_DIVISOR) / exact_t - 1.0
+    max_step_mm = float(gen.max_step_size_um(ion, case)) / 1000.0  # nominal slab's absolute step
+    b_s = fine_algorithm_loss(proj, a, e0, t, ion, gen.fine_step_lengths_mm(t, max_step_mm)) / exact_t - 1.0
     out = []
     for mult in (1, 2):
         tm = gen.slab_mm(ion, case, mult) * scale
@@ -626,7 +627,11 @@ def stepping_bias(ion: str, case: int) -> dict[str, float]:
             t = gen.slab_mm(ion, case, mult)
             de_exact = predicted_loss(f"model:{ion}", exact, a, e0, t)
             g.append(algorithm_loss(proj, a, e0, t, ion) / de_exact - 1.0)
-        de_fine = fine_algorithm_loss(proj, a, e0, gen.slab_mm(ion, case, 1), ion, gen.FINE_DIVISOR)
+        t1 = gen.slab_mm(ion, case, 1)
+        max_step_mm = float(gen.max_step_size_um(ion, case)) / 1000.0
+        de_fine = fine_algorithm_loss(
+            proj, a, e0, t1, ion, gen.fine_step_lengths_mm(t1, max_step_mm)
+        )
         _STEPPING[key] = {
             "g1": g[0],
             "g2": g[1],
@@ -2205,14 +2210,16 @@ def evaluate(
             "method_systematic_composition": "0.1 % table/range construction, 0.1 % per-nucleon "
             "energy convention, 0.1 % stepping (linear-branch Euler bias of the fine steps, "
             "-0.04 to -0.06 %); quadrature 0.17 %, rounded to 0.2 %",
-            "fine_step_divisor": gen.FINE_DIVISOR,
+            "fine_step_fraction": float(gen.FINE_STEP_FRACTION),
+            "fine_step_pattern": "19 limited steps of 0.0515 t, then one boundary-limited step of "
+            "0.0215 t (revision 15)",
             "x_cap": X_CAP,
             "k_one_sided": K_ONE_SIDED,
             "consistency_tolerance_reported_only": CONSISTENCY_TOL,
             "emulation_tolerance": EMULATION_TOL,
             "report_only": "e2 (1.6 t vs fine) and r_0 - r_fine carry rho' (the slope of the "
             "stopping ratio); not gates",
-            "point": "r_fine: the fine-step run (MaxStepSize t/20); the one-step pair enters the "
+            "point": "r_fine: the fine-step run (MaxStepSize 0.0515 t); the one-step pair enters the "
             "gate e1 (slab t vs fine) and the report-only quantities e2 and r_0 - r_fine",
             "model_residual_limit": MODEL_RESIDUAL_LIMIT,
             "he_model_max_abs_r_model": he_model,

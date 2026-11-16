@@ -10,20 +10,24 @@ Thin-slab mean energy loss of 12C, 16O (and a 4He control) in G4_WATER at E0 = 2
 (TOPAS cases 13-21, :data:`CASES`; amendment I3-FU-1 revision 1). Evidence parts (:data:`PARTS`):
 0 = C slab t, 1 = C slab 1.6t, 2 = O slab t, 3 = O slab 1.6t (all nine cases), 4 = He slab t (cases
 17, 21), 5 = C slab t with energy-loss fluctuations disabled (cases 13, 21), 6 = C slab t and
-7 = O slab t with the TOPAS per-component step limit ``d:Ge/Water/MaxStepSize`` = t/20 (fine-step
+7 = O slab t with the TOPAS per-component step limit ``d:Ge/Water/MaxStepSize`` = 0.0515 t (fine-step
 runs, direct Geant4 evidence at fine stepping; Codex REVIEW-183057ce finding 2, amendment
 revision 5; all nine cases): 58 bundles. The pre-declared repeat is frozen now: part + 8
 (:data:`REPEAT_OFFSET`) for every evidence bundle, same configuration (8 = C t, 9 = C 1.6t,
 10 = O t, 11 = O 1.6t, 12 = He t, 13 = C fluct. off, 14 = C fine, 15 = O fine; kind "repeat", run
 only on the repeat trigger of the evaluator's repeat rule): 58 bundles. Parts 16-19 reserved.
-MaxStepSize is written in um (t/20 = 50 t um, an exact decimal).
+MaxStepSize is written in um (0.0515 t = 51.5 t_mm um, an exact decimal). Revision 15
+(2026-11-16): the step limit 0.0515 t (t/19.42) replaced t/20 because t/20 divides t exactly, so
+the twentieth limited step ended exactly on the far face and the following zero-length boundary
+Transportation step was not always scored by the surface phase-space scorer; 0.0515 t gives 19
+limited steps (0.9785 t) and one boundary-limited step of 0.0215 t, never commensurate with t.
 Seed = 20619000 + 100*part + case (unchanged formula). Five execution smokes
 (:data:`SMOKES`): C 10 MeV/u, slab t, 2000 primaries at rehearsal seed 20600440 (standard lines)
 and 20600441 (the fluctuation-off line), so that every parameter line of an evidence bundle is
 exercised by a smoke; and two step-count smokes, C 2.4 and 50 MeV/u, slab 1.6t, 50 primaries,
 ``i:Ts/TrackingVerbosity = 1`` (seeds 20600443, 20600444), from whose step printout the
 evaluator counts the steps per primary inside the slab (expected: one) before the evidence runs;
-and the fine-step smoke, C 2.4 MeV/u, slab t with MaxStepSize t/20, 50 primaries,
+and the fine-step smoke, C 2.4 MeV/u, slab t with MaxStepSize 0.0515 t, 50 primaries,
 TrackingVerbosity 1 (seed 20600445; expected >= 15 steps in the slab per primary, i.e. the step
 limiter acts on GenericIon). 20600442 is reserved by the plan for one re-smoke (not generated).
 
@@ -58,6 +62,7 @@ import argparse
 import functools
 import hashlib
 import json
+import math
 import sys
 import tempfile
 from decimal import Decimal
@@ -103,11 +108,11 @@ PARTS: dict[int, tuple[str, int, bool, tuple[int, ...]]] = {
     3: ("oxygen", 2, True, ALL_CASES),
     4: ("he", 1, True, (17, 21)),
     5: ("carbon", 1, False, (13, 21)),
-    6: ("carbon", 1, True, ALL_CASES),  # fine-step: MaxStepSize t/20
-    7: ("oxygen", 1, True, ALL_CASES),  # fine-step: MaxStepSize t/20
+    6: ("carbon", 1, True, ALL_CASES),  # fine-step: MaxStepSize 0.0515 t
+    7: ("oxygen", 1, True, ALL_CASES),  # fine-step: MaxStepSize 0.0515 t
 }
-FINE_PARTS = (6, 7)  # slab t with the per-component step limit MaxStepSize = t / FINE_DIVISOR
-FINE_DIVISOR = 20
+FINE_PARTS = (6, 7)  # slab t with the per-component step limit MaxStepSize = FINE_STEP_FRACTION t
+FINE_STEP_FRACTION = Decimal("0.0515")
 REPEAT_OFFSET = 8  # repeat part = evidence part + 8 (frozen, same configuration)
 REPEAT_PARTS = tuple(p + REPEAT_OFFSET for p in PARTS)  # 8-15
 RESERVED_PARTS = tuple(range(16, 20))  # not generated
@@ -250,10 +255,24 @@ def exit_energy_per_u(ion: str, case: int, multiple: int) -> float:
 
 
 def max_step_size_um(ion: str, case: int) -> str:
-    """MaxStepSize of a fine-step run: t / :data:`FINE_DIVISOR` in um (= 50 t_mm um), as an exact
-    decimal string (t has 3 significant digits)."""
-    t = Decimal(fmt_mm(slab_mm(ion, case, 1)))
-    return format((t * 1000 / FINE_DIVISOR).normalize(), "f")
+    """MaxStepSize of a fine-step run: :data:`FINE_STEP_FRACTION` x t in um (= 51.5 t_mm um), as an
+    exact decimal string (t has at most 6 decimals, so the product is exact). The quotient
+    t / step must not be near an integer (fractional part in [0.2, 0.8])."""
+    t_um = Decimal(fmt_mm(slab_mm(ion, case, 1))) * 1000
+    step = t_um * FINE_STEP_FRACTION
+    frac = (t_um / step) % 1
+    assert Decimal("0.2") <= frac <= Decimal("0.8"), (ion, case, frac)
+    return format(step.normalize(), "f")
+
+
+def fine_step_lengths_mm(slab_mm: float, max_step_mm: float) -> list[float]:
+    """Geant4 step pattern inside a slab under a MaxStepSize limit: n_full = floor(slab/limit -
+    1e-9) full steps of ``max_step_mm`` followed by the boundary-limited remainder (> 0)."""
+    n_full = math.floor(slab_mm / max_step_mm - 1e-9)
+    rest = slab_mm - n_full * max_step_mm
+    if n_full < 0 or rest <= 0.0:
+        raise ValueError(f"no positive remainder step: slab {slab_mm} mm, limit {max_step_mm} mm")
+    return [max_step_mm] * n_full + [rest]
 
 
 def fmt_mm(x: float) -> str:
@@ -325,7 +344,7 @@ def build(
     elif kind == "smoke" and tracking and fine:
         head = (
             "I3-FU-1 step 2 FINE-STEP SMOKE (TrackingVerbosity 1: count the steps per track "
-            "inside the slab, expected >= 15 with MaxStepSize t/20; not evidence): case "
+            "inside the slab, expected >= 15 with MaxStepSize 0.0515 t; not evidence): case "
             f"{case} configuration ({ion} {e0} MeV/u, slab {slab_word} = {t_txt} mm, "
             f"MaxStepSize {max_step_um} um), rehearsal seed {seed}."
         )
@@ -398,7 +417,7 @@ def build(
         *(
             [
                 "# Fine-step run: TOPAS per-component step limit (G4StepLimiter) in the slab, "
-                f"t/{FINE_DIVISOR}.",
+                f"{FINE_STEP_FRACTION} t.",
                 f"d:Ge/Water/MaxStepSize = {max_step_um} um",
             ]
             if fine
@@ -456,7 +475,7 @@ def build(
         f"0 to {t_txt} mm) in a vacuum world 400 x 400 x 800 mm; slab {slab_word}, t from the "
         "ionmc default Bethe model (78 eV) for Delta E / E = 3 % at E0, 3 significant digits"
         + ("; 1.6t = exactly 1.6 x t" if mult == 2 else "")
-        + (f"; fine-step: MaxStepSize = t/{FINE_DIVISOR} = {max_step_um} um" if fine else ""),
+        + (f"; fine-step: MaxStepSize = {FINE_STEP_FRACTION} t = {max_step_um} um" if fine else ""),
         "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
         "cuts": "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (no delta electrons); "
         "EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7",
