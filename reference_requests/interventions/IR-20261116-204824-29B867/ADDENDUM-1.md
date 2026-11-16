@@ -8,7 +8,8 @@ with these corrections.
    (C 290 MeV/u) / ≈ 0.3 mm (O 350 MeV/u) of range". That is the region below 10 MeV/u. The region below **20 MeV/u**, where
    the declared deficit is 1.8–12 % against the revised ICRU 73 table and 0.6–5 % against the acceptance reference, is the
    last **≈ 1.45 mm of range at C 290 MeV/u (0.9 % of 163 mm) and ≈ 1.11 mm at O 350 MeV/u (0.7 % of 167 mm)**; below
-   50 MeV/u (deficit ≤ 0.8 % against the table) it is ≈ 7.5 mm (4.6 %) and ≈ 5.7 mm (3.4 %). These are the committed P12 §4
+   50 MeV/u (which includes the 2–20 MeV/u region above; the 20–50 MeV/u band alone has a deficit ≤ 0.8 % against the
+   table) it is ≈ 7.5 mm (4.6 %) and ≈ 5.7 mm (3.4 %) [wording corrected after Codex REVIEW-21409d5d]. These are the committed P12 §4
    figures (`validation/plans/v3-008/p12-i3-low-energy-stopping.md`). Decision 0043's capability statement is corrected in
    the same commit as this addendum.
 2. **Methodology wording (minor).** The TOPAS/ionmc band means are described as "one-step thin-slab mean energy loss". The
