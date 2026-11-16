@@ -10,10 +10,11 @@ Thin-slab mean energy loss of 12C, 16O (and a 4He control) in G4_WATER at E0 = 2
 (TOPAS cases 13-21, :data:`CASES`; amendment I3-FU-1 revision 1). Evidence parts (:data:`PARTS`):
 0 = C slab t, 1 = C slab 1.6t, 2 = O slab t, 3 = O slab 1.6t (all nine cases), 4 = He slab t (cases
 17, 21), 5 = C slab t with energy-loss fluctuations disabled (cases 13, 21): 40 bundles. The
-pre-declared repeat is frozen now: part + 6 (:data:`REPEAT_OFFSET`) for every evidence bundle,
-same configuration (6 = C t, 7 = C 1.6t, 8 = O t, 9 = O 1.6t, 10 = He t, 11 = C fluct. off;
-kind "repeat", run only on the repeat trigger of the amendment): 40 bundles. Parts 12-19
-reserved. Seed = 20619000 + 100*part + case (unchanged formula). Four execution smokes
+pre-declared repeat is frozen now: part + 8 (:data:`REPEAT_OFFSET`) for every evidence bundle,
+same configuration (8 = C t, 9 = C 1.6t, 10 = O t, 11 = O 1.6t, 12 = He t, 13 = C fluct. off;
+kind "repeat", run only on the repeat trigger of the evaluator's repeat rule): 40 bundles. Parts
+6, 7 and 14-19 reserved (Codex REVIEW-22f384ed finding 5: repeats renumbered to leave room).
+Seed = 20619000 + 100*part + case (unchanged formula). Four execution smokes
 (:data:`SMOKES`): C 10 MeV/u, slab t, 2000 primaries at rehearsal seed 20600440 (standard lines)
 and 20600441 (the fluctuation-off line), so that every parameter line of an evidence bundle is
 exercised by a smoke; and two step-count smokes, C 2.4 and 50 MeV/u, slab 1.6t, 50 primaries,
@@ -35,7 +36,7 @@ exit energy of every slab must stay >= 2.0 MeV/u (:func:`exit_energy_per_u`, ass
 bundle). These are model-only numbers. The
 physics lines are those of the TD-EM bundles (g4em-standard_opt4, CutForAllParticles 0.05 mm,
 CutForElectron 1 km, EMRangeMax 10 GeV, ListProcesses), the fluctuation-off line for parts 5
-and 11 and the fluctuation-off smoke, plus the printout ``i:Ph/Verbosity = 1``. Scorers: the
+and 13 and the fluctuation-off smoke, plus the printout ``i:Ph/Verbosity = 1``. Scorers: the
 V5-SS ASCII phase space ``SSExit`` of the primaries leaving the far face and an
 ``EnergyDeposit`` Sum/Standard_Deviation scorer on the slab (cross check). ``BeamEnergy`` is
 the TOTAL kinetic energy (A x MeV/u; P4 convention).
@@ -98,9 +99,9 @@ PARTS: dict[int, tuple[str, int, bool, tuple[int, ...]]] = {
     4: ("he", 1, True, (17, 21)),
     5: ("carbon", 1, False, (13, 21)),
 }
-REPEAT_OFFSET = 6  # repeat part = evidence part + 6 (frozen, same configuration)
-REPEAT_PARTS = tuple(p + REPEAT_OFFSET for p in PARTS)  # 6-11
-RESERVED_PARTS = tuple(range(12, 20))  # not generated
+REPEAT_OFFSET = 8  # repeat part = evidence part + 8 (frozen, same configuration)
+REPEAT_PARTS = tuple(p + REPEAT_OFFSET for p in PARTS)  # 8-13
+RESERVED_PARTS = (6, 7, *range(14, 20))  # not generated
 HISTORIES = 50_000
 DELTA_E_FRACTION = 0.03  # Delta E / E at E0 by the ionmc model (slab t)
 #: slab index -> (multiple of t, thickness factor f = Delta E / E by design); exact decimals
@@ -175,7 +176,7 @@ def e_tag(case: int) -> str:
 
 
 def base_part(part: int) -> int:
-    """Evidence part whose configuration ``part`` (evidence 0-5 or repeat 6-11) runs."""
+    """Evidence part whose configuration ``part`` (evidence 0-5 or repeat 8-13) runs."""
     if part in PARTS:
         return part
     if part in REPEAT_PARTS:
@@ -194,7 +195,7 @@ def evidence_keys() -> list[tuple[int, int]]:
 
 
 def repeat_keys() -> list[tuple[int, int]]:
-    """(case, part + 6) of the 40 frozen repeat bundles."""
+    """(case, part + 8) of the 40 frozen repeat bundles."""
     return [(c, p + REPEAT_OFFSET) for c, p in evidence_keys()]
 
 
@@ -256,7 +257,7 @@ def build(
     case: int, part: int, seed: int, histories: int, kind: str, tracking: int = 0
 ) -> tuple[dict[str, Any], str]:
     """(case.json dict, input.txt text) of one bundle; ``kind`` "evidence", "repeat" (``part``
-    6-11, the configuration of ``part`` - 6) or "smoke" (``part`` the evidence part whose
+    8-13, the configuration of ``part`` - 8) or "smoke" (``part`` the evidence part whose
     configuration it runs)."""
     ion, mult, fluct, _cases = PARTS[base_part(part)]
     if (kind == "repeat") != (part in REPEAT_PARTS):
@@ -275,18 +276,19 @@ def build(
     if kind == "repeat":
         orig = part - REPEAT_OFFSET
         head = (
-            f"V3-008 amendment I3-FU-1 step 2 FROZEN REPEAT of part {orig} (run only if the "
-            f"original run of this point is invalid), case {case} ({ion} {e0} MeV/u), part {part} "
+            f"V3-008 amendment I3-FU-1 step 2 FROZEN REPEAT of part {orig} (run only on the "
+            "evaluator's repeat trigger for this point), "
+            f"case {case} ({ion} {e0} MeV/u), part {part} "
             f"(slab {slab_word} = {t_txt} mm, energy-loss fluctuations {fl_word}; seed = "
             f"20619000 + 100*part + case = {seed})."
         )
         rationale = (
             "V3-008 amendment I3-FU-1 step 2 (plan validation/plans/v3-008-acceptance.md): "
-            f"pre-declared repeat (part {part} = part {orig} + 6, same configuration) of the "
+            f"pre-declared repeat (part {part} = part {orig} + 8, same configuration) of the "
             f"thin-slab mean energy loss of {ion} at E0 = {e0} MeV/u in G4_WATER, case {case} "
             f"(slab {slab_word} = {t_txt} mm, fluctuations {fl_word}), seed 20619000 + "
-            f"100*{part} + {case} = {seed}; used only if the original run is invalid; "
-            "diagnostic, no validation claim"
+            f"100*{part} + {case} = {seed}; used only if the original run or its point is "
+            "invalid; diagnostic, no validation claim"
         )
     elif kind == "evidence":
         head = (

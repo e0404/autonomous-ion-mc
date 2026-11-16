@@ -5,11 +5,15 @@ Bundles ``validation/reference_cases/topas/i3fu2-*`` and their frozen manifest c
 ``validation/scripts/stopping/i3fu2_evaluate.py`` is exercised in temporary git repositories
 holding a synthetic bundle set (1000 histories), a committed review pin and Ed25519-signed
 synthetic reference-runner records (test key from a fixed seed, committed as the trusted key of
-the temporary repository, as ``test_v5ss_evaluate.py`` does). Synthetic TOPAS outputs (phase space
-with the ``ss_evaluate`` header layout, a TOPAS CSV ``edep.csv``) carry energy losses equal to the
-ionmc prediction times planted factors; the synthetic libdEdx archive's ICRU73_NEW carbon/oxygen
-water tables are the ionmc model times a known factor. No real libdEdx, ICRU or TOPAS data are
-used.
+the temporary repository, as ``test_v5ss_evaluate.py`` does), the sealed decision-producing
+sources copied from this checkout, two synthetic passed review records (evaluator and markers
+pins), a synthetic log-marker file and a plan holding the review-pin note. Synthetic TOPAS
+outputs (phase space with the ``ss_evaluate`` header layout, a TOPAS CSV ``edep.csv``) carry
+energy losses equal to the ionmc prediction times planted factors (by default including the
+model's one-step algorithm bias 1 + g(f)); synthetic step-count smoke logs use a small
+SteppingVerbose-like format parsed with the test marker regexes; the synthetic libdEdx
+archive's ICRU73_NEW carbon/oxygen water tables are the ionmc model times a known factor. No
+real libdEdx, ICRU or TOPAS data are used.
 """
 
 from __future__ import annotations
@@ -45,9 +49,18 @@ SYN_HISTORIES = 1000
 ROW_NOISE = 0.01
 TABLE_FACTOR = 1.05  # synthetic ICRU73_NEW = ionmc model x this factor (s ~ +5 %)
 KEY_SEED = bytes(range(32))
-PIN_FINISHED = "2026-11-16T12:00:00+00:00"
+PIN_A_FINISHED = "2026-11-16T12:00:00+00:00"  # evaluator review (pin A)
+PIN_B_FINISHED = "2026-11-16T12:30:00+00:00"  # markers review (pin B)
 STARTED = "2026-11-16T13:00:00+00:00"
-FLUCT_OFF_TEST_MARKER = r"^Fluctuations of dE/dx are enabled\s+0\s*$"
+#: synthetic marker file of the temporary repositories (the real one is pinned from smoke logs)
+TEST_MARKERS = {
+    "fluct_on_marker": r"^Fluctuations of dE/dx are enabled\s+1\s*$",
+    "fluct_off_marker": r"^Fluctuations of dE/dx are enabled\s+0\s*$",
+    "step_line_re": r"^\s*(?P<step>\d+)\s+\S+ \S+\s+\S+ \S+\s+(?P<z>-?[0-9.eE+-]+) "
+    r"(?P<zunit>fm|Ang|nm|um|mm|cm|m|km)\s",
+    "track_header_re": r"^\* G4Track Information:\s+Particle = \S+,\s+Track ID = "
+    r"(?P<track>\d+),\s+Parent ID = (?P<parent>\d+)",
+}
 
 
 def _load(name: str, path: Path) -> ModuleType:
@@ -100,9 +113,10 @@ def test_bundle_set() -> None:
         + [(c, 5) for c in (13, 21)]
     )
     assert sorted(gen.evidence_keys()) == evidence and len(evidence) == 40
-    assert sorted(gen.repeat_keys()) == sorted((c, p + 6) for c, p in evidence)
-    assert gen.REPEAT_PARTS == (6, 7, 8, 9, 10, 11)
-    assert gen.RESERVED_PARTS == tuple(range(12, 20))
+    assert gen.REPEAT_OFFSET == 8
+    assert sorted(gen.repeat_keys()) == sorted((c, p + 8) for c, p in evidence)
+    assert gen.REPEAT_PARTS == (8, 9, 10, 11, 12, 13)  # Codex REVIEW-22f384ed: part + 8
+    assert gen.RESERVED_PARTS == (6, 7, 14, 15, 16, 17, 18, 19)
     assert not set(gen.PARTS) & set(gen.RESERVED_PARTS)
     assert not set(gen.REPEAT_PARTS) & set(gen.RESERVED_PARTS)
     energies = {c: float(e) for c, e in gen.CASES.items()}
@@ -116,12 +130,12 @@ def test_bundle_set() -> None:
         info = _case(d)["i3fu2"]
         part = int(m.group(4))
         assert (info["ion"], info["case"], info["part"]) == (m.group(1), int(m.group(3)), part)
-        kind = "repeat" if part >= 6 else "evidence"
+        kind = "repeat" if part >= 8 else "evidence"
         assert info["kind"] == kind
         kinds[kind] += 1
-        base = part - 6 if part >= 6 else part
+        base = part - 8 if part >= 8 else part
         assert info["thickness_factor"] == (0.048 if base in (1, 3) else 0.03)
-        if part >= 6:  # a repeat is byte-identical to its original except seed and wording
+        if part >= 8:  # a repeat is byte-identical to its original except seed and wording
             orig = _case(TOPAS / gen.bundle_name(info["case"], base))
             for key in ("physics", "source", "geometry", "histories", "scorers", "units"):
                 assert _case(d)[key] == orig[key], (d.name, key)
@@ -174,7 +188,7 @@ def test_seeds_formula_and_reservation() -> None:
         assert s in topas and s in seeds.V3_008_RESERVED
         assert case_no in seeds.TOPAS_CASES and part in seeds.TOPAS_PARTS
         used.append(s)
-    assert len(set(used)) == 80 and min(used) == 20619013 and max(used) == 20620121
+    assert len(set(used)) == 80 and min(used) == 20619013 and max(used) == 20620321
     smoke_seeds = {}
     for d in SMOKES:
         c = _case(d)
@@ -235,7 +249,7 @@ def test_physics_block_identical_to_td_em() -> None:
 
     td = ph(TD_EM.read_text())
     assert td == gen.PHYSICS_LINES
-    fluct_off = {gen.bundle_name(c, p) for c in (13, 21) for p in (5, 11)}
+    fluct_off = {gen.bundle_name(c, p) for c in (13, 21) for p in (5, 13)}
     fluct_off.add("i3fu2-smoke-carbon-water-10mevu-fluct-off")
     for d in BUNDLES:
         lines = ph((d / "input.txt").read_text())
@@ -362,10 +376,27 @@ def test_classify_rule() -> None:
     assert ev.classify(0.02, -0.03, 0.05, sig) == "N"
     assert ev.classify(0.06, 0.012, 0.05, sig) == "N"  # above the table, but not significantly
     assert ev.classify(0.0, 0.0, 3 * k, sig) == "U"  # X == k: U checked first
+    assert ev.classify(0.0, 0.0, 0.0, sig) == "U"  # s = 0 is always U
     assert ev.band_of(2.4) == "[2,5)" and ev.band_of(5.0) == "[5,10)"
     assert ev.band_of(20.0) == "[20,50]" and ev.band_of(50.0) == "[20,50]"
     with pytest.raises(ValueError):
         ev.band_of(50.1)
+
+
+def test_classify_relative_to_the_sign_of_s() -> None:
+    """Reviewer pass 2 item (d): with the table BELOW ionmc (s_b < 0), H is TOPAS further below
+    the table and L is TOPAS above ionmc; the mirrored inputs give the mirrored classes."""
+    sig = 0.0025
+    assert ev.classify(-0.05, 0.0, -0.05, sig) == "I"
+    assert ev.classify(-0.08, -0.03, -0.05, sig) == "H"  # beyond the table, away from ionmc
+    assert ev.classify(0.0, 0.05, -0.05, sig) == "M"
+    assert ev.classify(0.03, 0.076, -0.05, sig) == "L"  # beyond ionmc, away from the table
+    assert ev.classify(-0.02, 0.03, -0.05, sig) == "N"
+    # the unsigned rule would have called these H / L: with s < 0 they are not
+    assert ev.classify(0.08, 0.13, -0.05, sig) == "L"
+    assert ev.classify(-0.03, 0.02, -0.05, sig) == "N"
+    for r_m, r_i, s in ((0.08, 0.03, 0.05), (-0.03, -0.076, 0.05), (0.02, -0.03, 0.05)):
+        assert ev.classify(-r_m, -r_i, -s, sig) == ev.classify(r_m, r_i, s, sig)
 
 
 def _bands(classes: dict[str, tuple[str, str, str]]) -> dict[str, Any]:
@@ -413,6 +444,73 @@ def test_rk4_against_constant_stopping_and_domain_guard() -> None:
     assert s(10.0) == pytest.approx(100.0 * 10.0**-0.8, rel=1e-12)
 
 
+# --- stepping model (Codex REVIEW-22f384ed finding 4) ----------------------------------------
+
+
+def test_stepping_model_residual_within_limit_at_every_point() -> None:
+    """R_model <= 0.001 for all 18 C/O points and both He points (real model); the frozen-charge
+    algorithm loses more than the exact path (q^2 falls with the energy along the slab, so
+    q^2(E_pre) >= q^2(E)) and g grows with the thickness."""
+    table = ev.stepping_model_check()
+    assert sorted(table) == ["carbon", "he", "oxygen"]
+    assert len(table["carbon"]) == len(table["oxygen"]) == 9 and sorted(table["he"]) == [17, 21]
+    worst = {ion: max(abs(v["r_model"]) for v in pts.values()) for ion, pts in table.items()}
+    assert all(w <= ev.MODEL_RESIDUAL_LIMIT for w in worst.values())
+    assert worst["carbon"] < 3e-4 and worst["oxygen"] < 3e-4 and worst["he"] < 1e-6
+    for ion in ("carbon", "oxygen"):
+        for v in table[ion].values():
+            assert 0.0 <= v["g1"] <= v["g2"] and v["d_pred"] == pytest.approx(v["g2"] - v["g1"])
+        assert table[ion][13]["g1"] > 2e-3  # ~ +0.3-0.4 % at 2.4 MeV/u, f = 3 % (plan)
+        assert table[ion][21]["g2"] < 1e-4
+
+
+def test_frozen_charge_stopping_is_exact_at_the_pre_step_energy() -> None:
+    proj = gen.IONS["carbon"][0]
+    s = ev.model_stopping(proj)
+    alg = ev.frozen_charge_stopping(proj, s, 2.4)
+    assert alg(2.4) == pytest.approx(s(2.4), rel=1e-14)
+    assert alg(2.3) > s(2.3)  # q^2(2.4) > q^2(2.3): the frozen charge overestimates S
+    assert ev.effective_charge_sq(proj, 2.4) < 36.0
+
+
+def test_planted_algorithm_bias_is_consistent_and_extrapolates() -> None:
+    """A TOPAS bias equal to the model's g(f) passes the consistency check and the
+    extrapolation recovers the planted r0 up to exactly the modelled residual (1 + r0) R_model
+    (|R_model| <= 2.5e-4); a bias of the opposite sign fails the check at the low points."""
+    fails = []
+    for ion in ("carbon", "oxygen"):
+        for case in gen.ALL_CASES:
+            m = ev.stepping_bias(ion, case)
+            for r0 in (0.05, -0.04):
+                r1 = (1 + r0) * (1 + m["g1"]) - 1
+                r2 = (1 + r0) * (1 + m["g2"]) - 1
+                assert abs((r2 - r1) - m["d_pred"]) <= ev.CONSISTENCY_TOL
+                got = ev.richardson(r1, r2)
+                assert abs(got - (r0 + (1 + r0) * m["r_model"])) < 1e-12
+                assert abs(got - r0) < 2.6e-4
+                pt = ev.resolve_point(
+                    {gen.bundle_name(case, 0): _fake(r=r1), gen.bundle_name(case, 1): _fake(r=r2)},
+                    case,
+                    (0, 1),
+                    _ratios,
+                    m["d_pred"],
+                )
+                assert pt.valid
+            anti = (0.05 - m["g1"], 0.05 - m["g2"])
+            if abs((anti[1] - anti[0]) - m["d_pred"]) > ev.CONSISTENCY_TOL:
+                fails.append((ion, case))
+    assert ("carbon", 13) in fails and ("oxygen", 13) in fails and ("oxygen", 14) in fails
+
+
+def test_model_residual_above_limit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ev, "MODEL_RESIDUAL_LIMIT", 1e-5)
+    with pytest.raises(ev.RecordError, match="design premise"):
+        ev.stepping_model_check()
+
+
+# --- repeat rule (Codex REVIEW-22f384ed finding 5) -------------------------------------------
+
+
 def _fake(valid: bool = True, reason: str | None = None, r: float = 0.0) -> dict[str, Any]:
     return {"valid": valid, "reason": reason, "r": r}
 
@@ -423,33 +521,142 @@ def _ratios(run: dict[str, Any]) -> dict[str, Any]:
 
 def test_repeat_rule_unit() -> None:
     n = gen.bundle_name
+    d = 0.001  # predicted difference
+
+    def res(runs: dict[str, Any], case: int = 15, parts: tuple[int, ...] = (0, 1)) -> Any:
+        return ev.resolve_point(runs, case, parts, _ratios, d if len(parts) == 2 else None)
+
     ok = {n(15, 0): _fake(r=0.01), n(15, 1): _fake(r=0.012)}
-    pt = ev.resolve_point(ok, 15, (0, 1), _ratios)
+    pt = res(ok)
     assert pt.valid and pt.used == {} and pt.thickness_difference() == pytest.approx(0.002)
-    with pytest.raises(ev.RecordError, match="without an invalid original"):
-        ev.resolve_point({**ok, n(15, 6): _fake()}, 15, (0, 1), _ratios)
+    assert pt.consistency_residual() == pytest.approx(0.001)
+    for extra in (n(15, 8), n(15, 9)):  # a repeat without a recorded failure
+        with pytest.raises(ev.RecordError, match="without a recorded failure"):
+            res({**ok, extra: _fake()})
+    # validity failure of one run: exactly that run is repeated
     bad_t = {n(15, 0): _fake(False, "deficit"), n(15, 1): _fake(r=0.012)}
-    pt = ev.resolve_point(bad_t, 15, (0, 1), _ratios)
-    assert not pt.valid and "no valid repeat" in str(pt.reason)
-    pt = ev.resolve_point({**bad_t, n(15, 6): _fake(r=0.011)}, 15, (0, 1), _ratios)
-    assert pt.valid and pt.used == {n(15, 6): f"original {n(15, 0)} invalid: deficit"}
+    pt = res(bad_t)
+    assert not pt.valid and pt.reason == "invalid run; no repeat"
+    pt = res({**bad_t, n(15, 8): _fake(r=0.011)})
+    assert pt.valid and pt.used == {n(15, 8): f"original {n(15, 0)} invalid: deficit"}
     with pytest.raises(ev.RecordError, match="is valid"):  # repeat of the valid 1.6t run
-        ev.resolve_point({**bad_t, n(15, 7): _fake()}, 15, (0, 1), _ratios)
-    pt = ev.resolve_point({**bad_t, n(15, 6): _fake(False, "killed")}, 15, (0, 1), _ratios)
-    assert not pt.valid and "second invalid" in str(pt.reason)
+        res({**bad_t, n(15, 8): _fake(r=0.011), n(15, 9): _fake()})
+    with pytest.raises(ev.RecordError, match="is valid"):
+        res({**bad_t, n(15, 9): _fake()})
+    pt = res({**bad_t, n(15, 8): _fake(False, "killed")})
+    assert not pt.valid and "second failure" in str(pt.reason)
+    pt = res({**bad_t, n(15, 8): _fake(r=0.0)})  # repeat valid but the new pair inconsistent
+    assert not pt.valid and str(pt.reason).startswith(ev.CONSISTENCY_REASON)
+    assert "second failure" in str(pt.reason)
+    both_bad = {n(15, 0): _fake(False, "deficit"), n(15, 1): _fake(False, "killed")}
+    with pytest.raises(ev.RecordError, match="partial repeat set"):
+        res({**both_bad, n(15, 8): _fake(r=0.01)})
+    assert res({**both_bad, n(15, 8): _fake(r=0.01), n(15, 9): _fake(r=0.011)}).valid
+    # consistency failure (|0.01 - 0.001| > 0.003): BOTH slabs are repeated, the pair replaced
     incons = {n(15, 0): _fake(r=0.0), n(15, 1): _fake(r=0.01)}
-    pt = ev.resolve_point(incons, 15, (0, 1), _ratios)
+    pt = res(incons)
     assert not pt.valid and pt.thickness_difference() == pytest.approx(0.01)
-    assert str(pt.reason).startswith(ev.CONSISTENCY_REASON)
-    for rep in (n(15, 6), n(15, 7)):  # either slab may be repeated after a consistency failure
-        r = 0.001 if rep.endswith("part6") else 0.0
-        pt = ev.resolve_point({**incons, rep: _fake(r=r)}, 15, (0, 1), _ratios)
-        assert not pt.valid if rep.endswith("part6") else pt.valid
-    pt = ev.resolve_point({**incons, n(15, 7): _fake(r=0.02)}, 15, (0, 1), _ratios)
-    assert not pt.valid and "second invalid" in str(pt.reason)
+    assert pt.reason == f"{ev.CONSISTENCY_REASON}; no repeat"
+    for rep in (n(15, 8), n(15, 9)):
+        with pytest.raises(ev.RecordError, match="partial repeat set"):
+            res({**incons, rep: _fake(r=0.0)})
+    pt = res({**incons, n(15, 8): _fake(r=0.02), n(15, 9): _fake(r=0.021)})
+    assert pt.valid and set(pt.used) == {n(15, 8), n(15, 9)}
+    assert pt.thickness_difference() == pytest.approx(0.001)
+    pt = res({**incons, n(15, 8): _fake(r=0.0), n(15, 9): _fake(r=0.02)})
+    assert not pt.valid and "second failure" in str(pt.reason)
+    pt = res({**incons, n(15, 8): _fake(False, "deficit"), n(15, 9): _fake(r=0.0)})
+    assert not pt.valid and "second failure" in str(pt.reason)
+    # single-run points (He, fluctuations off)
     with pytest.raises(ev.RecordError, match="missing"):
-        ev.resolve_point({n(17, 10): _fake()}, 17, (4,), _ratios)
-    assert ev.resolve_point({}, 17, (4,), _ratios).reason == "missing run"
+        res({n(17, 12): _fake()}, 17, (4,))
+    assert res({}, 17, (4,)).reason == "missing run"
+    assert res({n(17, 4): _fake(False, "x"), n(17, 12): _fake(r=0.0)}, 17, (4,)).valid
+    with pytest.raises(ev.RecordError, match="without a recorded failure"):
+        res({n(17, 4): _fake(), n(17, 12): _fake()}, 17, (4,))
+    with pytest.raises(ValueError, match="predicted"):
+        ev.resolve_point(ok, 15, (0, 1), _ratios)
+
+
+# --- step-count parser (Codex REVIEW-22f384ed finding 3) -------------------------------------
+
+STEP_RE = re.compile(TEST_MARKERS["step_line_re"], re.M)
+TRACK_RE = re.compile(TEST_MARKERS["track_header_re"], re.M)
+
+
+def _track(slab_mm: float, *, split: bool = False, primary: bool = True, tid: int = 1) -> str:
+    """One synthetic SteppingVerbose block (G4BestUnit style values)."""
+    parent = 0 if primary else 1
+    lines = [
+        f"* G4Track Information:   Particle = C12,   Track ID = {tid},   Parent ID = {parent}",
+        "Step#    X(mm)    Y(mm)    Z(mm) KinE(MeV)  dE(MeV) StepLeng TrackLeng  NextVolume Proc",
+        "    0      0 fm      0 fm     -1 um   28.8 MeV   0 eV   0 fm   0 fm   World initStep",
+        "    1      0 fm      0 fm      0 fm   28.8 MeV   0 eV   1 um   1 um   Water Transp",
+    ]
+    zs = [slab_mm / 2, slab_mm] if split else [slab_mm]
+    for i, z in enumerate(zs, start=2):
+        lines.append(
+            f"    {i}      0 fm      0 fm   {z * 1000:.6g} um   27 MeV   1 MeV   1 um   1 um   "
+            "World Transportation"
+        )
+    k = len(zs) + 2
+    lines.append(
+        f"    {k}      0 fm      0 fm     40 cm   27 MeV   0 eV   1 cm   1 cm   OutOfWorld T"
+    )
+    lines.append("    :----- List of 2ndaries - #SpawnInStep=  0(Rest= 0,Along= 0,Post= 0)")
+    return "\n".join(lines) + "\n"
+
+
+def _step_stdout(n: int, slab_mm: float, *, split: int = -1, primaries: int | None = None) -> str:
+    blocks = [_stdout(n)]
+    for i in range(n if primaries is None else primaries):
+        blocks.append(_track(slab_mm, split=i == split))
+        blocks.append(_track(slab_mm / 3, primary=False, tid=2, split=True))  # ignored
+    return "".join(blocks)
+
+
+def test_count_slab_steps_contract() -> None:
+    slab = 0.0657
+    counts = ev.count_slab_steps(_step_stdout(5, slab), slab, STEP_RE, TRACK_RE)
+    assert counts == dict.fromkeys(range(5), 1)  # secondaries ignored, track IDs repeat
+    counts = ev.count_slab_steps(_step_stdout(5, slab, split=3), slab, STEP_RE, TRACK_RE)
+    assert counts == {0: 1, 1: 1, 2: 1, 3: 2, 4: 1}
+    assert ev.count_slab_steps("no steps\n", slab, STEP_RE, TRACK_RE) == {}
+    bad = _track(slab).replace("    2      0 fm", "    5      0 fm")
+    with pytest.raises(ev.RecordError, match="consecutive"):
+        ev.count_slab_steps(bad, slab, STEP_RE, TRACK_RE)
+    with pytest.raises(ev.RecordError, match="step 0"):
+        ev.count_slab_steps(_track(slab).replace("    0      0 fm", "    7      0 fm"), slab,
+                            STEP_RE, TRACK_RE)  # fmt: skip
+    plain = re.compile(r"^\s*(?P<step>\d+)\s+\S+ \S+\s+\S+ \S+\s+(?P<z>-?[0-9.eE+-]+) mm", re.M)
+    mm_text = (
+        "* G4Track Information:   Particle = C12,   Track ID = 1,   Parent ID = 0\n"
+        "    0      0 fm      0 fm   -0.001 mm\n    1      0 fm      0 fm   0 mm\n"
+        "    2      0 fm      0 fm   0.0657 mm\n    3      0 fm      0 fm   400 mm\n"
+    )
+    assert ev.count_slab_steps(mm_text, slab, plain, TRACK_RE) == {0: 1}  # no zunit group: mm
+
+
+def test_marker_file_parsing() -> None:
+    ok = ev.parse_markers(json.dumps(TEST_MARKERS).encode(), "x")
+    assert set(ok) == set(ev.MARKER_KEYS)
+    for key in ev.MARKER_KEYS:
+        with pytest.raises(ev.RecordError, match="non-empty"):
+            ev.parse_markers(json.dumps({**TEST_MARKERS, key: ""}).encode(), "x")
+    with pytest.raises(ev.RecordError, match="exactly the keys"):
+        ev.parse_markers(json.dumps({**TEST_MARKERS, "extra": "a"}).encode(), "x")
+    with pytest.raises(ev.RecordError, match="does not compile"):
+        ev.parse_markers(json.dumps({**TEST_MARKERS, "fluct_on_marker": "("}).encode(), "x")
+    with pytest.raises(ev.RecordError, match="named groups"):
+        ev.parse_markers(json.dumps({**TEST_MARKERS, "step_line_re": r"^\s*\d+"}).encode(), "x")
+
+
+def test_markers_discriminate_unit() -> None:
+    assert ev.markers_discriminate([(True, True, False), (False, False, True)])
+    assert not ev.markers_discriminate([(True, True, True), (False, False, True)])  # off hits on
+    assert not ev.markers_discriminate([(True, True, False), (False, True, True)])  # on hits off
+    assert not ev.markers_discriminate([(True, False, False), (False, False, True)])
+    assert not ev.markers_discriminate([(True, True, False)])  # no fluctuation-off run
 
 
 def _phase_space(
@@ -577,35 +784,73 @@ def _archive(tmp: Path, factor: float) -> tuple[Path, str, dict[str, str]]:
     return path, hashlib.sha256(path.read_bytes()).hexdigest(), members
 
 
+def _review(review_id: str, head: str, finished: str, **over: Any) -> dict[str, Any]:
+    """A synthetic passed codex-worker review record (schema of ``ss-seal-review.json``)."""
+    doc = {
+        "base_sha": "0" * 40,
+        "experiment_id": "experiment-v3",
+        "finished_at": finished,
+        "head_sha": head,
+        "report": {"findings": [], "head_sha": head, "summary": "synthetic", "verdict": "pass"},
+        "review_id": review_id,
+        "started_at": finished,
+        "status": "passed",
+        "task_id": "V3-008",
+        "tool": "codex exec",
+    }
+    doc.update(over)
+    return doc
+
+
+def _note(eval_id: str, eval_sha: str, markers_id: str, markers_sha: str) -> str:
+    return (
+        "**Dated note (2026-11-16, orchestrator; I3-FU-1 step-2 review pins).** evaluator review "
+        f"{eval_id} at {eval_sha}; markers review {markers_id} at {markers_sha}.\n"
+    )
+
+
+def _write_json(path: Path, doc: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+
+
 @pytest.fixture(scope="module")
 def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
-    """Temporary repository: synthetic bundles (1000 histories) + manifest + trust (commit
-    "reviewed"), then the review pin (commit "code_sha"); archive and model predictions."""
+    """Temporary repository: sealed sources + synthetic bundles (1000 histories) + manifest +
+    trust (commit "reviewed" = the evaluator review's head_sha); pin A + the marker file (commit
+    "markers" = the markers review's head_sha); pin B + the plan note (commit "code_sha")."""
     root = tmp_path_factory.mktemp("i3fu2")
     repo = root / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
+    for rel in ev.SEALED_SOURCES:
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / rel, repo / rel)
     bundles = repo / gen.REL_PREFIX
     gen.generate(bundles, histories=SYN_HISTORIES)
     (repo / ev.MANIFEST).write_text(gen.manifest_text(bundles))
     kp = IO.attest_module().keypair_from_seed(KEY_SEED)
-    trust = repo / IO.DEFAULT_TRUST
-    trust.parent.mkdir(parents=True)
-    trust.write_text(
-        json.dumps({"reference-runner": [{"key_id": kp.key_id, "public_key": kp.public_key.hex()}]})
+    _write_json(
+        repo / IO.DEFAULT_TRUST,
+        {"reference-runner": [{"key_id": kp.key_id, "public_key": kp.public_key.hex()}]},
     )
-    reviewed = _commit(repo, "bundles")
-    pin = repo / ev.REVIEW_PIN
-    pin.parent.mkdir(parents=True)
-    pin.write_text(
-        json.dumps({"review_id": "REVIEW-syn", "head_sha": reviewed, "finished_at": PIN_FINISHED})
-        + "\n"
+    (repo / ev.PLAN_PATH).parent.mkdir(parents=True, exist_ok=True)
+    (repo / ev.PLAN_PATH).write_text("# synthetic acceptance plan\n")
+    reviewed = _commit(repo, "sealed evaluator and bundles")
+    _write_json(repo / ev.REVIEW_PIN, _review("REVIEW-syn-a", reviewed, PIN_A_FINISHED))
+    _write_json(repo / ev.MARKERS, TEST_MARKERS)
+    markers_sha = _commit(repo, "pin A and markers")
+    _write_json(repo / ev.MARKERS_PIN, _review("REVIEW-syn-b", markers_sha, PIN_B_FINISHED))
+    (repo / ev.PLAN_PATH).write_text(
+        "# synthetic acceptance plan\n\n"
+        + _note("REVIEW-syn-a", reviewed, "REVIEW-syn-b", markers_sha)
     )
-    code_sha = _commit(repo, "review pin")
+    code_sha = _commit(repo, "pin B and plan note")
     archive, sha, members = _archive(root, TABLE_FACTOR)
     cases, de_m = {}, {}
-    for c, p in gen.evidence_keys() + gen.repeat_keys():
-        name = gen.bundle_name(c, p)
+    for name in [gen.bundle_name(c, p) for c, p in gen.evidence_keys() + gen.repeat_keys()] + list(
+        ev.STEP_SMOKES
+    ):
         doc = json.loads((bundles / name / "case.json").read_text())
         info = doc["i3fu2"]
         stop = ev.model_stopping(gen.IONS[info["ion"]][0])
@@ -617,6 +862,7 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         "root": root,
         "repo": repo,
         "reviewed": reviewed,
+        "markers_sha": markers_sha,
         "code_sha": code_sha,
         "archive": archive,
         "sha": sha,
@@ -624,6 +870,12 @@ def base(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         "cases": cases,
         "de_m": de_m,
     }
+
+
+def _g(info: dict[str, Any]) -> float:
+    """The model's one-step algorithm bias g(f) of this run's slab (planted as TOPAS's)."""
+    m = ev.stepping_bias(info["ion"], info["case"])
+    return float(m["g2"] if info["thickness_factor"] == 0.048 else m["g1"])
 
 
 def _write_run(
@@ -643,9 +895,11 @@ def _write_run(
     succeeded: bool = True,
     exit_code: int = 0,
     tamper_record: bool = False,
+    plant_g: bool = True,
 ) -> str:
     """Materialized outputs under ``<root>/out-<label>/<run_id>/`` and the signed record +
-    listing under ``<repo>/records/<label>/<run_id>/`` (not committed here)."""
+    listing under ``<repo>/records/<label>/<run_id>/`` (not committed here). The planted loss is
+    the model loss x (1 + r) x (1 + g(f)) (``plant_g``: TOPAS's one-step algorithm)."""
     doc = base["cases"][bundle]
     info = doc["i3fu2"]
     code_sha = code_sha or base["code_sha"]
@@ -664,7 +918,7 @@ def _write_run(
     }
     cfg = IO.canonical_digest(request)
     run_id = f"REF-{cfg[:20]}-{hashlib.sha256(label.encode()).hexdigest()[:8]}"
-    odir = base["root"] / f"out-{label}" / run_id
+    odir = base["root"] / f"out-{label.removesuffix('-steps')}" / run_id
     (odir / "work").mkdir(parents=True)
     (odir / "request.json").write_text(json.dumps(request))
     particle = ev.BEAM_PARTICLE[info["ion"]]
@@ -675,8 +929,9 @@ def _write_run(
     (odir / "stderr.txt").write_text(stderr)
     for name in ("case.json", "input.txt"):
         shutil.copy(bdir / name, odir / "work" / name)
+    g = _g(info) if plant_g and info["kind"] != "smoke" else 0.0
     h, rows, tot = _phase_space(
-        doc, base["de_m"][bundle] * (1.0 + r), rng, noise=noise, deficit=deficit
+        doc, base["de_m"][bundle] * (1.0 + r) * (1.0 + g), rng, noise=noise, deficit=deficit
     )
     (odir / "work" / "ss_exit.header").write_text(h)
     (odir / "work" / "ss_exit.phsp").write_text(rows)
@@ -742,7 +997,32 @@ def _write_index(repo: Path, label: str, entries: dict[str, str]) -> None:
         {"case": keys[b][0], "part": keys[b][1], "run_id": rid, "bundle": b}
         for b, rid in sorted(entries.items())
     ]
+    (repo / "records" / label).mkdir(parents=True, exist_ok=True)
     (repo / "records" / label / "index.json").write_text(json.dumps({"runs": runs}, indent=1))
+
+
+def _write_smokes(
+    base: dict[str, Any],
+    repo: Path,
+    label: str,
+    *,
+    split: str = "",
+    only: tuple[str, ...] = ev.STEP_SMOKES,
+    **kw: Any,
+) -> None:
+    """The two step-count smokes (``<label>-steps``); ``split``: that smoke's primary 7 takes two
+    steps in the slab."""
+    entries: dict[str, str] = {}
+    for name in only:
+        info = base["cases"][name]["i3fu2"]
+        n = int(base["cases"][name]["histories"])
+        out = _step_stdout(n, float(info["slab_mm"]), split=7 if name == split else -1)
+        rng = np.random.default_rng(len(entries))
+        entries[name] = _write_run(base, repo, f"{label}-steps", name, 0.0, rng, stdout=out, **kw)
+    (repo / "records" / f"{label}-steps").mkdir(parents=True, exist_ok=True)
+    (repo / "records" / f"{label}-steps" / "index.json").write_text(
+        json.dumps({"runs": [{"bundle": b, "run_id": r} for b, r in sorted(entries.items())]})
+    )
 
 
 def _scenario(
@@ -753,9 +1033,11 @@ def _scenario(
     noise: float = ROW_NOISE,
     run_kw: dict[str, dict[str, Any]] | None = None,
     repeats: dict[str, float] | None = None,
+    plant_g: bool = True,
+    smoke_kw: dict[str, Any] | None = None,
 ) -> str:
     """All 40 evidence runs (r_of(case, part) planted relative to the model slab loss), plus
-    the ``repeats`` {repeat bundle: r}; ``run_kw`` per bundle (e.g. a deficit)."""
+    the ``repeats`` {repeat bundle: r} and the two step-count smokes; ``run_kw`` per bundle."""
     repo, entries = base["repo"], {}
     run_kw = run_kw or {}
     keys = ev.run_bundles()
@@ -764,8 +1046,10 @@ def _scenario(
     for b, r in todo:
         c, p = keys[b]
         rng = np.random.default_rng([20261116, c, p])  # per run: identical across scenarios
-        entries[b] = _write_run(base, repo, label, b, r, rng, noise=noise, **run_kw.get(b, {}))
+        kw = {"noise": noise, "plant_g": plant_g, **run_kw.get(b, {})}
+        entries[b] = _write_run(base, repo, label, b, r, rng, **kw)
     _write_index(repo, label, entries)
+    _write_smokes(base, repo, label, **(smoke_kw or {}))
     return label
 
 
@@ -779,6 +1063,7 @@ def _evaluate(base: dict[str, Any], label: str, repo: Path | None = None) -> dic
             ev.MANIFEST,
             base["archive"],
             base["code_sha"],
+            step_smokes=f"records/{label}-steps",
             archive_sha256=base["sha"],
             member_sha256=base["members"],
         )
@@ -809,7 +1094,7 @@ def _r_he_fail(c: int, p: int) -> float:
     return 0.02 if p == 4 else _r_icru(c, p)
 
 
-R0, B_LIN = 0.05, 0.1  # Richardson scenario: r = R0 + B_LIN f exactly (noise free)
+R0, B_LIN = 0.05, 0.1  # Richardson scenario: r = R0 + B_LIN f exactly (noise free, no g)
 
 
 def _r_linear(c: int, p: int) -> float:
@@ -821,10 +1106,15 @@ def _r_linear(c: int, p: int) -> float:
 def _r_inconsistent(c: int, p: int) -> float:
     if p == 4:
         return 0.0
-    return S + (0.01 if (c, p) == (19, 3) else 0.0)  # O 20 MeV/u: |r(f2) - r(f1)| = 0.01
+    return S + (0.01 if (c, p) == (19, 3) else 0.0)  # O 20 MeV/u: Delta_meas off by ~0.01
 
 
 BAD = {"deficit": 1}
+
+
+def _both_lines(n: int, fluct: bool) -> str:
+    """A stdout showing BOTH fluctuation dump lines (a marker set that cannot discriminate)."""
+    return _stdout(n, fluct=fluct) + f"Fluctuations of dE/dx are enabled   {int(not fluct)}\n"
 
 
 @pytest.fixture(scope="module")
@@ -834,36 +1124,53 @@ def results(base: dict[str, Any]) -> dict[str, dict[str, Any]]:
     _scenario(base, "model", _r_model)
     _scenario(base, "mixed", _r_mixed)
     _scenario(base, "he_fail", _r_he_fail)
-    _scenario(base, "linear", _r_linear, noise=0.0)
+    _scenario(base, "linear", _r_linear, noise=0.0, plant_g=False)
     _scenario(base, "invalid", _r_icru, run_kw={c15: BAD})
     _scenario(  # C 5 MeV/u invalid + an invalid repeat; O 20 MeV/u inconsistent, no repeat
         base,
         "second_invalid",
         _r_inconsistent,
-        run_kw={c15: BAD, gen.bundle_name(15, 6): BAD},
-        repeats={gen.bundle_name(15, 6): S},
+        run_kw={c15: BAD, gen.bundle_name(15, 8): BAD},
+        repeats={gen.bundle_name(15, 8): S},
     )
-    _scenario(  # both restored by valid repeats (C part 6; O 1.6t part 9)
+    _scenario(  # both restored: C part 8 for the invalid run; O 20 MeV/u BOTH slabs (10, 11)
         base,
         "repeat_ok",
         _r_inconsistent,
         run_kw={c15: BAD},
-        repeats={gen.bundle_name(15, 6): S, gen.bundle_name(19, 9): S},
+        repeats={gen.bundle_name(15, 8): S, gen.bundle_name(19, 10): S, gen.bundle_name(19, 11): S},
+    )
+    _scenario(base, "split", _r_icru, smoke_kw={"split": ev.STEP_SMOKES[1]})
+    _scenario(base, "one_smoke", _r_icru, smoke_kw={"only": ev.STEP_SMOKES[:1]})
+    _scenario(  # the fluctuation-off marker also matches a fluctuation-ON run
+        base,
+        "off_hits_on",
+        _r_icru,
+        run_kw={gen.bundle_name(17, 0): {"stdout": _both_lines(SYN_HISTORIES, True)}},  # fmt: skip
+    )
+    _scenario(  # the fluctuation-on marker also matches a fluctuation-OFF run
+        base,
+        "on_hits_off",
+        _r_icru,
+        run_kw={gen.bundle_name(21, 5): {"stdout": _both_lines(SYN_HISTORIES, False)}},  # fmt: skip
     )
     _commit(base["repo"], "records")
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(ev, "FLUCT_OFF_MARKER", FLUCT_OFF_TEST_MARKER)
-        labels = ("icru", "model", "mixed", "he_fail", "linear", "invalid")
-        out = {lab: _evaluate(base, lab) for lab in (*labels, "second_invalid", "repeat_ok")}
+    out = {lab: _evaluate(base, lab) for lab in RESULT_LABELS}
     assert o19_2t in out["second_invalid"]["provenance"]["runs"]
     return out
+
+
+RESULT_LABELS = (
+    "icru", "model", "mixed", "he_fail", "linear", "invalid", "second_invalid", "repeat_ok",
+    "split", "one_smoke", "off_hits_on", "on_hits_off",
+)  # fmt: skip
 
 
 def _cls(doc: dict[str, Any], ion: str) -> dict[str, str]:
     return {b: v["class"] for b, v in doc["bands"][ion].items()}
 
 
-def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]]) -> None:
+def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]], base: dict) -> None:
     doc = results["icru"]
     assert doc["pattern"] == doc["pattern_before_controls"] == "ICRU" and doc["conclusive"]
     assert _cls(doc, "carbon") == {"[2,5)": "I", "[5,10)": "I", "[10,20)": "H", "[20,50]": "I"}
@@ -875,7 +1182,9 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]]) -> None:
             assert v["n"] == {"[2,5)": 2, "[5,10)": 2, "[10,20)": 2, "[20,50]": 3}[b]
             assert v["sigma_b"] == pytest.approx(np.hypot(v["se_b"], 0.0025))
             assert 1e-4 < v["se_b"] < 1.5e-3  # 1 % row noise, 1000 rows, extrapolated points
-            assert v["max_abs_thickness_difference"] < 3e-3
+            assert v["max_abs_consistency_residual"] < 2e-3  # planted g: Delta_meas ~ Delta_pred
+            assert 0.0 <= v["max_abs_model_residual"] < 3e-4
+            assert v["max_abs_predicted_difference"] < 3e-3
             if (ion, b) != ("carbon", "[10,20)"):
                 assert v["mean_r_I"] == pytest.approx(0.0, abs=4e-3)
     assert doc["bands"]["carbon"]["[10,20)"]["mean_r_I"] == pytest.approx(0.03, abs=4e-3)
@@ -885,20 +1194,36 @@ def test_icru_scenario_with_h_band(results: dict[str, dict[str, Any]]) -> None:
         "fluctuations_off": {
             "pass": True,
             "max_abs_difference": c["fluctuations_off"]["max_abs_difference"],
+            "markers_discriminate": True,
         },
         "controls_pass": True,
     }
-    assert c["helium"]["max_abs_r_m"] < 2e-3 and c["fluctuations_off"]["max_abs_difference"] < 2e-3
+    assert c["helium"]["max_abs_r_m"] <= 2e-3 and c["fluctuations_off"]["max_abs_difference"] < 2e-3
     assert doc["invalid_runs"] == {} and doc["invalid_points"] == {} and doc["repeats_used"] == {}
     assert doc["inconclusive_reasons"] == []
-    runs = doc["provenance"]["runs"]
+    assert doc["one_step_premise"] == {
+        "checked": True,
+        "smokes": {s: {"primaries": 50, "max_steps_in_slab": 1} for s in ev.STEP_SMOKES},
+        "pass": True,
+    }
+    prov = doc["provenance"]
+    runs = prov["runs"]
     assert len(runs) == 40 and set(runs) == {gen.bundle_name(c, p) for c, p in gen.evidence_keys()}
     assert all(
         v["scored"] == SYN_HISTORIES and v["run_id"].startswith("REF-") for v in runs.values()
     )
-    pin = doc["provenance"]["review_pin"]
-    assert pin["review_id"] == "REVIEW-syn" and pin["finished_at"] == PIN_FINISHED
-    assert doc["provenance"]["manifest"]["path"] == ev.MANIFEST
+    pins = prov["review_pins"]
+    assert pins["evaluator"]["review_id"] == "REVIEW-syn-a"
+    assert pins["evaluator"]["head_sha"] == base["reviewed"]
+    assert pins["markers"]["head_sha"] == base["markers_sha"]
+    assert pins["markers"]["finished_at"] == PIN_B_FINISHED
+    assert prov["manifest"]["path"] == ev.MANIFEST
+    assert prov["log_markers"]["path"] == ev.MARKERS
+    assert "I3-FU-1 step-2 review pins" in prov["plan_note"]["line"]
+    assert set(prov["sealed_sources"]) == set(ev.SEALED_SOURCES)
+    for rel, digest in prov["sealed_sources"].items():
+        assert digest == hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
+    assert set(prov["step_smokes"]) == set(ev.STEP_SMOKES)
 
 
 def test_model_scenario(results: dict[str, dict[str, Any]]) -> None:
@@ -931,9 +1256,10 @@ def test_failed_control_is_inconclusive(results: dict[str, dict[str, Any]]) -> N
 
 def test_richardson_removes_a_planted_linear_bias(results: dict[str, dict[str, Any]]) -> None:
     doc = results["linear"]
+    assert doc["conclusive"]
     for ion in ("carbon", "oxygen"):
         for v in doc["bands"][ion].values():
-            assert abs(v["mean_r_M"] - R0) < 1e-9
+            assert v["mean_r_M"] == R0  # written rounded; the planted value is exact at 0.1 pp
             assert v["se_b"] < 1e-9
             assert v["max_abs_thickness_difference"] == pytest.approx(B_LIN * 0.018, abs=1e-9)
     # fluctuation control: same planted r as C slab t -> zero difference
@@ -945,7 +1271,7 @@ def test_invalid_run_without_repeat_is_inconclusive(results: dict[str, dict[str,
     c15 = gen.bundle_name(15, 0)
     assert doc["pattern"] == "INCONCLUSIVE" and doc["pattern_before_controls"] == "ICRU"
     assert list(doc["invalid_runs"]) == [c15] and "deficit" in doc["invalid_runs"][c15]
-    assert doc["invalid_points"] == {"carbon case 15": "invalid run; no valid repeat"}
+    assert doc["invalid_points"] == {"carbon case 15": "invalid run; no repeat"}
     assert doc["bands"]["carbon"]["[5,10)"]["n"] == 1
     assert doc["inconclusive_reasons"] == ["an evidence point is invalid without a valid repeat"]
     assert doc["provenance"]["runs"][c15]["scored"] is None
@@ -954,32 +1280,58 @@ def test_invalid_run_without_repeat_is_inconclusive(results: dict[str, dict[str,
 def test_second_invalid_and_consistency_failure(results: dict[str, dict[str, Any]]) -> None:
     doc = results["second_invalid"]
     assert doc["pattern"] == "INCONCLUSIVE" and not doc["conclusive"]
-    assert set(doc["invalid_runs"]) == {gen.bundle_name(15, 0), gen.bundle_name(15, 6)}
+    assert set(doc["invalid_runs"]) == {gen.bundle_name(15, 0), gen.bundle_name(15, 8)}
     assert doc["invalid_points"] == {
-        "carbon case 15": "repeat run invalid (second invalid of the point)",
-        "oxygen case 19": f"{ev.CONSISTENCY_REASON}; no valid repeat",
+        "carbon case 15": "repeat run invalid (second failure of the point)",
+        "oxygen case 19": f"{ev.CONSISTENCY_REASON}; no repeat",
     }
-    assert list(doc["repeats_used"]) == [gen.bundle_name(15, 6)]
+    assert list(doc["repeats_used"]) == [gen.bundle_name(15, 8)]
     o = doc["bands"]["oxygen"]["[20,50]"]  # 20 MeV/u
-    assert o["n"] == 2 and o["max_abs_thickness_difference"] == pytest.approx(0.01, abs=2e-3)
+    assert o["n"] == 2 and o["max_abs_consistency_residual"] == pytest.approx(0.01, abs=2e-3)
 
 
 def test_valid_repeats_restore_conclusiveness(results: dict[str, dict[str, Any]]) -> None:
     doc = results["repeat_ok"]
     assert doc["conclusive"] and doc["pattern"] == "ICRU"
     assert doc["invalid_points"] == {} and list(doc["invalid_runs"]) == [gen.bundle_name(15, 0)]
+    cons = f"{ev.CONSISTENCY_REASON}"
     assert doc["repeats_used"] == {
-        gen.bundle_name(15, 6): f"original {gen.bundle_name(15, 0)} invalid: "
+        gen.bundle_name(15, 8): f"original {gen.bundle_name(15, 0)} invalid: "
         + doc["invalid_runs"][gen.bundle_name(15, 0)],
-        gen.bundle_name(
-            19, 9
-        ): f"original {gen.bundle_name(19, 3)} invalid: {ev.CONSISTENCY_REASON}",
+        gen.bundle_name(19, 10): f"original {gen.bundle_name(19, 2)} invalid: {cons}",
+        gen.bundle_name(19, 11): f"original {gen.bundle_name(19, 3)} invalid: {cons}",
     }
     assert (
         doc["bands"]["carbon"]["[5,10)"]["n"] == 2 and doc["bands"]["oxygen"]["[20,50]"]["n"] == 3
     )
-    assert doc["bands"]["oxygen"]["[20,50]"]["max_abs_thickness_difference"] < 3e-3
-    assert len(doc["provenance"]["runs"]) == 42
+    assert doc["bands"]["oxygen"]["[20,50]"]["max_abs_consistency_residual"] < 2e-3
+    assert len(doc["provenance"]["runs"]) == 43
+
+
+def test_one_step_premise_failures_are_inconclusive(results: dict[str, dict[str, Any]]) -> None:
+    doc = results["split"]
+    assert doc["pattern"] == "INCONCLUSIVE" and doc["pattern_before_controls"] == "ICRU"
+    assert doc["inconclusive_reasons"] == [ev.PREMISE_REASON] == ["one_step_premise"]
+    prem = doc["one_step_premise"]
+    assert prem["checked"] and not prem["pass"]
+    assert prem["smokes"][ev.STEP_SMOKES[1]] == {"primaries": 50, "max_steps_in_slab": 2}
+    assert prem["smokes"][ev.STEP_SMOKES[0]] == {"primaries": 50, "max_steps_in_slab": 1}
+    doc = results["one_smoke"]
+    assert doc["pattern"] == "INCONCLUSIVE" and doc["inconclusive_reasons"] == ["one_step_premise"]
+    assert doc["one_step_premise"]["checked"] is False and not doc["one_step_premise"]["pass"]
+    assert list(doc["one_step_premise"]["smokes"]) == [ev.STEP_SMOKES[0]]
+
+
+@pytest.mark.parametrize("label", ["off_hits_on", "on_hits_off"])
+def test_non_discriminating_markers_fail_the_fluctuation_control(
+    results: dict[str, dict[str, Any]], label: str
+) -> None:
+    doc = results[label]
+    fl = doc["controls"]["fluctuations_off"]
+    assert fl["markers_discriminate"] is False and fl["pass"] is False
+    assert fl["max_abs_difference"] < 2e-3  # the values alone would have passed
+    assert doc["pattern"] == "INCONCLUSIVE" and doc["pattern_before_controls"] == "ICRU"
+    assert doc["inconclusive_reasons"] == ["a control failed or is incomplete"]
 
 
 def _walk(x: Any, path: str = "") -> list[tuple[str, Any]]:
@@ -993,33 +1345,64 @@ def _walk(x: Any, path: str = "") -> list[tuple[str, Any]]:
     return out
 
 
-def test_no_per_point_leak(results: dict[str, dict[str, Any]]) -> None:
+def test_aggregates_only_and_table_relative_values_rounded(
+    results: dict[str, dict[str, Any]],
+) -> None:
+    """The result holds per-ion/band aggregates, control maxima and counts only (no per-point
+    list or value) and every table-relative aggregate is written rounded to 0.1 pp."""
     band_keys = {
         "n", "mean_r_M", "mean_r_I", "mean_s", "se_b", "sigma_b", "x_b", "class",
-        "max_abs_thickness_difference",
+        "max_abs_thickness_difference", "max_abs_consistency_residual",
+        "max_abs_predicted_difference", "max_abs_model_residual",
     }  # fmt: skip
     for doc in results.values():
+        assert doc["rounding_note"] == ev.ROUNDING_NOTE
         for path, v in _walk(doc):
             if isinstance(v, list):
-                assert len(v) <= 3, path
+                assert len(v) <= 4, path
         assert set(doc["bands"]) == {"carbon", "oxygen"}
         for ion in doc["bands"].values():
             assert set(ion) == {"[2,5)", "[5,10)", "[10,20)", "[20,50]"}
             for band in ion.values():
                 assert set(band) == band_keys
+                for key in ("mean_r_M", "mean_r_I", "mean_s", "x_b"):
+                    v = band[key]
+                    assert v is None or round(v, 3) == v, (key, v)
+        he = doc["controls"]["helium"]["max_abs_r_m"]
+        assert he is None or round(he, 3) == he
         for run in doc["provenance"]["runs"].values():
             assert set(run) == {"run_id", "seed", "histories", "scored"}
         assert set(doc["controls"]["helium"]) == {"pass", "max_abs_r_m"}
-        assert set(doc["controls"]["fluctuations_off"]) == {"pass", "max_abs_difference"}
+        assert set(doc["controls"]["fluctuations_off"]) == {
+            "pass", "max_abs_difference", "markers_discriminate",
+        }  # fmt: skip
+        prem = doc["one_step_premise"]
+        assert set(prem) == {"checked", "smokes", "pass"}
+        for s in prem["smokes"].values():
+            assert set(s) == {"primaries", "max_steps_in_slab"}
         for reason in [*doc["invalid_runs"].values(), *doc["invalid_points"].values()]:
             rest = reason.replace(ev.CONSISTENCY_REASON, "")
             assert not re.search(r"\d\.\d{3,}", rest), reason  # reasons carry no values
         text = json.dumps(doc)
-        for bad in ("r_i_per", 'delta_e"', "de_m", "de_i", "exit_energy", "differences"):
+        for bad in ("r_i_per", 'delta_e"', "de_m", "de_i", "exit_energy", "differences", '"g1"'):
             assert bad not in text.lower()
 
 
-# --- authentication and binding (Codex REVIEW-cfdff398 finding 1) ----------------------------
+def test_classes_use_full_precision_values() -> None:
+    """A band whose rounded mean would flip the class keeps the full-precision class."""
+    pts = [
+        {"e0": 2.4, "valid": True, "r_M": 0.0, "r_I": 0.0, "s": 0.0304, "se_rel": 0.0,
+         "d_thick": None, "d_resid": None, "d_pred": 0.0, "r_model": 0.0},
+    ]  # fmt: skip
+    band = ev.band_aggregates(pts)["[2,5)"]
+    # X = 0.0304 / 3 = 0.010133 -> capped 0.01; |r_I| + k = 0.0041 <= X: I
+    assert band["class"] == "I" and band["mean_s"] == 0.03 and band["x_b"] == 0.01
+    pts[0]["r_I"] = 0.0056  # full: 0.0097 <= 0.01 (I); rounded 0.006: 0.0101 > 0.01 (N)
+    band = ev.band_aggregates(pts)["[2,5)"]
+    assert band["mean_r_I"] == 0.006 and band["class"] == "I"
+
+
+# --- authentication, sealing and binding ------------------------------------------------------
 
 
 def _world(
@@ -1031,7 +1414,8 @@ def _world(
     commit: bool = True,
     **kw: Any,
 ) -> dict[str, Any]:
-    """A copy of the base repository with ONE run of ``bundle`` (default C 10 MeV/u slab t)."""
+    """A copy of the base repository with ONE run of ``bundle`` (default C 10 MeV/u slab t) and
+    an empty step-smoke index."""
     repo = tmp / "repo"
     shutil.copytree(base["repo"], repo)
     bundle = bundle or gen.bundle_name(17, 0)
@@ -1039,6 +1423,7 @@ def _world(
     w = {**base, "root": tmp, "repo": repo}
     rid = _write_run(w, repo, label, bundle, r, np.random.default_rng(3), **kw)
     _write_index(repo, label, {bundle: rid})
+    _write_json(repo / "records" / f"{label}-steps" / "index.json", {"runs": []})
     if commit:
         _commit(repo, "records")
     return {"repo": repo, "label": label, "bundle": bundle, "run_id": rid, "root": tmp}
@@ -1052,6 +1437,7 @@ def _ctx(base: dict[str, Any], w: dict[str, Any], code_sha: str | None = None) -
         ev.REVIEW_PIN,
         ev.MANIFEST,
         code_sha or base["code_sha"],
+        step_smokes=f"records/{w['label']}-steps",
     )
 
 
@@ -1063,14 +1449,17 @@ def test_authenticated_run_is_valid(base: dict[str, Any], tmp_path: Path) -> Non
     w = _world(base, tmp_path)
     out = _check(base, w)
     assert out["valid"] and out["scored"] == SYN_HISTORIES and out["run_id"] == w["run_id"]
-    assert out["de"] == pytest.approx(base["de_m"][w["bundle"]], rel=3e-3)
+    g = _g(base["cases"][w["bundle"]]["i3fu2"])
+    assert out["de"] == pytest.approx(base["de_m"][w["bundle"]] * (1 + g), rel=3e-3)
+    assert out["markers"] == (True, False)
 
 
 @pytest.mark.parametrize(
     "kw, match",
     [
         ({"tamper_record": True}, "attestation"),
-        ({"started": "2026-11-16T11:59:59+00:00"}, "not after the review pin"),
+        ({"started": "2026-11-16T11:59:59+00:00"}, "not after both review pins"),
+        ({"started": "2026-11-16T12:15:00+00:00"}, "not after both review pins"),  # A < t < B
         ({"succeeded": False}, "not a successful topas run"),
         ({"exit_code": 1}, "not a successful topas run"),
         (
@@ -1082,7 +1471,6 @@ def test_authenticated_run_is_valid(base: dict[str, Any], tmp_path: Path) -> Non
             "g4em-standard_opt4",
         ),
         ({"stdout": _stdout(SYN_HISTORIES, particle="alpha")}, "ionIoni"),
-        ({"stdout": _stdout(SYN_HISTORIES, fluct=False)}, "fluctuations enabled"),
     ],
 )
 def test_tampering_raises(
@@ -1103,11 +1491,11 @@ def test_altered_artifact_bytes_raise(base: dict[str, Any], tmp_path: Path) -> N
 
 
 def test_wrong_code_sha_raises(base: dict[str, Any], tmp_path: Path) -> None:
-    w = _world(base, tmp_path, code_sha=base["reviewed"])  # run executed at the bundles commit
+    w = _world(base, tmp_path, code_sha=base["markers_sha"])  # run executed before pin B
     with pytest.raises(ev.RecordError, match="code_sha"):
         _check(base, w)
-    with pytest.raises(ev.RecordError, match="i3fu2-review.json is not committed"):
-        _ctx(base, w, code_sha=base["reviewed"])
+    with pytest.raises(ev.RecordError, match="found 0|is not committed at"):
+        _ctx(base, w, code_sha=base["reviewed"])  # no plan note / pins at the reviewed commit
     with pytest.raises(ev.RecordError, match="40-hex"):
         _ctx(base, w, code_sha="abc")
 
@@ -1119,15 +1507,118 @@ def test_manifest_and_pin_mismatch_raise(base: dict[str, Any], tmp_path: Path) -
     _commit(w["repo"], "manifest changed after the runs")
     with pytest.raises(ev.RecordError, match="frozen manifest .* differs"):
         _ctx(base, w)
-    w = _world(base, tmp_path / "p")
-    pin = w["repo"] / ev.REVIEW_PIN
-    pin.write_text(pin.read_text().replace(PIN_FINISHED, "2026-11-16T10:00:00+00:00"))
-    _commit(w["repo"], "pin forged later")
-    with pytest.raises(ev.RecordError, match="review pin .* differs"):
+    for rel in (ev.REVIEW_PIN, ev.MARKERS_PIN):
+        w = _world(base, tmp_path / Path(rel).stem)
+        pin = w["repo"] / rel
+        pin.write_text(pin.read_text().replace("2026-11-16T12", "2026-11-16T10"))
+        _commit(w["repo"], "pin forged later")
+        with pytest.raises(ev.RecordError, match="review pin .* differs"):
+            _ctx(base, w)
+    w = _world(base, tmp_path / "mk")
+    mk = w["repo"] / ev.MARKERS
+    mk.write_text(json.dumps({**TEST_MARKERS, "fluct_off_marker": "x"}))
+    _commit(w["repo"], "markers changed after the runs")
+    with pytest.raises(ev.RecordError, match="log-marker file .* differs"):
         _ctx(base, w)
     w = _world(base, tmp_path / "u", commit=False)  # uncommitted records: fail closed
     with pytest.raises(ev.RecordError, match="not committed|differs from HEAD"):
         _check(base, w)
+
+
+def test_sealed_sources_committed_or_uncommitted_change_raises(
+    base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codex REVIEW-22f384ed finding 1: a later committed change and an uncommitted change of a
+    sealed source each refuse; so does a loaded module that differs from the sealed bytes."""
+    for rel in ("src/ionmc/physics/stopping.py", "validation/scripts/stopping/i3fu2_evaluate.py"):
+        w = _world(base, tmp_path / ("c-" + Path(rel).stem))
+        (w["repo"] / rel).write_text((w["repo"] / rel).read_text() + "# later change\n")
+        _commit(w["repo"], "sealed source changed after the runs")
+        with pytest.raises(ev.RecordError, match=f"sealed source {re.escape(rel)} differs"):
+            _ctx(base, w)
+    w = _world(base, tmp_path / "dirty")
+    rel = "src/ionmc/physics/projectiles.py"
+    (w["repo"] / rel).write_text((w["repo"] / rel).read_text() + "# uncommitted\n")
+    with pytest.raises(ev.RecordError, match="not clean"):
+        _ctx(base, w)
+    w = _world(base, tmp_path / "loaded")
+    other = tmp_path / "other.py"
+    other.write_text("# not the sealed bytes\n")
+    monkeypatch.setattr(ev, "loaded_source", lambda name: other)
+    with pytest.raises(ev.RecordError, match="loaded module differs"):
+        _ctx(base, w)
+
+
+def _repin(base: dict[str, Any], tmp: Path, *, pin_a: Any = None, pin_b: Any = None,
+           note: str | None = None) -> dict[str, Any]:  # fmt: skip
+    """A copy of the base repository whose pins / plan note are rewritten in ONE new commit,
+    which then serves as code_sha."""
+    w = _world(base, tmp)
+    if pin_a is not None:
+        _write_json(w["repo"] / ev.REVIEW_PIN, pin_a)
+    if pin_b is not None:
+        _write_json(w["repo"] / ev.MARKERS_PIN, pin_b)
+    if note is not None:
+        (w["repo"] / ev.PLAN_PATH).write_text("# synthetic acceptance plan\n\n" + note)
+    w["code_sha"] = _commit(w["repo"], "rewritten pins")
+    return w
+
+
+@pytest.mark.parametrize(
+    "which, over, match",
+    [
+        ("a", {"status": "failed"}, "status 'failed' is not 'passed'"),
+        ("b", {"status": "running"}, "status 'running' is not 'passed'"),
+        ("a", {"report": {"verdict": "changes_required"}}, "verdict 'changes_required'"),
+        ("b", {"report": {"verdict": "changes_required"}}, "verdict 'changes_required'"),
+        ("a", {"report": {"summary": "x"}}, "missing record field"),
+        ("a", {"report": None}, "missing record field"),
+        ("b", {"finished_at": None}, "missing record field"),
+        ("a", {"task_id": "V3-005"}, "task_id"),
+        ("b", {"finished_at": "yesterday"}, "ISO-8601"),
+        ("a", {"head_sha": "abc"}, "40-hex"),
+    ],
+)
+def test_review_record_must_be_a_passed_review(
+    base: dict[str, Any], tmp_path: Path, which: str, over: dict[str, Any], match: str
+) -> None:
+    a = _review("REVIEW-syn-a", base["reviewed"], PIN_A_FINISHED)
+    b = _review("REVIEW-syn-b", base["markers_sha"], PIN_B_FINISHED)
+    if which == "a":
+        a.update(over)
+    else:
+        b.update(over)
+    w = _repin(base, tmp_path, pin_a=a if which == "a" else None, pin_b=b if which == "b" else None)
+    with pytest.raises(ev.RecordError, match=match):
+        _ctx(base, w, code_sha=w["code_sha"])
+
+
+def test_pins_must_be_named_by_the_plan_note(base: dict[str, Any], tmp_path: Path) -> None:
+    ok = ("REVIEW-syn-a", base["reviewed"], "REVIEW-syn-b", base["markers_sha"])
+    for i, (bad, match) in enumerate(
+        (
+            (("REVIEW-other", *ok[1:]), "not the evaluator review named"),
+            ((*ok[:3], base["reviewed"]), "not the markers review named"),
+            ((ok[0], base["markers_sha"], *ok[2:]), "not the evaluator review named"),
+        )
+    ):
+        w = _repin(base, tmp_path / f"n{i}", note=_note(*bad))
+        with pytest.raises(ev.RecordError, match=match):
+            _ctx(base, w, code_sha=w["code_sha"])
+    w = _repin(base, tmp_path / "none", note="no note\n")
+    with pytest.raises(ev.RecordError, match="found 0"):
+        _ctx(base, w, code_sha=w["code_sha"])
+    w = _repin(base, tmp_path / "two", note=_note(*ok) + _note(*ok))
+    with pytest.raises(ev.RecordError, match="found 2"):
+        _ctx(base, w, code_sha=w["code_sha"])
+    # the note at code_sha differs from HEAD's (rewritten after the runs)
+    w = _world(base, tmp_path / "later")
+    (w["repo"] / ev.PLAN_PATH).write_text(
+        "# synthetic acceptance plan\n\n" + _note("REVIEW-syn-a", ok[1], "REVIEW-syn-b", ok[1])
+    )
+    _commit(w["repo"], "plan note rewritten after the runs")
+    with pytest.raises(ev.RecordError, match="plan note differs between code_sha"):
+        _ctx(base, w)
 
 
 def test_bundle_entry_not_in_manifest_raises(base: dict[str, Any], tmp_path: Path) -> None:
@@ -1141,33 +1632,53 @@ def test_bundle_entry_not_in_manifest_raises(base: dict[str, Any], tmp_path: Pat
         _ctx(base, w)
 
 
-def test_fluct_off_marker_must_be_pinned(
-    base: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    w = _world(base, tmp_path, gen.bundle_name(13, 5))
-    assert ev.FLUCT_OFF_MARKER == ""  # left for the orchestrator to pin from the smoke log
-    with pytest.raises(ev.RecordError, match="not pinned"):
-        _check(base, w)
-    monkeypatch.setattr(ev, "FLUCT_OFF_MARKER", r"^this marker is absent$")
-    with pytest.raises(ev.RecordError, match="marker is missing"):
-        _check(base, w)
-    monkeypatch.setattr(ev, "FLUCT_OFF_MARKER", FLUCT_OFF_TEST_MARKER)
-    assert _check(base, w)["valid"]
-
-
 def test_log_validity_failure_is_invalid_not_error(base: dict[str, Any], tmp_path: Path) -> None:
     w = _world(base, tmp_path, stdout=_stdout(SYN_HISTORIES) + "G4Exception: track stuck\n")
     out = _check(base, w)
     assert out["valid"] is False and "killed/stuck" in out["reason"]
 
 
-def test_repeat_without_invalid_original_raises(base: dict[str, Any], tmp_path: Path) -> None:
+def test_repeat_without_recorded_failure_raises(base: dict[str, Any], tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(base["repo"], repo)
     w = {**base, "root": tmp_path, "repo": repo}
-    _scenario(w, "extra", _r_model, repeats={gen.bundle_name(13, 6): 0.0})
+    _scenario(w, "extra", _r_model, repeats={gen.bundle_name(13, 8): 0.0})
     _commit(repo, "records")
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(ev, "FLUCT_OFF_MARKER", FLUCT_OFF_TEST_MARKER)
-        with pytest.raises(ev.RecordError, match="without an invalid original"):
-            _evaluate(w, "extra", repo)
+    with pytest.raises(ev.RecordError, match="without a recorded failure"):
+        _evaluate(w, "extra", repo)
+
+
+def _smoke_world(base: dict[str, Any], tmp: Path, **kw: Any) -> dict[str, Any]:
+    repo = tmp / "repo"
+    shutil.copytree(base["repo"], repo)
+    w = {**base, "root": tmp, "repo": repo}
+    _write_index(repo, "s", {})
+    _write_smokes(w, repo, "s", **kw)
+    _commit(repo, "smoke records")
+    ctx = ev.context(repo, "records/s", tmp / "out-s", ev.REVIEW_PIN, ev.MANIFEST,
+                     base["code_sha"], step_smokes="records/s-steps")  # fmt: skip
+    return {"ctx": ctx, "index": ctx.step_index}
+
+
+def test_step_smoke_authentication_and_chronology(base: dict[str, Any], tmp_path: Path) -> None:
+    """Step-count smokes: after the evaluator pin (A) and at a commit carrying it (they precede
+    the markers pin B, whose marker file is pinned from their logs)."""
+    early = _smoke_world(  # code_sha = the markers review's head (carries pin A), A < t < B
+        base, tmp_path / "early", code_sha=base["markers_sha"], started="2026-11-16T12:15:00+00:00"
+    )
+    for name, rid in early["index"].items():
+        out = ev.check_step_smoke(early["ctx"], name, rid)
+        assert out["ok"] and out["primaries"] == 50 and out["max_steps_in_slab"] == 1
+        assert out["code_sha"] == base["markers_sha"]
+    w = _smoke_world(base, tmp_path / "before", started="2026-11-16T11:00:00+00:00")
+    name, rid = next(iter(w["index"].items()))
+    with pytest.raises(ev.RecordError, match="not after the evaluator review pin"):
+        ev.check_step_smoke(w["ctx"], name, rid)
+    w = _smoke_world(base, tmp_path / "nopin", code_sha=base["reviewed"])
+    name, rid = next(iter(w["index"].items()))
+    with pytest.raises(ev.RecordError, match="step smoke .* not committed"):
+        ev.check_step_smoke(w["ctx"], name, rid)
+    w = _smoke_world(base, tmp_path / "tamper", tamper_record=True)
+    name, rid = next(iter(w["index"].items()))
+    with pytest.raises(ev.RecordError, match="attestation"):
+        ev.check_step_smoke(w["ctx"], name, rid)

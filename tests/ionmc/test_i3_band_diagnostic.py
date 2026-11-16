@@ -19,6 +19,7 @@ import importlib.util
 import io
 import json
 import re
+import subprocess
 import sys
 import tarfile
 from collections.abc import Callable
@@ -519,48 +520,114 @@ def _assert_reproducible_from_rounded_means(mod, out: dict[str, Any]) -> None:  
             )
 
 
-def _i3_file(mod, tmp_path: Path, path: Path, sha: str, members: dict[str, str]) -> Path:  # type: ignore[no-untyped-def]
-    """Row I3 JSON of the same synthetic archive (compare_icru73.run, as the CLI writes it)."""
-    i3 = mod.I3.run(path, "i3sha", archive_sha256=sha, member_sha256=members)
-    out = tmp_path / "icru73_comparison.json"
-    out.write_text(json.dumps(i3, indent=2) + "\n", encoding="utf-8")
+# =============================================================================================
+# CLI provenance: temporary git repositories (exact clean HEAD, sealed sources, committed I3)
+# =============================================================================================
+
+REPO_ROOT = SCRIPT.parents[3]
+
+
+def _good_factor(z: int, e: np.ndarray) -> np.ndarray:
+    out: np.ndarray = 1.0 + 0.01 * np.sin(np.log(e))
     return out
 
 
-def test_cli_expect_i3(mod, model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
-    path, sha, members = _build(tmp_path, model, lambda z, e: 1.0 + 0.01 * np.sin(np.log(e)))
-    i3_path = _i3_file(mod, tmp_path, path, sha, members)
+def _git(repo: Path, *args: str) -> str:
+    env = {
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@x",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@x",
+        "PATH": "/usr/bin:/bin:/usr/local/bin",
+        "HOME": str(repo),
+    }
+    return subprocess.run(
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True, env=env
+    ).stdout.strip()
+
+
+def _commit(repo: Path, msg: str) -> str:
+    _git(repo, "add", "-A")
+    _git(repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _i3_json(mod, path: Path, sha: str, members: dict[str, str]) -> str:  # type: ignore[no-untyped-def]
+    """Row I3 JSON of the same synthetic archive (compare_icru73.run, as the CLI writes it)."""
+    i3 = mod.I3.run(path, "i3sha", archive_sha256=sha, member_sha256=members)
+    return json.dumps(i3, indent=2) + "\n"
+
+
+@pytest.fixture
+def cli_repo(mod, model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+    """Temporary repository with copies of the sealed sources and the synthetic row I3 file at
+    their real relative paths (one commit); ``run`` bound to the synthetic archive hashes."""
+    path, sha, members = _build(tmp_path, model, _good_factor)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    for rel in mod.SEALED_SOURCES:
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+    i3 = repo / mod.DEFAULT_EXPECT_I3
+    i3.parent.mkdir(parents=True)
+    i3.write_text(_i3_json(mod, path, sha, members), encoding="utf-8")
+    (repo / "README.md").write_text("synthetic\n")
+    head = _commit(repo, "sources and row I3")
     monkeypatch.setattr(
         mod,
         "run",
         lambda a, c, _run=mod.run: _run(a, c, archive_sha256=sha, member_sha256=members),
     )
+    return {"archive": path, "repo": repo, "head": head, "i3": i3, "out": tmp_path / "out"}
 
-    def cli(out_dir: Path, expect: Path | None) -> int:
-        argv = ["i3_band_diagnostic", "--archive", str(path), "--output-dir", str(out_dir)]
-        argv += ["--code-sha", "abc"]
-        monkeypatch.setattr(
-            sys, "argv", argv if expect is None else [*argv, "--expect-i3", str(expect)]
-        )
-        result: int = mod.main()
-        return result
 
-    # --expect-i3 is required: no run, no output without it
-    with pytest.raises(SystemExit) as excinfo:
-        cli(tmp_path / "none", None)
-    assert excinfo.value.code == 2
-    assert not (tmp_path / "none").exists()
+def _cli(mod, monkeypatch: pytest.MonkeyPatch, env: dict[str, Any], *extra: str) -> int:  # type: ignore[no-untyped-def]
+    argv = ["i3_band_diagnostic", "--archive", str(env["archive"])]
+    argv += ["--output-dir", str(env["out"]), "--repo", str(env["repo"]), *extra]
+    monkeypatch.setattr(sys, "argv", argv)
+    result: int = mod.main()
+    return result
 
-    assert cli(tmp_path / "ok", i3_path) == 0
-    raw = (tmp_path / "ok" / "icru73_band_diagnostic.json").read_text()
+
+def _output(env: dict[str, Any]) -> Path:
+    return Path(env["out"]) / "icru73_band_diagnostic.json"
+
+
+def test_cli_success_records_sealed_sources_and_committed_i3(  # type: ignore[no-untyped-def]
+    mod, cli_repo: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = cli_repo
+    assert _cli(mod, monkeypatch, env, "--code-sha", env["head"]) == 0
+    raw = _output(env).read_text()
     assert raw.endswith("}\n") and not raw.endswith("\n\n")
     data = json.loads(raw)
-    assert data["provenance"]["code_sha"] == "abc" and data["row"] == "I3-diagnostic"
+    prov = data["provenance"]
+    assert prov["code_sha"] == env["head"] and data["row"] == "I3-diagnostic"
+    from ionmc import __version__
+
+    assert prov["ionmc_version"] == __version__
     assert "0.1 percentage point" in data["rounding_note"]
-    record = data["provenance"]["expect_i3"]
-    assert record["matched"] is True and record["path"] == str(i3_path)
-    assert record["sha256"] == hashlib.sha256(i3_path.read_bytes()).hexdigest()
-    i3 = json.loads(i3_path.read_text())
+    sealed = prov["sealed_sources"]
+    assert set(sealed) == set(mod.SEALED_SOURCES)
+    assert {
+        "validation/scripts/stopping/i3_band_diagnostic.py",
+        "validation/scripts/stopping/compare_icru73.py",
+        "src/ionmc/physics/stopping.py",
+        "src/ionmc/physics/projectiles.py",
+        "src/ionmc/materials.py",
+    } <= set(sealed)
+    for rel, digest in sealed.items():
+        assert digest == hashlib.sha256((REPO_ROOT / rel).read_bytes()).hexdigest(), rel
+    record = prov["expect_i3"]
+    committed = env["i3"].read_bytes()  # unchanged since the commit (clean-tree check passed)
+    assert record == {
+        "path": mod.DEFAULT_EXPECT_I3,
+        "sha256": hashlib.sha256(committed).hexdigest(),
+        "committed_at": env["head"],
+        "matched": True,
+    }
+    i3 = json.loads(env["i3"].read_text())
     for name in ("carbon12", "oxygen16"):
         stopping = i3["ions"][name]["stopping"]
         ion = data["ions"][name]
@@ -571,10 +638,76 @@ def test_cli_expect_i3(mod, model, tmp_path: Path, monkeypatch: pytest.MonkeyPat
             stopping["ge_10_MeV_u"]["max_abs_relative_deviation"], rel=1e-9
         )
 
-    stopping = i3["ions"]["oxygen16"]["stopping"]["ge_10_MeV_u"]
-    stopping["max_abs_relative_deviation"] *= 1.0 + 1e-6
-    tampered = tmp_path / "tampered.json"
-    tampered.write_text(json.dumps(i3), encoding="utf-8")
-    with pytest.raises(RuntimeError, match="oxygen16"):
-        cli(tmp_path / "bad", tampered)
-    assert not (tmp_path / "bad" / "icru73_band_diagnostic.json").exists()
+
+def test_cli_requires_code_sha(mod, cli_repo: dict[str, Any], monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    with pytest.raises(SystemExit) as excinfo:
+        _cli(mod, monkeypatch, cli_repo)
+    assert excinfo.value.code == 2
+    assert not cli_repo["out"].exists()
+
+
+def _rejected(mod, monkeypatch, env: dict[str, Any], match: str, *extra: str) -> None:  # type: ignore[no-untyped-def]
+    with pytest.raises(RuntimeError, match=match):
+        _cli(mod, monkeypatch, env, *extra)
+    assert not _output(env).exists()
+
+
+def test_cli_rejects_malformed_or_foreign_sha(mod, cli_repo: dict[str, Any], monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    env, head = cli_repo, cli_repo["head"]
+    for bad in ("abc", head[:12], head.upper(), head + "0", "g" * 40):
+        _rejected(mod, monkeypatch, env, "40 lowercase hex", "--code-sha", bad)
+    other = "0" * 40 if head != "0" * 40 else "1" * 40
+    _rejected(mod, monkeypatch, env, "HEAD of", "--code-sha", other)
+
+
+def test_cli_rejects_dirty_tree(mod, cli_repo: dict[str, Any], monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    env = cli_repo
+    (env["repo"] / "README.md").write_text("modified\n")
+    _rejected(mod, monkeypatch, env, "modified tracked files", "--code-sha", env["head"])
+    _git(env["repo"], "checkout", "--", "README.md")
+    # a modified sealed source (or I3 file) is first caught as a dirty tree
+    stopping = env["repo"] / "src/ionmc/physics/stopping.py"
+    stopping.write_bytes(stopping.read_bytes() + b"# edit\n")
+    _rejected(mod, monkeypatch, env, "modified tracked files", "--code-sha", env["head"])
+
+
+def test_cli_rejects_sealed_source_differing_from_commit(  # type: ignore[no-untyped-def]
+    mod, cli_repo: dict[str, Any], monkeypatch
+) -> None:
+    env = cli_repo
+    rel = "src/ionmc/physics/stopping.py"
+    disk = env["repo"] / rel
+    # hidden from git status (skip-worktree): the byte comparison with the commit catches it
+    _git(env["repo"], "update-index", "--skip-worktree", rel)
+    disk.write_bytes(disk.read_bytes() + b"# edit\n")
+    assert _git(env["repo"], "status", "--porcelain", "--untracked-files=no") == ""
+    _rejected(mod, monkeypatch, env, "differs from its committed bytes", "--code-sha", env["head"])
+    # committed edit: clean HEAD, but the loaded (executing) module is not the committed source
+    _git(env["repo"], "update-index", "--no-skip-worktree", rel)
+    head = _commit(env["repo"], "edit")
+    _rejected(mod, monkeypatch, env, f"loaded {rel} differs", "--code-sha", head)
+
+
+def test_cli_rejects_i3_working_copy_differing_from_commit(  # type: ignore[no-untyped-def]
+    mod, cli_repo: dict[str, Any], monkeypatch
+) -> None:
+    env = cli_repo
+    rel = mod.DEFAULT_EXPECT_I3
+    _git(env["repo"], "update-index", "--skip-worktree", rel)
+    env["i3"].write_text(env["i3"].read_text() + " ", encoding="utf-8")
+    assert _git(env["repo"], "status", "--porcelain", "--untracked-files=no") == ""
+    _rejected(mod, monkeypatch, env, f"{rel} in .* differs", "--code-sha", env["head"])
+    # a path not committed at code_sha (untracked copy) is rejected by git show
+    untracked = "validation/results/stopping/untracked.json"
+    (env["repo"] / untracked).write_text(env["i3"].read_text())
+    extra = ("--code-sha", env["head"], "--expect-i3", untracked)
+    _rejected(mod, monkeypatch, env, "git show", *extra)
+
+
+def test_cli_rejects_committed_i3_mismatch(mod, cli_repo: dict[str, Any], monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    env = cli_repo
+    i3 = json.loads(env["i3"].read_text())
+    i3["ions"]["oxygen16"]["stopping"]["ge_10_MeV_u"]["max_abs_relative_deviation"] *= 1.0 + 1e-6
+    env["i3"].write_text(json.dumps(i3), encoding="utf-8")
+    head = _commit(env["repo"], "tampered row I3")
+    _rejected(mod, monkeypatch, env, "oxygen16", "--code-sha", head)

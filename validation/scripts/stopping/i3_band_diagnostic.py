@@ -3,7 +3,8 @@
 Usage::
 
     uv run python validation/scripts/stopping/i3_band_diagnostic.py --archive PATH \
-        --output-dir DIR --code-sha SHA --expect-i3 ROW_I3_JSON
+        --output-dir DIR --code-sha "$(git rev-parse HEAD)" \
+        [--expect-i3 validation/results/stopping/v3-008-i3/icru73_comparison.json] [--repo DIR]
 
 Purpose (amendment I3-FU-1): attribute the row I3 FAIL (``compare_icru73.py``) by looking at
 how the ionmc-vs-table stopping deviation is distributed over energy bands and over the ion
@@ -25,9 +26,8 @@ Content of ``icru73_band_diagnostic.json``:
   than two grid points raises ``ValueError`` (its mean would be a per-energy value). Carbon and
   oxygen additionally carry ``max_abs_relative_deviation_2_to_10`` (2 <= E < 10 MeV/u) and
   ``max_abs_relative_deviation_ge_10`` (E >= 10 MeV/u to the grid end) at full precision, the
-  two band maxima the committed row I3 file already publishes; the required ``--expect-i3 PATH``
-  checks them against that file (rtol 1e-9; ``RuntimeError`` and no output on mismatch) and
-  records its path and sha256.
+  two band maxima the committed row I3 file already publishes; they are checked against that
+  file (``--expect-i3``, see "Provenance"; rtol 1e-9; ``RuntimeError`` and no output on mismatch).
 * ``hypothesis_check`` (amendment I3-FU-1 rule 1a): the recorded C/O hypothesis (``HYPOTHESIS``,
   ``HYPOTHESIS_HIGH_ABS``) against the rounded band means. CONFIRMED iff, for both ions, every
   rounded band mean below 50 MeV/u equals the quoted value (equality at 0.1 pp, i.e.
@@ -73,6 +73,23 @@ at 15 MeV/u, and the z-scan coefficients and d_z/d_6 ratios would expose the C/O
 Cost: the quantisation limits the z-scan in the [20, 50) band, where the deviations are a few
 0.1 pp.
 
+Provenance (fail closed; ``RuntimeError`` and nothing written on any failure, checked before
+the computation):
+
+* ``--code-sha`` is required and must be 40 lowercase hex digits; in ``--repo`` (default: the
+  repository containing this script) ``git rev-parse HEAD`` must equal it and
+  ``git status --porcelain --untracked-files=no`` must be empty (no modified tracked file).
+* Sealed executable sources (``SEALED_SOURCES``: this script, ``compare_icru73.py`` and the
+  ionmc modules that compute or load the compared quantities): for each, the file in ``--repo``,
+  the file actually loaded by this process and ``git show <code_sha>:<path>`` must have identical
+  bytes; their sha256 is recorded in ``provenance.sealed_sources``.
+* ``--expect-i3`` is a repo-relative path (default ``DEFAULT_EXPECT_I3``) read as committed
+  bytes at ``code_sha`` (``git show``), not from the working copy; the working copy must be
+  byte-identical. Recorded as ``provenance.expect_i3`` = ``{path, sha256, committed_at, matched}``.
+* ``provenance.code_sha`` and ``provenance.ionmc_version`` (``ionmc.__version__``).
+
+Git is run as a subprocess without a shell and with inherited ``GIT_*`` variables removed.
+
 The JSON output contains aggregates and model-only quantities only; no libdEdx/ICRU table
 values, per-energy deviations or ratios are written (fields ``redistribution_note`` and
 ``rounding_note``).
@@ -82,8 +99,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import importlib.util
 import json
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -194,6 +215,23 @@ VARIANTS: dict[str, BetheOptions] = {
     "effective_charge_off": BetheOptions(effective_charge=False),
     "ls_eff": BetheOptions(ls="eff"),  # LS replaces Bloch + Mott (both on)
     "ls_bare_mixed": BetheOptions(ls="bare_mixed"),
+}
+
+# Provenance (Codex REVIEW-22f384ed finding 6): exact clean commit, sealed sources, committed I3.
+CODE_SHA_RE = re.compile(r"[0-9a-f]{40}")
+DEFAULT_REPO = Path(__file__).resolve().parents[3]
+DEFAULT_EXPECT_I3 = "validation/results/stopping/v3-008-i3/icru73_comparison.json"
+SCRIPT_REL = "validation/scripts/stopping/i3_band_diagnostic.py"
+I3_SCRIPT_REL = "validation/scripts/stopping/compare_icru73.py"
+# repo-relative path -> the module whose loaded file must be that path's bytes (None: script)
+SEALED_SOURCES: dict[str, str | None] = {
+    SCRIPT_REL: None,
+    I3_SCRIPT_REL: None,
+    "src/ionmc/physics/stopping.py": "ionmc.physics.stopping",
+    "src/ionmc/physics/projectiles.py": "ionmc.physics.projectiles",
+    "src/ionmc/materials.py": "ionmc.materials",
+    "src/ionmc/physics/lindhard_sorensen.py": "ionmc.physics.lindhard_sorensen",
+    "src/ionmc/data/cache.py": "ionmc.data.cache",
 }
 
 STATUS_NOTE = (
@@ -485,7 +523,7 @@ def mass_sensitivity(e_u: NDArray[np.float64], material: Material) -> float:
 
 def run(
     archive: Path,
-    code_sha: str | None,
+    code_sha: str,
     *,
     archive_sha256: str = ARCHIVE_SHA256,
     member_sha256: dict[str, str] | None = None,
@@ -619,18 +657,69 @@ def run(
             },
             "mass_note": mass_note,
             "mass_sensitivity_max_rel": sensitivity,
+            "sealed_sources": None,
             "expect_i3": None,
         },
     }
 
 
-def check_expect_i3(result: dict[str, Any], path: Path) -> dict[str, Any]:
-    """Compare the C/O band maxima with a row I3 file (``compare_icru73.py`` output).
+def _git(repo: Path, *args: str) -> bytes:
+    """Run ``git -C repo args`` (no shell, ``GIT_*`` environment removed); stdout bytes."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, env=env)
+    if proc.returncode != 0:
+        detail = proc.stderr.decode(errors="replace").strip()
+        raise RuntimeError(f"git {' '.join(args)} failed in {repo}: {detail}")
+    return proc.stdout
 
-    Raises ``RuntimeError`` on any mismatch (rtol ``EXPECT_I3_RTOL``) or missing field; returns
-    the provenance record ``{"path", "sha256", "matched": True}``.
+
+def committed_bytes(repo: Path, code_sha: str, rel: str) -> bytes:
+    """Bytes of ``rel`` committed at ``code_sha``; the working copy in ``repo`` must match."""
+    raw = _git(repo, "show", f"{code_sha}:{rel}")
+    disk = Path(repo, rel)
+    if not disk.is_file() or disk.read_bytes() != raw:
+        raise RuntimeError(f"{rel} in {repo} differs from its committed bytes at {code_sha}")
+    return raw
+
+
+def _loaded_file(rel: str, module: str | None) -> Path:
+    """The file this process actually executes for the sealed source ``rel``."""
+    if module is not None:
+        return Path(str(importlib.import_module(module).__file__))
+    return Path(__file__) if rel == SCRIPT_REL else Path(str(I3.__file__))
+
+
+def verify_checkout(repo: Path, code_sha: str) -> dict[str, str]:
+    """Fail closed unless ``repo`` is a clean checkout of ``code_sha`` running its own sources.
+
+    Returns ``{path: sha256}`` of the sealed sources (``SEALED_SOURCES``). Raises
+    ``RuntimeError`` on a malformed SHA, HEAD != ``code_sha``, a modified tracked file, or a
+    sealed source whose disk, loaded or committed bytes differ.
     """
-    raw = Path(path).read_bytes()
+    if not isinstance(code_sha, str) or not CODE_SHA_RE.fullmatch(code_sha):
+        raise RuntimeError(f"--code-sha must be 40 lowercase hex digits, got {code_sha!r}")
+    head = _git(repo, "rev-parse", "HEAD").decode().strip()
+    if head != code_sha:
+        raise RuntimeError(f"HEAD of {repo} is {head}, not --code-sha {code_sha}")
+    dirty = _git(repo, "status", "--porcelain", "--untracked-files=no").decode().strip()
+    if dirty:
+        raise RuntimeError(f"{repo} has modified tracked files:\n{dirty}")
+    sealed: dict[str, str] = {}
+    for rel, module in SEALED_SOURCES.items():
+        raw = committed_bytes(repo, code_sha, rel)
+        if _loaded_file(rel, module).read_bytes() != raw:
+            raise RuntimeError(f"loaded {rel} differs from its committed bytes at {code_sha}")
+        sealed[rel] = hashlib.sha256(raw).hexdigest()
+    return sealed
+
+
+def check_expect_i3(result: dict[str, Any], raw: bytes, rel: str, code_sha: str) -> dict[str, Any]:
+    """Compare the C/O band maxima with the committed row I3 file (``compare_icru73.py`` output).
+
+    ``raw`` are the committed bytes of ``rel`` at ``code_sha`` (:func:`committed_bytes`). Raises
+    ``RuntimeError`` on any mismatch (rtol ``EXPECT_I3_RTOL``) or missing field; returns the
+    provenance record ``{"path", "sha256", "committed_at", "matched": True}``.
+    """
     i3 = json.loads(raw)
     fields = {
         "max_abs_relative_deviation_2_to_10": "2_to_10_MeV_u",
@@ -642,13 +731,18 @@ def check_expect_i3(result: dict[str, Any], path: Path) -> dict[str, Any]:
             try:
                 expected = float(i3["ions"][name]["stopping"][theirs]["max_abs_relative_deviation"])
             except (KeyError, TypeError, ValueError) as exc:
-                raise RuntimeError(f"row I3 file {path} lacks {name} {theirs} maximum") from exc
+                raise RuntimeError(f"row I3 file {rel} lacks {name} {theirs} maximum") from exc
             got = float(result["ions"][name][ours])
             if not np.isclose(got, expected, rtol=EXPECT_I3_RTOL, atol=0.0):
                 raise RuntimeError(
-                    f"{name} {ours} does not match the row I3 file {path} (rtol {EXPECT_I3_RTOL})"
+                    f"{name} {ours} does not match the row I3 file {rel} (rtol {EXPECT_I3_RTOL})"
                 )
-    return {"path": str(path), "sha256": hashlib.sha256(raw).hexdigest(), "matched": True}
+    return {
+        "path": rel,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "committed_at": code_sha,
+        "matched": True,
+    }
 
 
 def main() -> int:
@@ -658,17 +752,29 @@ def main() -> int:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument(
         "--code-sha",
-        default=None,
-        help="git SHA of the clean checkout that produced this diagnostic (recorded verbatim)",
+        required=True,
+        help="40-hex SHA that must equal HEAD of the clean --repo checkout",
+    )
+    parser.add_argument(
+        "--repo",
+        default=str(DEFAULT_REPO),
+        help="repository root (default: the one containing this script)",
     )
     parser.add_argument(
         "--expect-i3",
-        required=True,
-        help="row I3 JSON (compare_icru73.py); the C/O band maxima must match it (rtol 1e-9)",
+        default=DEFAULT_EXPECT_I3,
+        help="repo-relative row I3 JSON, read as committed at --code-sha; the C/O band maxima "
+        "must match it (rtol 1e-9)",
     )
     args = parser.parse_args()
+    repo = Path(args.repo)
+    sealed = verify_checkout(repo, args.code_sha)
+    i3_raw = committed_bytes(repo, args.code_sha, args.expect_i3)
     result = run(Path(args.archive), args.code_sha)
-    result["provenance"]["expect_i3"] = check_expect_i3(result, Path(args.expect_i3))
+    result["provenance"]["sealed_sources"] = sealed
+    result["provenance"]["expect_i3"] = check_expect_i3(
+        result, i3_raw, args.expect_i3, args.code_sha
+    )
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     path = out / "icru73_band_diagnostic.json"

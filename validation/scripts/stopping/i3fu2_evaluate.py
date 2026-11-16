@@ -3,61 +3,102 @@
 Usage::
 
     python validation/scripts/stopping/i3fu2_evaluate.py --runs DIR --archive PATH \
-        --code-sha SHA [--records validation/results/stopping/v3-008-i3fu2/topas-runs] \
+        --code-sha SHA --step-smokes DIR \
+        [--records validation/results/stopping/v3-008-i3fu2/topas-runs] \
         [--review-pin validation/results/stopping/v3-008-i3fu2/i3fu2-review.json] \
+        [--markers-pin validation/results/stopping/v3-008-i3fu2/i3fu2-markers-review.json] \
+        [--markers validation/results/stopping/v3-008-i3fu2/log-markers.json] \
         [--manifest validation/reference_cases/topas/i3fu2-frozen-manifest.json] \
         [--repo .] [--output-dir validation/results/stopping/v3-008-i3fu2]
 
 Diagnostic (plan ``validation/plans/v3-008-acceptance.md``, amendment I3-FU-1 step 2 and decision
-rule 2a, revision 1); no gate, no validation claim.
+rule 2a, revision 1 and the dispositions of Codex REVIEW-22f384ed); no gate, no validation claim.
 
 **Inputs.** ``--repo`` (default: this checkout) is read only as committed at its HEAD
 (``r2_io.CommittedReader``: a working copy that differs fails closed); ``--records``,
-``--review-pin`` and ``--manifest`` are paths in it. Records (``--records``, committed):
-``index.json`` = ``{"runs": [{"case", "part", "run_id", "bundle"}, ...]}`` (one entry per
-evidence or used repeat bundle, as ``validation/results/transport/v8-ss/topas-runs/index.json``)
-and per run ``<run_id>/record.json`` (the signed reference-runner record, verbatim) and
+``--step-smokes``, both review pins, ``--markers`` and ``--manifest`` are paths in it. Records
+(``--records`` and ``--step-smokes``, committed): ``index.json`` = ``{"runs": [{"bundle",
+"run_id", ...}, ...]}`` (``--records``: one entry per evidence or offered repeat bundle with its
+``case`` and ``part``; ``--step-smokes``: the two step-count smokes
+``i3fu2-smoke-carbon-water-2p4mevu-steps`` / ``...-50mevu-steps``) and per run
+``<run_id>/record.json`` (the signed reference-runner record, verbatim) and
 ``<run_id>/artifacts.json`` (the ``list_reference_artifacts`` result). Materialized outputs
-(``--runs``, not committed): ``<run_id>/`` holding the listed files at their listed paths,
-i.e. ``request.json``, ``stdout.txt``, ``stderr.txt``, ``work/ss_exit.header``,
-``work/ss_exit.phsp`` and ``work/edep.csv`` (the layout ``ss_evaluate.load_run`` reads). The
-review pin is the committed JSON ``{"review_id", "head_sha", "finished_at", ...}`` of the Codex
-review that approved the bundles.
+(``--runs``, not committed, evidence, repeats and step-count smokes alike): ``<run_id>/`` holding
+the listed files at their listed paths, i.e. ``request.json``, ``stdout.txt``, ``stderr.txt``,
+``work/ss_exit.header``, ``work/ss_exit.phsp`` and ``work/edep.csv``.
 
-**Authentication and binding (any failure: ``RecordError`` naming the run; Codex
-REVIEW-cfdff398 finding 1, mirroring ``ss_evaluate.load_run`` / ``r2_io.load_signed_run``).** Once:
-``--code-sha`` is a 40-hex ancestor of HEAD; the review pin is byte-identical at ``code_sha`` and
-at HEAD, its ``head_sha`` is an ancestor of (or equal to) ``code_sha``; the frozen manifest is
-byte-identical at HEAD, at ``code_sha`` and at the pin's ``head_sha`` (the reviewed bundles),
-has the generator's bundle set and reproduces its own ``bundle_set_digest``; the trust map is
-``infrastructure/keys/trusted_attestation_keys.json`` at HEAD. Per run: Ed25519 attestation of
-``record.json`` by a trusted ``reference-runner`` key (``attest.classify_record``); schema 3, not
-timed out, engine topas, ``succeeded`` true, ``exit_code`` 0, no missing outputs; run id derived
-from the configuration id; the record's ``code_sha`` equals ``--code-sha``; its ``started_at``
-(the controlled ``reference_started``) is not before ``finished_at`` and later than the pin's
-``finished_at``; the listing reproduces the signed ``output_files_sha256`` / ``output_count``
-and the signed stdout/stderr/request digests; every file read hashes to its listed sha256
-(``r2_io.read_verified``); the request's ``input_files`` equal the bundle committed at
-``code_sha``, whose ``case.json`` / ``input.txt`` equal the manifest entry; the request case equals
-that ``case.json``; seed = 20619000 + 100 part + case; the case's ``i3fu2`` block matches the
-index entry and the bundle kind (evidence / repeat); configuration markers in stdout:
-the ``Ph/ListProcesses`` block (``Registered Physics Processes:``), the opt4 module marker and
-the EM-only check of ``r2_io.module_check`` (configuration "idd-em": ``Use ICRU90 data 1`` and the
-GoudsmitSaunderson e- msc model; no hadronic marker; the physics-list name itself is not printed
-by OpenTOPAS 4.3), the frozen physics lines of the bundle (``r2_io.frozen_lines_check``), an
-``ionIoni:  for <GenericIon | alpha>`` block, and the fluctuation state: ``Fluctuations of
-dE/dx are enabled 1`` (format verified on a materialized opt4 log) for the standard runs and
-:data:`FLUCT_OFF_MARKER` for the fluctuation-off runs (to be pinned by the orchestrator from the
-fluctuation-off smoke log; empty = every fluctuation-off run fails closed).
+**Sealed decision code (Codex REVIEW-22f384ed finding 1).** The evaluator refuses to run unless
+the ``--repo`` worktree is clean (``git status --porcelain --untracked-files=no`` empty) and every
+decision-producing source (:data:`SEALED_SOURCES`, the evaluator, the generator, the loaders
+and the ionmc model modules it imports, and the attestation module) is byte-identical on disk,
+at HEAD, at ``--code-sha``, at the evaluator review's ``head_sha`` (pin A) and at the code_sha of
+every step-count smoke, and the file the running interpreter actually loaded for each of them
+has the same bytes. Their sha256 are written to ``provenance.sealed_sources``.
 
-**Run validity (an INVALID run is recorded with its reason and triggers the repeat rule; plan
-"Validity per run").** stderr empty, no stdout line outside "Begin processing" mentions killed or
-stuck tracks, every ``Particle source Beam: Total number of histories: N`` equals the bundle's
-histories; phase space (header by ``ss_evaluate.parse_header``, :data:`EXPECTED_COLUMNS`):
-every primary scored exactly once (deficit 0), only the beam ion's PDG code, Z at the far face
-(world frame, z = slab), finite values, first-scored flag 1, forward direction, 0 < <Delta E> <
-20 % of the entrance energy; the energy-deposit cross check |EDep Sum / N / <Delta E>_T - 1| <=
-0.1 %. <Delta E>_T = A E0 - mean(E_exit), SE = std(E_exit, ddof=1) / sqrt(N).
+**Review pins and the plan note (finding 2; reviewer pass 2 item (c)).** Two verbatim
+codex-worker review records: pin A ``i3fu2-review.json`` (the review of the commit that seals
+the evaluator) and pin B ``i3fu2-markers-review.json`` (the review of the commit that adds the
+log-marker file and pin A). Each must hold :data:`rio.REVIEW_FIELDS` and ``report.verdict``,
+``status`` "passed", ``report.verdict`` "pass", ``task_id`` "V3-008", a 40-hex ``head_sha`` (equal
+to ``report.head_sha`` where present) and an ISO ``finished_at``. The acceptance plan at HEAD and
+at ``code_sha`` must contain exactly one line matching :data:`PLAN_NOTE_RE`, identical at both::
+
+    **Dated note (<YYYY-MM-DD>, orchestrator; I3-FU-1 step-2 review pins).** evaluator review
+    <REVIEW-...> at <40-hex>; markers review <REVIEW-...> at <40-hex>
+
+(one line in the plan), whose ids and SHAs must equal pin A's and pin B's ``review_id`` /
+``head_sha``. Pin A's ``head_sha`` is an ancestor of pin B's, pin B's an ancestor of
+``code_sha``, and ``code_sha`` an ancestor of (or equal to) HEAD. Pin A and the marker file are
+byte-identical at pin B's ``head_sha``, at ``code_sha`` and at HEAD; pin B at ``code_sha`` and
+HEAD. The frozen manifest is byte-identical at HEAD, at ``code_sha``, at pin A's ``head_sha`` and
+at every step-count smoke's code_sha, has the generator's bundle set and reproduces its own
+``bundle_set_digest``. The trust map is ``infrastructure/keys/trusted_attestation_keys.json`` at
+HEAD. (HEAD itself cannot equal ``code_sha``: the signed records are committed after the runs
+executed ``code_sha``; the seal therefore binds the sources at every commit that matters.)
+
+**Log markers (reviewer pass 2 item (b)).** ``--markers`` is the committed JSON
+``{"fluct_on_marker", "fluct_off_marker", "step_line_re", "track_header_re"}``; every value must
+be a non-empty regular expression (compiled with ``re.M``), else ``RecordError``. The fluctuation
+markers must discriminate: ``fluct_off_marker`` matches every fluctuation-off run's stdout and no
+fluctuation-on run's, ``fluct_on_marker`` every fluctuation-on run's and no fluctuation-off run's
+(over all authenticated runs, step-count smokes included); otherwise the fluctuation control is
+FAILED (never passed). ``step_line_re`` / ``track_header_re`` are the step-count parser contract
+of :func:`count_slab_steps`.
+
+**Per-run authentication and binding (any failure: ``RecordError`` naming the run; Codex
+REVIEW-cfdff398 finding 1, mirroring ``ss_evaluate.load_run`` / ``r2_io.load_signed_run``).**
+Ed25519 attestation of ``record.json`` by a trusted ``reference-runner`` key
+(``attest.classify_record``); schema 3, not timed out, engine topas, ``succeeded`` true,
+``exit_code`` 0, no missing outputs; run id derived from the configuration id; the record's
+``code_sha`` equals ``--code-sha`` (evidence and repeats) or, for a step-count smoke, is a commit
+at which pin A and the sealed sources are present byte-identically and which is an ancestor of
+(or equal to) ``code_sha``; ``started_at`` is not after ``finished_at`` and later than both pins'
+``finished_at`` (evidence and repeats) or than pin A's (step-count smokes: the step-line regexes
+of the marker file are pinned from their logs, so they necessarily precede pin B); the listing
+reproduces the signed ``output_files_sha256`` / ``output_count`` and the signed
+stdout/stderr/request digests; every file read hashes to its listed sha256; the request's
+``input_files`` equal the bundle committed at the run's code_sha, whose ``case.json`` /
+``input.txt`` equal the manifest entry; the request case equals that ``case.json``; the seed is
+20619000 + 100 part + case (smokes: the generator's rehearsal seed); the case's ``i3fu2`` block
+matches the index entry and the kind (evidence / repeat / smoke); configuration markers in stdout:
+the ``Ph/ListProcesses`` block, the opt4 module marker and the EM-only check of
+``r2_io.module_check`` (configuration "idd-em"), the frozen physics lines of the bundle and an
+``ionIoni:  for <GenericIon | alpha>`` block.
+
+**Run validity (an INVALID run is recorded with its reason and triggers the repeat rule).** stderr
+empty, no stdout line outside "Begin processing" mentions killed or stuck tracks, every ``Particle
+source Beam: Total number of histories: N`` equals the bundle's histories; phase space: every
+primary scored exactly once (deficit 0), only the beam ion's PDG code, Z at the far face, finite
+values, first-scored flag 1, forward direction, 0 < <Delta E> < 20 % of the entrance energy; the
+energy-deposit cross check |EDep Sum / N / <Delta E>_T - 1| <= 0.1 %. <Delta E>_T = A E0 -
+mean(E_exit), SE = std(E_exit, ddof=1) / sqrt(N).
+
+**One-step premise (finding 3; reviewer pass 2 item (e)).** Both step-count smokes must be
+present and every one of their 50 primaries must have exactly one step whose pre-step point lies
+in the Water slab (0 <= z_pre < slab thickness) (:func:`count_slab_steps`; the limiting process
+of that step is expected to be Transportation, the slab's far face). Otherwise ``conclusive`` is
+false with the reason ``one_step_premise``. Written: ``one_step_premise = {checked, smokes: {name:
+{primaries, max_steps_in_slab}}, pass}`` (counts only).
 
 **Predictions** (fixed by this committed code before any run): dE/dz = -rho S(E/A), rho = 1 g/cm3,
 RK4 over the slab (:data:`N_RK4` steps) from E_in = A E0; S from (M) ``bethe_mass_stopping``
@@ -66,40 +107,58 @@ default options at ``water(78.0)`` and (I) the libdEdx ICRU73_NEW liquid-water t
 r_M = Delta E_T / Delta E_M - 1, r_I = Delta E_T / Delta E_I - 1, s = Delta E_I / Delta E_M - 1,
 SE_rel = SE / Delta E_T.
 
-**Points (revision 1).** Per ion (C parts 0/1, O parts 2/3) and case: the point value is the
-zero-thickness (Richardson) extrapolation r_0 = (f2 r(f1) - f1 r(f2)) / (f2 - f1) of r_M, r_I
-and s, with f1 = 0.03 (slab t) and f2 = 0.048 (slab 1.6 t) read from the bundles'
-``thickness_factor`` and asserted (:data:`FACTORS`): a bias linear in the thickness factor
-cancels; s, a model-only number, is extrapolated the same way so that r_M, r_I and s refer to the
-same limit. SE_rel,0 = sqrt((f2 SE_rel(f1))^2 + (f1 SE_rel(f2))^2) / (f2 - f1) (independent
-runs). Consistency: |r_M(f2) - r_M(f1)| <=
-:data:`CONSISTENCY_TOL`; a larger difference makes the point INVALID. **Repeat rule:** a repeat
-bundle (part + 6) is used for a point only if that point's original run is present and INVALID
-(validity failure; or the point's thickness-consistency failure, after which a repeat of either
-slab may be used); it is recorded in ``repeats_used`` with the original's reason. A repeat offered
-without an invalid original (or for a missing original) is a ``RecordError``. A point that stays
-invalid (no repeat, an invalid repeat, or a second consistency failure) is excluded from the bands
-and makes the result not conclusive.
+**Stepping model (finding 4).** Geant4's range-table branch freezes the effective charge at the
+pre-step energy for a one-step slab. Emulated with ionmc's own model: S(E) = q^2(E) S_0(E) with q
+from ``pierce_blann_charge`` and S_0 = S / q^2 numerically (so that the q-dependent Barkas, Bloch
+and Mott terms stay those of the default model); the algorithm's loss integrates
+q^2(E_pre) S_0(E) = S(E) q^2(E_pre) / q^2(E) over the slab with the same RK4 integrator as the
+exact loss. g(f) = Delta E_alg / Delta E_exact - 1 at f1 = 0.03 (slab t) and f2 = 0.048 (slab
+1.6 t) per point (He with z = 2 through the same callable). Per point: Delta_pred = g(f2) -
+g(f1); Delta_meas = r_M(f2) - r_M(f1); consistency |Delta_meas - Delta_pred| <=
+:data:`CONSISTENCY_TOL` (a failure makes the point INVALID: repeat rule); model residual of the
+extrapolation R_model = (f2 g(f1) - f1 g(f2)) / (f2 - f1) with |R_model| <=
+:data:`MODEL_RESIDUAL_LIMIT` at every C/O/He point (else ``RecordError``: the design premise
+fails). The 0.25 % method systematic in sigma_b stays (its 0.2 % stepping term bounds twice
+the modelled residual).
+
+**Points.** Per ion (C parts 0/1, O parts 2/3) and case: the point value is the zero-thickness
+(Richardson) extrapolation r_0 = (f2 r(f1) - f1 r(f2)) / (f2 - f1) of r_M, r_I and s, f1, f2 read
+from the bundles' ``thickness_factor`` and asserted (:data:`FACTORS`). SE_rel,0 = sqrt((f2
+SE_rel(f1))^2 + (f1 SE_rel(f2))^2) / (f2 - f1).
+
+**Repeat rule (finding 5; deterministic).** Repeat bundle = part + 8 (:data:`gen.REPEAT_OFFSET`).
+A validity failure of a run requires the repeat of exactly that run; a consistency failure of a
+point (both runs valid) requires the repeat of BOTH slabs, and the repeat pair replaces the pair.
+The offered repeats of a point must be exactly the required set: a repeat offered without a
+recorded failure, a repeat of a valid run, or a partial set (e.g. one slab of a failed pair) is a
+``RecordError``. Required repeats not offered: the point is invalid ("no repeat"). A second
+failure (an invalid repeat, or the repeated pair inconsistent) makes the point invalid; an
+invalid evidence point makes the result INCONCLUSIVE.
 
 **Aggregates** (``i3fu2_result.json``; per ion C/O and band [2,5), [5,10), [10,20), [20,50] over
 the valid points): n, mean r_M, mean r_I, mean s, SE_b = sqrt(sum SE_rel,0^2) / n, sigma_b =
-sqrt(SE_b^2 + 0.0025^2), X_b = min(0.01, |s_b| / 3), the class (U first: X_b <= 1.645 sigma_b; I:
-|r_I| + 1.645 sigma_b <= X_b; H: r_I - 1.645 sigma_b > X_b; M: |r_M| + 1.645 sigma_b <= X_b; L:
-r_M + 1.645 sigma_b < -X_b; else N) and the band maximum of |r_M(f2) - r_M(f1)|. Pattern:
-ICRU iff both ions are I/H in [2,5) and [5,10) and I/H/U in [10,20); MODEL iff both are M/L in
-[2,5) and [5,10) and M/L/U in [10,20); else MIXED (``pattern_before_controls``). ``pattern`` is
-INCONCLUSIVE whenever ``conclusive`` is false: a control failed or is incomplete, an evidence
-point is invalid, or a band of [2,5) / [5,10) is U. Controls: He (parts 4, cases 17/21): pass iff
-both points valid and |r_M| <= 0.005 (written: ``pass``, ``max_abs_r_m``); fluctuations off (part
-5 vs the C slab-t run of the same case, cases 13/21): pass iff complete and |r_M(off) - r_M(on)|
-<= 0.002 (written: ``pass``, ``max_abs_difference``). Nothing per point is written; reasons carry
-no values (decision 0038).
+sqrt(SE_b^2 + 0.0025^2), X_b = min(0.01, |s_b| / 3), the class (relative to the sign of s_b;
+U first: X_b <= 1.645 sigma_b; I: |r_I| + 1.645 sigma_b <= X_b; H: sign(s_b) r_I - 1.645
+sigma_b > X_b (TOPAS beyond the table, away from ionmc); M: |r_M| + 1.645 sigma_b <= X_b; L:
+-sign(s_b) r_M - 1.645 sigma_b > X_b (TOPAS beyond ionmc, away from the table); else N), the band
+maxima of |r_M(f2) - r_M(f1)|, |Delta_meas - Delta_pred|, |Delta_pred| and |R_model|. The
+table-relative aggregates (mean r_M, mean r_I, mean s, X_b and the He ``max_abs_r_m``) are
+written rounded to 0.1 percentage point (:data:`ROUND_DECIMALS`); classes and the pattern are
+computed from the full-precision values. Pattern: ICRU iff both ions are I/H in [2,5) and
+[5,10) and I/H/U in [10,20); MODEL iff both are M/L in [2,5) and [5,10) and M/L/U in [10,20);
+else MIXED (``pattern_before_controls``). ``pattern`` is INCONCLUSIVE whenever ``conclusive`` is
+false: a control failed or is incomplete, an evidence point is invalid, a band of [2,5) /
+[5,10) is U, or the one-step premise fails. Controls: He (part 4, cases 17/21): pass iff both
+points valid and |r_M| <= 0.005; fluctuations off (part 5 vs the C slab-t run of the same case,
+cases 13/21): pass iff complete, the marker set discriminates and |r_M(off) - r_M(on)| <= 0.002.
+Nothing per point is written; reasons carry no values (decision 0038).
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import importlib.metadata
 import importlib.util
 import io as _io
@@ -107,6 +166,7 @@ import json
 import math
 import platform
 import re
+import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -118,7 +178,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ionmc.materials import water
-from ionmc.physics.stopping import bethe_mass_stopping
+from ionmc.physics.projectiles import Projectile
+from ionmc.physics.stopping import bethe_mass_stopping, kinematics, pierce_blann_charge
 from ionmc.reference.parsers import ParseError, parse_topas_csv
 
 HERE = Path(__file__).resolve().parent
@@ -155,14 +216,44 @@ COL_FIRST = EXPECTED_COLUMNS.index(
     "Flag to tell if this is the First Scored Particle from this History (1 means true)"
 )
 
-RESULT_SCHEMA = "ionmc-i3fu2-result-2"
+RESULT_SCHEMA = "ionmc-i3fu2-result-3"
 RESULT_NAME = "i3fu2_result.json"
 RESULTS_DIR = "validation/results/stopping/v3-008-i3fu2"
-REVIEW_PIN = f"{RESULTS_DIR}/i3fu2-review.json"
+REVIEW_PIN = f"{RESULTS_DIR}/i3fu2-review.json"  # pin A: the evaluator seal review
+MARKERS_PIN = f"{RESULTS_DIR}/i3fu2-markers-review.json"  # pin B: markers + pin A review
+MARKERS = f"{RESULTS_DIR}/log-markers.json"
 RECORDS = f"{RESULTS_DIR}/topas-runs"
 MANIFEST = f"{gen.REL_PREFIX}/i3fu2-frozen-manifest.json"
-PIN_KEYS = ("review_id", "head_sha", "finished_at")
+PLAN_PATH: str = rio.PLAN_PATH
+TASK_ID = "V3-008"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+#: The dated plan note naming both review pins (one line; parsed at HEAD and at code_sha).
+PLAN_NOTE_RE = re.compile(
+    r"^\*\*Dated note \((?P<date>\d{4}-\d{2}-\d{2}), orchestrator; I3-FU-1 step-2 review "
+    r"pins\)\.\*\* evaluator review (?P<eval_id>REVIEW-[0-9A-Za-z_-]+) at "
+    r"(?P<eval_sha>[0-9a-f]{40}); markers review (?P<markers_id>REVIEW-[0-9A-Za-z_-]+) at "
+    r"(?P<markers_sha>[0-9a-f]{40})(?![0-9A-Za-z])",
+    re.M,
+)
+MARKER_KEYS = ("fluct_on_marker", "fluct_off_marker", "step_line_re", "track_header_re")
+#: Decision-producing sources (repository path -> module name of the running interpreter).
+SEALED_SOURCES: dict[str, str] = {
+    "validation/scripts/stopping/i3fu2_evaluate.py": __name__,
+    "validation/scripts/stopping/gen_i3fu2_bundles.py": "gen_i3fu2_bundles",
+    "validation/scripts/stopping/compare_icru73.py": "compare_icru73",
+    "validation/scripts/ion_em/r2_io.py": "r2_io",
+    "validation/scripts/ion_em/ss_evaluate.py": "ss_evaluate",
+    "validation/scripts/ion_em/r2_evaluate.py": "r2_evaluate",
+    "validation/scripts/ion_em/ss_budget.py": "ss_budget",
+    "validation/scripts/ion_em/ss_wrapper_template.py": "ss_wrapper_template",
+    "src/ionmc/physics/stopping.py": "ionmc.physics.stopping",
+    "src/ionmc/physics/projectiles.py": "ionmc.physics.projectiles",
+    "src/ionmc/physics/lindhard_sorensen.py": "ionmc.physics.lindhard_sorensen",
+    "src/ionmc/materials.py": "ionmc.materials",
+    "src/ionmc/data/cache.py": "ionmc.data.cache",
+    "src/ionmc/reference/parsers.py": "ionmc.reference.parsers",
+    "infrastructure/experiment_v3/attest.py": "infrastructure.experiment_v3.attest",
+}
 PDG = {"carbon": 1000060120, "oxygen": 1000080160, "he": 1000020040}
 BEAM_PARTICLE = {"carbon": "GenericIon", "oxygen": "GenericIon", "he": "alpha"}
 EM_CONFIG = "idd-em"  # r2 configuration whose frozen module set / physics lines these bundles use
@@ -176,10 +267,12 @@ Z_ATOL_CM = 1e-9
 METHOD_SYSTEMATIC = 0.0025
 X_CAP = 0.01
 K_ONE_SIDED = 1.645
-CONSISTENCY_TOL = 0.008  # |r_M(f2) - r_M(f1)| per point (revision 1)
+CONSISTENCY_TOL = 0.003  # |Delta_meas - Delta_pred| per point (Codex REVIEW-22f384ed finding 4)
+MODEL_RESIDUAL_LIMIT = 0.001  # |R_model| per point (design premise)
 FACTORS = (0.03, 0.048)  # thickness factors f1 (slab t), f2 (slab 1.6 t) of every pair
 HE_TOL = 0.005
 FLUCT_TOL = 0.002
+ROUND_DECIMALS = 3  # 0.1 percentage point in relative units
 BANDS: tuple[tuple[str, float, float, bool], ...] = (
     ("[2,5)", 2.0, 5.0, False),
     ("[5,10)", 5.0, 10.0, False),
@@ -191,22 +284,33 @@ PAIR_PARTS = {"carbon": (0, 1), "oxygen": (2, 3)}  # (slab t, slab 1.6 t)
 HE_PART, FLUCT_PART = 4, 5
 HE_CASES = (17, 21)
 FLUCT_CASES = (13, 21)
+STEP_SMOKES = ("i3fu2-smoke-carbon-water-2p4mevu-steps", "i3fu2-smoke-carbon-water-50mevu-steps")
 ICRU_LIKE, MODEL_LIKE = ("I", "H"), ("M", "L")
-#: stdout line of the Geant4 EM-parameter dump with fluctuations enabled (format verified on a
-#: materialized opt4 TOPAS log of this cache, ``Fluctuations of dE/dx are enabled  1``).
-FLUCT_ON_RE = re.compile(r"^Fluctuations of dE/dx are enabled\s+1\s*$", re.M)
-#: Regular expression (re.M) that a fluctuation-off run's stdout must match. TO BE PINNED BY THE
-#: ORCHESTRATOR from the fluctuation-off smoke log (seed 20600441) before the evidence runs: the
-#: region parameter ``EnableEnergyLossFluctuations`` may show in the global dump line above
-#: (value 0) or only in the per-process lines (``fluct: 0``) -- unknown until the smoke is read.
-#: Empty: every fluctuation-off run fails closed.
-FLUCT_OFF_MARKER = ""
 _IONIONI = "^ionIoni:\\s+for\\s+{}\\s"
-CONSISTENCY_REASON = f"thickness consistency |r_M(f2) - r_M(f1)| > {CONSISTENCY_TOL}"
+#: printed length unit -> mm (Geant4 G4BestUnit "Length" symbols)
+LENGTH_UNITS_MM = {
+    "fm": 1e-12,
+    "Ang": 1e-7,
+    "nm": 1e-6,
+    "um": 1e-3,
+    "mm": 1.0,
+    "cm": 10.0,
+    "m": 1e3,
+    "km": 1e6,
+    "pc": 3.0856775814913673e19,
+}
+CONSISTENCY_REASON = f"thickness consistency |Delta_meas - Delta_pred| > {CONSISTENCY_TOL}"
+PREMISE_REASON = "one_step_premise"
 REDISTRIBUTION_NOTE = (
     "Aggregates only: no libdEdx/ICRU 73 or Geant4 table values, no per-energy deviations, "
     "ratios or TOPAS energy-loss values (decision 0038); the controls are written as pass/fail "
-    "and maxima, the thickness check as one maximum per ion and band, reasons without values."
+    "and maxima, the thickness and stepping checks as maxima per ion and band, reasons without "
+    "values."
+)
+ROUNDING_NOTE = (
+    "mean_r_M, mean_r_I, mean_s, x_b and controls.helium.max_abs_r_m are written rounded to "
+    "0.1 percentage point (3 decimals in relative units); the classes and the pattern were "
+    "computed from the full-precision values (pre-declared)."
 )
 
 Stopping = Callable[[float], float]
@@ -216,8 +320,12 @@ class RunInvalid(Exception):
     """A run failed a validity criterion (recorded with its reason; the repeat rule applies)."""
 
 
+def _round(x: float | None) -> float | None:
+    return None if x is None else round(float(x), ROUND_DECIMALS)
+
+
 # =============================================================================================
-# predictions
+# predictions and the stepping model
 # =============================================================================================
 
 
@@ -279,6 +387,69 @@ def predicted_loss(key: str, stopping: Stopping, a: int, e0: float, slab_mm: flo
     if k not in _PREDICTIONS:
         _PREDICTIONS[k] = slab_energy_loss(a * e0, a, slab_mm, stopping)
     return _PREDICTIONS[k]
+
+
+def effective_charge_sq(proj: Projectile, e_u: float) -> float:
+    """q^2 of ionmc's default model (``pierce_blann_charge``, Barkas-125 form) at E/A = ``e_u``."""
+    beta2 = kinematics(np.atleast_1d(np.float64(e_u)), proj)[0]
+    q = pierce_blann_charge(np.sqrt(beta2), proj)
+    return float(q[0]) ** 2
+
+
+def frozen_charge_stopping(proj: Projectile, stopping: Stopping, e_pre_u: float) -> Stopping:
+    """The one-step algorithm's stopping: q^2(E_pre) S_0(E) with S_0 = S / q^2 of the default
+    model, i.e. S(E) q^2(E_pre) / q^2(E) (the effective charge frozen at the pre-step energy)."""
+    q2_pre = effective_charge_sq(proj, e_pre_u)
+
+    def s(e_u: float) -> float:
+        return stopping(e_u) * q2_pre / effective_charge_sq(proj, e_u)
+
+    return s
+
+
+_STEPPING: dict[tuple[str, int], dict[str, float]] = {}
+
+
+def stepping_bias(ion: str, case: int) -> dict[str, float]:
+    """Model-side emulation of the single-step algorithm for one point (memoised): g(f1),
+    g(f2) with g = Delta E_alg / Delta E_exact - 1 over the generator's slabs t and 1.6 t,
+    ``d_pred`` = g(f2) - g(f1) and ``r_model`` = (f2 g(f1) - f1 g(f2)) / (f2 - f1)."""
+    key = (ion, case)
+    if key not in _STEPPING:
+        proj, _z, a, _p = gen.IONS[ion]
+        e0 = float(gen.CASES[case])
+        exact = model_stopping(proj)
+        alg = frozen_charge_stopping(proj, exact, e0)
+        g = []
+        for mult in (1, 2):
+            t = gen.slab_mm(ion, case, mult)
+            de_exact = predicted_loss(f"model:{ion}", exact, a, e0, t)
+            de_alg = slab_energy_loss(a * e0, a, t, alg)
+            g.append(de_alg / de_exact - 1.0)
+        _STEPPING[key] = {
+            "g1": g[0],
+            "g2": g[1],
+            "d_pred": g[1] - g[0],
+            "r_model": richardson(g[0], g[1]),
+        }
+    return _STEPPING[key]
+
+
+def stepping_model_check() -> dict[str, dict[int, dict[str, float]]]:
+    """:func:`stepping_bias` for every C/O point and both He points; any |R_model| above
+    :data:`MODEL_RESIDUAL_LIMIT` is a ``RecordError`` (the design premise fails)."""
+    out: dict[str, dict[int, dict[str, float]]] = {}
+    for ion, cases in (("carbon", gen.ALL_CASES), ("oxygen", gen.ALL_CASES), ("he", HE_CASES)):
+        out[ion] = {}
+        for case in cases:
+            b = stepping_bias(ion, case)
+            if not abs(b["r_model"]) <= MODEL_RESIDUAL_LIMIT:
+                raise RecordError(
+                    f"stepping model: |R_model| > {MODEL_RESIDUAL_LIMIT} for {ion} case {case}; "
+                    "the zero-thickness design premise fails"
+                )
+            out[ion][case] = b
+    return out
 
 
 # =============================================================================================
@@ -379,9 +550,10 @@ def validity_problems(stdout: str, stderr: bytes, histories: int) -> list[str]:
     return problems
 
 
-def config_problems(native: str, stdout: str, ion: str, fluctuations: bool) -> list[str]:
+def config_problems(native: str, stdout: str, ion: str) -> list[str]:
     """Configuration markers (a problem means the run did not execute the frozen configuration:
-    ``RecordError``, not a validity failure)."""
+    ``RecordError``, not a validity failure). The fluctuation state is checked separately by the
+    discriminating marker set (:func:`marker_hits`)."""
     problems = []
     if rio.registered_processes(stdout) is None:
         problems.append("the Ph/ListProcesses block (Registered Physics Processes) is absent")
@@ -390,14 +562,106 @@ def config_problems(native: str, stdout: str, ion: str, fluctuations: bool) -> l
     particle = BEAM_PARTICLE[ion]
     if not re.search(_IONIONI.format(re.escape(particle)), stdout, re.M):
         problems.append(f"no ionIoni block for {particle} in the EM printout")
-    if fluctuations:
-        if not FLUCT_ON_RE.search(stdout):
-            problems.append("EM parameter dump does not show fluctuations enabled (1)")
-    elif not FLUCT_OFF_MARKER:
-        problems.append("FLUCT_OFF_MARKER is not pinned (fluctuation-off runs fail closed)")
-    elif not re.search(FLUCT_OFF_MARKER, stdout, re.M):
-        problems.append("the pinned fluctuation-off marker is missing from stdout")
     return problems
+
+
+# =============================================================================================
+# log markers and the step-count parser
+# =============================================================================================
+
+
+def parse_markers(blob: bytes, where: str) -> dict[str, re.Pattern[str]]:
+    """The committed marker file: exactly :data:`MARKER_KEYS`, each a non-empty regular
+    expression (compiled with ``re.M``); the step parser's named groups are required."""
+    try:
+        doc = json.loads(blob.decode("utf-8"))
+    except ValueError as exc:
+        raise RecordError(f"log-marker file {where} is not JSON: {exc}") from exc
+    if not isinstance(doc, dict) or sorted(doc) != sorted(MARKER_KEYS):
+        raise RecordError(f"log-marker file {where} must hold exactly the keys {MARKER_KEYS}")
+    out: dict[str, re.Pattern[str]] = {}
+    for key in MARKER_KEYS:
+        v = doc[key]
+        if not isinstance(v, str) or not v.strip():
+            raise RecordError(f"log-marker file {where}: {key} is not a non-empty regex")
+        try:
+            out[key] = re.compile(v, re.M)
+        except re.error as exc:
+            raise RecordError(f"log-marker file {where}: {key} does not compile: {exc}") from exc
+    groups = {
+        "step_line_re": {"step", "z"},
+        "track_header_re": {"track", "parent"},
+    }
+    for key, need in groups.items():
+        if not need <= set(out[key].groupindex):
+            raise RecordError(f"log-marker file {where}: {key} lacks the named groups {need}")
+    return out
+
+
+def count_slab_steps(
+    stdout: str,
+    slab_mm: float,
+    step_line_re: re.Pattern[str],
+    track_header_re: re.Pattern[str],
+) -> dict[int, int]:
+    """Steps per PRIMARY track whose pre-step point lies in the Water slab, from a Geant4
+    SteppingVerbose printout (``Ts/TrackingVerbosity = 1``).
+
+    Parser contract (the two regexes come from the committed marker file, pinned from the
+    step-count smoke logs): ``track_header_re`` matches the header line of every track with the
+    named groups ``track`` (track ID) and ``parent`` (parent ID; 0 = primary);
+    ``step_line_re`` matches every step line of the step table and nothing else inside a
+    primary's block (e.g. not the secondary-list lines), with the named groups ``step`` (step
+    number) and ``z`` (the printed z position of the step's post-step point) and optionally
+    ``zunit`` (a :data:`LENGTH_UNITS_MM` symbol; absent: mm). Lines are matched one at a time.
+    Step 0 is the initial point; the pre-step point of step n >= 1 is the position printed for
+    step n - 1, and step n counts iff 0 <= z_pre < ``slab_mm`` (world frame, the slab spans
+    z = 0 ... slab). Step numbers of a primary must run 0, 1, 2, ... (else ``RecordError``).
+    Returns {ordinal of the primary in the printout: steps in the slab}; Geant4 restarts the
+    track IDs in every event, so the track ID itself is not a key. Expected for a one-step slab:
+    exactly 1 for every one of the primaries, the step limited by Transportation at the far
+    face."""
+    counts: dict[int, int] = {}
+    current: int | None = None
+    prev: tuple[int, float] | None = None
+    for line in stdout.splitlines():
+        h = track_header_re.search(line)
+        if h:
+            if int(h.group("parent")) == 0:
+                current = len(counts)
+                counts[current] = 0
+            else:
+                current = None
+            prev = None
+            continue
+        if current is None:
+            continue
+        m = step_line_re.search(line)
+        if not m:
+            continue
+        step = int(m.group("step"))
+        unit = (m.groupdict().get("zunit") or "mm").strip()
+        if unit not in LENGTH_UNITS_MM:
+            raise RecordError(f"step line: unknown length unit {unit!r}")
+        z = float(m.group("z")) * LENGTH_UNITS_MM[unit]
+        if prev is None:
+            if step != 0:
+                raise RecordError(f"primary {current}: the first step line is not step 0")
+        else:
+            if step != prev[0] + 1:
+                raise RecordError(f"primary {current}: step numbers are not consecutive")
+            if 0.0 <= prev[1] < slab_mm:
+                counts[current] += 1
+        prev = (step, z)
+    return counts
+
+
+def marker_hits(markers: dict[str, re.Pattern[str]], stdout: str) -> tuple[bool, bool]:
+    """(fluct_on_marker matches, fluct_off_marker matches) for one run's stdout."""
+    return (
+        bool(markers["fluct_on_marker"].search(stdout)),
+        bool(markers["fluct_off_marker"].search(stdout)),
+    )
 
 
 # =============================================================================================
@@ -412,20 +676,29 @@ class Context:
     repo: Path
     reader: Any
     records: str
-    pin_rel: str
-    manifest_rel: str
+    step_records: str
     outputs: Path
     code_sha: str
-    pin: dict[str, Any]
-    pin_finished: Any
-    pin_sha256: str
+    pins: dict[str, dict[str, Any]]
+    plan_note: dict[str, str]
+    manifest_rel: str
     manifest: dict[str, Any]
     manifest_sha256: str
+    markers_rel: str
+    markers_sha256: str
+    markers: dict[str, re.Pattern[str]]
+    sealed: dict[str, str]
     trust: dict[str, Any]
     trust_info: dict[str, Any]
     index: dict[str, str]
+    step_index: dict[str, str]
     bundles: dict[str, tuple[int, int]] = field(default_factory=dict)
-    _committed: dict[str, dict[str, Any]] = field(default_factory=dict)
+    _committed: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
+
+    @property
+    def runs_after(self) -> Any:
+        """The later of both pins' ``finished_at`` (evidence and repeat runs start after it)."""
+        return max(p["finished"] for p in self.pins.values())
 
 
 def run_bundles() -> dict[str, tuple[int, int]]:
@@ -444,32 +717,118 @@ def manifest_digest(bundles: dict[str, Any]) -> str:
     return hashlib.sha256(listing.encode()).hexdigest()
 
 
-def load_pin(reader: Any, rel: str, code_sha: str) -> tuple[dict[str, Any], Any, str]:
-    """The review pin, byte-identical at HEAD and at ``code_sha``; its ``head_sha`` must be an
-    ancestor of (or equal to) ``code_sha``."""
-    at_head = reader.read(rel)
-    if rio.git_show(reader.repo, code_sha, rel) != at_head:
-        raise RecordError(f"review pin {rel} differs between code_sha {code_sha} and HEAD")
-    try:
-        pin = json.loads(at_head.decode("utf-8"))
-    except ValueError as exc:
-        raise RecordError(f"review pin {rel} is not JSON: {exc}") from exc
-    for key in PIN_KEYS:
-        rio.require(pin, key, "review pin")
-    if not isinstance(pin["head_sha"], str) or not SHA_RE.match(pin["head_sha"]):
-        raise RecordError("review pin: head_sha is not a 40-hex commit SHA")
-    finished = rio._parse_time(pin["finished_at"], "review pin finished_at")
-    if not rio.is_ancestor(reader.repo, pin["head_sha"], code_sha):
+def require_clean(repo: Path) -> None:
+    """The evaluator worktree has no modified tracked file."""
+    proc = subprocess.run(  # noqa: S603 - fixed argv
+        ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=no"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RecordError(f"git status failed: {proc.stderr.strip()}")
+    if proc.stdout.strip():
+        raise RecordError("the evaluator worktree is not clean (modified tracked files)")
+
+
+def loaded_source(module_name: str) -> Path:
+    """The file the running interpreter loaded for ``module_name``."""
+    if module_name == "infrastructure.experiment_v3.attest":
+        rio.attest_module()
+    mod = sys.modules.get(module_name) or importlib.import_module(module_name)
+    path = getattr(mod, "__file__", None)
+    if not path:
+        raise RecordError(f"sealed module {module_name} has no source file")
+    return Path(path)
+
+
+def sealed_sources(reader: Any, shas: dict[str, str]) -> dict[str, str]:
+    """Every :data:`SEALED_SOURCES` file byte-identical on disk and at HEAD (``reader.read``), at
+    every commit of ``shas`` {what: sha} and in the file actually loaded; returns {path: sha256}."""
+    out = {}
+    for rel, module_name in SEALED_SOURCES.items():
+        blob = reader.read(rel)
+        for what, sha in shas.items():
+            if rio.git_show(reader.repo, sha, rel) != blob:
+                raise RecordError(f"sealed source {rel} differs between {what} {sha} and HEAD")
+        if loaded_source(module_name).read_bytes() != blob:
+            raise RecordError(f"sealed source {rel}: the loaded module differs from HEAD")
+        out[rel] = hashlib.sha256(blob).hexdigest()
+    return out
+
+
+def check_review_record(doc: Any, what: str) -> dict[str, Any]:
+    """A verbatim passed codex-worker review record (schema of ``ss-seal-review.json``)."""
+    for key in rio.REVIEW_FIELDS:
+        rio.require(doc, key, what)
+    rio.require(doc["report"], "verdict", f"{what} report")
+    if doc["status"] != "passed":
+        raise RecordError(f"{what}: status {doc['status']!r} is not 'passed'")
+    if doc["report"]["verdict"] != "pass":
+        raise RecordError(f"{what}: report verdict {doc['report']['verdict']!r} is not 'pass'")
+    if doc.get("task_id") != TASK_ID:
+        raise RecordError(f"{what}: task_id {doc.get('task_id')!r} is not {TASK_ID}")
+    if not isinstance(doc["head_sha"], str) or not SHA_RE.match(doc["head_sha"]):
+        raise RecordError(f"{what}: head_sha is not a 40-hex commit SHA")
+    if "head_sha" in doc["report"] and doc["report"]["head_sha"] != doc["head_sha"]:
+        raise RecordError(f"{what}: report head_sha differs from head_sha")
+    rio._parse_time(doc["finished_at"], f"{what} finished_at")
+    return dict(doc)
+
+
+def parse_plan_note(text: str, where: str) -> dict[str, str]:
+    """The one :data:`PLAN_NOTE_RE` line of the acceptance plan (zero or several: fail closed)."""
+    found = list(PLAN_NOTE_RE.finditer(text))
+    if len(found) != 1:
         raise RecordError(
-            f"review pin head_sha {pin['head_sha']} is not an ancestor of code_sha {code_sha}"
+            f"{PLAN_PATH} at {where}: expected exactly one I3-FU-1 step-2 review-pin note, "
+            f"found {len(found)}"
         )
-    return pin, finished, hashlib.sha256(at_head).hexdigest()
+    return {**found[0].groupdict(), "line": found[0].group(0)}
 
 
-def load_manifest(reader: Any, rel: str, code_sha: str, reviewed: str) -> tuple[dict, str]:
-    """The frozen manifest, byte-identical at HEAD, ``code_sha`` and the reviewed commit."""
+def load_pins(reader: Any, rel_a: str, rel_b: str, code_sha: str) -> tuple[dict, dict[str, str]]:
+    """Both review pins and the plan note naming them (see the module docstring)."""
+    note = parse_plan_note(reader.read(PLAN_PATH).decode("utf-8"), "HEAD")
+    at_code = parse_plan_note(rio.git_show(reader.repo, code_sha, PLAN_PATH).decode(), code_sha)
+    if at_code != note:
+        raise RecordError(f"the review-pin plan note differs between code_sha {code_sha} and HEAD")
+    pins: dict[str, dict[str, Any]] = {}
+    for name, rel, id_key, sha_key in (
+        ("evaluator", rel_a, "eval_id", "eval_sha"),
+        ("markers", rel_b, "markers_id", "markers_sha"),
+    ):
+        blob = reader.read(rel)
+        if rio.git_show(reader.repo, code_sha, rel) != blob:
+            raise RecordError(f"review pin {rel} differs between code_sha {code_sha} and HEAD")
+        try:
+            doc = json.loads(blob.decode("utf-8"))
+        except ValueError as exc:
+            raise RecordError(f"review pin {rel} is not JSON: {exc}") from exc
+        doc = check_review_record(doc, f"review pin {rel}")
+        if doc["review_id"] != note[id_key] or doc["head_sha"] != note[sha_key]:
+            raise RecordError(f"review pin {rel} is not the {name} review named by the plan note")
+        pins[name] = {
+            "path": rel,
+            "doc": doc,
+            "sha256": hashlib.sha256(blob).hexdigest(),
+            "blob": blob,
+            "finished": rio._parse_time(doc["finished_at"], f"{rel} finished_at"),
+        }
+    a, b = pins["evaluator"]["doc"]["head_sha"], pins["markers"]["doc"]["head_sha"]
+    if not rio.is_ancestor(reader.repo, a, b):
+        raise RecordError(f"evaluator review head_sha {a} is not an ancestor of the markers one")
+    if not rio.is_ancestor(reader.repo, b, code_sha):
+        raise RecordError(f"markers review head_sha {b} is not an ancestor of code_sha {code_sha}")
+    if rio.git_show(reader.repo, b, rel_a) != pins["evaluator"]["blob"]:
+        raise RecordError(f"review pin {rel_a} differs between the markers review {b} and HEAD")
+    return pins, note
+
+
+def load_manifest(reader: Any, rel: str, shas: dict[str, str]) -> tuple[dict, str]:
+    """The frozen manifest, byte-identical at HEAD and at every commit of ``shas``."""
     at_head = reader.read(rel)
-    for sha, what in ((code_sha, "the runs' code_sha"), (reviewed, "the reviewed head_sha")):
+    for what, sha in shas.items():
         if rio.git_show(reader.repo, sha, rel) != at_head:
             raise RecordError(f"frozen manifest {rel} differs between {what} {sha} and HEAD")
     try:
@@ -508,6 +867,24 @@ def load_index(reader: Any, records: str) -> dict[str, str]:
     return out
 
 
+def load_step_index(reader: Any, records: str) -> dict[str, str]:
+    """smoke bundle -> run id from ``<step-smokes>/index.json`` (step-count smokes only)."""
+    idx = reader.json(f"{records}/index.json", "i3fu2 step-smoke index")
+    runs = rio.require(idx, "runs", "i3fu2 step-smoke index")
+    if not isinstance(runs, list):
+        raise RecordError("i3fu2 step-smoke index: runs must be a list")
+    out: dict[str, str] = {}
+    for e in runs:
+        bundle = str(rio.require(e, "bundle", "step-smoke index entry"))
+        run_id = str(rio.require(e, "run_id", "step-smoke index entry"))
+        if bundle not in STEP_SMOKES:
+            raise RecordError(f"step-smoke index entry {bundle} is not a step-count smoke")
+        if bundle in out:
+            raise RecordError(f"step-smoke index lists {bundle} twice")
+        out[bundle] = run_id
+    return out
+
+
 def context(
     repo: Path | str,
     records: str,
@@ -515,58 +892,117 @@ def context(
     review_pin: str,
     manifest: str,
     code_sha: str,
+    *,
+    step_smokes: str,
+    markers_pin: str = MARKERS_PIN,
+    markers: str = MARKERS,
 ) -> Context:
     reader = rio.CommittedReader(repo)
+    require_clean(reader.repo)
     if not SHA_RE.match(code_sha):
         raise RecordError(f"--code-sha {code_sha!r} is not a 40-hex commit SHA")
     if not rio.is_ancestor(reader.repo, code_sha, reader.head):
         raise RecordError(f"code_sha {code_sha} is not an ancestor of HEAD {reader.head}")
-    records_rel, pin_rel, man_rel = (reader.rel(p) for p in (records, review_pin, manifest))
-    pin, finished, pin_sha = load_pin(reader, pin_rel, code_sha)
-    man, man_sha = load_manifest(reader, man_rel, code_sha, pin["head_sha"])
+    rels = [reader.rel(p) for p in (records, step_smokes, review_pin, markers_pin, manifest)]
+    records_rel, step_rel, pin_a, pin_b, man_rel = rels
+    pins, note = load_pins(reader, pin_a, pin_b, code_sha)
+    reviewed = pins["evaluator"]["doc"]["head_sha"]
+    markers_reviewed = pins["markers"]["doc"]["head_sha"]
+    seal_shas = {"code_sha": code_sha, "the evaluator review head_sha": reviewed}
+    sealed = sealed_sources(reader, seal_shas)
+    man, man_sha = load_manifest(reader, man_rel, seal_shas)
+    markers_rel = reader.rel(markers)
+    m_blob = reader.read(markers_rel)
+    for what, sha in (("code_sha", code_sha), ("the markers review head_sha", markers_reviewed)):
+        if rio.git_show(reader.repo, sha, markers_rel) != m_blob:
+            raise RecordError(
+                f"log-marker file {markers_rel} differs between {what} {sha} and HEAD"
+            )
     trust, trust_info = rio.committed_trust(reader)
     return Context(
         repo=reader.repo,
         reader=reader,
         records=records_rel,
-        pin_rel=pin_rel,
-        manifest_rel=man_rel,
+        step_records=step_rel,
         outputs=Path(outputs),
         code_sha=code_sha,
-        pin=pin,
-        pin_finished=finished,
-        pin_sha256=pin_sha,
+        pins=pins,
+        plan_note=note,
+        manifest_rel=man_rel,
         manifest=man,
         manifest_sha256=man_sha,
+        markers_rel=markers_rel,
+        markers_sha256=hashlib.sha256(m_blob).hexdigest(),
+        markers=parse_markers(m_blob, markers_rel),
+        sealed=sealed,
         trust=trust,
         trust_info=trust_info,
         index=load_index(reader, records_rel),
+        step_index=load_step_index(reader, step_rel),
         bundles=run_bundles(),
     )
 
 
-def committed_bundle(ctx: Context, bundle: str) -> dict[str, Any]:
-    """{file: {"sha256", "bytes"}} of the bundle committed at ``code_sha`` (cached)."""
-    if bundle not in ctx._committed:
+def committed_bundle(ctx: Context, bundle: str, sha: str) -> dict[str, Any]:
+    """{file: {"sha256", "bytes"}} of the bundle committed at ``sha`` (cached)."""
+    key = (sha, bundle)
+    if key not in ctx._committed:
         bdir = f"{gen.REL_PREFIX}/{bundle}"
         files: dict[str, Any] = {}
         blobs: dict[str, bytes] = {}
-        for rel in rio.git_ls(ctx.repo, ctx.code_sha, bdir):
-            blob = rio.git_show(ctx.repo, ctx.code_sha, rel)
+        for rel in rio.git_ls(ctx.repo, sha, bdir):
+            blob = rio.git_show(ctx.repo, sha, rel)
             name = rel[len(bdir) + 1 :]
             files[name] = {"sha256": hashlib.sha256(blob).hexdigest(), "bytes": len(blob)}
             blobs[name] = blob
         if not files:
-            raise RecordError(f"bundle {bundle} is not committed at {ctx.code_sha}")
-        ctx._committed[bundle] = {"files": files, "blobs": blobs}
-    return ctx._committed[bundle]
+            raise RecordError(f"bundle {bundle} is not committed at {sha}")
+        ctx._committed[key] = {"files": files, "blobs": blobs}
+    return ctx._committed[key]
 
 
-def load_run(ctx: Context, bundle: str, run_id: str) -> Any:
+@dataclass(frozen=True)
+class Expect:
+    """What a run's bundle must be: (case, part, kind, seed) and whether it is a step smoke."""
+
+    case: int
+    part: int
+    kind: str
+    seed: int
+    smoke: bool = False
+
+
+def expect_for(ctx: Context, bundle: str) -> Expect:
+    if bundle in STEP_SMOKES:
+        seed, part, case, _hist, _tracking = gen.SMOKES[bundle]
+        return Expect(case, part, "smoke", seed, smoke=True)
+    case, part = ctx.bundles[bundle]
+    kind = "repeat" if part in gen.REPEAT_PARTS else "evidence"
+    return Expect(case, part, kind, gen.topas_seed(case, part))
+
+
+def check_smoke_sha(ctx: Context, sha: str) -> None:
+    """A step-count smoke ran a commit at which pin A, the sealed sources and the manifest are
+    present byte-identically, and which is an ancestor of (or equal to) ``code_sha``."""
+    if not SHA_RE.match(sha) or not rio.is_ancestor(ctx.repo, sha, ctx.code_sha):
+        raise RecordError(f"smoke code_sha {sha} is not an ancestor of code_sha {ctx.code_sha}")
+    pin_a = ctx.pins["evaluator"]
+    if rio.git_show(ctx.repo, sha, pin_a["path"]) != pin_a["blob"]:
+        raise RecordError(f"smoke code_sha {sha} does not carry the evaluator review pin")
+    for rel in SEALED_SOURCES:
+        if hashlib.sha256(rio.git_show(ctx.repo, sha, rel)).hexdigest() != ctx.sealed[rel]:
+            raise RecordError(f"sealed source {rel} differs at the smoke code_sha {sha}")
+    if hashlib.sha256(rio.git_show(ctx.repo, sha, ctx.manifest_rel)).hexdigest() != (
+        ctx.manifest_sha256
+    ):
+        raise RecordError(f"frozen manifest differs at the smoke code_sha {sha}")
+
+
+def load_run(ctx: Context, bundle: str, run_id: str, records: str | None = None) -> Any:
     """Authenticate and bind one signed reference-runner run of ``bundle`` (``r2_io.TopasRun``);
     every failure raises RecordError."""
-    case, part = ctx.bundles[bundle]
-    rdir = f"{ctx.records}/{run_id}"
+    exp = expect_for(ctx, bundle)
+    rdir = f"{records or ctx.records}/{run_id}"
     record_path = f"{rdir}/record.json"
     result = ctx.reader.json(record_path, f"signed run record {run_id}")
     status, why = rio.attest_module().classify_record(result, ctx.trust, rio.REFERENCE_SIGNER)
@@ -591,15 +1027,19 @@ def load_run(ctx: Context, bundle: str, run_id: str) -> Any:
             f"{result['exit_code']!r}, missing_outputs={result['missing_outputs']!r})"
         )
     code_sha = str(result["code_sha"])
-    if code_sha != ctx.code_sha:
-        raise RecordError(f"record code_sha {code_sha} != --code-sha {ctx.code_sha}")
+    if exp.smoke:
+        check_smoke_sha(ctx, code_sha)
+        after, after_what = ctx.pins["evaluator"]["finished"], "the evaluator review pin's"
+    else:
+        if code_sha != ctx.code_sha:
+            raise RecordError(f"record code_sha {code_sha} != --code-sha {ctx.code_sha}")
+        after, after_what = ctx.runs_after, "both review pins'"
     started = rio._parse_time(result["started_at"], f"{run_id} started_at")
     if started > rio._parse_time(result["finished_at"], f"{run_id} finished_at"):
         raise RecordError("started_at is later than finished_at")
-    if not started > ctx.pin_finished:
+    if not started > after:
         raise RecordError(
-            f"reference_started {result['started_at']} is not after the review pin's "
-            f"finished_at {ctx.pin['finished_at']} (review {ctx.pin['review_id']})"
+            f"reference_started {result['started_at']} is not after {after_what} finished_at"
         )
     sizes: dict[str, Any] = {}
     listing = rio._listing(
@@ -626,9 +1066,9 @@ def load_run(ctx: Context, bundle: str, run_id: str) -> Any:
             raise RecordError(f"signed {key} differs from the listing")
     run = rio.TopasRun(
         run_id=run_id,
-        case=case,
+        case=exp.case,
         config="i3fu2",
-        part=part,
+        part=exp.part,
         bundle=bundle,
         configuration_id=str(result["configuration_id"]),
         code_sha=code_sha,
@@ -649,7 +1089,7 @@ def load_run(ctx: Context, bundle: str, run_id: str) -> Any:
         raise RecordError(f"request.json is not JSON: {exc}") from exc
     if rio.canonical_digest(request) != run.configuration_id or request.get("code_sha") != code_sha:
         raise RecordError("request.json not bound to the record")
-    committed = committed_bundle(ctx, bundle)
+    committed = committed_bundle(ctx, bundle, code_sha)
     if request.get("input_files") != committed["files"]:
         raise RecordError(f"request input_files differ from the bundle {bundle} at code_sha")
     entry = ctx.manifest["bundles"].get(bundle)
@@ -662,10 +1102,10 @@ def load_run(ctx: Context, bundle: str, run_id: str) -> Any:
     if request.get("case") != case_doc:
         raise RecordError("request case differs from the committed case.json")
     info = case_doc.get("i3fu2", {})
-    kind = "repeat" if part in gen.REPEAT_PARTS else "evidence"
-    if (info.get("case"), info.get("part"), info.get("kind")) != (case, part, kind):
-        raise RecordError(f"case.json i3fu2 block does not describe {kind} ({case}, {part})")
-    if case_doc.get("seeds") != [gen.topas_seed(case, part)]:
+    if (info.get("case"), info.get("part"), info.get("kind")) != (exp.case, exp.part, exp.kind):
+        raise RecordError(f"case.json i3fu2 block does not describe {exp.kind} ({exp.case}, "
+                          f"{exp.part})")  # fmt: skip
+    if case_doc.get("seeds") != [exp.seed]:
         raise RecordError(f"seed {case_doc.get('seeds')} breaks the formula")
     hist = case_doc.get("histories")
     if not isinstance(hist, int) or isinstance(hist, bool) or hist <= 0:
@@ -678,13 +1118,13 @@ def load_run(ctx: Context, bundle: str, run_id: str) -> Any:
 
 def check_run(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
     """Authenticate one run (RecordError naming the run), then measure it; a validity failure
-    gives ``valid`` False with its ``reason``."""
+    gives ``valid`` False with its ``reason``. ``markers`` = (fluct_on hit, fluct_off hit)."""
     try:
         run = load_run(ctx, bundle, run_id)
         info = run.case_doc["i3fu2"]
         stdout = rio.read_verified(run, "stdout.txt").decode("utf-8", "replace")
         stderr = rio.read_verified(run, "stderr.txt")
-        problems = config_problems(run.native, stdout, info["ion"], bool(info["fluctuations"]))
+        problems = config_problems(run.native, stdout, info["ion"])
         if problems:
             raise RecordError("configuration markers: " + "; ".join(problems))
         files = {n: rio.read_verified(run, f"work/{n}") for n in gen.EXPECTED_OUTPUTS}
@@ -699,6 +1139,7 @@ def check_run(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
         "valid": True,
         "reason": None,
         "scored": None,
+        "markers": marker_hits(ctx.markers, stdout),
     }
     try:
         bad = validity_problems(stdout, stderr, run.histories)
@@ -713,24 +1154,55 @@ def check_run(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
     return out
 
 
+def check_step_smoke(ctx: Context, bundle: str, run_id: str) -> dict[str, Any]:
+    """Authenticate one step-count smoke (RecordError naming it) and count the steps of its
+    primaries inside the slab (:func:`count_slab_steps`)."""
+    try:
+        run = load_run(ctx, bundle, run_id, ctx.step_records)
+        info = run.case_doc["i3fu2"]
+        stdout = rio.read_verified(run, "stdout.txt").decode("utf-8", "replace")
+        problems = config_problems(run.native, stdout, info["ion"])
+        if problems:
+            raise RecordError("configuration markers: " + "; ".join(problems))
+        counts = count_slab_steps(
+            stdout,
+            float(info["slab_mm"]),
+            ctx.markers["step_line_re"],
+            ctx.markers["track_header_re"],
+        )
+    except RecordError as exc:
+        raise RecordError(f"step smoke {bundle} ({run_id}): {exc}") from exc
+    return {
+        "primaries": len(counts),
+        "max_steps_in_slab": max(counts.values(), default=None),
+        "ok": len(counts) == run.histories and all(n == 1 for n in counts.values()),
+        "markers": marker_hits(ctx.markers, stdout),
+        "run_id": run_id,
+        "seed": run.case_doc["seeds"][0],
+        "code_sha": run.code_sha,
+    }
+
+
 # =============================================================================================
 # points, repeats and aggregation
 # =============================================================================================
 
 
 def classify(r_m: float, r_i: float, s: float, sigma: float) -> str:
-    """Decision rule 2a (revision 1) for one band; U checked first."""
+    """Decision rule 2a for one band, relative to the sign of s_b; U checked first (X_b > 0
+    implies s_b != 0 for the other classes)."""
     x = min(X_CAP, abs(s) / 3.0)
     k = K_ONE_SIDED * sigma
     if x <= k:
         return "U"
+    sign = 1.0 if s > 0 else -1.0
     if abs(r_i) + k <= x:
         return "I"
-    if r_i - k > x:
+    if sign * r_i - k > x:
         return "H"
     if abs(r_m) + k <= x:
         return "M"
-    if r_m + k < -x:
+    if -sign * r_m - k > x:
         return "L"
     return "N"
 
@@ -772,29 +1244,46 @@ def run_ratios(run: dict[str, Any], s_model: dict, s_table: dict, keys: dict) ->
 @dataclass
 class Point:
     """Outcome of the repeat rule for one point: ``runs`` the final attempt (with ratios where
-    valid; None if an original is missing), ``valid``, ``reason`` and the repeats used."""
+    valid; None if an original is missing), ``valid``, ``reason``, the repeats used and the
+    predicted thickness difference (pairs)."""
 
     runs: list[dict[str, Any]] | None
     valid: bool
     reason: str | None
     used: dict[str, str]
+    d_pred: float | None = None
 
     def thickness_difference(self) -> float | None:
-        """r_M(f2) - r_M(f1) of the final attempt if both of its runs are valid."""
+        """Delta_meas = r_M(f2) - r_M(f1) of the final attempt if both of its runs are valid."""
         if self.runs is None or len(self.runs) != 2 or not all(r["valid"] for r in self.runs):
             return None
         return float(self.runs[1]["r_M"] - self.runs[0]["r_M"])
 
+    def consistency_residual(self) -> float | None:
+        """Delta_meas - Delta_pred of the final attempt (pairs with both runs valid)."""
+        d = self.thickness_difference()
+        return None if d is None or self.d_pred is None else d - self.d_pred
+
 
 def resolve_point(
-    runs: dict[str, dict[str, Any]], case: int, parts: tuple[int, ...], ratios: Callable
+    runs: dict[str, dict[str, Any]],
+    case: int,
+    parts: tuple[int, ...],
+    ratios: Callable,
+    d_pred: float | None = None,
 ) -> Point:
-    """Repeat rule for one point (one slab part, or the t / 1.6 t pair)."""
+    """Deterministic repeat rule for one point (one slab part, or the t / 1.6 t pair with its
+    predicted difference ``d_pred``); see the module docstring."""
+    if len(parts) == 2 and d_pred is None:
+        raise ValueError("a pair needs its predicted thickness difference")
     names = [gen.bundle_name(case, p) for p in parts]
     reps = [gen.bundle_name(case, p + gen.REPEAT_OFFSET) for p in parts]
 
     def consistent(rs: list[dict[str, Any]]) -> bool:
-        return len(rs) == 1 or abs(rs[1]["r_M"] - rs[0]["r_M"]) <= CONSISTENCY_TOL
+        if len(rs) == 1:
+            return True
+        d_meas = float(rs[1]["r_M"]) - float(rs[0]["r_M"])
+        return abs(d_meas - float(d_pred or 0.0)) <= CONSISTENCY_TOL
 
     def with_ratios(r: dict[str, Any]) -> dict[str, Any]:
         return {**r, **ratios(r)} if r["valid"] else r
@@ -803,42 +1292,55 @@ def resolve_point(
         for n, rep in zip(names, reps, strict=True):
             if n not in runs and rep in runs:
                 raise RecordError(f"repeat {rep} offered but the original {n} is missing")
-        return Point(None, False, "missing run", {})
+        return Point(None, False, "missing run", {}, d_pred)
     first = [with_ratios(runs[n]) for n in names]
     failed = {i: str(r["reason"]) for i, r in enumerate(first) if not r["valid"]}
     by_consistency = not failed and not consistent(first)
     if by_consistency:
         failed = dict.fromkeys(range(len(parts)), CONSISTENCY_REASON)
+    offered = {i for i, rep in enumerate(reps) if rep in runs}
     if not failed:
-        for rep in reps:
-            if rep in runs:
-                raise RecordError(f"repeat {rep} offered without an invalid original")
-        return Point(first, True, None, {})
+        if offered:
+            raise RecordError(
+                f"repeat {reps[min(offered)]} offered without a recorded failure of the point"
+            )
+        return Point(first, True, None, {}, d_pred)
+    for i in sorted(offered - set(failed)):
+        raise RecordError(f"repeat {reps[i]} offered but the original {names[i]} is valid")
+    why = CONSISTENCY_REASON if by_consistency else "invalid run"
+    if not offered:
+        return Point(first, False, f"{why}; no repeat", {}, d_pred)
+    if offered != set(failed):
+        missing = [reps[i] for i in sorted(set(failed) - offered)]
+        raise RecordError(f"partial repeat set: {missing} required with the offered repeats")
     chosen, used = list(first), {}
-    for i, rep in enumerate(reps):
-        if rep in runs:
-            if i not in failed:
-                raise RecordError(f"repeat {rep} offered but the original {names[i]} is valid")
-            chosen[i] = with_ratios(runs[rep])
-            used[rep] = f"original {names[i]} invalid: {failed[i]}"
-    if not used or (not by_consistency and any(reps[i] not in runs for i in failed)):
-        why = CONSISTENCY_REASON if by_consistency else "invalid run"
-        return Point(chosen, False, f"{why}; no valid repeat", used)
+    for i in sorted(offered):
+        chosen[i] = with_ratios(runs[reps[i]])
+        used[reps[i]] = f"original {names[i]} invalid: {failed[i]}"
     if any(not r["valid"] for r in chosen):
-        return Point(chosen, False, "repeat run invalid (second invalid of the point)", used)
+        return Point(
+            chosen, False, "repeat run invalid (second failure of the point)", used, d_pred
+        )
     if not consistent(chosen):
-        return Point(chosen, False, f"{CONSISTENCY_REASON} (second invalid of the point)", used)
-    return Point(chosen, True, None, used)
+        return Point(
+            chosen, False, f"{CONSISTENCY_REASON} (second failure of the point)", used, d_pred
+        )
+    return Point(chosen, True, None, used, d_pred)
+
+
+def _max_abs(values: list[float | None]) -> float | None:
+    vals = [abs(v) for v in values if v is not None]
+    return max(vals) if vals else None
 
 
 def band_aggregates(points: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Per band: n, means of r_M, r_I, s (extrapolated points), SE_b, sigma_b, X_b, class and the
-    maximum |r_M(f2) - r_M(f1)| over the band's points with both runs valid."""
+    """Per band: n, means of r_M, r_I, s (extrapolated points; written rounded, classified at
+    full precision), SE_b, sigma_b, X_b, class and the band maxima of the thickness difference,
+    the consistency residual, the predicted difference and the model residual."""
     out: dict[str, dict[str, Any]] = {}
     for name, *_ in BANDS:
         pts = [p for p in points if band_of(p["e0"]) == name]
         valid = [p for p in pts if p["valid"]]
-        diffs = [abs(p["d_thick"]) for p in pts if p["d_thick"] is not None]
         n = len(valid)
         band: dict[str, Any] = {
             "n": n,
@@ -849,7 +1351,10 @@ def band_aggregates(points: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "sigma_b": None,
             "x_b": None,
             "class": "none",
-            "max_abs_thickness_difference": max(diffs) if diffs else None,
+            "max_abs_thickness_difference": _max_abs([p["d_thick"] for p in pts]),
+            "max_abs_consistency_residual": _max_abs([p["d_resid"] for p in pts]),
+            "max_abs_predicted_difference": _max_abs([p["d_pred"] for p in pts]),
+            "max_abs_model_residual": _max_abs([p["r_model"] for p in pts]),
         }
         if n:
             r_m = float(np.mean([p["r_M"] for p in valid]))
@@ -858,12 +1363,12 @@ def band_aggregates(points: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             se_b = math.sqrt(sum(p["se_rel"] ** 2 for p in valid)) / n
             sigma = math.sqrt(se_b**2 + METHOD_SYSTEMATIC**2)
             band.update(
-                mean_r_M=r_m,
-                mean_r_I=r_i,
-                mean_s=s,
+                mean_r_M=_round(r_m),
+                mean_r_I=_round(r_i),
+                mean_s=_round(s),
                 se_b=se_b,
                 sigma_b=sigma,
-                x_b=min(X_CAP, abs(s) / 3.0),
+                x_b=_round(min(X_CAP, abs(s) / 3.0)),
                 **{"class": classify(r_m, r_i, s, sigma)},
             )
         out[name] = band
@@ -885,6 +1390,14 @@ def pattern(bands: dict[str, dict[str, dict[str, Any]]]) -> str:
     return "MIXED"
 
 
+def markers_discriminate(hits: list[tuple[bool, bool, bool]]) -> bool:
+    """[(fluctuations on, on-marker hit, off-marker hit)] over all authenticated runs: each
+    run's own marker matches and the other does not; at least one run of each state."""
+    states = {f for f, _on, _off in hits}
+    ok = all((on and not off) if f else (off and not on) for f, on, off in hits)
+    return ok and states == {True, False}
+
+
 # =============================================================================================
 # evaluation
 # =============================================================================================
@@ -899,12 +1412,26 @@ def evaluate(
     archive: Path,
     code_sha: str,
     *,
+    step_smokes: str,
+    markers_pin: str = MARKERS_PIN,
+    markers: str = MARKERS,
     archive_sha256: str | None = None,
     member_sha256: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """The result document (aggregates only). ``archive_sha256``/``member_sha256`` override the
     pinned libdEdx hashes of ``compare_icru73`` (tests with a synthetic archive only)."""
-    ctx = context(repo, records, runs_dir, review_pin, manifest, code_sha)
+    ctx = context(
+        repo,
+        records,
+        runs_dir,
+        review_pin,
+        manifest,
+        code_sha,
+        step_smokes=step_smokes,
+        markers_pin=markers_pin,
+        markers=markers,
+    )
+    stepping = stepping_model_check()
     archive_sha = icru.ARCHIVE_SHA256 if archive_sha256 is None else archive_sha256
     members = dict(icru.MEMBER_SHA256 if member_sha256 is None else member_sha256)
     tables = icru.load_icru73_water(
@@ -922,6 +1449,21 @@ def evaluate(
         c, p = ctx.bundles[name]
         if p in gen.REPEAT_PARTS and gen.bundle_name(c, p - gen.REPEAT_OFFSET) not in runs:
             raise RecordError(f"repeat {name} offered but its original run is not indexed")
+        info = runs[name]["info"]
+        mult = 2 if gen.PARTS[gen.base_part(p)][1] == 2 else 1
+        if float(info["slab_mm"]) != gen.slab_mm(info["ion"], c, mult):
+            raise RecordError(f"run {name}: slab thickness differs from the generator's")
+
+    smokes = {b: check_step_smoke(ctx, b, rid) for b, rid in sorted(ctx.step_index.items())}
+    premise_checked = sorted(smokes) == sorted(STEP_SMOKES)
+    premise = {
+        "checked": premise_checked,
+        "smokes": {
+            b: {"primaries": v["primaries"], "max_steps_in_slab": v["max_steps_in_slab"]}
+            for b, v in smokes.items()
+        },
+        "pass": premise_checked and all(v["ok"] for v in smokes.values()),
+    }
 
     def ratios(r: dict[str, Any]) -> dict[str, Any]:
         return run_ratios(r, s_model, s_table, keys)
@@ -936,13 +1478,20 @@ def evaluate(
             for p in parts:
                 if gen.bundle_name(case, p) not in runs:
                     raise RecordError(f"missing evidence run {gen.bundle_name(case, p)}")
-            pt = resolve_point(runs, case, parts, ratios)
+            model = stepping[ion][case]
+            pt = resolve_point(runs, case, parts, ratios, model["d_pred"])
             repeats_used.update(pt.used)
             e0 = float(gen.CASES[case])
-            d = pt.thickness_difference()
+            base = {
+                "e0": e0,
+                "d_thick": pt.thickness_difference(),
+                "d_resid": pt.consistency_residual(),
+                "d_pred": model["d_pred"],
+                "r_model": model["r_model"],
+            }
             if not pt.valid or pt.runs is None:
                 invalid_points[f"{ion} case {case}"] = str(pt.reason)
-                points[ion].append({"e0": e0, "valid": False, "d_thick": d})
+                points[ion].append({**base, "valid": False})
                 continue
             t, t2 = pt.runs
             f1, f2 = (float(r["info"]["thickness_factor"]) for r in (t, t2))
@@ -951,9 +1500,8 @@ def evaluate(
             chosen_t[(ion, case)] = t
             points[ion].append(
                 {
-                    "e0": e0,
+                    **base,
                     "valid": True,
-                    "d_thick": d,
                     "r_M": richardson(t["r_M"], t2["r_M"], f1, f2),
                     "r_I": richardson(t["r_I"], t2["r_I"], f1, f2),
                     "s": richardson(t["s"], t2["s"], f1, f2),
@@ -971,9 +1519,10 @@ def evaluate(
             control_invalid[f"he case {case}"] = str(pt.reason)
         else:
             he_r.append(pt.runs[0]["r_M"])
+    max_he = max((abs(v) for v in he_r), default=None)
     helium = {
         "pass": len(he_r) == len(HE_CASES) and all(abs(v) <= HE_TOL for v in he_r),
-        "max_abs_r_m": max((abs(v) for v in he_r), default=None),
+        "max_abs_r_m": _round(max_he),
     }
     fl_d: list[float] = []
     for case in FLUCT_CASES:
@@ -985,9 +1534,15 @@ def evaluate(
             control_invalid[f"carbon fluctuations-off case {case}"] = "no valid slab-t C point"
         else:
             fl_d.append(pt.runs[0]["r_M"] - chosen_t[("carbon", case)]["r_M"])
+    hits = [(bool(r["info"]["fluctuations"]), *r["markers"]) for r in runs.values()]
+    hits += [(True, *v["markers"]) for v in smokes.values()]
+    discriminate = markers_discriminate(hits)
     fluct = {
-        "pass": len(fl_d) == len(FLUCT_CASES) and all(abs(v) <= FLUCT_TOL for v in fl_d),
+        "pass": discriminate
+        and len(fl_d) == len(FLUCT_CASES)
+        and all(abs(v) <= FLUCT_TOL for v in fl_d),
         "max_abs_difference": max((abs(v) for v in fl_d), default=None),
+        "markers_discriminate": discriminate,
     }
     controls_pass = bool(helium["pass"] and fluct["pass"])
     low_u = any(bands[i][b]["class"] == "U" for i in bands for b in LOW_BANDS)
@@ -998,16 +1553,19 @@ def evaluate(
         reasons.append("an evidence point is invalid without a valid repeat")
     if low_u:
         reasons.append("class U in [2,5) or [5,10)")
+    if not premise["pass"]:
+        reasons.append(PREMISE_REASON)
     conclusive = not reasons
     before = pattern(bands)
     try:
         ionmc_version: str | None = importlib.metadata.version("ionmc")
     except importlib.metadata.PackageNotFoundError:
         ionmc_version = None
+    he_model = _max_abs([stepping["he"][c]["r_model"] for c in HE_CASES])
     return {
         "schema": RESULT_SCHEMA,
-        "task_id": "V3-008",
-        "amendment": "I3-FU-1 step 2 (revision 1)",
+        "task_id": TASK_ID,
+        "amendment": "I3-FU-1 step 2 (revision 1; Codex REVIEW-22f384ed dispositions)",
         "claim": "diagnostic; no gate; no validation claim",
         "code_sha": code_sha,
         "method": {
@@ -1017,10 +1575,14 @@ def evaluate(
             "rk4_steps": N_RK4,
             "model": "ionmc bethe_mass_stopping default options, water(78.0)",
             "table": "libdEdx ICRU73_NEW liquid water (target 276), log-log interpolated",
+            "stepping_model": "q^2 frozen at the pre-step energy over the one-step slab, "
+            "S_0 = S / q^2 of the default model; g(f) = Delta E_alg / Delta E_exact - 1",
             "method_systematic": METHOD_SYSTEMATIC,
             "x_cap": X_CAP,
             "k_one_sided": K_ONE_SIDED,
             "consistency_tolerance": CONSISTENCY_TOL,
+            "model_residual_limit": MODEL_RESIDUAL_LIMIT,
+            "he_model_max_abs_r_model": he_model,
             "he_tolerance": HE_TOL,
             "fluctuation_tolerance": FLUCT_TOL,
         },
@@ -1029,6 +1591,7 @@ def evaluate(
         "pattern": before if conclusive else "INCONCLUSIVE",
         "conclusive": conclusive,
         "inconclusive_reasons": reasons,
+        "one_step_premise": premise,
         "controls": {
             "helium": helium,
             "fluctuations_off": fluct,
@@ -1045,12 +1608,19 @@ def evaluate(
                 "sha256": ctx.manifest_sha256,
                 "bundle_set_digest": ctx.manifest["bundle_set_digest"],
             },
-            "review_pin": {
-                "path": ctx.pin_rel,
-                "sha256": ctx.pin_sha256,
-                **{k: ctx.pin[k] for k in PIN_KEYS},
+            "review_pins": {
+                name: {
+                    "path": p["path"],
+                    "sha256": p["sha256"],
+                    **{k: p["doc"][k] for k in ("review_id", "head_sha", "finished_at")},
+                }
+                for name, p in ctx.pins.items()
             },
+            "plan_note": {"path": PLAN_PATH, "line": ctx.plan_note["line"]},
+            "log_markers": {"path": ctx.markers_rel, "sha256": ctx.markers_sha256},
+            "sealed_sources": ctx.sealed,
             "records": ctx.records,
+            "step_smoke_records": ctx.step_records,
             "code_sha": code_sha,
             "evaluator_head_sha": ctx.reader.head,
             "trust_file": ctx.trust_info,
@@ -1059,6 +1629,10 @@ def evaluate(
                 b: {k: r[k] for k in ("run_id", "seed", "histories", "scored")}
                 for b, r in sorted(runs.items())
             },
+            "step_smokes": {
+                b: {k: v[k] for k in ("run_id", "seed", "code_sha")}
+                for b, v in sorted(smokes.items())
+            },
             "versions": {
                 "python": platform.python_version(),
                 "numpy": np.__version__,
@@ -1066,21 +1640,36 @@ def evaluate(
             },
         },
         "redistribution_note": REDISTRIBUTION_NOTE,
+        "rounding_note": ROUNDING_NOTE,
     }
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     ap.add_argument("--records", default=RECORDS)
+    ap.add_argument("--step-smokes", required=True)
     ap.add_argument("--runs", type=Path, required=True)
     ap.add_argument("--review-pin", default=REVIEW_PIN)
+    ap.add_argument("--markers-pin", default=MARKERS_PIN)
+    ap.add_argument("--markers", default=MARKERS)
     ap.add_argument("--repo", type=Path, default=gen.REPO_ROOT)
     ap.add_argument("--archive", type=Path, required=True)
     ap.add_argument("--manifest", default=MANIFEST)
     ap.add_argument("--output-dir", type=Path, default=gen.REPO_ROOT / RESULTS_DIR)
     ap.add_argument("--code-sha", required=True)
     a = ap.parse_args(argv)
-    doc = evaluate(a.repo, a.records, a.runs, a.review_pin, a.manifest, a.archive, a.code_sha)
+    doc = evaluate(
+        a.repo,
+        a.records,
+        a.runs,
+        a.review_pin,
+        a.manifest,
+        a.archive,
+        a.code_sha,
+        step_smokes=a.step_smokes,
+        markers_pin=a.markers_pin,
+        markers=a.markers,
+    )
     a.output_dir.mkdir(parents=True, exist_ok=True)
     out = a.output_dir / RESULT_NAME
     out.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
