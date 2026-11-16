@@ -87,8 +87,10 @@ ATTESTATION_REQUIRED = (
 )
 HOST_RUN_SIGNER = "host-runner"
 REFERENCE_RUN_SIGNER = "reference-runner"
+REVIEW_SIGNER = "codex-worker"
 # Signers the trust file must list (at least one key each). Every other signer
-# in attest.SIGNERS (reference-runner, V3-INFRA-004) is optional: absent or an
+# in attest.SIGNERS (reference-runner, V3-INFRA-004; codex-worker,
+# V3-INFRA-006) is optional: absent or an
 # empty list means "not yet published" and its records stay "unverified"; once
 # listed, its entries obey the same rules (well-formed, exactly one in a
 # key-publication branch, evidenced by a signed record).
@@ -579,6 +581,7 @@ def evaluate(
     trusted: dict | None = None,
     trust_source: str = "integration",
     trust_problem: str | None = None,
+    review_evidence: list[dict] | None = None,
 ) -> dict:
     """Gate decision over annotated records for ``task_id``.
 
@@ -617,7 +620,9 @@ def evaluate(
       (validation-manager) referencing a verified successful host run
       (host-runner), both bound to this task and SHA, and, when the branch
       publishes a reference-runner key, a verified successful reference run
-      of this SHA referenced from a passing record.
+      of this SHA referenced from a passing record, and, when it publishes a
+      codex-worker key, a verified passed Codex review record of this task and
+      SHA (``review_evidence``, from review_records.review_evidence).
     """
     if trusted is None:
         trusted = load_trust()
@@ -701,6 +706,12 @@ def evaluate(
                 x.get("status") == "verified" and x.get("ok")
                 for r in passing
                 for x in (r.get("reference_run_attestation") or [])
+            )
+        if trusted.get(REVIEW_SIGNER):
+            # Only when the branch publishes a codex-worker key (V3-INFRA-006).
+            evidence[REVIEW_SIGNER] = any(
+                x.get("status") == "verified" and x.get("ok")
+                for x in (review_evidence or [])
             )
         summary["key_publication_evidence"] = evidence
         if not all(evidence.values()):
@@ -820,11 +831,27 @@ def record(
     )
 
 
+def reviews_for(task_id: str, sha: str, trusted: dict, source: str) -> list[dict]:
+    """Signed Codex review records evidencing a published codex-worker key.
+
+    Consulted only in key-publication mode when the branch lists a
+    codex-worker key; otherwise the gate does not read review records.
+    """
+    if source != "key-publication" or not trusted.get(REVIEW_SIGNER):
+        return []
+    from infrastructure.validation import review_records
+
+    return review_records.review_evidence(normalize_task_id(task_id), sha, trusted)
+
+
 def inspect(task_id: str):
     state = worktree_state(task_id)
     trusted, source, problem = effective_trust(state)
     records = records_for(task_id, state["sha"], trusted)
-    verdict = evaluate(records, state["dirty"], task_id, trusted, source, problem)
+    reviews = reviews_for(task_id, state["sha"], trusted, source)
+    verdict = evaluate(
+        records, state["dirty"], task_id, trusted, source, problem, reviews
+    )
 
     result = {
         "status": "present" if records else "missing",
@@ -843,7 +870,10 @@ def check(task_id: str):
     state = worktree_state(task_id)
     trusted, source, problem = effective_trust(state)
     records = records_for(task_id, state["sha"], trusted)
-    verdict = evaluate(records, state["dirty"], task_id, trusted, source, problem)
+    reviews = reviews_for(task_id, state["sha"], trusted, source)
+    verdict = evaluate(
+        records, state["dirty"], task_id, trusted, source, problem, reviews
+    )
 
     result = {
         "status": "passed" if verdict["gate_passed"] else "failed",

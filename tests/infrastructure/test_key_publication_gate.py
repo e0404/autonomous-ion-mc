@@ -13,6 +13,7 @@ from infrastructure.experiment_v3 import attest
 from infrastructure.validation import host_run_records as hrr
 from infrastructure.validation import local_validation as lv
 from infrastructure.validation import reference_run_records as rrr
+from infrastructure.validation import review_records as rvr
 
 TASK = "V3-INFRA-003"
 RUN = "RUN-20260101-000000-KEY001"
@@ -34,13 +35,15 @@ def entry(key, **extra):
     return {"key_id": key.key_id, "public_key": key.public_key.hex(), **extra}
 
 
-def trust_file(vm_keys=(), hr_keys=(), rr_keys=None):
+def trust_file(vm_keys=(), hr_keys=(), rr_keys=None, cw_keys=None):
     data = {
         "validation-manager": [entry(k) for k in vm_keys],
         "host-runner": [entry(k) for k in hr_keys],
     }
     if rr_keys is not None:  # optional signer (V3-INFRA-004)
         data["reference-runner"] = [entry(k) for k in rr_keys]
+    if cw_keys is not None:  # optional signer (V3-INFRA-006)
+        data["codex-worker"] = [entry(k) for k in cw_keys]
     return json.dumps(data, indent=2) + "\n"
 
 
@@ -64,6 +67,7 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.setattr(lv, "VALIDATION_ROOT", tmp_path / "val")
     monkeypatch.setattr(hrr, "HOST_RUNS_ROOT", tmp_path / "runs")
     monkeypatch.setattr(rrr, "REFERENCE_STATE", tmp_path / "state")
+    monkeypatch.setattr(rvr, "REVIEW_STATE", tmp_path / "state")
     monkeypatch.setattr(lv, "base_ref", lambda: BASE)
     monkeypatch.setattr(
         lv, "worktree_state",
@@ -430,3 +434,86 @@ def test_rotating_published_reference_runner_key_is_allowed(repo, tmp_path, caps
     code, out = check(capsys)
     assert code == 0 and out["trust_source"] == "key-publication"
     assert out["key_publication_evidence"]["reference-runner"] is True
+
+
+def put_review(tmp_path, sha, cw, status="passed", task=TASK):
+    """Signed codex-worker review record (V3-INFRA-006) with its report.json."""
+    from infrastructure.experiment_v3.common import file_hash, write_json
+
+    rid = "REVIEW-" + ("0" if status == "passed" else "1") * 32
+    d = tmp_path / "state" / "reviews" / rid
+    verdict = "pass" if status == "passed" else "changes_required"
+    findings = [] if status == "passed" else [
+        {"severity": "important", "path": "x", "description": "fix"}
+    ]
+    write_json(d / "report.json", {
+        "head_sha": sha, "verdict": verdict, "summary": "s", "findings": findings,
+    })
+    rec = {
+        "schema_version": 1, "review_id": rid, "task_id": task, "head_sha": sha,
+        "base_sha": "b" * 40, "status": status, "model": "m", "provider": "openai",
+        "tool": "codex exec", "experiment_id": "e",
+        "started_at": "2026-01-01T00:00:00+00:00",
+        "finished_at": "2026-01-01T00:10:00+00:00",
+        "report_sha256": file_hash(d / "report.json"),
+        "report": json.loads((d / "report.json").read_text()),
+    }
+    write_json(d / "record.json", attest.sign_record(rec, cw, "codex-worker"))
+
+
+def test_codex_worker_key_publication_requires_review_evidence(repo, tmp_path, capsys):
+    """Publishing the optional codex-worker key (V3-INFRA-006) follows the
+    reference-runner rule: exactly one key, evidenced by a verified, passed
+    Codex review record of this task and SHA."""
+    vm, hr, cw = (attest.generate_keypair() for _ in range(3))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    sha = commit_branch(repo, trust_file([vm], [hr], cw_keys=[cw]))
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 1 and out["trust_source"] == "key-publication"
+    assert out["key_publication_evidence"] == {
+        "validation-manager": True, "host-runner": True, "codex-worker": False,
+    }
+    assert "codex-worker" in out["key_publication_problem"]
+    put_review(tmp_path, sha, cw, status="changes_required")
+    code, out = check(capsys)
+    assert code == 1 and out["key_publication_evidence"]["codex-worker"] is False
+    put_review(tmp_path, "c" * 40, cw)  # another SHA does not count
+    code, out = check(capsys)
+    assert code == 1
+    put_review(tmp_path, sha, cw)
+    code, out = check(capsys)
+    assert code == 0 and out["status"] == "passed"
+    assert out["key_publication_evidence"]["codex-worker"] is True
+
+
+def test_codex_worker_key_publication_rejects_unevidenced_rogue_key(
+    repo, tmp_path, capsys
+):
+    vm, hr, cw, rogue = (attest.generate_keypair() for _ in range(4))
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    sha = commit_branch(repo, trust_file([vm], [hr], cw_keys=[rogue]))
+    put_records(tmp_path, sha, vm, hr)
+    put_review(tmp_path, sha, cw)  # signed by the service key, not the rogue one
+    code, out = check(capsys)
+    assert code == 1 and out["key_publication_evidence"]["codex-worker"] is False
+
+
+def test_unpublished_codex_worker_key_keeps_the_gate_green(repo, tmp_path, capsys):
+    """Absent or [] codex-worker list: no review evidence demanded, gate unchanged."""
+    vm, hr = attest.generate_keypair(), attest.generate_keypair()
+    sha = commit_branch(repo, trust_file([vm], [hr], cw_keys=[]))
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 0 and out["trust_source"] == "key-publication"
+    assert out["key_publication_evidence"] == {"validation-manager": True, "host-runner": True}
+    # Integration mode with the published required keys and no codex-worker key.
+    lv.TRUSTED_KEYS_PATH.write_text(trust_file([vm], [hr]))
+    git("checkout", "-q", BASE, cwd=repo)
+    (repo / lv.KEY_FILE_REL).write_text(trust_file([vm], [hr]))
+    git("commit", "-qam", "integration keys", cwd=repo)
+    sha = git("rev-parse", "HEAD", cwd=repo)
+    put_records(tmp_path, sha, vm, hr)
+    code, out = check(capsys)
+    assert code == 0 and out["trust_source"] == "integration"
+    assert "key_publication_evidence" not in out

@@ -88,7 +88,13 @@ def start_codex_review(task_id: str) -> dict:
 
 @mcp.tool()
 def inspect_codex_review(review_id: str) -> dict:
-    """Read protected review status and structured findings, without raw token logs."""
+    """Read protected review status and structured findings, without raw token logs.
+
+    A review finished since V3-INFRA-006 is returned as its signed record
+    (attestation block, signer codex-worker; verify it with
+    infrastructure/validation/review_records.py); older reviews carry
+    attestation null.
+    """
     return inspect(review_id)
 
 
