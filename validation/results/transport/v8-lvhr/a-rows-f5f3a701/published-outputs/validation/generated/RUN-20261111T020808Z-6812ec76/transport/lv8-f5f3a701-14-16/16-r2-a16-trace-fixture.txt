@@ -1,0 +1,52 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py r2 --timeout 2970 --seed-base 20581004
+# git_sha: f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d
+# started_utc: 2026-11-11T02:18:11Z
+# step_timeout_s: 3300
+#JSON-BEGIN
+{
+ "a16": {
+  "baseline_digests_sha256": "abd3b3ba09da78e0c544f92e43b97dc24bdd66fac1afb538cbaa1aff51f86d3e",
+  "baseline_ref": "f3a1dd62ea2f57a3f4c07999935f317b3c044871",
+  "exit": 0,
+  "mode": "regression",
+  "pass": true
+ },
+ "a16_baseline_expected": "f3a1dd62ea2f57a3f4c07999935f317b3c044871",
+ "format": 1,
+ "frozen_histories": null,
+ "git_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "histories": null,
+ "intended_change_set": null,
+ "pass": true,
+ "reduced": false,
+ "seed_base": 20581004,
+ "step": "r2",
+ "suite": "lv8",
+ "trace_fixture_guard": {
+  "pass": true,
+  "test": "test_default_trace_is_unchanged_from_the_stored_baseline"
+ },
+ "trace_fixture_python_bitwise": {
+  "attempts": true,
+  "blocks": true,
+  "deposit_mev": true,
+  "energy_mev": true,
+  "history": true,
+  "ix": true,
+  "iy": true,
+  "iz": true,
+  "reason": true,
+  "step": true,
+  "step_mm": true,
+  "ux": true,
+  "uy": true,
+  "uz": true,
+  "x_mm": true,
+  "y_mm": true,
+  "z_mm": true
+ },
+ "trace_fixture_python_bitwise_all": true
+}
+#JSON-END
+
+# exit=0

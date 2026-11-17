@@ -261,15 +261,27 @@ def test_require_verified_helper():
     # strict by default: unverified rejected even with an empty trust map
     with pytest.raises(av.AttestationRequired):
         av.require_verified(_rec(), "host-runner", empty)
-    # explicit bootstrap flag tolerates unverified only while no key is trusted
+    # the bootstrap flag is migration-only: an unsigned record of a non-migration task (V3-X1)
+    # is rejected even with an empty trust map (with or without expected_task_id)
+    with pytest.raises(av.AttestationRequired, match="reserved for the migration"):
+        av.require_verified(_rec(), "host-runner", empty, bootstrap=True)
+    with pytest.raises(av.AttestationRequired, match="reserved for the migration"):
+        av.require_verified(_rec(), "host-runner", empty, expected_task_id=TASK, bootstrap=True)
+    # migration task: tolerated only while no key is trusted; invalid always raises
+    mig = _rec(task="V3-INFRA-002")
     assert (
-        av.require_verified(_rec(), "host-runner", empty, bootstrap=True)["status"]
+        av.require_verified(
+            mig, "host-runner", empty, expected_task_id="V3-INFRA-002", bootstrap=True
+        )["status"]
         == "unverified"
     )
     with pytest.raises(av.AttestationRequired):
-        av.require_verified(_rec(), "host-runner", other, bootstrap=True)
+        av.require_verified(mig, "host-runner", other, expected_task_id="V3-INFRA-002", bootstrap=True)
     with pytest.raises(av.AttestationRequired):
-        av.require_verified({**signed, "summary": "x"}, "host-runner", empty, bootstrap=True)
+        av.require_verified(
+            {**attest.sign_record(mig, key, "host-runner"), "summary": "x"}, "host-runner", empty,
+            expected_task_id="V3-INFRA-002", bootstrap=True,
+        )  # fmt: skip
 
 
 def test_require_verified_identity_binding():

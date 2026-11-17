@@ -1,0 +1,168 @@
+{
+ "attestation": null,
+ "conformant": false,
+ "deferred_steps": [],
+ "execution_mode": "single-process-diagnostic",
+ "git_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+ "identity": "c0fb9b648a0eec58d1f01cf6af5d31bb829b3ea2a41a9e7db5d297f8b8ed41d8",
+ "non_conformant_reasons": [
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)",
+  "135-i15-combine: imported_partials_unverified_by_code"
+ ],
+ "partials_attestation_problems": [
+  "135-i15-combine: imported_partials_unverified_by_code"
+ ],
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "seed_base": "20572004",
+ "sha_source": "git",
+ "single_process_env": "OMP_NUM_THREADS=1,OPENBLAS_NUM_THREADS=1,MKL_NUM_THREADS=1,NUMEXPR_NUM_THREADS=1,IONMC_SINGLE_PROCESS=1",
+ "source_ok": true,
+ "steps": {
+  "135-i15-combine": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+    "manifest_sha256": "4b1587ed3aa65bf815da5dc8b557da557a6363455c792f6e7b3b646a6684e7c0",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "bbf002e8c891ca37cbb6ea790a11fbe236c46d2bc921c410d28c376b159d1ed8",
+      "host_run_id": "RUN-20261112T225448Z-24e2fcdc",
+      "name": "i15-theta-v1-sh0-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8f86748c3842d8955b09e5e5452752ea3030870e1058404131d1862e9ad07a14",
+      "host_run_id": "RUN-20261112T230434Z-8cd363ab",
+      "name": "i15-theta-v1-sh0-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "7bfd00bb7a55cb31bdcd19efa911bd917355b67a5523c2b9b24d70c5c68f377a",
+      "host_run_id": "RUN-20261112T231422Z-84e6d180",
+      "name": "i15-theta-v1-sh1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "9a935db83f9877c759f16c657058c4c2a93ff6f02a3e01ac107501824f676ae8",
+      "host_run_id": "RUN-20261112T232409Z-72f6bac7",
+      "name": "i15-theta-v1-sh1-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "c6d3834d13a270bdde9809b2d773b47267aeadb7c576eb46af04c8caaf25d103",
+      "host_run_id": "RUN-20261112T233354Z-f894fe3f",
+      "name": "i15-theta-v2-sh0-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "01c2d9abc8a4e16feeadf93c5496229b4dade00f8b27018a43de5b4eaecb8494",
+      "host_run_id": "RUN-20261112T234044Z-94c09a08",
+      "name": "i15-theta-v2-sh0-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "ec299f7a56314f6eca4af6c217570d99925012e2baad9fc72e9efeaba929d40f",
+      "host_run_id": "RUN-20261112T234733Z-d5106d7f",
+      "name": "i15-theta-v2-sh1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "25a88911d2896b008077fb8019d52a3cff2f852b68b744694035a176b77727a9",
+      "host_run_id": "RUN-20261112T235423Z-cf6802e2",
+      "name": "i15-theta-v2-sh1-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "7243deb1d434b3a3813e13d729c0e5fc351901ed8a9ced6ed2a748e4fd480ee0",
+      "host_run_id": "RUN-20261113T000111Z-797c22ab",
+      "name": "i15-sigma-v1-sh0-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "6ec428b3f4615f3f32083579b49f705967d6d0d438156a80303a5bce48730798",
+      "host_run_id": "RUN-20261113T000930Z-3c056f43",
+      "name": "i15-sigma-v1-sh0-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8bad12e48b9c1fe5d0fa170bdda0428daa97c4f7f64a16bf707eb32d0f205802",
+      "host_run_id": "RUN-20261113T001748Z-83d1a707",
+      "name": "i15-sigma-v1-sh0-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "426f75a8aeb7539794ac20aa30c804afe56aa2c63a217e34b6dfecf58b9b93b7",
+      "host_run_id": "RUN-20261113T002611Z-209656e3",
+      "name": "i15-sigma-v1-sh0-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "ba9cacf1374a3b43eff8f6023fff163ab84b1f0c4bda6b2ab9b2d1c7710b9812",
+      "host_run_id": "RUN-20261113T003429Z-35438133",
+      "name": "i15-sigma-v1-sh1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "c6bcb519554ed53ae88c25f637c5316825e94208d2e9032e6d27b186b3f4d5de",
+      "host_run_id": "RUN-20261113T004248Z-164128ed",
+      "name": "i15-sigma-v1-sh1-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "fbbbed1dbdaff7945d370759526c66d6544341f0052a0bd8093de40e7e5ba96c",
+      "host_run_id": "RUN-20261113T005107Z-f599fde9",
+      "name": "i15-sigma-v1-sh1-s2.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "f7f74b22498c0f43c1ce72f13e9bfab81f30900587a7454d8094b140bfbf4d2c",
+      "host_run_id": "RUN-20261113T005926Z-a8e63431",
+      "name": "i15-sigma-v1-sh1-s3.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8e446c533e9fdd376b486cac14b9d3cb520a429927bf9799504041e77886f235",
+      "host_run_id": "RUN-20261113T010746Z-7066039d",
+      "name": "i15-sigma-v2-sh0-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "1060cc85a4af485fdba1f61a6e78827a676755fbce2052ab30afd568cf7a1dd6",
+      "host_run_id": "RUN-20261113T011921Z-8a4a0a75",
+      "name": "i15-sigma-v2-sh0-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "bf6502a5b010a24c4aa61aa7dbf5eb72af90aee360d7dcfb79d298b33a2c60de",
+      "host_run_id": "RUN-20261113T013055Z-42ce6b13",
+      "name": "i15-sigma-v2-sh1-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "018260f39be97868b037bf4556a8bf26eb07f03157b404e431ddc3c4378e2629",
+      "host_run_id": "RUN-20261113T014227Z-3012a901",
+      "name": "i15-sigma-v2-sh1-s1.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "135-i15-combine.txt",
+   "frozen_histories": 1600000,
+   "histories": 1600000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "subset": true,
+ "suite": "lv8",
+ "tree_dirty": "no"
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "git_sha": "8dfbeb37ec200fa6d9044aef69c0e4bb9a5d7a24",
+  "request_id": "IR-20261116-204824-29B867",
+  "created_at_utc": "2026-11-16T20:48:24.641812+00:00",
+  "task_id": "V3-008",
+  "category": "authorization",
+  "summary": "V3-008 (PR #84): decide the integration scope after amendment I3-FU-1 ran to its end — row I3 (C/O stopping vs the revised ICRU 73 table) stays a gating FAIL; the pre-declared route selected option (c), a declared uncertainty with no model change; merging PR #84 with that limitation declared is a material scope reduction reserved to the operator (plan Appendix A; commit d66622aa).",
+  "investigation": {
+    "blocked_claim": "Integration of V3-008 (PR #84) requires the operator's scope decision: row I3 (C/O stopping vs the revised ICRU 73 table) is a gating FAIL that the pre-declared scientific follow-up (amendment I3-FU-1, steps 1-3) resolved into a declared uncertainty (option (c)), not into a passing row; the orchestrator may not merge past a failed gate nor reduce the validation scope itself.",
+    "budget": "Spent on the follow-up today: step 1 (one host run), step 2 (5 smokes x 4 chains, 58 evidence runs x 3 attempts + 3 repeats, ~1 s TOPAS each), 17 amendment revisions with 20+ signed Codex reviews, two STOP notes. Option (A) costs one more review/CI/merge cycle; option (B) is estimated at several hours of reference and ionmc runs plus implementation and reviews (plan section E); option (C) costs nothing now.",
+    "alternatives": [
+      "(A) amend the validation scope: I3 becomes a declared model limitation; merge PR #84 with the limitation declared",
+      "(B) option (b): tabulated/re-parameterised low-energy C/O stopping in a new task with licence review, circularity analysis, fresh held-out TOPAS evidence",
+      "(C) keep V3-008 open, continue other tasks"
+    ],
+    "attempts": [
+      {
+        "approach": "Amendment I3-FU-1 step 1: committed band and z-scan diagnostic of the row-I3 deficit (hypothesis rule 1a, z-scan rule 1b), executed by the host-runner through the sealed launcher",
+        "outcome": "hypothesis WITHDRAWN (oxygen >= 50 MeV/u band mean -0.1 pp vs the quoted bound); deficit not a single-term rescaling; [10,20) MeV/u attributed to a z^2-like shape",
+        "artifact": "validation/results/stopping/v3-008-i3fu1/icru73_band_diagnostic.json; host record RUN-20261116T164519Z-ad778a16"
+      },
+      {
+        "approach": "Amendment I3-FU-1 step 2, attempt 1 (code_sha c223f5e5): 58 TOPAS thin-slab runs, sealed evaluator",
+        "outcome": "INCONCLUSIVE on two instrument defects (stderr banner rule; single-bin EDep parser), STOP note; revisions 15-16",
+        "artifact": "validation/results/stopping/v3-008-i3fu2/host-records/RUN-20261116T190358Z-aa434fec.json; plan STOP notes"
+      },
+      {
+        "approach": "Amendment I3-FU-1 step 2, attempt 3 (code_sha 48b41981, fresh seed family after revision 17): 58 runs + the pre-declared repeat triple of the one failing point",
+        "outcome": "INCONCLUSIVE by the pre-declared rule (oxygen 2.4 MeV/u point fails the emulation gate twice); pattern before that rule MIXED: TOPAS between ionmc and ICRU73_NEW, nearer to ionmc; controls and premises pass",
+        "artifact": "validation/results/stopping/v3-008-i3fu2/i3fu2_result.json (sha256 497d2d8e...); host record RUN-20261116T203950Z-df7c5df4; commit d66622aa"
+      },
+      {
+        "approach": "Step 3 decision by rule 2a",
+        "outcome": "option (c): declared uncertainty, no model change; decision 0043 section 1/5 note; ledger rows; I3 stays FAIL",
+        "artifact": "validation/plans/v3-008-acceptance.md (Step 3 note of 2026-11-16); decisions/0043-ion-em-transport.md"
+      }
+    ]
+  },
+  "reason_autonomous_resolution_not_possible": "Plan F.6 forbids integrating V3-008 with a gating FAIL that is neither an evidence gap nor removed by amendment; EXPERIMENT.md (\"Task branches must not be merged into develop unless the relevant automated tests and validation pass\"), the directive of 2026-11-01 (\"Keep the existing integration gates, final requirements and stability restrictions\") and the directive of 2026-10-19 (\"does not authorise … merging before gates pass\"; \"return separately for any material scope reduction\") prohibit the orchestrator from deciding this. The scientific route has been run to its end (amendment I3-FU-1 steps 1–3, 17 reviewed revisions, two STOP notes preserved in validation/plans/v3-008-acceptance.md): step 1 (committed band diagnostic, host-run RUN-20261116T164519Z-ad778a16) withdrew the recorded hypothesis on one band and showed the C/O deficit is not a single-term rescaling of the model's low-energy terms; step 2 (58 + 3 TOPAS thin-slab reference runs of a fresh seed family, evaluator sealed and signed, host-run RUN-20261116T203950Z-df7c5df4) graded INCONCLUSIVE by the pre-declared rule (the oxygen 2.4 MeV/u point failed its emulation gate twice, 0.17 % against 0.15 %) with pattern MIXED before that rule: the acceptance reference (TOPAS 4.3 / Geant4 11.4.2, opt4 EM-only) carries stopping BETWEEN ionmc and the revised ICRU 73 table and nearer to ionmc — TOPAS/ionmc − 1 = +3.5/+5.0 % (C/O) at 2–5 MeV/u, +1.4/+2.2 % at 5–10, +0.6/+1.0 % at 10–20, +0.1/+0.3 % at 20–50 MeV/u, against ICRU73_NEW/ionmc − 1 = +9.8/+13.7, +5.4/+9.4, +1.9/+4.2, +0.3/+0.8 %. Rule 2a therefore selects option (c): a tabulated low-energy source would move ionmc past the acceptance reference in every band below 20 MeV/u. Declared uncertainty (decision 0043 §1/§5, commit d66622aa): \"ionmc's analytic C/O electronic stopping in water lies below the revised ICRU 73 table (libdEdx ICRU73_NEW, lineage identity with the 2009 revision OPEN) by band means of 8.6/12.2 % (C/O) at 2–5 MeV/u, 4.3/7.5 % at 5–10, 1.8/3.9 % at 10–20 and 0.3/0.8 % at 20–50 MeV/u, and by at most 0.05 % (C) / 0.1 % (O) in band mean above 50 MeV/u; the CSDA-range agreement with the table is within 0.26 % (C) / 0.39 % (O); row I3 FAILED and is not re-graded. The acceptance reference differs from ionmc by band means of +3.5/+5.0 % (C/O) at 2–5 MeV/u, +1.4/+2.2 % at 5–10, +0.6/+1.0 % at 10–20 and +0.1/+0.3 % at 20–50 MeV/u (one-step thin-slab mean energy loss; 0.2 % method systematic; the oxygen 2.4 MeV/u point invalid after its repeat), i.e. it lies between ionmc and the table and nearer to ionmc. Not a clinical claim.\" The affected region is the last ≈ 0.4 mm (C 290 MeV/u) / ≈ 0.3 mm (O 350 MeV/u) of range, traversed by every beam; the declared domains are unchanged. Everything else on the branch passed its gates (signed reviews, validation records, CI green at the last pushed heads); no gate was relaxed and no scientific tolerance changed.",
+  "requested_input": "Choose one: (A) amend the V3-008 validation scope so that row I3 becomes a declared model limitation instead of a gating row, after which PR #84 meets the integration criterion with the limitation declared and the orchestrator merges it through the normal gates (Codex review, validation record, CI green); (B) do not merge; pursue option (b) in a new task (tabulated or re-parameterised low-energy C/O stopping: licence review of a stopping table (libdEdx GPL-3 / Geant4 water table), circularity with the ICRU73_NEW lineage, fresh held-out TOPAS evidence and the stopping-dependent A-rows at a new frozen SHA; ESTIMATE from plan §E: reference runs ≈ 2–3 h, ionmc samples ≈ 3–4 h, A-rows ≈ 1–2 h, plus implementation and reviews); (C) do not merge; keep V3-008 open and continue other tasks. Decisions that depend on it: merge of PR #84; ledger rows V1-MUST-005 / V2-ION; decision 0043 capability statement; whether a follow-up task for option (b) is created.",
+  "decisions_or_tasks_blocked": null,
+  "status": "open",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  }
+}

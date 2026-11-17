@@ -1,0 +1,36 @@
+{
+ "attestation": null,
+ "conformant": false,
+ "deferred_steps": [],
+ "execution_mode": "single-process-diagnostic",
+ "git_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+ "identity": "9262a0734d0106c0720b319723a5079201f2c23d44b9e9366240c8baf3dcd969",
+ "non_conformant_reasons": [
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)"
+ ],
+ "partials_attestation_problems": [],
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "seed_base": "20591004",
+ "sha_source": "git",
+ "single_process_env": "OMP_NUM_THREADS=1,OPENBLAS_NUM_THREADS=1,MKL_NUM_THREADS=1,NUMEXPR_NUM_THREADS=1,IONMC_SINGLE_PROCESS=1",
+ "source_ok": true,
+ "steps": {
+  "01-t13-ion-chunks-cuda-c290": {
+   "attestation": null,
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "01-t13-ion-chunks-cuda-c290.txt",
+   "frozen_histories": 100000,
+   "histories": 100000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "subset": true,
+ "suite": "hr8",
+ "tree_dirty": "no"
+}

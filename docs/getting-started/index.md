@@ -7,8 +7,12 @@ available, on CUDA devices.
 
 At the current stage the package provides the project scaffold (version and
 environment report), the external data layer, materials, the electronic
-stopping-power model and tables, and the proton electromagnetic transport engine with
-its Python reference backend (the Warp CPU and CUDA backends are not available yet).
+stopping-power model and tables, and the electromagnetic transport engine for protons and the ions 4He, 12C and 16O with its
+Python reference backend and the Warp CPU and CUDA backends. `ionmc.capabilities()` reports the
+supported species with their energy domains, cutoff rule, nuclear support, multiple-scattering
+mapping, Lindhard-Sorensen option default and producible tallies. Protons are the default
+example below; ion sources (z >= 2) use the same API (`PencilBeamSource(ALPHA, ...)`), electromagnetic
+interactions only (no nuclear interactions, fragments or secondary ions).
 
 ## Installation
 

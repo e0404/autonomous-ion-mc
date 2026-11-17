@@ -186,8 +186,8 @@ class TransportTables:
         energy_axis: str = "total_kinetic_mev",
     ) -> TransportTables:
         """Build transport tables from one :class:`StoppingTable` per material (``projectile`` a
-        proton or, with ``energy_axis="total_kinetic_mev"``, any ``z = 1`` projectile such as the
-        deuteron: the grids are ``ln(A e)``, see the module docstring).
+        proton or, with ``energy_axis="total_kinetic_mev"``, a deuteron or an ion
+        (V3-008): the grids are ``ln(A e)``, see the module docstring).
 
         ``water`` (the proton table of liquid water from the *same* ``StoppingSource``) adds the
         water stopping row of the LET definition: ``ln S`` on a uniform ``ln E`` grid of at least
@@ -197,8 +197,6 @@ class TransportTables:
             raise ValueError("at least one stopping table is required")
         if points_per_decade < MIN_POINTS_PER_DECADE or range_points_per_decade < 200:
             raise ValueError(f"tables need at least {MIN_POINTS_PER_DECADE} points per decade")
-        if projectile.z != 1:
-            raise ValueError("transport tables are implemented for z = 1 projectiles only")
         if energy_axis != "total_kinetic_mev":
             raise ValueError(f"energy_axis must be 'total_kinetic_mev', got {energy_axis!r}")
         if projectile == PROTON and tables[0].projectile.z != 1:

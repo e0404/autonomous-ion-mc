@@ -1,0 +1,2187 @@
+{
+  "row": "I3-diagnostic",
+  "status_note": "diagnostic of the row I3 FAIL under amendment I3-FU-1; no gate; row I3 is not re-graded",
+  "reference": "libdEdx ICRU73_NEW, target 276 (liquid water), Z = 1-10",
+  "redistribution_note": "This file contains aggregate statistics only; no libdEdx/ICRU 73 table values, per-energy deviations or ratios are reproduced.",
+  "rounding_note": "every table-relative band mean (ions, informative_z1_z2, i3b default) is rounded to 0.1 percentage point (round(d, 3) in relative units) before it is written and before any derived quantity is computed; z-scan fits, shape_ratio_to_z6, prediction_from_z3_10_fit, hypothesis_check and the z-scan verdicts use the rounded means only, so nothing here depends on an unrounded mean. 0.1 pp is the precision already present in Git (plan results note of 2026-11-15). Reason: the [10, 20) band holds two grid points and row I3 publishes the >= 10 MeV/u maximum (at 10 MeV/u for a monotone deficit), so a full-precision mean would give the deviation at the other point; at 0.1 pp it is fixed only to +-0.1 pp. The quantisation limits the z-scan in the [20, 50) band (deviations of a few 0.1 pp). The C/O band maxima (2-10, >= 10 MeV/u) are at full precision: row I3 already publishes them",
+  "i_value_note": "The ionmc model is evaluated at I = 78 eV (water(78.0), not tuned). libdEdx lists I = 75.0 eV for target 276 (dedx_metadata.h material constant). Whether the ICRU73_NEW water values were computed with 75 eV or 78 eV: TO-VERIFY (P5b); the archive documentation (README.md, data/README.md, tools/dat2c.py, the dedx_icru73new.h header) states no I-value for this table. If 75 eV, the known bounded contribution of the difference is about 0.4-0.6 % in S above 10 MeV/u and 0.4-0.5 % in CSDA range (plan row I3, L0 ~ -ln I; model S lower and range longer at 78 eV); a range-clause failure within that bound is recorded as FAIL with this attribution, never re-graded.",
+  "bands": {
+    "2_to_5_MeV_u": {
+      "band_per_u_mev": [
+        2.0,
+        5.0
+      ],
+      "upper_closed": false
+    },
+    "5_to_10_MeV_u": {
+      "band_per_u_mev": [
+        5.0,
+        10.0
+      ],
+      "upper_closed": false
+    },
+    "10_to_20_MeV_u": {
+      "band_per_u_mev": [
+        10.0,
+        20.0
+      ],
+      "upper_closed": false
+    },
+    "20_to_50_MeV_u": {
+      "band_per_u_mev": [
+        20.0,
+        50.0
+      ],
+      "upper_closed": false
+    },
+    "50_to_1000_MeV_u": {
+      "band_per_u_mev": [
+        50.0,
+        1000.0
+      ],
+      "upper_closed": true
+    }
+  },
+  "ions": {
+    "proton": {
+      "z": 1,
+      "a": 1,
+      "mass_mev": 938.27208816,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": 0.003
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.007
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.008
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.007
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": -0.005
+        }
+      }
+    },
+    "alpha": {
+      "z": 2,
+      "a": 4,
+      "mass_mev": 3727.3794066,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.004
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.007
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.008
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.006
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": -0.004
+        }
+      }
+    },
+    "lithium7": {
+      "z": 3,
+      "a": 7,
+      "mass_mev": 6518.92572009,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.028
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.01
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.005
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.002
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": 0.0
+        }
+      }
+    },
+    "beryllium9": {
+      "z": 4,
+      "a": 9,
+      "mass_mev": 8381.402925979999,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.047
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.017
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.007
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.002
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": 0.0
+        }
+      }
+    },
+    "boron11": {
+      "z": 5,
+      "a": 11,
+      "mass_mev": 10243.880131869999,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.067
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.029
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.011
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.002
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": 0.0
+        }
+      }
+    },
+    "carbon12": {
+      "z": 6,
+      "a": 12,
+      "mass_mev": 11174.86323534,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.086
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.043
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.018
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.003
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": 0.0
+        }
+      },
+      "max_abs_relative_deviation_2_to_10": 0.10092763306923969,
+      "max_abs_relative_deviation_ge_10": 0.025118855120928596
+    },
+    "nitrogen14": {
+      "z": 7,
+      "a": 14,
+      "mass_mev": 13037.34044123,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.104
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.058
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.027
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.004
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": 0.0
+        }
+      }
+    },
+    "oxygen16": {
+      "z": 8,
+      "a": 16,
+      "mass_mev": 14895.080645240894,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.122
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.075
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.039
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.008
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": -0.001
+        }
+      },
+      "max_abs_relative_deviation_2_to_10": 0.13501460655174435,
+      "max_abs_relative_deviation_ge_10": 0.0504713298218642
+    },
+    "fluorine19": {
+      "z": 9,
+      "a": 19,
+      "mass_mev": 17693.78895543,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.127
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.083
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.046
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.01
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": -0.001
+        }
+      }
+    },
+    "neon20": {
+      "z": 10,
+      "a": 20,
+      "mass_mev": 18624.7720589,
+      "bands": {
+        "2_to_5_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            2.0,
+            5.0
+          ],
+          "mean_relative_deviation": -0.132
+        },
+        "5_to_10_MeV_u": {
+          "n_points": 5,
+          "band_per_u_mev": [
+            5.0,
+            10.0
+          ],
+          "mean_relative_deviation": -0.089
+        },
+        "10_to_20_MeV_u": {
+          "n_points": 2,
+          "band_per_u_mev": [
+            10.0,
+            20.0
+          ],
+          "mean_relative_deviation": -0.052
+        },
+        "20_to_50_MeV_u": {
+          "n_points": 4,
+          "band_per_u_mev": [
+            20.0,
+            50.0
+          ],
+          "mean_relative_deviation": -0.013
+        },
+        "50_to_1000_MeV_u": {
+          "n_points": 17,
+          "band_per_u_mev": [
+            50.0,
+            1000.0
+          ],
+          "mean_relative_deviation": -0.001
+        }
+      }
+    }
+  },
+  "hypothesis_check": {
+    "rule": "amendment I3-FU-1 rule 1a: CONFIRMED iff, for carbon12 and oxygen16, every band mean of [2,5), [5,10), [10,20), [20,50) MeV/u rounded to 0.1 pp equals the quoted value (|delta| <= 0.05 pp before rounding) and |rounded mean of [50,1000]| <= the quoted bound (0.03 % C, 0.06 % O); otherwise WITHDRAWN. The bounds are below the 0.1 pp quantum, so the last condition means a rounded mean of 0 (|mean| < 0.05 pp). The quoted >= 50 MeV/u figure was a max-type statement; a mean checks it only partly",
+    "per_ion": {
+      "carbon12": {
+        "2_to_5_MeV_u": {
+          "quoted": -0.086,
+          "committed": -0.086,
+          "match": true
+        },
+        "5_to_10_MeV_u": {
+          "quoted": -0.043,
+          "committed": -0.043,
+          "match": true
+        },
+        "10_to_20_MeV_u": {
+          "quoted": -0.018,
+          "committed": -0.018,
+          "match": true
+        },
+        "20_to_50_MeV_u": {
+          "quoted": -0.003,
+          "committed": -0.003,
+          "match": true
+        },
+        "50_to_1000_MeV_u": {
+          "quoted_abs_bound": 0.0003,
+          "committed": 0.0,
+          "match": true
+        }
+      },
+      "oxygen16": {
+        "2_to_5_MeV_u": {
+          "quoted": -0.122,
+          "committed": -0.122,
+          "match": true
+        },
+        "5_to_10_MeV_u": {
+          "quoted": -0.075,
+          "committed": -0.075,
+          "match": true
+        },
+        "10_to_20_MeV_u": {
+          "quoted": -0.039,
+          "committed": -0.039,
+          "match": true
+        },
+        "20_to_50_MeV_u": {
+          "quoted": -0.008,
+          "committed": -0.008,
+          "match": true
+        },
+        "50_to_1000_MeV_u": {
+          "quoted_abs_bound": 0.0006,
+          "committed": -0.001,
+          "match": false
+        }
+      }
+    },
+    "verdict": "WITHDRAWN"
+  },
+  "z_scan": {
+    "ions_z": [
+      3,
+      10
+    ],
+    "method": "per band, least squares d_z = c f(z) without intercept over Z = 3-10; d_z the band mean of S_model/S_table - 1 rounded to 0.1 pp; charge: f = band mean of 1 - q^2/z^2 (model effective charge); barkas_like: f = z; bloch_like: f = z^2; constant: f = 1 (z-independent control); r_squared uncentred (1 - sum res^2 / sum d^2); ranking by residual RMS",
+    "verdict_rule": "amendment I3-FU-1 rule 1b: with RMS_1 <= RMS_2 the two smallest residual RMS and r^2_1 that of the best shape, attributed_to = best iff RMS_1 <= 0.5 RMS_2, r^2_1 >= 0.90 and the rounded d_z over Z = 3-10 have one common sign (no zero, no sign change); otherwise attributed_to = null (no single-term scaling explains the z-dependence in this band) with reason in {rms_ratio, r_squared, sign_change}. Interpretive, not a grade",
+    "bands": {
+      "2_to_5_MeV_u": {
+        "band_per_u_mev": [
+          2.0,
+          5.0
+        ],
+        "hypotheses": {
+          "charge": {
+            "coefficient": -0.6511226264056424,
+            "residual_rms": 0.014821934596332938,
+            "r_squared": 0.9762917273283273
+          },
+          "barkas_like": {
+            "coefficient": -0.013921052631578947,
+            "residual_rms": 0.007815302129055603,
+            "r_squared": 0.9934085392218186
+          },
+          "bloch_like": {
+            "coefficient": -0.0016655869805656503,
+            "residual_rms": 0.022079004103074923,
+            "r_squared": 0.947392327400564
+          },
+          "constant": {
+            "coefficient": -0.089125,
+            "residual_rms": 0.03637457044419906,
+            "r_squared": 0.8572139186035532
+          }
+        },
+        "ranking": [
+          "barkas_like",
+          "charge",
+          "bloch_like",
+          "constant"
+        ],
+        "shape_ratio_to_z6": {
+          "3": 0.32558139534883723,
+          "4": 0.5465116279069768,
+          "5": 0.7790697674418606,
+          "6": 1.0,
+          "7": 1.2093023255813955,
+          "8": 1.4186046511627908,
+          "9": 1.4767441860465118,
+          "10": 1.5348837209302328
+        },
+        "f_charge_band_mean": {
+          "3": 0.02182620967376217,
+          "4": 0.046616152538770605,
+          "5": 0.0766011811826558,
+          "6": 0.10907659386182084,
+          "7": 0.14228867130097816,
+          "8": 0.1751020490879044,
+          "9": 0.2070840647696444,
+          "10": 0.23770256769375062
+        },
+        "verdict": {
+          "attributed_to": null,
+          "reason": [
+            "rms_ratio"
+          ],
+          "rms_ratio_1_to_2": 0.5272794909639643,
+          "common_sign": true
+        }
+      },
+      "5_to_10_MeV_u": {
+        "band_per_u_mev": [
+          5.0,
+          10.0
+        ],
+        "hypotheses": {
+          "charge": {
+            "coefficient": -1.3429373728541463,
+            "residual_rms": 0.01110737235711951,
+            "r_squared": 0.9632788985252764
+          },
+          "barkas_like": {
+            "coefficient": -0.008273684210526317,
+            "residual_rms": 0.01040154340774281,
+            "r_squared": 0.96779757265774
+          },
+          "bloch_like": {
+            "coefficient": -0.001023068415231474,
+            "residual_rms": 0.006896811269572509,
+            "r_squared": 0.9858423972950063
+          },
+          "constant": {
+            "coefficient": -0.0505,
+            "residual_rms": 0.028451713480913587,
+            "r_squared": 0.7590594538284099
+          }
+        },
+        "ranking": [
+          "bloch_like",
+          "barkas_like",
+          "charge",
+          "constant"
+        ],
+        "shape_ratio_to_z6": {
+          "3": 0.23255813953488375,
+          "4": 0.39534883720930236,
+          "5": 0.6744186046511629,
+          "6": 1.0,
+          "7": 1.3488372093023258,
+          "8": 1.744186046511628,
+          "9": 1.9302325581395352,
+          "10": 2.0697674418604652
+        },
+        "f_charge_band_mean": {
+          "3": 0.0017819352382168585,
+          "4": 0.005847707926891599,
+          "5": 0.01279831425620832,
+          "6": 0.02243716586447524,
+          "7": 0.03432707574047145,
+          "8": 0.047951077341269646,
+          "9": 0.06293934186413015,
+          "10": 0.07881956712402752
+        },
+        "verdict": {
+          "attributed_to": null,
+          "reason": [
+            "rms_ratio"
+          ],
+          "rms_ratio_1_to_2": 0.6630565291338004,
+          "common_sign": true
+        }
+      },
+      "10_to_20_MeV_u": {
+        "band_per_u_mev": [
+          10.0,
+          20.0
+        ],
+        "hypotheses": {
+          "charge": {
+            "coefficient": -2.1634890830712696,
+            "residual_rms": 0.006199868396058583,
+            "r_squared": 0.959479912369539
+          },
+          "barkas_like": {
+            "coefficient": -0.004318421052631579,
+            "residual_rms": 0.007925205459730831,
+            "r_squared": 0.9337895569071579
+          },
+          "bloch_like": {
+            "coefficient": -0.0005460973297519356,
+            "residual_rms": 0.0022137190477647356,
+            "r_squared": 0.9948340471498891
+          },
+          "constant": {
+            "coefficient": -0.025624999999999995,
+            "residual_rms": 0.017087550292537546,
+            "r_squared": 0.6922025299775991
+          }
+        },
+        "ranking": [
+          "bloch_like",
+          "charge",
+          "barkas_like",
+          "constant"
+        ],
+        "shape_ratio_to_z6": {
+          "3": 0.2777777777777778,
+          "4": 0.38888888888888895,
+          "5": 0.6111111111111112,
+          "6": 1.0,
+          "7": 1.5,
+          "8": 2.166666666666667,
+          "9": 2.555555555555556,
+          "10": 2.888888888888889
+        },
+        "f_charge_band_mean": {
+          "3": 0.0001841531866760282,
+          "4": 0.0008887054598404887,
+          "5": 0.002507093100398705,
+          "6": 0.0052767639851911685,
+          "7": 0.009281510149736605,
+          "8": 0.014482451825815035,
+          "9": 0.020819154254575423,
+          "10": 0.028131270765056726
+        },
+        "verdict": {
+          "attributed_to": "bloch_like",
+          "reason": null,
+          "rms_ratio_1_to_2": 0.35705903840992076,
+          "common_sign": true
+        }
+      },
+      "20_to_50_MeV_u": {
+        "band_per_u_mev": [
+          20.0,
+          50.0
+        ],
+        "hypotheses": {
+          "charge": {
+            "coefficient": -3.643553804362507,
+            "residual_rms": 0.0016675871681654155,
+            "r_squared": 0.9398735791690822
+          },
+          "barkas_like": {
+            "coefficient": -0.000931578947368421,
+            "residual_rms": 0.0022422380736548397,
+            "r_squared": 0.8912944523470839
+          },
+          "bloch_like": {
+            "coefficient": -0.00011952915152472743,
+            "residual_rms": 0.0010188711575915004,
+            "r_squared": 0.9775546284157439
+          },
+          "constant": {
+            "coefficient": -0.0055,
+            "residual_rms": 0.004,
+            "r_squared": 0.654054054054054
+          }
+        },
+        "ranking": [
+          "bloch_like",
+          "charge",
+          "barkas_like",
+          "constant"
+        ],
+        "shape_ratio_to_z6": {
+          "3": 0.6666666666666666,
+          "4": 0.6666666666666666,
+          "5": 0.6666666666666666,
+          "6": 1.0,
+          "7": 1.3333333333333333,
+          "8": 2.6666666666666665,
+          "9": 3.3333333333333335,
+          "10": 4.333333333333333
+        },
+        "f_charge_band_mean": {
+          "3": 3.1525053944270187e-06,
+          "4": 2.9208133407232495e-05,
+          "5": 0.00012710590863163063,
+          "6": 0.00036621539219913735,
+          "7": 0.0008194510651722553,
+          "8": 0.0015487367781734374,
+          "9": 0.0026073399061088964,
+          "10": 0.004021903073580746
+        },
+        "verdict": {
+          "attributed_to": null,
+          "reason": [
+            "rms_ratio"
+          ],
+          "rms_ratio_1_to_2": 0.6109852468536349,
+          "common_sign": true
+        }
+      }
+    }
+  },
+  "informative_z1_z2": {
+    "lineage_note": "table lineage for Z = 1, 2 OPEN: excluded from the z-scan fits (Z = 3-10); band means and the predictions of the Z = 3-10 fits are informative only",
+    "bands": {
+      "2_to_5_MeV_u": {
+        "band_per_u_mev": [
+          2.0,
+          5.0
+        ],
+        "z1": {
+          "mean_relative_deviation": 0.003,
+          "f_charge_band_mean": 0.0,
+          "prediction_from_z3_10_fit": {
+            "charge": -0.0,
+            "barkas_like": -0.013921052631578947,
+            "bloch_like": -0.0016655869805656503,
+            "constant": -0.089125
+          }
+        },
+        "z2": {
+          "mean_relative_deviation": -0.004,
+          "f_charge_band_mean": 0.005728243021466767,
+          "prediction_from_z3_10_fit": {
+            "charge": -0.003729788640827234,
+            "barkas_like": -0.027842105263157894,
+            "bloch_like": -0.006662347922262601,
+            "constant": -0.089125
+          }
+        }
+      },
+      "5_to_10_MeV_u": {
+        "band_per_u_mev": [
+          5.0,
+          10.0
+        ],
+        "z1": {
+          "mean_relative_deviation": -0.007,
+          "f_charge_band_mean": 0.0,
+          "prediction_from_z3_10_fit": {
+            "charge": -0.0,
+            "barkas_like": -0.008273684210526317,
+            "bloch_like": -0.001023068415231474,
+            "constant": -0.0505
+          }
+        },
+        "z2": {
+          "mean_relative_deviation": -0.007,
+          "f_charge_band_mean": 0.00022225539570619457,
+          "prediction_from_z3_10_fit": {
+            "charge": -0.0002984750772123356,
+            "barkas_like": -0.016547368421052634,
+            "bloch_like": -0.004092273660925896,
+            "constant": -0.0505
+          }
+        }
+      },
+      "10_to_20_MeV_u": {
+        "band_per_u_mev": [
+          10.0,
+          20.0
+        ],
+        "z1": {
+          "mean_relative_deviation": -0.008,
+          "f_charge_band_mean": 0.0,
+          "prediction_from_z3_10_fit": {
+            "charge": -0.0,
+            "barkas_like": -0.004318421052631579,
+            "bloch_like": -0.0005460973297519356,
+            "constant": -0.025624999999999995
+          }
+        },
+        "z2": {
+          "mean_relative_deviation": -0.008,
+          "f_charge_band_mean": 1.1573848074375448e-05,
+          "prediction_from_z3_10_fit": {
+            "charge": -2.5039893958036718e-05,
+            "barkas_like": -0.008636842105263158,
+            "bloch_like": -0.0021843893190077422,
+            "constant": -0.025624999999999995
+          }
+        }
+      },
+      "20_to_50_MeV_u": {
+        "band_per_u_mev": [
+          20.0,
+          50.0
+        ],
+        "z1": {
+          "mean_relative_deviation": -0.007,
+          "f_charge_band_mean": 0.0,
+          "prediction_from_z3_10_fit": {
+            "charge": -0.0,
+            "barkas_like": -0.000931578947368421,
+            "bloch_like": -0.00011952915152472743,
+            "constant": -0.0055
+          }
+        },
+        "z2": {
+          "mean_relative_deviation": -0.006,
+          "f_charge_band_mean": 6.346249734057174e-08,
+          "prediction_from_z3_10_fit": {
+            "charge": -2.3122902361958566e-07,
+            "barkas_like": -0.001863157894736842,
+            "bloch_like": -0.0004781166060989097,
+            "constant": -0.0055
+          }
+        }
+      }
+    }
+  },
+  "i3b": {
+    "note": "informative; table-relative band means for the default variant only (duplicate of the rounded ions entry); all variants carry model-only quantities (CSDA-range shift vs the default model from BetheStoppingSource tables, 1-500 MeV/u, 200 points/decade; band-mean stopping ratio r_v to the default model). Variant-vs-table band means are not written: eight of them at full precision would let the per-energy table values of a band with <= 8 grid points be solved for; the variant-vs-table mean is approximately (1 + d_default) r_v - 1",
+    "ions": {
+      "carbon12": {
+        "standard_energies_per_u_mev": [
+          80.0,
+          290.0,
+          430.0
+        ],
+        "variants": {
+          "default": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.086
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.043
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.018
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.003
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": 0.0
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "80": 0.0,
+              "290": 0.0,
+              "430": 0.0
+            }
+          },
+          "shell_off": {
+            "options": {
+              "shell": false,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.011790259654474
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0094694313980974
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0065429455287713
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0024627450391996
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0003121806941344
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "80": -0.028607806839524574,
+              "290": -0.06189232023803726,
+              "430": -0.07553455422257827
+            }
+          },
+          "barkas_off": {
+            "options": {
+              "shell": true,
+              "barkas": false,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9698202905596359
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9907786600170752
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9958456810688405
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.998639138522351
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.999832879873838
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "80": 0.021672311657334742,
+              "290": 0.039163714947036965,
+              "430": 0.047394555411486294
+            }
+          },
+          "bloch_off": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": false,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0687161855665288
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0279119560357208
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0149340723981604
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0061722646058526
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.001130892847528
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "80": -0.08302967515937176,
+              "290": -0.2193163513043217,
+              "430": -0.2976612624670594
+            }
+          },
+          "mott_off": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": false,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.998788557473743
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.998391613894303
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9980743816092497
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9974953753671435
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9952811621209603
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "80": 0.0523399906644495,
+              "290": 0.7184753910665265,
+              "430": 1.498872542108991
+            }
+          },
+          "effective_charge_off": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": false,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.1185620111365904
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.022560433899622
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0052473934433404
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0003645240391092
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0000012326029424
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "80": -0.027898228478444587,
+              "290": -0.02790303914736114,
+              "430": -0.02790235121203466
+            }
+          },
+          "ls_eff": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "eff"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0005181364176012
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0005918081899907
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0005934753737393
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0005635505695905
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0004586000149418
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "80": -0.009406625138059788,
+              "290": -0.07766806324372766,
+              "430": -0.1415713965933918
+            }
+          },
+          "ls_bare_mixed": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "bare_mixed"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9934686515555325
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9999890630393017
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0005183570747733
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0005614937664802
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.000458599054421
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "80": -0.007318936763556216,
+              "290": -0.07558037313437183,
+              "430": -0.13948375808336522
+            }
+          }
+        }
+      },
+      "oxygen16": {
+        "standard_energies_per_u_mev": [
+          100.0,
+          350.0,
+          430.0
+        ],
+        "variants": {
+          "default": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.122
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.075
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.039
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.008
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0,
+                "mean_relative_deviation": -0.001
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "100": 0.0,
+              "350": 0.0,
+              "430": 0.0
+            }
+          },
+          "shell_off": {
+            "options": {
+              "shell": false,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.012066378805682
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0096002764768943
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0065971411415435
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0024705886323357
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0003121292355877
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "100": -0.0252352120074395,
+              "350": -0.051575364917368915,
+              "430": -0.05702009109132433
+            }
+          },
+          "barkas_off": {
+            "options": {
+              "shell": true,
+              "barkas": false,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9604809664161367
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9877132162285985
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9944440624869868
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.998181090517075
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.99977722458782
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "100": 0.02496670457054595,
+              "350": 0.04384587709346022,
+              "430": 0.04835405661271608
+            }
+          },
+          "bloch_off": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": false,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.1026557136339998
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0455586866199689
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0253111537582562
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0107405878912987
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0019944544214558
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "100": -0.12686615525828726,
+              "350": -0.33307010351837363,
+              "430": -0.3914274133168405
+            }
+          },
+          "mott_off": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": false,
+              "effective_charge": true,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9984092113509383
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9978540948619946
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9974230649944673
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9966514443542919
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9937140193085066
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "100": 0.08390790302117201,
+              "350": 1.026339751617904,
+              "430": 1.4985949824174583
+            }
+          },
+          "effective_charge_off": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": false,
+              "ls": "off"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.2024505722924146
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0489930558515415
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0144366142640155
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0015379544789784
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0000111337707462
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "100": -0.04318277445535701,
+              "350": -0.04320516460268209,
+              "430": -0.043205820655103366
+            }
+          },
+          "ls_eff": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "eff"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0006834229507477
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0008936682620546
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.000953743044802
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0009526741742012
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.000805111806054
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "100": -0.01773755141227573,
+              "350": -0.13664032315880092,
+              "430": -0.18660995771906386
+            }
+          },
+          "ls_bare_mixed": {
+            "options": {
+              "shell": true,
+              "barkas": true,
+              "bloch": true,
+              "mott": true,
+              "effective_charge": true,
+              "ls": "bare_mixed"
+            },
+            "bands": {
+              "2_to_5_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  2.0,
+                  5.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9849942645112821
+              },
+              "5_to_10_MeV_u": {
+                "n_points": 5,
+                "band_per_u_mev": [
+                  5.0,
+                  10.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 0.9989184451181765
+              },
+              "10_to_20_MeV_u": {
+                "n_points": 2,
+                "band_per_u_mev": [
+                  10.0,
+                  20.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.000618954753386
+              },
+              "20_to_50_MeV_u": {
+                "n_points": 4,
+                "band_per_u_mev": [
+                  20.0,
+                  50.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0009376629282802
+              },
+              "50_to_1000_MeV_u": {
+                "n_points": 17,
+                "band_per_u_mev": [
+                  50.0,
+                  1000.0
+                ],
+                "model_only_stopping_ratio_to_default_band_mean": 1.0008050910795934
+              }
+            },
+            "csda_range_shift_mm_vs_default": {
+              "100": -0.014004984311881685,
+              "350": -0.13290787904949752,
+              "430": -0.18287745992171978
+            }
+          }
+        }
+      }
+    }
+  },
+  "provenance": {
+    "archive_sha256": "b941a0c30793daddc4d119a2cc664bfbdd430554c3a4788be04e97ff6fcc0863",
+    "member_sha256": {
+      "data/raw/ICRU73_NEW.dat": "749768c1c2de475c928cc2c50a354903577139c11debd4b5948b035ca3a3d87e",
+      "data/raw/icru73_newEng.dat": "8b5b809f5c0cc4f6018f9faa89e9f73c7b9b81a3c588f98bef556712d4c77dd1"
+    },
+    "target": 276,
+    "code_sha": "5999f7891f8e6c5027578fd141cc41ea7b723e9f",
+    "ionmc_version": "0.1.0.dev0",
+    "numpy_version": "2.5.3",
+    "model": {
+      "source": "bethe",
+      "I_eV": 78.0,
+      "material": "water",
+      "options": {
+        "shell": true,
+        "barkas": true,
+        "bloch": true,
+        "mott": true,
+        "effective_charge": true,
+        "ls": "off"
+      }
+    },
+    "projectiles": {
+      "proton": {
+        "z": 1,
+        "a": 1,
+        "mass_mev": 938.27208816,
+        "mass": "ionmc projectile"
+      },
+      "alpha": {
+        "z": 2,
+        "a": 4,
+        "mass_mev": 3727.3794066,
+        "mass": "ionmc projectile"
+      },
+      "lithium7": {
+        "z": 3,
+        "a": 7,
+        "mass_mev": 6518.92572009,
+        "mass": "A u - Z m_e"
+      },
+      "beryllium9": {
+        "z": 4,
+        "a": 9,
+        "mass_mev": 8381.402925979999,
+        "mass": "A u - Z m_e"
+      },
+      "boron11": {
+        "z": 5,
+        "a": 11,
+        "mass_mev": 10243.880131869999,
+        "mass": "A u - Z m_e"
+      },
+      "carbon12": {
+        "z": 6,
+        "a": 12,
+        "mass_mev": 11174.86323534,
+        "mass": "ionmc projectile"
+      },
+      "nitrogen14": {
+        "z": 7,
+        "a": 14,
+        "mass_mev": 13037.34044123,
+        "mass": "A u - Z m_e"
+      },
+      "oxygen16": {
+        "z": 8,
+        "a": 16,
+        "mass_mev": 14895.080645240894,
+        "mass": "ionmc projectile"
+      },
+      "fluorine19": {
+        "z": 9,
+        "a": 19,
+        "mass_mev": 17693.78895543,
+        "mass": "A u - Z m_e"
+      },
+      "neon20": {
+        "z": 10,
+        "a": 20,
+        "mass_mev": 18624.7720589,
+        "mass": "A u - Z m_e"
+      }
+    },
+    "mass_note": "Li-7, Be-9, B-11, N-14, F-19 and Ne-20 use the nuclear mass A u - Z m_e (mass number times the atomic mass unit minus Z electron masses; mass excess and electron binding neglected). Model-only sensitivity: a 0.1 % mass increase changes the nitrogen14 stopping by at most 0.000799 (relative) over the grid at E >= 2 MeV/u.",
+    "mass_sensitivity_max_rel": 0.00079893019246291,
+    "sealed_sources": {
+      "src/ionmc/__init__.py": "447ddba9973864bbc68ef3986d9964996c3943d959e622391d9e2992e5a8e5d4",
+      "src/ionmc/_version.py": "8df5e1b28f2f4988d543036afa9df37607ae5697a8bc96d74d5916694c27bad9",
+      "src/ionmc/data/__init__.py": "96596b5eec408aced8a3c2075f79b11953869b08416f5633ff2f3c485f2be9bf",
+      "src/ionmc/data/cache.py": "91f3c18434c97d77717ece8fb3d4f90ef26abb8b2ab114262a9ec50d350e9072",
+      "src/ionmc/data/nist_star.py": "cf116e673a4b2f69ecd3e24335715bdadebdff9a7c49b6812538a78791a9189d",
+      "src/ionmc/materials.py": "8dda5bb8bc4c8b18fb7c85787e07bdc25f3cddef56de51e889818221a050e5ff",
+      "src/ionmc/physics/__init__.py": "cd5cfc60df6a66dc7c98a9e61dbb3837255d6558b2b8c805b3db0b58b8571003",
+      "src/ionmc/physics/lindhard_sorensen.py": "800d1f0a13524af5bad3946032f894479f606ba9b1482bf3ea190eeb9b4d3a6a",
+      "src/ionmc/physics/projectiles.py": "5b76a14a4d0275ef5d6bddbeaf33e8588d97301655e4e336351979095f202399",
+      "src/ionmc/physics/stopping.py": "4be0934a76219e4e56d3eb7c329137e5781f75ba923899cc44b0d2dc66cd6c08",
+      "validation/scripts/stopping/compare_icru73.py": "2dc16272a32a30cdf93a91bc006af8b436b529ead5fa465bccf5351159d6f1e8",
+      "validation/scripts/stopping/env_seal.py": "c05501da207024b36dea916007cf2f25b40ff1285c6c45f8acc031dd857231f7",
+      "validation/scripts/stopping/i3_band_diagnostic.py": "137c8414a4e0dcefaac883c16758efb18e3170cce97881267fc2e310c9ebd435",
+      "uv.lock": "0d7e79d3b88fd95f7b59d717efa27d6bfb9b78a435fb2ccc5b991e4347d37299",
+      "pyproject.toml": "0e73bd64aea5ef153e198c00a67c20efbc8ef1a5061f1f77d2bdab555dda9352",
+      "validation/results/stopping/v3-008-i3fu1/environment-seal.json": "4166366856656e669c7cd4aabbfec3c679203d90af3e9eca24dd1b1eb87991c9",
+      "validation/scripts/stopping/sealed_launch.py": "24bd01b6a16bb17072064f4a9d9d16fa5c9d55a483703db70fdfb77cf3f35c48"
+    },
+    "ionmc_loaded_from_repo": true,
+    "environment": {
+      "numpy": {
+        "running": "2.5.3",
+        "locked": "2.5.3",
+        "match": true
+      },
+      "python": {
+        "running": "3.12.0",
+        "major_minor": "3.12",
+        "requires_python": ">=3.12",
+        "check": "satisfies uv.lock requires-python"
+      },
+      "note": "numpy version and Python version checked against the uv.lock committed at code_sha; hashed against the committed environment seal: the numpy distribution (every RECORD-listed file), its _multiarray_umath extension, the interpreter executable, every loaded stdlib module and the launcher; only the kernel, libc and the C runtime the interpreter links against are NOT sealed (declared limitation)",
+      "seal": {
+        "numpy_version": "2.5.3",
+        "numpy_record_sha256": "596b7c79758f86e74c89f6d2c7917f59e09cf802c7a6d78e94d31bfc27241543",
+        "numpy_multiarray_sha256": "ceec5ba13ab88318632307fdd2df74f317fa293ce77be559c4298ddd1f4306b0",
+        "python_executable_sha256": "56bfd38b490ae57cd942ad6a7573cef9ad6c43d1c903bdfba92fa88512953c36",
+        "sys_version": "3.12.0 (main, Oct 18 2023, 16:27:16) [GCC 11.4.0]",
+        "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+        "sys_prefix": "/usr/local",
+        "sys_base_prefix": "/usr/local",
+        "stdlib_dir_sha256_of_listing": "3bf6d43a6d09ff06899b85f2755cc21753b5481e2b72bd742bbc4b4473b8782e",
+        "stdlib_modules_in_seal": 827,
+        "stdlib_modules_verified": 146,
+        "numpy_record_files_verified": 929,
+        "seal_sha256": "4166366856656e669c7cd4aabbfec3c679203d90af3e9eca24dd1b1eb87991c9",
+        "match": true
+      },
+      "runtime": {
+        "launch": {
+          "dont_write_bytecode_flag": 1,
+          "pycache_prefix": "/workspace/validation/generated/i3fu1-pycache",
+          "pycache_prefix_exists": false,
+          "pycache_prefix_files_at_start": null,
+          "isolated_flag": 1,
+          "no_site_flag": 1,
+          "meta_path": [
+            "BuiltinImporter",
+            "FrozenImporter",
+            "PathFinder"
+          ],
+          "machinery_problems": [],
+          "sys_path_at_capture": [
+            "/workspace/src",
+            "/workspace/validation/scripts/stopping",
+            "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/lib/python3.12/site-packages",
+            "/usr/local/lib/python312.zip",
+            "/usr/local/lib/python3.12",
+            "/usr/local/lib/python3.12/lib-dynload"
+          ],
+          "launcher_record": {
+            "origin": "validation/scripts/stopping/sealed_launch.py",
+            "launcher_sha256": "24bd01b6a16bb17072064f4a9d9d16fa5c9d55a483703db70fdfb77cf3f35c48",
+            "target": "validation/scripts/stopping/i3_band_diagnostic.py",
+            "target_path": "/workspace/validation/scripts/stopping/i3_band_diagnostic.py",
+            "target_sha256": "137c8414a4e0dcefaac883c16758efb18e3170cce97881267fc2e310c9ebd435",
+            "head_sha": "5999f7891f8e6c5027578fd141cc41ea7b723e9f",
+            "git": "/usr/bin/git",
+            "git_toplevel": "/workspace",
+            "git_common_dir": "/workspace/.git",
+            "target_committed": true,
+            "sys_modules_at_launch": [
+              "__future__",
+              "__main__",
+              "_abc",
+              "_blake2",
+              "_codecs",
+              "_collections",
+              "_collections_abc",
+              "_compression",
+              "_frozen_importlib",
+              "_frozen_importlib_external",
+              "_functools",
+              "_hashlib",
+              "_imp",
+              "_io",
+              "_locale",
+              "_operator",
+              "_posixsubprocess",
+              "_signal",
+              "_sre",
+              "_stat",
+              "_sysconfigdata__linux_x86_64-linux-gnu",
+              "_thread",
+              "_typing",
+              "_warnings",
+              "_weakref",
+              "_weakrefset",
+              "abc",
+              "builtins",
+              "codecs",
+              "collections",
+              "collections.abc",
+              "contextlib",
+              "copyreg",
+              "encodings",
+              "encodings.aliases",
+              "encodings.utf_8",
+              "enum",
+              "errno",
+              "fcntl",
+              "fnmatch",
+              "functools",
+              "genericpath",
+              "hashlib",
+              "importlib",
+              "importlib._bootstrap",
+              "importlib._bootstrap_external",
+              "importlib.machinery",
+              "io",
+              "ipaddress",
+              "itertools",
+              "keyword",
+              "locale",
+              "marshal",
+              "math",
+              "ntpath",
+              "operator",
+              "os",
+              "os.path",
+              "pathlib",
+              "posix",
+              "posixpath",
+              "re",
+              "re._casefix",
+              "re._compiler",
+              "re._constants",
+              "re._parser",
+              "reprlib",
+              "select",
+              "selectors",
+              "shutil",
+              "signal",
+              "stat",
+              "subprocess",
+              "sys",
+              "sysconfig",
+              "threading",
+              "time",
+              "types",
+              "typing",
+              "typing.io",
+              "typing.re",
+              "urllib",
+              "urllib.parse",
+              "warnings",
+              "zipimport",
+              "zlib"
+            ],
+            "python_executable": "/usr/local/bin/python3.12",
+            "flags": {
+              "isolated": 1,
+              "no_site": 1,
+              "dont_write_bytecode": 1
+            },
+            "pycache_prefix": "/workspace/validation/generated/i3fu1-pycache",
+            "pycache_prefix_state": "absent",
+            "git_work_tree_env": "/workspace",
+            "machinery_ok": true,
+            "sys_path": [
+              "/workspace/src",
+              "/workspace/validation/scripts/stopping",
+              "/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/lib/python3.12/site-packages",
+              "/usr/local/lib/python312.zip",
+              "/usr/local/lib/python3.12",
+              "/usr/local/lib/python3.12/lib-dynload"
+            ],
+            "sys_prefix": "/usr/local",
+            "sys_base_prefix": "/usr/local",
+            "stdlib_dir": "/usr/local/lib/python3.12",
+            "pid": 2,
+            "stdlib_modules_at_launch": 58
+          },
+          "launch_ok": true
+        },
+        "stdlib_modules_verified": 147,
+        "numpy_modules_verified": 86,
+        "dont_write_bytecode": true,
+        "modules_without_bytecode_cache": 99
+      }
+    },
+    "expect_i3": {
+      "path": "validation/results/stopping/v3-008-i3/icru73_comparison.json",
+      "sha256": "c0c7f16dbcb51e2d590656d336ae4584910a16fbdba3649f4385213bb5b81baa",
+      "committed_at": "5999f7891f8e6c5027578fd141cc41ea7b723e9f",
+      "matched": true
+    }
+  }
+}

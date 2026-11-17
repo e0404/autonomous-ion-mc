@@ -1,0 +1,1090 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py combine --row t12-ion-lv --dirs /workspace/validation/generated/transport/lv8-f5f3a701-21 /workspace/.ionmc-cache/transport-samples/f5f3a701/17 /workspace/.ionmc-cache/transport-samples/f5f3a701/18 /workspace/.ionmc-cache/transport-samples/f5f3a701/19 /workspace/.ionmc-cache/transport-samples/f5f3a701/20 --partials-manifest /workspace/.ionmc-cache/transport-samples/f5f3a701/manifest.json --scale 1.0 --timeout 1350 --seed-base 20581004
+# git_sha: f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d
+# started_utc: 2026-11-11T03:20:30Z
+# step_timeout_s: 1500
+#JSON-BEGIN
+{
+ "attestation": {
+  "manifest_path": "/workspace/.ionmc-cache/transport-samples/f5f3a701/manifest.json",
+  "manifest_sha256": "1585d3e47d2f3abed44b0a19b8efc05f377c9cb59b5d3f79981c8532fc25e4ec",
+  "manifest_source": "host-runner protected stdout PARTIAL lines",
+  "partials": [
+   {
+    "content_sha256": "feee6d69632fea40bf96f5d646c0893074b3e4d2d98b561f226236f69cb719d6",
+    "host_run_id": "RUN-20261111T021859Z-00fbeb58",
+    "name": "t12-ion-lv-python-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "3496aa3c0a332012e48e25c483d3af4a3a2c9151910549f92da11ff3088407c1",
+    "host_run_id": "RUN-20261111T023514Z-7f8be657",
+    "name": "t12-ion-lv-python-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "9b8bbffb21b8f83e9769d734936cdecf7a8715d0c8edd4c03da74034d49258e6",
+    "host_run_id": "RUN-20261111T025123Z-0d0cccbc",
+    "name": "t12-ion-lv-cpu64-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "c1731d26d49ba54038140ecc53af847005ae993515caa1eba757342ceb4465ab",
+    "host_run_id": "RUN-20261111T030552Z-487b99ba",
+    "name": "t12-ion-lv-cpu64-s1.json",
+    "origin": "imported"
+   }
+  ],
+  "protected_host_records_verified_by_code": false,
+  "run_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+  "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+ },
+ "format": 1,
+ "frozen_histories": 204000,
+ "git_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "histories": 204000,
+ "pass": true,
+ "reduced": false,
+ "row": "t12-ion-lv",
+ "seed_base": 20581004,
+ "shards": {
+  "cpu64": [
+   20585906,
+   20585907
+  ],
+  "python": [
+   20585904,
+   20585905
+  ]
+ },
+ "step": "t12-ion-lv-combine",
+ "suite": "lv8",
+ "t12_ion_lv": {
+  "python_vs_cpu64": {
+   "arrays": {
+    "idd": {
+     "bonferroni_bound": 4.5242639160611855,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 149.88813103359115,
+     "chi2_all_selected_bins": 149.88813103360275,
+     "groups": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       5
+      ],
+      [
+       5,
+       6
+      ],
+      [
+       6,
+       7
+      ],
+      [
+       7,
+       8
+      ],
+      [
+       8,
+       9
+      ],
+      [
+       9,
+       10
+      ],
+      [
+       10,
+       11
+      ],
+      [
+       11,
+       12
+      ],
+      [
+       12,
+       13
+      ],
+      [
+       13,
+       14
+      ],
+      [
+       14,
+       15
+      ],
+      [
+       15,
+       16
+      ],
+      [
+       16,
+       17
+      ],
+      [
+       17,
+       18
+      ],
+      [
+       18,
+       19
+      ],
+      [
+       19,
+       20
+      ],
+      [
+       20,
+       21
+      ],
+      [
+       21,
+       22
+      ],
+      [
+       22,
+       23
+      ],
+      [
+       23,
+       24
+      ],
+      [
+       24,
+       25
+      ],
+      [
+       25,
+       26
+      ],
+      [
+       26,
+       27
+      ],
+      [
+       27,
+       28
+      ],
+      [
+       28,
+       29
+      ],
+      [
+       29,
+       30
+      ],
+      [
+       30,
+       31
+      ],
+      [
+       31,
+       32
+      ],
+      [
+       32,
+       33
+      ],
+      [
+       33,
+       34
+      ],
+      [
+       34,
+       35
+      ],
+      [
+       35,
+       36
+      ],
+      [
+       36,
+       37
+      ],
+      [
+       37,
+       38
+      ],
+      [
+       38,
+       39
+      ],
+      [
+       39,
+       40
+      ],
+      [
+       40,
+       41
+      ],
+      [
+       41,
+       42
+      ],
+      [
+       42,
+       43
+      ],
+      [
+       43,
+       44
+      ],
+      [
+       44,
+       45
+      ],
+      [
+       45,
+       46
+      ],
+      [
+       46,
+       47
+      ],
+      [
+       47,
+       48
+      ],
+      [
+       48,
+       49
+      ],
+      [
+       49,
+       50
+      ],
+      [
+       50,
+       51
+      ],
+      [
+       51,
+       52
+      ],
+      [
+       52,
+       53
+      ],
+      [
+       53,
+       54
+      ],
+      [
+       54,
+       55
+      ],
+      [
+       55,
+       56
+      ],
+      [
+       56,
+       57
+      ],
+      [
+       57,
+       58
+      ],
+      [
+       58,
+       59
+      ],
+      [
+       59,
+       60
+      ],
+      [
+       60,
+       61
+      ],
+      [
+       61,
+       62
+      ],
+      [
+       62,
+       63
+      ],
+      [
+       63,
+       64
+      ],
+      [
+       64,
+       65
+      ],
+      [
+       65,
+       66
+      ],
+      [
+       66,
+       67
+      ],
+      [
+       67,
+       68
+      ],
+      [
+       68,
+       69
+      ],
+      [
+       69,
+       70
+      ],
+      [
+       70,
+       71
+      ],
+      [
+       71,
+       72
+      ],
+      [
+       72,
+       73
+      ],
+      [
+       73,
+       74
+      ],
+      [
+       74,
+       75
+      ],
+      [
+       75,
+       76
+      ],
+      [
+       76,
+       77
+      ],
+      [
+       77,
+       78
+      ],
+      [
+       78,
+       79
+      ],
+      [
+       79,
+       80
+      ],
+      [
+       80,
+       81
+      ],
+      [
+       81,
+       82
+      ],
+      [
+       82,
+       83
+      ],
+      [
+       83,
+       84
+      ],
+      [
+       84,
+       85
+      ],
+      [
+       85,
+       86
+      ],
+      [
+       86,
+       87
+      ],
+      [
+       87,
+       88
+      ],
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ],
+      [
+       112,
+       113
+      ],
+      [
+       113,
+       114
+      ],
+      [
+       114,
+       115
+      ],
+      [
+       115,
+       116
+      ],
+      [
+       116,
+       117
+      ],
+      [
+       117,
+       118
+      ],
+      [
+       118,
+       119
+      ],
+      [
+       119,
+       120
+      ],
+      [
+       120,
+       121
+      ],
+      [
+       121,
+       122
+      ],
+      [
+       122,
+       123
+      ],
+      [
+       123,
+       124
+      ],
+      [
+       124,
+       125
+      ],
+      [
+       125,
+       126
+      ],
+      [
+       126,
+       127
+      ],
+      [
+       127,
+       128
+      ],
+      [
+       128,
+       129
+      ],
+      [
+       129,
+       130
+      ],
+      [
+       130,
+       131
+      ],
+      [
+       131,
+       132
+      ],
+      [
+       132,
+       133
+      ],
+      [
+       133,
+       134
+      ],
+      [
+       134,
+       135
+      ],
+      [
+       135,
+       136
+      ],
+      [
+       136,
+       137
+      ],
+      [
+       137,
+       138
+      ],
+      [
+       138,
+       139
+      ],
+      [
+       139,
+       140
+      ],
+      [
+       140,
+       141
+      ],
+      [
+       141,
+       142
+      ],
+      [
+       142,
+       143
+      ],
+      [
+       143,
+       144
+      ],
+      [
+       144,
+       145
+      ],
+      [
+       145,
+       146
+      ],
+      [
+       146,
+       147
+      ],
+      [
+       147,
+       148
+      ],
+      [
+       148,
+       149
+      ],
+      [
+       149,
+       150
+      ],
+      [
+       150,
+       151
+      ],
+      [
+       151,
+       152
+      ],
+      [
+       152,
+       153
+      ],
+      [
+       153,
+       154
+      ],
+      [
+       154,
+       155
+      ],
+      [
+       155,
+       156
+      ],
+      [
+       156,
+       157
+      ],
+      [
+       157,
+       158
+      ],
+      [
+       158,
+       159
+      ],
+      [
+       159,
+       160
+      ],
+      [
+       160,
+       161
+      ],
+      [
+       161,
+       162
+      ],
+      [
+       162,
+       163
+      ],
+      [
+       163,
+       164
+      ],
+      [
+       164,
+       165
+      ]
+     ],
+     "hull": [
+      0,
+      164
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 3.293611846712096,
+     "max_abs_z_all_bins": 3.2936118467125115,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 165,
+     "n_groups": 165,
+     "n_merged_groups": 0,
+     "n_supported_bins": 165,
+     "p_value": 0.6456771614192903,
+     "p_value_max_z": 0.25337331334332835,
+     "p_value_wilson_hilferty": 0.7944489051226904,
+     "pass": true,
+     "singleton_mass_fraction": 0.9999999999999999,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       40
+      ],
+      "index": 46,
+      "required": [
+       20,
+       20
+      ],
+      "supported": true
+     }
+    },
+    "lat25": {
+     "bonferroni_bound": 3.662259930887615,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 1.3773291600685145,
+     "chi2_all_selected_bins": 1.377329160068509,
+     "groups": [
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ]
+     ],
+     "hull": [
+      98,
+      101
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 1.142815056110869,
+     "max_abs_z_all_bins": 1.1428150561108659,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 4,
+     "n_groups": 4,
+     "n_merged_groups": 0,
+     "n_supported_bins": 4,
+     "p_value": 0.775112443778111,
+     "p_value_max_z": 0.6136931534232883,
+     "p_value_wilson_hilferty": 0.8492564758236734,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       40
+      ],
+      "index": 98,
+      "required": [
+       20,
+       20
+      ],
+      "supported": true
+     }
+    },
+    "lat50": {
+     "bonferroni_bound": 3.836106931176034,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 9.567876641151859,
+     "chi2_all_selected_bins": 9.46099911664774,
+     "groups": [
+      [
+       95,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       105
+      ]
+     ],
+     "hull": [
+      95,
+      104
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.0907224891052354,
+     "max_abs_z_all_bins": 1.9225395359846864,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 10,
+     "n_groups": 8,
+     "n_merged_groups": 2,
+     "n_supported_bins": 8,
+     "p_value": 0.3503248375812094,
+     "p_value_max_z": 0.2888555722138931,
+     "p_value_wilson_hilferty": 0.29615262005481535,
+     "pass": true,
+     "singleton_mass_fraction": 0.9376420038054638,
+     "unsupported_bins": [
+      95,
+      104
+     ],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       39,
+       40
+      ],
+      "index": 96,
+      "required": [
+       20,
+       20
+      ],
+      "supported": true
+     }
+    },
+    "lat90": {
+     "bonferroni_bound": 4.08817367365812,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 15.951482468332795,
+     "chi2_all_selected_bins": 18.000679036574983,
+     "groups": [
+      [
+       86,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       114
+      ]
+     ],
+     "hull": [
+      86,
+      113
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 1.7417811437002624,
+     "max_abs_z_all_bins": 1.58436392046467,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 28,
+     "n_groups": 23,
+     "n_merged_groups": 2,
+     "n_supported_bins": 21,
+     "p_value": 0.8225887056471765,
+     "p_value_max_z": 0.8420789605197402,
+     "p_value_wilson_hilferty": 0.857684741291824,
+     "pass": true,
+     "singleton_mass_fraction": 0.9823412956232472,
+     "unsupported_bins": [
+      86,
+      87,
+      88,
+      89,
+      111,
+      112,
+      113
+     ],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       40
+      ],
+      "index": 102,
+      "required": [
+       20,
+       20
+      ],
+      "supported": true
+     }
+    }
+   },
+   "bootstrap": {
+    "n_boot": 2000,
+    "seed": 20261004
+   },
+   "calibration": "studentized_bootstrap_t",
+   "max_z_calibration": "bootstrap_max_t",
+   "n_batches": [
+    40,
+    40
+   ],
+   "pass": true,
+   "permutation": {
+    "n_perm": 2000,
+    "seed": 20261004
+   },
+   "scalars": {
+    "r80_mm": {
+     "a": 162.9689907270626,
+     "b": 162.95444487359836,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.008509922046676777,
+     "se_b": 0.0011763734874360632,
+     "z": 1.693180644970305
+    },
+    "sigma_lat_05R_mm": {
+     "a": 0.32776005942823966,
+     "b": 0.33402471750245055,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.002714742340426563,
+     "se_b": 0.0005752436004037636,
+     "z": -2.257518878096522
+    },
+    "total_deposit_mev": {
+     "a": 3479.999999999939,
+     "b": 3480.0000000000014,
+     "bound": 1e-12,
+     "noise_allowance": 5.507997619134457e-10,
+     "pass": true,
+     "relative_difference": 1.7902410078001597e-14,
+     "rule": "deterministic_precision_bound",
+     "se_a": 1.5637578355083809e-10,
+     "se_b": 1.76736934221597e-11,
+     "z": -0.39588135258548784
+    }
+   }
+  }
+ }
+}
+#JSON-END
+
+# exit=0

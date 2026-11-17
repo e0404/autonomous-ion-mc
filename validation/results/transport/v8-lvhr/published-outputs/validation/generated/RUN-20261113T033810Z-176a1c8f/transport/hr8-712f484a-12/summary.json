@@ -1,0 +1,108 @@
+{
+ "attestation": null,
+ "conformant": false,
+ "deferred_steps": [],
+ "execution_mode": "single-process-diagnostic",
+ "git_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+ "identity": "9262a0734d0106c0720b319723a5079201f2c23d44b9e9366240c8baf3dcd969",
+ "non_conformant_reasons": [
+  "execution mode single-process-diagnostic (diagnostic, not the qualification mode)",
+  "12-t12-ion-hr-combine: imported_partials_unverified_by_code"
+ ],
+ "partials_attestation_problems": [
+  "12-t12-ion-hr-combine: imported_partials_unverified_by_code"
+ ],
+ "pass": true,
+ "problems": [],
+ "reduced_history_counts": false,
+ "seed_base": "20591004",
+ "sha_source": "git",
+ "single_process_env": "OMP_NUM_THREADS=1,OPENBLAS_NUM_THREADS=1,MKL_NUM_THREADS=1,NUMEXPR_NUM_THREADS=1,IONMC_SINGLE_PROCESS=1",
+ "source_ok": true,
+ "steps": {
+  "12-t12-ion-hr-combine": {
+   "attestation": {
+    "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+    "manifest_sha256": "4539262ae918680b8e7b0ed996660d320e049f0932b6da177988580a92063153",
+    "manifest_source": "host-runner protected stdout PARTIAL lines",
+    "partials": [
+     {
+      "content_sha256": "3e7c32456fcdaa585745b25a3edad97a30b2c594f5b8f9d3078c244a0d44969a",
+      "host_run_id": "RUN-20261113T020456Z-05ed7790",
+      "name": "t12-ion-hr-c290-cpu64-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "2f5c842ea5012dc134de6748650ab5ccb78291f7b11831d82f9df82091edbdbb",
+      "host_run_id": "RUN-20261113T021924Z-1eaa5433",
+      "name": "t12-ion-hr-c290-cpu64-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "b92084c55ba418b09b7aa00bc6ea368736e9bfff019def14261c2f9b9a6e6a7b",
+      "host_run_id": "RUN-20261113T023349Z-79c64988",
+      "name": "t12-ion-hr-c290-cuda32-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "8198193ea768ba6d089e2a250d19a3c35185e700686c12e43dac70408965ae54",
+      "host_run_id": "RUN-20261113T023615Z-b875aca3",
+      "name": "t12-ion-hr-c290-cuda64-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "929334f44ecd82dc3c725655b6cb2d2c20d985b385c0f821acdc50b2db2d6ee9",
+      "host_run_id": "RUN-20261113T023844Z-91c97e14",
+      "name": "t12-ion-hr-he150-cpu64-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "16c184946e343d4c4d36d6d3780b9e138650bdb26cd6d9511c6708ef4b6aae7f",
+      "host_run_id": "RUN-20261113T024934Z-685d4820",
+      "name": "t12-ion-hr-he150-cpu64-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "b9a3e14af0bd052d779b72e160d1b380095e14fc009fd933ce4fb4772c7eb90f",
+      "host_run_id": "RUN-20261113T030022Z-482dcc1b",
+      "name": "t12-ion-hr-he150-cuda32-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "79a5d7fbeabc88100dbe6a294fbc072fda6b3c748d446280365a8e3914b54328",
+      "host_run_id": "RUN-20261113T030211Z-1ac4b788",
+      "name": "t12-ion-hr-o350-cpu64-s0.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "92215bc664c790738c723b6139fe657b05736d68b4e25bf98cfc244ffc9a786d",
+      "host_run_id": "RUN-20261113T031845Z-8a064208",
+      "name": "t12-ion-hr-o350-cpu64-s1.json",
+      "origin": "imported"
+     },
+     {
+      "content_sha256": "81611b63c908f88dbd682b47f2f9fb9235d46cd7ab9cdb929333f60f56a95968",
+      "host_run_id": "RUN-20261113T033518Z-2e8ccde1",
+      "name": "t12-ion-hr-o350-cuda32-s0.json",
+      "origin": "imported"
+     }
+    ],
+    "protected_host_records_verified_by_code": false,
+    "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+    "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+   },
+   "deselected_tests": null,
+   "exit": 0,
+   "file": "12-t12-ion-hr-combine.txt",
+   "frozen_histories": 4600000,
+   "histories": 4600000,
+   "pass": true,
+   "problems": [],
+   "reduced": false,
+   "status": "executed"
+  }
+ },
+ "subset": true,
+ "suite": "hr8",
+ "tree_dirty": "no"
+}

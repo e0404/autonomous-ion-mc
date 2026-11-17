@@ -1,8 +1,11 @@
-# Electromagnetic transport of protons
+# Electromagnetic transport of protons and light ions
 
 Implemented in `ionmc.physics.em`, `ionmc.physics.kinematics`, `ionmc.physics.scattering` and
-`ionmc.transport` for protons from the table floor to 500 MeV with local deposition of delta
-electrons and no nuclear interactions. Decision:
+`ionmc.transport` for protons from the table floor to 500 MeV and, for the ions 4He, 12C and 16O,
+over the source domains listed in [transport engine](../architecture/transport.md) (alpha 50 to 250,
+carbon12 80 to 430, oxygen16 100 to 430 MeV/u), with local deposition of delta electrons and no
+nuclear interactions (ions: decision 0043; no fragments or secondary ions). Sections below are
+written for protons; the ion differences are summarised in "Ions" at the end. Decision:
 [0039](../generated/decisions/0039-proton-transport-engine.md). The step algorithm and the API are in
 [transport engine](../architecture/transport.md). Units: energy MeV, length mm, mass thickness and
 range g/cm2, density g/cm3, scattering power rad2/mm.
@@ -189,6 +192,54 @@ functions as the tests, `ionmc.transport.mcs_checks`) and archived in
 source); see `validation/results/transport/README.md`. The negative control gives a relative
 spread of 1.6 (160 %) of the per-step Highland sum over the step lengths, against 2e-5 for the
 engine's stepped `T_dM` up to 1 mm; the worst U5 deviation is 1.5e-3.
+
+## Ions (4He, 12C, 16O; decision 0043)
+
+* **Stopping and straggling.** The same CSDA step algorithm and Bohr straggling with the ion's
+  Bethe table (effective charge, shell, Barkas and Bloch terms); the Lindhard-Sorensen option
+  `BetheOptions.ls` defaults to `"off"` and never changes proton tables.
+* **Cutoff.** `e_cut_ion_mev_per_u * A` (default 2 MeV/u), total kinetic energy.
+* **Multiple scattering.** The Moliere-Hanson `differential_moliere` model with the projectile's
+  charge and mass; its scattering function `f_dM` for z >= 2 uses the exact-Omega mapping: the ion
+  state (`pv`, `p1v1`) is matched to the proton-equivalent state with the same Omega, evaluated on
+  a Bethe proton path up to 4000 MeV. The domain status is recorded per run (`fdm_extrapolated`
+  is True when the proton-equivalent energy exceeds 300 MeV; above 4000 MeV the run fails closed).
+* **Mapping evaluation.** `PhysicsOptions.mcs_mapping_eval` (ignored for protons). Both modes
+  solve the matching equation `b_p(pv_eq, r pv_eq) = b_ion(pv, p1v1)` exactly on every step, with
+  the same Illinois iteration, tolerance (|residual| <= 1e-13 or a step/bracket <= 1e-14 in
+  `ln pv_eq`, float64) and status codes. `"root"` starts from the full proton-path bracket.
+  `"table"`, the default, starts from a tight bracket around the bilinear value of a per-material
+  `pv_eq/pv` table (uniform 128 x 128 grid in (`ln pv`, `ln(p1v1/pv)`), built by `validate()` with
+  the root solve at the nodes the run's initial states can reach, `pv(E0 ± 6 sigma_E)`): one end
+  at the table value, the other `w` away on the side of the sign change, with
+  `w = max(10 x the table's build-time interpolation estimate, 1e-5)` (relative); without a sign
+  change the bracket is widened once (x10), then the full bracket is used; every step whose
+  initial tight bracket had no sign change (widened or full bracket needed) is counted in the
+  diagnostic `mcs_table_bracket_miss` (it never invalidates a result). The table is an
+  accelerator only: its interpolation error (estimated at build from second differences on a
+  2x-refined root-solve grid, safety factor 2) is a performance diagnostic, not a correctness
+  claim (Codex REVIEW-ee53867c). Coverage does not restrict availability (Codex
+  REVIEW-16c63514): a table cell with a node where the root solve fails stays invalid, and a
+  state in it or outside the table has no starting guess and is solved from the full bracket, as
+  `"root"` (not counted as a miss); the fraction of the band cells with four valid nodes is
+  recorded (`table_coverage`). The mapping is defined where the proton-equivalent state stays
+  inside the proton b-slab range: with multiple scattering on, `validate()` root-solves the
+  table nodes of the run's reachable states in both modes and fails closed when any has no root
+  (observed: oxygen16 at 100 and 150 MeV/u in copper and lead, root status 2 at the lowest-energy
+  states with a whole-range slab), so every validated run has coverage 1.0. With
+  `multiple_scattering=False` the mapping is unused: for an ion source no f_dM domain check, no
+  proton path, no packing and no root solve happen (summary `mcs_mapping.fdm_domain = "not
+  evaluated (multiple_scattering=False)"`). A step whose solve fails (nonzero status) is counted as
+  `mcs_mapping_failure` and the result is invalid. Tests: `tests/ionmc/test_ion_mcs_table.py`
+  (the accelerated root equals the root path within the solver tolerance on >= 2000 random states
+  per ion, material and domain end). Cost (warp-cpu float64, single thread): about 21 us per step
+  for `"table"` against 40 us for `"root"`. The summary (`mcs_mapping`) records the evaluation,
+  the table sizes, axes, domain, sha256, the contract, the solver tolerances, the bracket
+  constants and widths, the interpolation estimate and the table coverage (overall and per
+  material).
+* **Not included.** Nuclear interactions, fragmentation and secondary ions (`nuclear=True` fails
+  closed for z >= 2). No validation statement is made here beyond the CI rows of the test suite
+  (`tests/ionmc/test_v3_008_rows_ci.py`).
 
 ## Sources and units
 

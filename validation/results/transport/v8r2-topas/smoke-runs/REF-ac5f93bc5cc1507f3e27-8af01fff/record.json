@@ -1,0 +1,43 @@
+{
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "303cce4c129d387c",
+    "payload_sha256": "e45682830b451ced7cc4504fc5370abc2af8eb22aec330b0fee08b1b6b10f030",
+    "public_key": "4ca28f27ff512758365bdd54799baaaaec661eeac507a7c6ff0785cf1ac417e9",
+    "schema": "ionmc-attestation-1",
+    "signature": "913944dfb6ba98ceea884cc48fce6395d059469961bcd748cd715877fe56ba98f6f3c0baeb88246b637d130f767d685bfcc7e65731afc3846eb100722fe13a03",
+    "signed_at_utc": "2026-11-09T17:20:20.658169+00:00",
+    "signer": "reference-runner"
+  },
+  "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+  "configuration_id": "ac5f93bc5cc1507f3e276a38f0d7dbc1d274bc0efcecdffcd041200716b63d18",
+  "engine": "topas",
+  "error": null,
+  "exit_code": 0,
+  "finished_at": "2026-11-09T17:20:20.653487+00:00",
+  "metadata_status": "declared; inspect native logs/outputs",
+  "missing_outputs": [],
+  "output_count": 3,
+  "output_files_sha256": "5dd2cb076442165c671bdcb195b8194f1f5954fc7cdd0a26b012b63ae834f159",
+  "request_sha256": "f06ac967badfa0d5c524791a4e5ed2c96fd598c7f47046ad94dfba6c4272d248",
+  "run_id": "REF-ac5f93bc5cc1507f3e27-8af01fff",
+  "schema_version": 3,
+  "scientifically_validated": false,
+  "seconds": 0.8720164739061147,
+  "started_at": "2026-11-09T17:20:19.781468+00:00",
+  "stderr": {
+    "bytes": 0,
+    "text": "",
+    "truncated": false
+  },
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout": {
+    "bytes": 4720542,
+    "text": "er_Z_Division has replica number: 1639\nG4WT0 > PostStep Touchable(2): Water_1x1x2500/Water_X_Division has replica number: 0\nG4WT0 > PostStep Touchable(1): Water_1x1x2500/Water_Y_Division has replica number: 0\nG4WT0 > PostStep Touchable(0): Water_1x1x2500/Water_Z_Division has replica number: 1640\nG4WT0 >  1679    -1.61    0.809      164     0.188    0.567  0.00144       164       Water Water_1x1x2500\nG4WT0 > NoteIncidentParticleInfo called for step: 0x70371420e800, fIncidentParticleEnergy = 0.1881497752061765, fIncidentParticleMomentum = 64.8558802354613\nG4WT0 > PreStep x,y,z: -1.612096508644703, 0.8094184700642192, 164\nG4WT0 > Step Energy Deposit: 0.1881497752061765\nG4WT0 > Step Length: 0.001298339187600518\nG4WT0 > PreStep Touchable(2): Water_1x1x2500/Water_X_Division has replica number: 0\nG4WT0 > PreStep Touchable(1): Water_1x1x2500/Water_Y_Division has replica number: 0\nG4WT0 > PreStep Touchable(0): Water_1x1x2500/Water_Z_Division has replica number: 1640\nG4WT0 > PostStep Touchable(2): Water_1x1x2500/Water_X_Division has replica number: 0\nG4WT0 > PostStep Touchable(1): Water_1x1x2500/Water_Y_Division has replica number: 0\nG4WT0 > PostStep Touchable(0): Water_1x1x2500/Water_Z_Division has replica number: 1640\nG4WT0 >  1680    -1.61    0.809      164         0    0.188   0.0013       164       Water ionIoni\nG4WT0 >  1681    -1.61    0.809      164         0        0        0       164       Water NoProcess\n\nTOPAS run sequence complete.\nParticle source Beam: Total number of histories: 3\nParticle source Demo: Total number of histories: 0\n\nScorer: IDD\nResults have been written to file: idd_dose.csv\n\nElapsed times:\nParameter Reading : User=0.000000s Real=0.001277s Sys=0.000000s [Cpu=0.0%]\n    Initialization: User=0.020000s Real=0.019284s Sys=0.000000s [Cpu=103.7%]\n         Execution: User=0.680000s Real=0.715269s Sys=0.040000s [Cpu=100.7%]\n      Finalization: User=0.000000s Real=0.003571s Sys=0.010000s [Cpu=280.0%]\n             Total: User=0.7s Real=0.739401s Sys=0.05s\n",
+    "truncated": true
+  },
+  "stdout_sha256": "1704f9c80a8ec41f664f18e147d1907f58b5426ccf8cd81caa47a44e0bffcaea",
+  "succeeded": true,
+  "task_id": "V3-008",
+  "timed_out": false
+}

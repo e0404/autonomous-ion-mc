@@ -27,6 +27,19 @@ quantize) and ``edep_excluded_from_let`` (E, class "local", all species includin
 pseudo-species). Together the two counts give the deterministic rounding bound of every
 channel according to its class mask.
 
+End of range (``continuous_residual_v1``, V3-008 R2-STOP3): the residual segment below the cutoff
+is scored as class "step" sub-steps. A sub-step that ends at or above the transport-table floor
+``E_lo`` of its material is an ordinary step (water ``S_mid``, ramp slope ``k`` and ``Edot`` at its
+mean energy). A sub-step that reaches below the floor follows the constant stopping-power
+convention of the residual energy profile: it is scored at the floor state ``S_p = S_w(E_lo)``,
+``k = 0``, ``E_p = E_lo``, and its pieces carry the flag ``CLASS_RESIDUAL_FLOOR`` (never a class a
+channel selects): a lookup is evaluated at the floor argument, clamped to its axis *by
+definition*, and is not counted in ``lookup_out_of_domain``. So the coverage the validation
+requires (energy axis from the table floor, LET axis over the water-ramp envelope from the
+floor) is exactly what such a run evaluates, and nothing below the floor is extrapolated. The
+capacity envelope of the primary then starts at ``min(E_cut, 2 E_lo)`` instead of ``E_cut``
+(scored midpoint energies reach down to ``E_lo``).
+
 Channels live in one int64 array ``acc[B, sum_c size_c]``; channel ``c`` owns a contiguous block
 of ``size_c`` columns (``n_voxels``, times ``n_bins + 2`` for a spectrum) at ``offset_c``. An
 increment is quantized as ``floor(x 2^k_c + 1/2)``. ``k_c`` follows the capacity rule of
@@ -68,6 +81,10 @@ from ionmc.transport.tally import MAX_QUANTA, QUANTUM_MEV
 KINDS = ("E", "L", "LS", "LS2", "ES", "FE", "FL", "N")
 CLASS_STEP = 1
 CLASS_LOCAL = 2
+CLASS_RESIDUAL_FLOOR = 4
+"""Piece flag (with ``CLASS_STEP``) of an end-of-range sub-step below the transport-table floor:
+scored at the constant floor state, lookups clamped by definition (not out-of-domain). Not a
+class mask bit of any channel, so it never changes the channel selection."""
 GEN_MAX = 2**31 - 1
 MAX_CHANNELS = 256
 MAX_SPECTRUM_BINS = 4096
@@ -329,7 +346,11 @@ def water_ramp_envelope(
     scorer uses; the source table only enters through the coverage check and, without a runtime
     row, a conservative fallback), per bin over ``[e_lo/2, e_hi]`` (clamped as the runtime clamps).
     Returns ``S_mid`` extrema, ``gamma_max``, ``amp`` and the ramp extrema ``S_bar_min/max``;
-    fails closed if ``amp >= 1`` (the ramp could reach zero or negative: never clamped)."""
+    fails closed if ``amp >= 1`` (the ramp could reach zero or negative: never clamped).
+    End of range ``continuous_residual_v1`` (module docstring): an ordinary residual sub-step has
+    ``dE <= E`` like any step, so the same bound holds with ``e_lo/2`` at most the table floor
+    ``E_lo`` (the caller passes ``e_lo = min(E_cut, 2 E_lo)``); a sub-step below the floor is
+    scored at ``S_w(E_lo)`` with ``k = 0``, inside the envelope of the floor bin."""
     floor_mev = float(water.energy_per_u[0]) * a
     e_lo_mid = max(0.5 * e_lo_mev, floor_mev)
     # coverage of the source table (fails closed); every value below comes from the runtime row
@@ -576,6 +597,12 @@ def _check_lookup(
     s_lo: float,
     s_hi: float,
 ) -> None:
+    """Species rows and axis coverage of a lookup: ``[e_lo_per_u, e_hi_per_u]`` (energy per
+    nucleon, from the transport-table floor) or ``[s_lo, s_hi]`` (LET, the water-ramp envelope
+    from the floor). Arguments below the floor are never evaluated as such: the end-of-range
+    sub-steps below the floor (``continuous_residual_v1``) are scored at the floor, their lookups
+    clamped by definition and not counted as out-of-domain (``CLASS_RESIDUAL_FLOOR``), so a table
+    whose domain starts exactly at the floor is complete."""
     need = [s for s in selected if s in {p for p, _ in producible}]
     missing = [s for s in need if s not in table.values]
     if missing:
@@ -673,6 +700,7 @@ def compile_channels(
     producible: frozenset[tuple[str, str]],
     max_step_mm: float | None = None,
     nuclear: NuclearCapacity | None = None,
+    continuous_residual: bool = False,
 ) -> ChannelPlan:
     """Compile ``requests`` into a :class:`ChannelPlan` (deduplicated, ordered by grid, with
     offsets, quanta and memory guard) or raise ``UnsupportedCombinationError``.
@@ -682,6 +710,9 @@ def compile_channels(
     water stopping power over ``[E_cut, E_hi]`` as decision 0040 section 4 prescribes.
     ``nuclear`` (a nuclear run, decision 0041 section 5) extends the bounds to the secondary
     protons and deuterons as documented at :class:`NuclearCapacity`.
+    ``continuous_residual`` (end-of-range model ``continuous_residual_v1``): the residual
+    sub-steps are scored down to the table floor ``E_lo`` (see the module docstring), so the
+    primary's capacity envelope covers midpoint energies from ``min(E_cut / 2, E_lo)``.
     """
     a = projectile.a
     species_of_projectile(projectile)  # registry membership
@@ -702,8 +733,13 @@ def compile_channels(
     # energy bound of a whole history (the E, ES and FE accumulators)
     e_top = e_hi_mev if nuclear is None else max(e_hi_mev, nuclear.transport_energy_bound_mev)
     e_hist = e_top if nuclear is None else max(e_hi_mev, nuclear.history_energy_bound_mev)
+    # the third entry e_lo: the envelopes cover the scored midpoint energies from e_lo / 2; with the
+    # continuous residual the residual sub-steps are scored down to the table floor (module doc)
+    e_lo_env = e_cut_mev
+    if continuous_residual:
+        e_lo_env = min(e_cut_mev, 2.0 * float(tables.e_min_mev.min()))
     sp_list: list[tuple[StoppingTable, TransportTables, float, int]] = [
-        (water, tables, e_cut_mev, a)
+        (water, tables, e_lo_env, a)
     ]
     if nuclear is not None:
         sp_list.append(

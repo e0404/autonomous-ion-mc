@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "git_sha": "7dfab63471e07d7ac863784aacf447f47a4a3fd7",
+  "request_id": "IR-20261116-132756-B6F2C2",
+  "created_at_utc": "2026-11-16T13:27:56.953030+00:00",
+  "task_id": "V3-INFRA-006",
+  "category": "authorization",
+  "summary": "One external action is needed: restart the codex-worker MCP service so that the merged V3-INFRA-006 change (signed, timestamped review records; PR #90 merged into v3/develop at 7dfab634) takes effect. After the restart the service creates its signing key on the first finished review; the orchestrator then runs one discovery review and publishes the public key through the documented V3-INFRA-003/005 procedure. This supersedes the earlier request IR-20261116-123921-312B59 (whose option (A) was withdrawn by its addendum 1): no decision beyond the restart is requested.",
+  "investigation": {
+    "blocked_claim": "Activation of V3-INFRA-006 (signed codex-worker review records) in the running MCP service; without it the V3-008 amendment I3-FU-1 evaluator cannot obtain a service-signed review pin and the I3 follow-up diagnostics cannot start under the plan's F.4/F.5 gate.",
+    "budget": "Operator: one service restart (minutes). Orchestrator afterwards: one discovery review, one trust-file branch (key publication, reviewed and CI-gated), then the V3-008 pin and runs (step 1 minutes; about 63 TOPAS runs of <= 2 min each).",
+    "alternatives": "No autonomous alternative: the server process is outside the sandbox and the repository; restarting it is not a pre-authorized operation. Option (A) of IR-20261116-123921-312B59 (proceed without service-signed pins) was withdrawn after Codex REVIEW-cf6fa397 judged it a gate weakening.",
+    "attempts": [
+      {
+        "approach": "Implement signing in the review service and a verifier (V3-INFRA-006), reviewed and merged",
+        "outcome": "PR #90 merged into v3/develop at 7dfab634 after two passed Codex reviews, validation records and green CI; inactive until the service restarts",
+        "artifact": "infrastructure/experiment_v3/review.py; infrastructure/validation/review_records.py; infrastructure/keys/README.md; experiment/v3/SETUP.md (V3-INFRA-006 section)"
+      },
+      {
+        "approach": "Bind the V3-008 evaluator's pins to signed validation-manager records embedding the review record",
+        "outcome": "Judged insufficient by Codex (caller-asserted; the validation manager signs what it is given); kept as a second binding until the service-signed record exists",
+        "artifact": "validation/scripts/stopping/i3fu2_evaluate.py (check_pin_attestation); V3-008 commits 9706fd01 ... e46abb76"
+      }
+    ],
+    "merged_develop_sha": "7dfab63471e07d7ac863784aacf447f47a4a3fd7",
+    "pr": 90,
+    "supersedes": "IR-20261116-123921-312B59 (addendum 1: option A withdrawn; the only operator action is this restart)",
+    "no_clinical_claim": true
+  },
+  "reason_autonomous_resolution_not_possible": "Category 4 (Authorization: deployment to infrastructure outside the experimental workspace). The running codex-worker MCP server loads infrastructure/experiment_v3/review.py at start-up; the merged change (signing of every finished review record with a service key, signer \"codex-worker\"; verifier infrastructure/validation/review_records.py; key-publication evidence rule) is inactive until the server process is restarted, which only the operator can do (precedent: IR-20261107-235713-1724FF for V3-INFRA-002/003 and IR-20261109-112802-D6BAE3 for V3-INFRA-004). Why it is needed: the independent Codex review of the V3-008 amendment I3-FU-1 (nine rounds) converged on the finding that the evaluator's review-chronology pin is not authenticated by the review service; the merged change provides the service-signed record the evaluator will consume (together with the sealed launcher already on the V3-008 branch, which answers the second remaining finding). Gates met for the merge: Codex REVIEW-4a570742 (pass, one minor finding fixed in fe3d6744) and REVIEW-64ad632d (pass, no findings), local-validation records VAL-20261116-125733 and VAL-20261116-131416 (615 passed, 3 skipped), CI run 43875086986 green (docs, pre-commit, tests), squash-merged as PR #90.",
+  "requested_input": "Please restart the codex-worker MCP service (the same restart procedure as for V3-INFRA-002/003/004) and reply \"restarted\" (optionally with the time). Nothing else is requested; the key publication and the follow-up reviews are autonomous.",
+  "decisions_or_tasks_blocked": "activation of signed codex-worker review records; publication of the codex-worker public key (trust-file branch); the V3-008 amendment I3-FU-1 review pins (evaluator consumes the service-signed record), hence the start of the I3 follow-up diagnostics (step 1, smokes, 58 TOPAS evidence runs)",
+  "status": "open",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  }
+}

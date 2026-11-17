@@ -1,0 +1,271 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py combine --row i15 --dirs /workspace/validation/generated/transport/lv8-712f484a-135 /workspace/.ionmc-cache/transport-samples/712f484a/115 /workspace/.ionmc-cache/transport-samples/712f484a/116 /workspace/.ionmc-cache/transport-samples/712f484a/117 /workspace/.ionmc-cache/transport-samples/712f484a/118 /workspace/.ionmc-cache/transport-samples/712f484a/119 /workspace/.ionmc-cache/transport-samples/712f484a/120 /workspace/.ionmc-cache/transport-samples/712f484a/121 /workspace/.ionmc-cache/transport-samples/712f484a/122 /workspace/.ionmc-cache/transport-samples/712f484a/123 /workspace/.ionmc-cache/transport-samples/712f484a/124 /workspace/.ionmc-cache/transport-samples/712f484a/125 /workspace/.ionmc-cache/transport-samples/712f484a/126 /workspace/.ionmc-cache/transport-samples/712f484a/127 /workspace/.ionmc-cache/transport-samples/712f484a/128 /workspace/.ionmc-cache/transport-samples/712f484a/129 /workspace/.ionmc-cache/transport-samples/712f484a/130 /workspace/.ionmc-cache/transport-samples/712f484a/131 /workspace/.ionmc-cache/transport-samples/712f484a/132 /workspace/.ionmc-cache/transport-samples/712f484a/133 /workspace/.ionmc-cache/transport-samples/712f484a/134 --partials-manifest /workspace/.ionmc-cache/transport-samples/712f484a/manifest.json --scale 1.0 --timeout 1350 --seed-base 20572004
+# git_sha: 712f484a13dbee4a181d15addf127b1c58dc1cbc
+# started_utc: 2026-11-13T01:54:15Z
+# step_timeout_s: 1500
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /cache/warp/1.17.0
+Module mcs_kernel__locals__k_75e603fe f3907b8 load on device 'cpu' took 1.16 ms  (cached)
+#JSON-BEGIN
+{
+ "attestation": {
+  "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+  "manifest_sha256": "4b1587ed3aa65bf815da5dc8b557da557a6363455c792f6e7b3b646a6684e7c0",
+  "manifest_source": "host-runner protected stdout PARTIAL lines",
+  "partials": [
+   {
+    "content_sha256": "bbf002e8c891ca37cbb6ea790a11fbe236c46d2bc921c410d28c376b159d1ed8",
+    "host_run_id": "RUN-20261112T225448Z-24e2fcdc",
+    "name": "i15-theta-v1-sh0-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "8f86748c3842d8955b09e5e5452752ea3030870e1058404131d1862e9ad07a14",
+    "host_run_id": "RUN-20261112T230434Z-8cd363ab",
+    "name": "i15-theta-v1-sh0-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "7bfd00bb7a55cb31bdcd19efa911bd917355b67a5523c2b9b24d70c5c68f377a",
+    "host_run_id": "RUN-20261112T231422Z-84e6d180",
+    "name": "i15-theta-v1-sh1-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "9a935db83f9877c759f16c657058c4c2a93ff6f02a3e01ac107501824f676ae8",
+    "host_run_id": "RUN-20261112T232409Z-72f6bac7",
+    "name": "i15-theta-v1-sh1-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "c6d3834d13a270bdde9809b2d773b47267aeadb7c576eb46af04c8caaf25d103",
+    "host_run_id": "RUN-20261112T233354Z-f894fe3f",
+    "name": "i15-theta-v2-sh0-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "01c2d9abc8a4e16feeadf93c5496229b4dade00f8b27018a43de5b4eaecb8494",
+    "host_run_id": "RUN-20261112T234044Z-94c09a08",
+    "name": "i15-theta-v2-sh0-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "ec299f7a56314f6eca4af6c217570d99925012e2baad9fc72e9efeaba929d40f",
+    "host_run_id": "RUN-20261112T234733Z-d5106d7f",
+    "name": "i15-theta-v2-sh1-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "25a88911d2896b008077fb8019d52a3cff2f852b68b744694035a176b77727a9",
+    "host_run_id": "RUN-20261112T235423Z-cf6802e2",
+    "name": "i15-theta-v2-sh1-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "7243deb1d434b3a3813e13d729c0e5fc351901ed8a9ced6ed2a748e4fd480ee0",
+    "host_run_id": "RUN-20261113T000111Z-797c22ab",
+    "name": "i15-sigma-v1-sh0-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "6ec428b3f4615f3f32083579b49f705967d6d0d438156a80303a5bce48730798",
+    "host_run_id": "RUN-20261113T000930Z-3c056f43",
+    "name": "i15-sigma-v1-sh0-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "8bad12e48b9c1fe5d0fa170bdda0428daa97c4f7f64a16bf707eb32d0f205802",
+    "host_run_id": "RUN-20261113T001748Z-83d1a707",
+    "name": "i15-sigma-v1-sh0-s2.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "426f75a8aeb7539794ac20aa30c804afe56aa2c63a217e34b6dfecf58b9b93b7",
+    "host_run_id": "RUN-20261113T002611Z-209656e3",
+    "name": "i15-sigma-v1-sh0-s3.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "ba9cacf1374a3b43eff8f6023fff163ab84b1f0c4bda6b2ab9b2d1c7710b9812",
+    "host_run_id": "RUN-20261113T003429Z-35438133",
+    "name": "i15-sigma-v1-sh1-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "c6bcb519554ed53ae88c25f637c5316825e94208d2e9032e6d27b186b3f4d5de",
+    "host_run_id": "RUN-20261113T004248Z-164128ed",
+    "name": "i15-sigma-v1-sh1-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "fbbbed1dbdaff7945d370759526c66d6544341f0052a0bd8093de40e7e5ba96c",
+    "host_run_id": "RUN-20261113T005107Z-f599fde9",
+    "name": "i15-sigma-v1-sh1-s2.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "f7f74b22498c0f43c1ce72f13e9bfab81f30900587a7454d8094b140bfbf4d2c",
+    "host_run_id": "RUN-20261113T005926Z-a8e63431",
+    "name": "i15-sigma-v1-sh1-s3.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "8e446c533e9fdd376b486cac14b9d3cb520a429927bf9799504041e77886f235",
+    "host_run_id": "RUN-20261113T010746Z-7066039d",
+    "name": "i15-sigma-v2-sh0-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "1060cc85a4af485fdba1f61a6e78827a676755fbce2052ab30afd568cf7a1dd6",
+    "host_run_id": "RUN-20261113T011921Z-8a4a0a75",
+    "name": "i15-sigma-v2-sh0-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "bf6502a5b010a24c4aa61aa7dbf5eb72af90aee360d7dcfb79d298b33a2c60de",
+    "host_run_id": "RUN-20261113T013055Z-42ce6b13",
+    "name": "i15-sigma-v2-sh1-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "018260f39be97868b037bf4556a8bf26eb07f03157b404e431ddc3c4378e2629",
+    "host_run_id": "RUN-20261113T014227Z-3012a901",
+    "name": "i15-sigma-v2-sh1-s1.json",
+    "origin": "imported"
+   }
+  ],
+  "protected_host_records_verified_by_code": false,
+  "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+  "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+ },
+ "format": 1,
+ "frozen_histories": 1600000,
+ "git_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+ "histories": 1600000,
+ "i15": {
+  "runs": {
+   "v1-sh0": {
+    "sigma_mm": {
+     "0.5": 0.3322091771561346,
+     "0.9": 0.8967433895337871
+    },
+    "sigma_over_fermi_eyges": {
+     "0.5": 1.0083144237408739,
+     "0.9": 1.0048945392844648
+    },
+    "theta": {
+     "histories": 200000,
+     "n_escaped": 200000,
+     "theta_over_quadrature": 1.0014057472126656,
+     "theta_rms": 0.007909320523112528,
+     "z_end_mm": 81.61797130607015
+    }
+   },
+   "v1-sh1": {
+    "sigma_mm": {
+     "0.5": 0.32987922663916863,
+     "0.9": 0.8931703918705267
+    },
+    "sigma_over_fermi_eyges": {
+     "0.5": 1.001242606119908,
+     "0.9": 1.0008906225758587
+    },
+    "theta": {
+     "histories": 200000,
+     "n_escaped": 200000,
+     "theta_over_quadrature": 0.9999518221888993,
+     "theta_rms": 0.00789783710686337,
+     "z_end_mm": 81.61797130607015
+    }
+   },
+   "v2-sh0": {
+    "sigma_mm": {
+     "0.5": 0.3322433981719327,
+     "0.9": 0.8970930458454084
+    },
+    "sigma_over_fermi_eyges": {
+     "0.5": 1.008418290660264,
+     "0.9": 1.0052863656667672
+    },
+    "theta": {
+     "histories": 200000,
+     "n_escaped": 200000,
+     "theta_over_quadrature": 1.0021020343235625,
+     "theta_rms": 0.00791481995024436,
+     "z_end_mm": 81.61797130607015
+    }
+   },
+   "v2-sh1": {
+    "sigma_mm": {
+     "0.5": 0.32905845792179855,
+     "0.9": 0.8916238942035968
+    },
+    "sigma_over_fermi_eyges": {
+     "0.5": 0.9987514258841177,
+     "0.9": 0.9991576105696904
+    },
+    "theta": {
+     "histories": 200000,
+     "n_escaped": 200000,
+     "theta_over_quadrature": 0.9992198787826498,
+     "theta_rms": 0.007892056058551115,
+     "z_end_mm": 81.61797130607015
+    }
+   }
+  },
+  "sigma_pairwise_spread_0.5R": 0.009678949662163205,
+  "sigma_pairwise_spread_0.9R": 0.006133922248345192,
+  "theta_pairwise_spread": 0.0028844057270196455
+ },
+ "pass": true,
+ "reduced": false,
+ "row": "i15",
+ "seed_base": 20572004,
+ "shards": {
+  "sigma-v1-sh0": [
+   20576712,
+   20576713,
+   20576714,
+   20576715
+  ],
+  "sigma-v1-sh1": [
+   20576716,
+   20576717,
+   20576718,
+   20576719
+  ],
+  "sigma-v2-sh0": [
+   20576720,
+   20576721
+  ],
+  "sigma-v2-sh1": [
+   20576722,
+   20576723
+  ],
+  "theta-v1-sh0": [
+   20576704,
+   20576705
+  ],
+  "theta-v1-sh1": [
+   20576706,
+   20576707
+  ],
+  "theta-v2-sh0": [
+   20576708,
+   20576709
+  ],
+  "theta-v2-sh1": [
+   20576710,
+   20576711
+  ]
+ },
+ "step": "i15-combine",
+ "suite": "lv8"
+}
+#JSON-END
+
+# exit=0

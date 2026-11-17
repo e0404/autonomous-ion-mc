@@ -1,0 +1,63 @@
+{
+  "files": [
+    {
+      "bytes": 2009,
+      "path": "inputs/case.json",
+      "sha256": "be48ec64b55621353a5b16c319356f5e270264922aba3533477f0fda5208c87d"
+    },
+    {
+      "bytes": 3019,
+      "path": "inputs/input.txt",
+      "sha256": "c5477abdfc604118c8a2ccf257546d9b42f06e7b853156972c40b9886ff66be1"
+    },
+    {
+      "bytes": 3917,
+      "path": "record.json",
+      "sha256": "01da80d1cd084a155ae43d54be8adfbf8cd732fe6477173a9bd1ef1be91bee88"
+    },
+    {
+      "bytes": 3586,
+      "path": "request.json",
+      "sha256": "d4c0b9965c683cad389d4afbca41a90542997c1488035b48953e10e3e479a639"
+    },
+    {
+      "bytes": 196,
+      "path": "stderr.txt",
+      "sha256": "1e2d958ae60809fc8e8f3a3ae167f23f779906160bd73153c8c9593a5ee2cea4"
+    },
+    {
+      "bytes": 2630693,
+      "path": "stdout.txt",
+      "sha256": "c8d38521477cdfdd7ea700e681fc3ccd41f7ad94e91b42b3321f5acc5956da4f"
+    },
+    {
+      "bytes": 2009,
+      "path": "work/case.json",
+      "sha256": "be48ec64b55621353a5b16c319356f5e270264922aba3533477f0fda5208c87d"
+    },
+    {
+      "bytes": 190,
+      "path": "work/edep.csv",
+      "sha256": "f86d757e3309b55bea8c8cd002e8ba6bd06e45b263301c480484e2082def9be5"
+    },
+    {
+      "bytes": 3019,
+      "path": "work/input.txt",
+      "sha256": "c5477abdfc604118c8a2ccf257546d9b42f06e7b853156972c40b9886ff66be1"
+    },
+    {
+      "bytes": 624,
+      "path": "work/ss_exit.header",
+      "sha256": "a3acda24a661b547a3d121052e796733ae86264de6980b71e9ff007c9ed76f88"
+    },
+    {
+      "bytes": 5550000,
+      "path": "work/ss_exit.phsp",
+      "sha256": "68feb0a3e679e6c50d2d3adce73170776d9a78a4c1ac5fb0cedd3b5dd752e016"
+    }
+  ],
+  "next_offset": null,
+  "run_id": "REF-0346041be5033120ddb5-a903c0cd",
+  "sha": "48b419810ba5de2a98f9e99ad1cf127763648d13",
+  "total_files": 11
+}

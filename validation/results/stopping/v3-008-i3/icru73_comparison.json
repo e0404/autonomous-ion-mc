@@ -1,0 +1,162 @@
+{
+  "row": "I3",
+  "reference": "libdEdx ICRU73_NEW, target 276 (liquid water), Z = 6 and 8",
+  "redistribution_note": "This file contains aggregate statistics only; no libdEdx/ICRU 73 table values, per-energy deviations or ratios are reproduced.",
+  "i_value_note": "The ionmc model is evaluated at I = 78 eV (water(78.0), not tuned). libdEdx lists I = 75.0 eV for target 276 (dedx_metadata.h material constant). Whether the ICRU73_NEW water values were computed with 75 eV or 78 eV: TO-VERIFY (P5b); the archive documentation (README.md, data/README.md, tools/dat2c.py, the dedx_icru73new.h header) states no I-value for this table. If 75 eV, the known bounded contribution of the difference is about 0.4-0.6 % in S above 10 MeV/u and 0.4-0.5 % in CSDA range (plan row I3, L0 ~ -ln I; model S lower and range longer at 78 eV); a range-clause failure within that bound is recorded as FAIL with this attribution, never re-graded.",
+  "thresholds": {
+    "stopping_ge_10_MeV_u_max_abs": 0.015,
+    "stopping_ge_10_MeV_u_rms": 0.008,
+    "stopping_2_to_10_MeV_u_max_abs": 0.06,
+    "csda_range_max_abs": 0.005
+  },
+  "range_construction": "table log-log interpolated to 200 points/decade from 2 MeV/u, exact log-log quadrature (build_table), started at the ionmc Bethe 78 eV CSDA range at 2 MeV/u; model: BetheStoppingSource table (200 points/decade from 1 MeV/u, constant-S start)",
+  "ions": {
+    "carbon12": {
+      "z": 6,
+      "a": 12,
+      "stopping": {
+        "2_to_10_MeV_u": {
+          "band_per_u_mev": [
+            2.0,
+            10.0
+          ],
+          "n_points": 9,
+          "energy_per_u_range_mev": [
+            2.0,
+            9.0
+          ],
+          "max_abs_relative_deviation": 0.10092763306923969,
+          "rms_relative_deviation": 0.06658017468232563
+        },
+        "ge_10_MeV_u": {
+          "band_per_u_mev": [
+            10.0,
+            1000.0
+          ],
+          "n_points": 23,
+          "energy_per_u_range_mev": [
+            10.0,
+            1000.0
+          ],
+          "max_abs_relative_deviation": 0.025118855120928596,
+          "rms_relative_deviation": 0.00589144568728507
+        },
+        "informative_10_to_500_MeV_u": {
+          "band_per_u_mev": [
+            10.0,
+            500.0
+          ],
+          "n_points": 18,
+          "energy_per_u_range_mev": [
+            10.0,
+            500.0
+          ],
+          "max_abs_relative_deviation": 0.025118855120928596,
+          "rms_relative_deviation": 0.00664810604515693
+        }
+      },
+      "csda_range": {
+        "energies_per_u_mev": [
+          80.0,
+          290.0,
+          430.0
+        ],
+        "max_abs_relative_deviation": 0.0025626735973141024,
+        "energy_per_u_mev_at_max": 80.0
+      },
+      "gates": {
+        "stopping_ge_10_MeV_u_max_abs_le_0.015": false,
+        "stopping_ge_10_MeV_u_rms_le_0.008": true,
+        "stopping_2_to_10_MeV_u_max_abs_le_0.06": false,
+        "csda_range_max_abs_le_0.005": true
+      },
+      "pass": false
+    },
+    "oxygen16": {
+      "z": 8,
+      "a": 16,
+      "stopping": {
+        "2_to_10_MeV_u": {
+          "band_per_u_mev": [
+            2.0,
+            10.0
+          ],
+          "n_points": 9,
+          "energy_per_u_range_mev": [
+            2.0,
+            9.0
+          ],
+          "max_abs_relative_deviation": 0.13501460655174435,
+          "rms_relative_deviation": 0.09919483292109087
+        },
+        "ge_10_MeV_u": {
+          "band_per_u_mev": [
+            10.0,
+            1000.0
+          ],
+          "n_points": 23,
+          "energy_per_u_range_mev": [
+            10.0,
+            1000.0
+          ],
+          "max_abs_relative_deviation": 0.0504713298218642,
+          "rms_relative_deviation": 0.012507953360008742
+        },
+        "informative_10_to_500_MeV_u": {
+          "band_per_u_mev": [
+            10.0,
+            500.0
+          ],
+          "n_points": 18,
+          "energy_per_u_range_mev": [
+            10.0,
+            500.0
+          ],
+          "max_abs_relative_deviation": 0.0504713298218642,
+          "rms_relative_deviation": 0.014129747627488662
+        }
+      },
+      "csda_range": {
+        "energies_per_u_mev": [
+          100.0,
+          350.0,
+          430.0
+        ],
+        "max_abs_relative_deviation": 0.0038630164828694635,
+        "energy_per_u_mev_at_max": 100.0
+      },
+      "gates": {
+        "stopping_ge_10_MeV_u_max_abs_le_0.015": false,
+        "stopping_ge_10_MeV_u_rms_le_0.008": false,
+        "stopping_2_to_10_MeV_u_max_abs_le_0.06": false,
+        "csda_range_max_abs_le_0.005": true
+      },
+      "pass": false
+    }
+  },
+  "pass": false,
+  "provenance": {
+    "archive_sha256": "b941a0c30793daddc4d119a2cc664bfbdd430554c3a4788be04e97ff6fcc0863",
+    "member_sha256": {
+      "data/raw/ICRU73_NEW.dat": "749768c1c2de475c928cc2c50a354903577139c11debd4b5948b035ca3a3d87e",
+      "data/raw/icru73_newEng.dat": "8b5b809f5c0cc4f6018f9faa89e9f73c7b9b81a3c588f98bef556712d4c77dd1"
+    },
+    "target": 276,
+    "code_sha": "7d0e796bddab18e4d89fc896b30ab59f211b82ff",
+    "ionmc_version": "0.1.0.dev0",
+    "numpy_version": "2.5.3",
+    "model": {
+      "source": "bethe",
+      "I_eV": 78.0,
+      "material": "water",
+      "options": {
+        "shell": true,
+        "barkas": true,
+        "bloch": true,
+        "mott": true,
+        "effective_charge": true,
+        "ls": "off"
+      }
+    }
+  }
+}

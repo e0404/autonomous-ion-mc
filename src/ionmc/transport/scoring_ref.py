@@ -31,6 +31,7 @@ from ionmc._wpfunc import python_twin
 from ionmc.scoring import ScoringGrid
 from ionmc.species import species_by_id
 from ionmc.transport.channels import (
+    CLASS_RESIDUAL_FLOOR,
     CLASS_STEP,
     KINDS,
     ChannelPlan,
@@ -123,6 +124,16 @@ class ReferenceChannelScorer:
         self.set_step_state(s_mid, k, e_mid, e_dot)
         self.a_step = self._a_of(species)  # after set_step_state, which resets it
 
+    def begin_floor_step(self, e_lo: float, species: int = 0) -> None:
+        """Step quantities of an end-of-range sub-step below the table floor ``e_lo``
+        (``continuous_residual_v1``; the pieces carry the ``CLASS_RESIDUAL_FLOOR`` flag): the
+        constant floor state ``S_mid = S_w(E_lo)``, ``k = 0``, ``E_mid = E_lo``, ``Edot = 0``,
+        the constant stopping-power convention of the residual profile below the floor (as the
+        kernel's ``deposit_residual``)."""
+        s_mid, _gamma = self.water_state(e_lo, species)
+        self.set_step_state(s_mid, 0.0, e_lo, 0.0)
+        self.a_step = self._a_of(species)
+
     def set_step_state(self, s_mid: float, k: float, e_mid: float, e_dot: float) -> None:
         """Set the step quantities directly (hook-level tests with a synthetic stream)."""
         self.s_mid, self.k, self.e_mid, self.e_dot = s_mid, k, e_mid, e_dot
@@ -143,9 +154,12 @@ class ReferenceChannelScorer:
     ) -> None:
         """Add one piece to every channel of grid ``g`` that selects its class, species and
         generation. ``vox`` is the flat voxel index (the piece must lie inside the grid);
-        ``length``/``tau`` are 0 for a local point deposit."""
+        ``length``/``tau`` are 0 for a local point deposit. ``cls`` may carry the flag
+        ``CLASS_RESIDUAL_FLOOR`` (a class-step piece of an end-of-range sub-step below the table
+        floor): its lookups are clamped by definition and not counted as out-of-domain."""
         plan, SC = self.plan, self.SC
-        if cls == CLASS_STEP:
+        clamped = bool(cls & CLASS_RESIDUAL_FLOOR)
+        if cls & CLASS_STEP:
             s_bar, e_bar = SC.piece_state(self.s_mid, self.k, self.e_mid, self.e_dot, tau)
             m1, m2 = SC.piece_moments(s_bar, self.k, length)
             if s_bar <= 0.0:  # compile-time envelope violated: invalidate the result
@@ -161,7 +175,9 @@ class ReferenceChannelScorer:
             f = 1.0
             col = c.offset + vox
             if c.kind == "FE":
-                f = self._lookup_value(c.lookup, species, s_bar, e_bar, self._piece_a(species))
+                f = self._lookup_value(
+                    c.lookup, species, s_bar, e_bar, self._piece_a(species), clamped
+                )
             elif c.kind == "FL":
                 spec = self._spectra[ci]
                 assert spec is not None
@@ -179,12 +195,20 @@ class ReferenceChannelScorer:
         return self.a_step if not self._species_a else self._a_of(species)
 
     def _lookup_value(
-        self, li: int, species: int, s_bar: float, e_bar: float, a: int | None = None
+        self,
+        li: int,
+        species: int,
+        s_bar: float,
+        e_bar: float,
+        a: int | None = None,
+        clamped: bool = False,
     ) -> float:
+        """Lookup value at the piece argument (clamped to the axis); an argument outside the axis
+        counts as out-of-domain unless ``clamped`` (a residual floor piece)."""
         a0, inv, n, lg, axis, rows = self._lookups[li]
         x = e_bar / (self.a if a is None else a) if axis == "energy_per_nucleon_mev" else s_bar
         i, fr, inside = self.SC.lookup_bin(x, a0, inv, n, lg)
-        if not inside:
+        if not inside and not clamped:
             self.lookup_ood += 1
         v = rows[species_by_id(species).name]
         return float(self.F.lerp(float(v[i]), float(v[i + 1]), fr))

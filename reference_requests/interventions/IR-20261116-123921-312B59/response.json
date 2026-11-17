@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "IR-20261116-123921-312B59",
+  "resolved_at_utc": "2026-11-16T16:15:40.895209+00:00",
+  "task_id": "v3-008",
+  "response": "Superseded by ADDENDUM-1 (option A withdrawn) and by the operator's response to the follow-up request IR-20261116-132756-B6F2C2 (2026-11-16), which states verbatim: \"I have reconnected/restarted codex-worker for IR-20261116-132756-B6F2C2. Record this response verbatim and record the earlier IR-20261116-123921-312B59 as superseded by its addendum and this follow-up. Continue the autonomous work. The maintainer verified existing signed review records against the host public key, whose key ID is b53b2800f81a4e64. Complete the required trust publication and exact-commit review before running I3-FU-1 diagnostics. No review-gate waiver, scientific tolerance change, or authorization to merge PR #84 is granted by this response.\"",
+  "operator_note": "Recorded as superseded on the operator's instruction (response to IR-20261116-132756-B6F2C2). No separate decision on the original options was given; option A had been withdrawn by ADDENDUM-1."
+}

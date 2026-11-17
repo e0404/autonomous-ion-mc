@@ -1,0 +1,4374 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py combine --row t12-ion-hr --dirs /workspace/validation/generated/transport/hr8-712f484a-12 /workspace/.ionmc-cache/transport-samples/712f484a/02 /workspace/.ionmc-cache/transport-samples/712f484a/03 /workspace/.ionmc-cache/transport-samples/712f484a/04 /workspace/.ionmc-cache/transport-samples/712f484a/05 /workspace/.ionmc-cache/transport-samples/712f484a/06 /workspace/.ionmc-cache/transport-samples/712f484a/07 /workspace/.ionmc-cache/transport-samples/712f484a/08 /workspace/.ionmc-cache/transport-samples/712f484a/09 /workspace/.ionmc-cache/transport-samples/712f484a/10 /workspace/.ionmc-cache/transport-samples/712f484a/11 --partials-manifest /workspace/.ionmc-cache/transport-samples/712f484a/manifest.json --scale 1.0 --timeout 1350 --seed-base 20591004
+# git_sha: 712f484a13dbee4a181d15addf127b1c58dc1cbc
+# started_utc: 2026-11-13T03:38:12Z
+# step_timeout_s: 1500
+#JSON-BEGIN
+{
+ "attestation": {
+  "manifest_path": "/workspace/.ionmc-cache/transport-samples/712f484a/manifest.json",
+  "manifest_sha256": "4539262ae918680b8e7b0ed996660d320e049f0932b6da177988580a92063153",
+  "manifest_source": "host-runner protected stdout PARTIAL lines",
+  "partials": [
+   {
+    "content_sha256": "3e7c32456fcdaa585745b25a3edad97a30b2c594f5b8f9d3078c244a0d44969a",
+    "host_run_id": "RUN-20261113T020456Z-05ed7790",
+    "name": "t12-ion-hr-c290-cpu64-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "2f5c842ea5012dc134de6748650ab5ccb78291f7b11831d82f9df82091edbdbb",
+    "host_run_id": "RUN-20261113T021924Z-1eaa5433",
+    "name": "t12-ion-hr-c290-cpu64-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "b92084c55ba418b09b7aa00bc6ea368736e9bfff019def14261c2f9b9a6e6a7b",
+    "host_run_id": "RUN-20261113T023349Z-79c64988",
+    "name": "t12-ion-hr-c290-cuda32-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "8198193ea768ba6d089e2a250d19a3c35185e700686c12e43dac70408965ae54",
+    "host_run_id": "RUN-20261113T023615Z-b875aca3",
+    "name": "t12-ion-hr-c290-cuda64-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "929334f44ecd82dc3c725655b6cb2d2c20d985b385c0f821acdc50b2db2d6ee9",
+    "host_run_id": "RUN-20261113T023844Z-91c97e14",
+    "name": "t12-ion-hr-he150-cpu64-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "16c184946e343d4c4d36d6d3780b9e138650bdb26cd6d9511c6708ef4b6aae7f",
+    "host_run_id": "RUN-20261113T024934Z-685d4820",
+    "name": "t12-ion-hr-he150-cpu64-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "b9a3e14af0bd052d779b72e160d1b380095e14fc009fd933ce4fb4772c7eb90f",
+    "host_run_id": "RUN-20261113T030022Z-482dcc1b",
+    "name": "t12-ion-hr-he150-cuda32-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "79a5d7fbeabc88100dbe6a294fbc072fda6b3c748d446280365a8e3914b54328",
+    "host_run_id": "RUN-20261113T030211Z-1ac4b788",
+    "name": "t12-ion-hr-o350-cpu64-s0.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "92215bc664c790738c723b6139fe657b05736d68b4e25bf98cfc244ffc9a786d",
+    "host_run_id": "RUN-20261113T031845Z-8a064208",
+    "name": "t12-ion-hr-o350-cpu64-s1.json",
+    "origin": "imported"
+   },
+   {
+    "content_sha256": "81611b63c908f88dbd682b47f2f9fb9235d46cd7ab9cdb929333f60f56a95968",
+    "host_run_id": "RUN-20261113T033518Z-2e8ccde1",
+    "name": "t12-ion-hr-o350-cuda32-s0.json",
+    "origin": "imported"
+   }
+  ],
+  "protected_host_records_verified_by_code": false,
+  "run_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+  "statement": "the code verifies each imported partial against the manifest entry (digest) and requires a host_run_id per entry, but any imported partial makes the summary non-conformant (imported_partials_unverified_by_code); it cannot verify the protected host-runner records that the manifest is built from. The orchestrator must have written the manifest only from the PARTIAL <name> <sha> stdout lines of those records and must list the host_run_ids in record_local_validation"
+ },
+ "format": 1,
+ "frozen_histories": 4600000,
+ "git_sha": "712f484a13dbee4a181d15addf127b1c58dc1cbc",
+ "histories": 4600000,
+ "pass": true,
+ "reduced": false,
+ "row": "t12-ion-hr",
+ "seed_base": 20591004,
+ "shards": {
+  "c290-cpu64": [
+   20596404,
+   20596405
+  ],
+  "c290-cuda32": [
+   20596406
+  ],
+  "c290-cuda64": [
+   20596407
+  ],
+  "he150-cpu64": [
+   20596408,
+   20596409
+  ],
+  "he150-cuda32": [
+   20596410
+  ],
+  "o350-cpu64": [
+   20596411,
+   20596412
+  ],
+  "o350-cuda32": [
+   20596413
+  ]
+ },
+ "step": "t12-ion-hr-combine",
+ "suite": "hr8",
+ "t12_ion_hr": {
+  "c290-cpu64_vs_c290-cuda32": {
+   "arrays": {
+    "idd": {
+     "bonferroni_bound": 4.5242639160611855,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 178.52428506672734,
+     "chi2_all_selected_bins": 178.52428506689998,
+     "groups": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       5
+      ],
+      [
+       5,
+       6
+      ],
+      [
+       6,
+       7
+      ],
+      [
+       7,
+       8
+      ],
+      [
+       8,
+       9
+      ],
+      [
+       9,
+       10
+      ],
+      [
+       10,
+       11
+      ],
+      [
+       11,
+       12
+      ],
+      [
+       12,
+       13
+      ],
+      [
+       13,
+       14
+      ],
+      [
+       14,
+       15
+      ],
+      [
+       15,
+       16
+      ],
+      [
+       16,
+       17
+      ],
+      [
+       17,
+       18
+      ],
+      [
+       18,
+       19
+      ],
+      [
+       19,
+       20
+      ],
+      [
+       20,
+       21
+      ],
+      [
+       21,
+       22
+      ],
+      [
+       22,
+       23
+      ],
+      [
+       23,
+       24
+      ],
+      [
+       24,
+       25
+      ],
+      [
+       25,
+       26
+      ],
+      [
+       26,
+       27
+      ],
+      [
+       27,
+       28
+      ],
+      [
+       28,
+       29
+      ],
+      [
+       29,
+       30
+      ],
+      [
+       30,
+       31
+      ],
+      [
+       31,
+       32
+      ],
+      [
+       32,
+       33
+      ],
+      [
+       33,
+       34
+      ],
+      [
+       34,
+       35
+      ],
+      [
+       35,
+       36
+      ],
+      [
+       36,
+       37
+      ],
+      [
+       37,
+       38
+      ],
+      [
+       38,
+       39
+      ],
+      [
+       39,
+       40
+      ],
+      [
+       40,
+       41
+      ],
+      [
+       41,
+       42
+      ],
+      [
+       42,
+       43
+      ],
+      [
+       43,
+       44
+      ],
+      [
+       44,
+       45
+      ],
+      [
+       45,
+       46
+      ],
+      [
+       46,
+       47
+      ],
+      [
+       47,
+       48
+      ],
+      [
+       48,
+       49
+      ],
+      [
+       49,
+       50
+      ],
+      [
+       50,
+       51
+      ],
+      [
+       51,
+       52
+      ],
+      [
+       52,
+       53
+      ],
+      [
+       53,
+       54
+      ],
+      [
+       54,
+       55
+      ],
+      [
+       55,
+       56
+      ],
+      [
+       56,
+       57
+      ],
+      [
+       57,
+       58
+      ],
+      [
+       58,
+       59
+      ],
+      [
+       59,
+       60
+      ],
+      [
+       60,
+       61
+      ],
+      [
+       61,
+       62
+      ],
+      [
+       62,
+       63
+      ],
+      [
+       63,
+       64
+      ],
+      [
+       64,
+       65
+      ],
+      [
+       65,
+       66
+      ],
+      [
+       66,
+       67
+      ],
+      [
+       67,
+       68
+      ],
+      [
+       68,
+       69
+      ],
+      [
+       69,
+       70
+      ],
+      [
+       70,
+       71
+      ],
+      [
+       71,
+       72
+      ],
+      [
+       72,
+       73
+      ],
+      [
+       73,
+       74
+      ],
+      [
+       74,
+       75
+      ],
+      [
+       75,
+       76
+      ],
+      [
+       76,
+       77
+      ],
+      [
+       77,
+       78
+      ],
+      [
+       78,
+       79
+      ],
+      [
+       79,
+       80
+      ],
+      [
+       80,
+       81
+      ],
+      [
+       81,
+       82
+      ],
+      [
+       82,
+       83
+      ],
+      [
+       83,
+       84
+      ],
+      [
+       84,
+       85
+      ],
+      [
+       85,
+       86
+      ],
+      [
+       86,
+       87
+      ],
+      [
+       87,
+       88
+      ],
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ],
+      [
+       112,
+       113
+      ],
+      [
+       113,
+       114
+      ],
+      [
+       114,
+       115
+      ],
+      [
+       115,
+       116
+      ],
+      [
+       116,
+       117
+      ],
+      [
+       117,
+       118
+      ],
+      [
+       118,
+       119
+      ],
+      [
+       119,
+       120
+      ],
+      [
+       120,
+       121
+      ],
+      [
+       121,
+       122
+      ],
+      [
+       122,
+       123
+      ],
+      [
+       123,
+       124
+      ],
+      [
+       124,
+       125
+      ],
+      [
+       125,
+       126
+      ],
+      [
+       126,
+       127
+      ],
+      [
+       127,
+       128
+      ],
+      [
+       128,
+       129
+      ],
+      [
+       129,
+       130
+      ],
+      [
+       130,
+       131
+      ],
+      [
+       131,
+       132
+      ],
+      [
+       132,
+       133
+      ],
+      [
+       133,
+       134
+      ],
+      [
+       134,
+       135
+      ],
+      [
+       135,
+       136
+      ],
+      [
+       136,
+       137
+      ],
+      [
+       137,
+       138
+      ],
+      [
+       138,
+       139
+      ],
+      [
+       139,
+       140
+      ],
+      [
+       140,
+       141
+      ],
+      [
+       141,
+       142
+      ],
+      [
+       142,
+       143
+      ],
+      [
+       143,
+       144
+      ],
+      [
+       144,
+       145
+      ],
+      [
+       145,
+       146
+      ],
+      [
+       146,
+       147
+      ],
+      [
+       147,
+       148
+      ],
+      [
+       148,
+       149
+      ],
+      [
+       149,
+       150
+      ],
+      [
+       150,
+       151
+      ],
+      [
+       151,
+       152
+      ],
+      [
+       152,
+       153
+      ],
+      [
+       153,
+       154
+      ],
+      [
+       154,
+       155
+      ],
+      [
+       155,
+       156
+      ],
+      [
+       156,
+       157
+      ],
+      [
+       157,
+       158
+      ],
+      [
+       158,
+       159
+      ],
+      [
+       159,
+       160
+      ],
+      [
+       160,
+       161
+      ],
+      [
+       161,
+       162
+      ],
+      [
+       162,
+       163
+      ],
+      [
+       163,
+       164
+      ],
+      [
+       164,
+       165
+      ]
+     ],
+     "hull": [
+      0,
+      164
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.670833202563885,
+     "max_abs_z_all_bins": 2.6708332025614983,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 165,
+     "n_groups": 165,
+     "n_merged_groups": 0,
+     "n_supported_bins": 165,
+     "p_value": 0.3733133433283358,
+     "p_value_max_z": 0.6966516741629185,
+     "p_value_wilson_hilferty": 0.223112390549846,
+     "pass": true,
+     "singleton_mass_fraction": 0.9999999999999999,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 108,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat25": {
+     "bonferroni_bound": 3.662259930887615,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 6.358239899668291,
+     "chi2_all_selected_bins": 6.3582398996676455,
+     "groups": [
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ]
+     ],
+     "hull": [
+      98,
+      101
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 1.729013747968208,
+     "max_abs_z_all_bins": 1.7290137479680487,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 4,
+     "n_groups": 4,
+     "n_merged_groups": 0,
+     "n_supported_bins": 4,
+     "p_value": 0.21039480259870064,
+     "p_value_max_z": 0.2698650674662669,
+     "p_value_wilson_hilferty": 0.17246532359182476,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 100,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat50": {
+     "bonferroni_bound": 3.89059188641312,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 9.260304757883823,
+     "chi2_all_selected_bins": 9.26030475788343,
+     "groups": [
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ]
+     ],
+     "hull": [
+      95,
+      104
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 1.5926554735255096,
+     "max_abs_z_all_bins": 1.5926554735254441,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 10,
+     "n_groups": 10,
+     "n_merged_groups": 0,
+     "n_supported_bins": 10,
+     "p_value": 0.5012493753123438,
+     "p_value_max_z": 0.6696651674162919,
+     "p_value_wilson_hilferty": 0.5082113377459099,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 101,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat90": {
+     "bonferroni_bound": 4.133588386895672,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 42.981629384209995,
+     "chi2_all_selected_bins": 42.981629384210045,
+     "groups": [
+      [
+       86,
+       87
+      ],
+      [
+       87,
+       88
+      ],
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ],
+      [
+       112,
+       113
+      ],
+      [
+       113,
+       114
+      ]
+     ],
+     "hull": [
+      86,
+      113
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.8258578062683886,
+     "max_abs_z_all_bins": 2.8258578062683934,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 28,
+     "n_groups": 28,
+     "n_merged_groups": 0,
+     "n_supported_bins": 28,
+     "p_value": 0.08595702148925537,
+     "p_value_max_z": 0.17491254372813594,
+     "p_value_wilson_hilferty": 0.03492853446220279,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 113,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    }
+   },
+   "bootstrap": {
+    "n_boot": 2000,
+    "seed": 20261004
+   },
+   "calibration": "studentized_bootstrap_t",
+   "max_z_calibration": "bootstrap_max_t",
+   "n_batches": [
+    40,
+    100
+   ],
+   "pass": true,
+   "permutation": {
+    "n_perm": 2000,
+    "seed": 20261004
+   },
+   "scalars": {
+    "r80_mm": {
+     "a": 162.95323065628344,
+     "b": 162.95271077137858,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.0013492325101346371,
+     "se_b": 0.0005375489172713862,
+     "z": 0.3579555117183495
+    },
+    "sigma_lat_05R_mm": {
+     "a": 0.3346323356795352,
+     "b": 0.3345811016254401,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.0006313284107640971,
+     "se_b": 0.00022608967246944212,
+     "z": 0.07640136051679706
+    },
+    "total_deposit_mev": {
+     "a": 3479.9999999999914,
+     "b": 3480.000002641523,
+     "bound": 1e-05,
+     "noise_allowance": 1.3606432515827947e-08,
+     "pass": true,
+     "relative_difference": 7.590608799858353e-10,
+     "rule": "deterministic_precision_bound",
+     "se_a": 2.0944157254607856e-11,
+     "se_b": 3.887495728727066e-09,
+     "z": -679.4846124794577
+    }
+   }
+  },
+  "c290-cuda32_vs_c290-cuda64": {
+   "arrays": {
+    "idd": {
+     "bonferroni_bound": 4.5242639160611855,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_permutation",
+     "chi2": 204.8938917543131,
+     "chi2_all_selected_bins": 204.89389175444668,
+     "groups": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       5
+      ],
+      [
+       5,
+       6
+      ],
+      [
+       6,
+       7
+      ],
+      [
+       7,
+       8
+      ],
+      [
+       8,
+       9
+      ],
+      [
+       9,
+       10
+      ],
+      [
+       10,
+       11
+      ],
+      [
+       11,
+       12
+      ],
+      [
+       12,
+       13
+      ],
+      [
+       13,
+       14
+      ],
+      [
+       14,
+       15
+      ],
+      [
+       15,
+       16
+      ],
+      [
+       16,
+       17
+      ],
+      [
+       17,
+       18
+      ],
+      [
+       18,
+       19
+      ],
+      [
+       19,
+       20
+      ],
+      [
+       20,
+       21
+      ],
+      [
+       21,
+       22
+      ],
+      [
+       22,
+       23
+      ],
+      [
+       23,
+       24
+      ],
+      [
+       24,
+       25
+      ],
+      [
+       25,
+       26
+      ],
+      [
+       26,
+       27
+      ],
+      [
+       27,
+       28
+      ],
+      [
+       28,
+       29
+      ],
+      [
+       29,
+       30
+      ],
+      [
+       30,
+       31
+      ],
+      [
+       31,
+       32
+      ],
+      [
+       32,
+       33
+      ],
+      [
+       33,
+       34
+      ],
+      [
+       34,
+       35
+      ],
+      [
+       35,
+       36
+      ],
+      [
+       36,
+       37
+      ],
+      [
+       37,
+       38
+      ],
+      [
+       38,
+       39
+      ],
+      [
+       39,
+       40
+      ],
+      [
+       40,
+       41
+      ],
+      [
+       41,
+       42
+      ],
+      [
+       42,
+       43
+      ],
+      [
+       43,
+       44
+      ],
+      [
+       44,
+       45
+      ],
+      [
+       45,
+       46
+      ],
+      [
+       46,
+       47
+      ],
+      [
+       47,
+       48
+      ],
+      [
+       48,
+       49
+      ],
+      [
+       49,
+       50
+      ],
+      [
+       50,
+       51
+      ],
+      [
+       51,
+       52
+      ],
+      [
+       52,
+       53
+      ],
+      [
+       53,
+       54
+      ],
+      [
+       54,
+       55
+      ],
+      [
+       55,
+       56
+      ],
+      [
+       56,
+       57
+      ],
+      [
+       57,
+       58
+      ],
+      [
+       58,
+       59
+      ],
+      [
+       59,
+       60
+      ],
+      [
+       60,
+       61
+      ],
+      [
+       61,
+       62
+      ],
+      [
+       62,
+       63
+      ],
+      [
+       63,
+       64
+      ],
+      [
+       64,
+       65
+      ],
+      [
+       65,
+       66
+      ],
+      [
+       66,
+       67
+      ],
+      [
+       67,
+       68
+      ],
+      [
+       68,
+       69
+      ],
+      [
+       69,
+       70
+      ],
+      [
+       70,
+       71
+      ],
+      [
+       71,
+       72
+      ],
+      [
+       72,
+       73
+      ],
+      [
+       73,
+       74
+      ],
+      [
+       74,
+       75
+      ],
+      [
+       75,
+       76
+      ],
+      [
+       76,
+       77
+      ],
+      [
+       77,
+       78
+      ],
+      [
+       78,
+       79
+      ],
+      [
+       79,
+       80
+      ],
+      [
+       80,
+       81
+      ],
+      [
+       81,
+       82
+      ],
+      [
+       82,
+       83
+      ],
+      [
+       83,
+       84
+      ],
+      [
+       84,
+       85
+      ],
+      [
+       85,
+       86
+      ],
+      [
+       86,
+       87
+      ],
+      [
+       87,
+       88
+      ],
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ],
+      [
+       112,
+       113
+      ],
+      [
+       113,
+       114
+      ],
+      [
+       114,
+       115
+      ],
+      [
+       115,
+       116
+      ],
+      [
+       116,
+       117
+      ],
+      [
+       117,
+       118
+      ],
+      [
+       118,
+       119
+      ],
+      [
+       119,
+       120
+      ],
+      [
+       120,
+       121
+      ],
+      [
+       121,
+       122
+      ],
+      [
+       122,
+       123
+      ],
+      [
+       123,
+       124
+      ],
+      [
+       124,
+       125
+      ],
+      [
+       125,
+       126
+      ],
+      [
+       126,
+       127
+      ],
+      [
+       127,
+       128
+      ],
+      [
+       128,
+       129
+      ],
+      [
+       129,
+       130
+      ],
+      [
+       130,
+       131
+      ],
+      [
+       131,
+       132
+      ],
+      [
+       132,
+       133
+      ],
+      [
+       133,
+       134
+      ],
+      [
+       134,
+       135
+      ],
+      [
+       135,
+       136
+      ],
+      [
+       136,
+       137
+      ],
+      [
+       137,
+       138
+      ],
+      [
+       138,
+       139
+      ],
+      [
+       139,
+       140
+      ],
+      [
+       140,
+       141
+      ],
+      [
+       141,
+       142
+      ],
+      [
+       142,
+       143
+      ],
+      [
+       143,
+       144
+      ],
+      [
+       144,
+       145
+      ],
+      [
+       145,
+       146
+      ],
+      [
+       146,
+       147
+      ],
+      [
+       147,
+       148
+      ],
+      [
+       148,
+       149
+      ],
+      [
+       149,
+       150
+      ],
+      [
+       150,
+       151
+      ],
+      [
+       151,
+       152
+      ],
+      [
+       152,
+       153
+      ],
+      [
+       153,
+       154
+      ],
+      [
+       154,
+       155
+      ],
+      [
+       155,
+       156
+      ],
+      [
+       156,
+       157
+      ],
+      [
+       157,
+       158
+      ],
+      [
+       158,
+       159
+      ],
+      [
+       159,
+       160
+      ],
+      [
+       160,
+       161
+      ],
+      [
+       161,
+       162
+      ],
+      [
+       162,
+       163
+      ],
+      [
+       163,
+       164
+      ],
+      [
+       164,
+       165
+      ]
+     ],
+     "hull": [
+      0,
+      164
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 3.0180625075021963,
+     "max_abs_z_all_bins": 3.0180625074933616,
+     "max_z_rule": "permutation_max_t",
+     "n_bins": 165,
+     "n_groups": 165,
+     "n_merged_groups": 0,
+     "n_supported_bins": 165,
+     "p_value": 0.09995002498750624,
+     "p_value_max_z": 0.3683158420789605,
+     "p_value_wilson_hilferty": 0.01893269840611156,
+     "pass": true,
+     "singleton_mass_fraction": 1.0000000000000002,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       100,
+       100
+      ],
+      "index": 39,
+      "required": [
+       50,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat25": {
+     "bonferroni_bound": 3.662259930887615,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_permutation",
+     "chi2": 1.448006593885332,
+     "chi2_all_selected_bins": 1.448006593885009,
+     "groups": [
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ]
+     ],
+     "hull": [
+      98,
+      101
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 0.8243905718411045,
+     "max_abs_z_all_bins": 0.8243905718408235,
+     "max_z_rule": "permutation_max_t",
+     "n_bins": 4,
+     "n_groups": 4,
+     "n_merged_groups": 0,
+     "n_supported_bins": 4,
+     "p_value": 0.7586206896551724,
+     "p_value_max_z": 0.7941029485257372,
+     "p_value_wilson_hilferty": 0.8372531161548419,
+     "pass": true,
+     "singleton_mass_fraction": 0.9999999999999999,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       100,
+       100
+      ],
+      "index": 99,
+      "required": [
+       50,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat50": {
+     "bonferroni_bound": 3.89059188641312,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_permutation",
+     "chi2": 12.205198511411071,
+     "chi2_all_selected_bins": 12.20519851141103,
+     "groups": [
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ]
+     ],
+     "hull": [
+      95,
+      104
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 1.986542648725014,
+     "max_abs_z_all_bins": 1.9865426487248639,
+     "max_z_rule": "permutation_max_t",
+     "n_bins": 10,
+     "n_groups": 10,
+     "n_merged_groups": 0,
+     "n_supported_bins": 10,
+     "p_value": 0.2893553223388306,
+     "p_value_max_z": 0.3823088455772114,
+     "p_value_wilson_hilferty": 0.27099696525144534,
+     "pass": true,
+     "singleton_mass_fraction": 1.0000000000000002,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       100,
+       100
+      ],
+      "index": 101,
+      "required": [
+       50,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat90": {
+     "bonferroni_bound": 4.133588386895672,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_permutation",
+     "chi2": 23.337438195278633,
+     "chi2_all_selected_bins": 23.337438195279447,
+     "groups": [
+      [
+       86,
+       87
+      ],
+      [
+       87,
+       88
+      ],
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ],
+      [
+       112,
+       113
+      ],
+      [
+       113,
+       114
+      ]
+     ],
+     "hull": [
+      86,
+      113
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.3625694362989043,
+     "max_abs_z_all_bins": 2.362569436298898,
+     "max_z_rule": "permutation_max_t",
+     "n_bins": 28,
+     "n_groups": 28,
+     "n_merged_groups": 0,
+     "n_supported_bins": 28,
+     "p_value": 0.7191404297851074,
+     "p_value_max_z": 0.4287856071964018,
+     "p_value_wilson_hilferty": 0.7163940414501181,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       100,
+       100
+      ],
+      "index": 111,
+      "required": [
+       50,
+       50
+      ],
+      "supported": true
+     }
+    }
+   },
+   "bootstrap": {
+    "n_boot": 2000,
+    "seed": 20261004
+   },
+   "calibration": "studentized_permutation",
+   "max_z_calibration": "permutation_max_t",
+   "n_batches": [
+    100,
+    100
+   ],
+   "pass": true,
+   "permutation": {
+    "n_perm": 2000,
+    "seed": 20261004
+   },
+   "scalars": {
+    "r80_mm": {
+     "a": 162.95271077137858,
+     "b": 162.95374530721725,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.0005375489172713862,
+     "se_b": 0.0005915450990334458,
+     "z": -1.2942983090605304
+    },
+    "sigma_lat_05R_mm": {
+     "a": 0.3345811016254401,
+     "b": 0.3352703072641535,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.00022608967246944212,
+     "se_b": 0.0002484320482973087,
+     "z": -2.051761431553038
+    },
+    "total_deposit_mev": {
+     "a": 3480.000002641523,
+     "b": 3480.000000000015,
+     "bound": 1e-05,
+     "noise_allowance": 1.3606269913123678e-08,
+     "pass": true,
+     "relative_difference": 7.590540849104824e-10,
+     "rule": "deterministic_precision_bound",
+     "se_a": 3.887495728727066e-09,
+     "se_b": 8.800269488684911e-12,
+     "z": 679.4866499237986
+    }
+   }
+  },
+  "he150-cpu64_vs_he150-cuda32": {
+   "arrays": {
+    "idd": {
+     "bonferroni_bound": 4.520381140921647,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 187.33422855447424,
+     "chi2_all_selected_bins": 187.33422855460316,
+     "groups": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       5
+      ],
+      [
+       5,
+       6
+      ],
+      [
+       6,
+       7
+      ],
+      [
+       7,
+       8
+      ],
+      [
+       8,
+       9
+      ],
+      [
+       9,
+       10
+      ],
+      [
+       10,
+       11
+      ],
+      [
+       11,
+       12
+      ],
+      [
+       12,
+       13
+      ],
+      [
+       13,
+       14
+      ],
+      [
+       14,
+       15
+      ],
+      [
+       15,
+       16
+      ],
+      [
+       16,
+       17
+      ],
+      [
+       17,
+       18
+      ],
+      [
+       18,
+       19
+      ],
+      [
+       19,
+       20
+      ],
+      [
+       20,
+       21
+      ],
+      [
+       21,
+       22
+      ],
+      [
+       22,
+       23
+      ],
+      [
+       23,
+       24
+      ],
+      [
+       24,
+       25
+      ],
+      [
+       25,
+       26
+      ],
+      [
+       26,
+       27
+      ],
+      [
+       27,
+       28
+      ],
+      [
+       28,
+       29
+      ],
+      [
+       29,
+       30
+      ],
+      [
+       30,
+       31
+      ],
+      [
+       31,
+       32
+      ],
+      [
+       32,
+       33
+      ],
+      [
+       33,
+       34
+      ],
+      [
+       34,
+       35
+      ],
+      [
+       35,
+       36
+      ],
+      [
+       36,
+       37
+      ],
+      [
+       37,
+       38
+      ],
+      [
+       38,
+       39
+      ],
+      [
+       39,
+       40
+      ],
+      [
+       40,
+       41
+      ],
+      [
+       41,
+       42
+      ],
+      [
+       42,
+       43
+      ],
+      [
+       43,
+       44
+      ],
+      [
+       44,
+       45
+      ],
+      [
+       45,
+       46
+      ],
+      [
+       46,
+       47
+      ],
+      [
+       47,
+       48
+      ],
+      [
+       48,
+       49
+      ],
+      [
+       49,
+       50
+      ],
+      [
+       50,
+       51
+      ],
+      [
+       51,
+       52
+      ],
+      [
+       52,
+       53
+      ],
+      [
+       53,
+       54
+      ],
+      [
+       54,
+       55
+      ],
+      [
+       55,
+       56
+      ],
+      [
+       56,
+       57
+      ],
+      [
+       57,
+       58
+      ],
+      [
+       58,
+       59
+      ],
+      [
+       59,
+       60
+      ],
+      [
+       60,
+       61
+      ],
+      [
+       61,
+       62
+      ],
+      [
+       62,
+       63
+      ],
+      [
+       63,
+       64
+      ],
+      [
+       64,
+       65
+      ],
+      [
+       65,
+       66
+      ],
+      [
+       66,
+       67
+      ],
+      [
+       67,
+       68
+      ],
+      [
+       68,
+       69
+      ],
+      [
+       69,
+       70
+      ],
+      [
+       70,
+       71
+      ],
+      [
+       71,
+       72
+      ],
+      [
+       72,
+       73
+      ],
+      [
+       73,
+       74
+      ],
+      [
+       74,
+       75
+      ],
+      [
+       75,
+       76
+      ],
+      [
+       76,
+       77
+      ],
+      [
+       77,
+       78
+      ],
+      [
+       78,
+       79
+      ],
+      [
+       79,
+       80
+      ],
+      [
+       80,
+       81
+      ],
+      [
+       81,
+       82
+      ],
+      [
+       82,
+       83
+      ],
+      [
+       83,
+       84
+      ],
+      [
+       84,
+       85
+      ],
+      [
+       85,
+       86
+      ],
+      [
+       86,
+       87
+      ],
+      [
+       87,
+       88
+      ],
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ],
+      [
+       112,
+       113
+      ],
+      [
+       113,
+       114
+      ],
+      [
+       114,
+       115
+      ],
+      [
+       115,
+       116
+      ],
+      [
+       116,
+       117
+      ],
+      [
+       117,
+       118
+      ],
+      [
+       118,
+       119
+      ],
+      [
+       119,
+       120
+      ],
+      [
+       120,
+       121
+      ],
+      [
+       121,
+       122
+      ],
+      [
+       122,
+       123
+      ],
+      [
+       123,
+       124
+      ],
+      [
+       124,
+       125
+      ],
+      [
+       125,
+       126
+      ],
+      [
+       126,
+       127
+      ],
+      [
+       127,
+       128
+      ],
+      [
+       128,
+       129
+      ],
+      [
+       129,
+       130
+      ],
+      [
+       130,
+       131
+      ],
+      [
+       131,
+       132
+      ],
+      [
+       132,
+       133
+      ],
+      [
+       133,
+       134
+      ],
+      [
+       134,
+       135
+      ],
+      [
+       135,
+       136
+      ],
+      [
+       136,
+       137
+      ],
+      [
+       137,
+       138
+      ],
+      [
+       138,
+       139
+      ],
+      [
+       139,
+       140
+      ],
+      [
+       140,
+       141
+      ],
+      [
+       141,
+       142
+      ],
+      [
+       142,
+       143
+      ],
+      [
+       143,
+       144
+      ],
+      [
+       144,
+       145
+      ],
+      [
+       145,
+       146
+      ],
+      [
+       146,
+       147
+      ],
+      [
+       147,
+       148
+      ],
+      [
+       148,
+       149
+      ],
+      [
+       149,
+       150
+      ],
+      [
+       150,
+       151
+      ],
+      [
+       151,
+       152
+      ],
+      [
+       152,
+       153
+      ],
+      [
+       153,
+       154
+      ],
+      [
+       154,
+       155
+      ],
+      [
+       155,
+       156
+      ],
+      [
+       156,
+       157
+      ],
+      [
+       157,
+       158
+      ],
+      [
+       158,
+       159
+      ],
+      [
+       159,
+       160
+      ],
+      [
+       160,
+       161
+      ],
+      [
+       161,
+       162
+      ]
+     ],
+     "hull": [
+      0,
+      161
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 3.3013969066878084,
+     "max_abs_z_all_bins": 3.30139690668836,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 162,
+     "n_groups": 162,
+     "n_merged_groups": 0,
+     "n_supported_bins": 162,
+     "p_value": 0.2848575712143928,
+     "p_value_max_z": 0.22488755622188905,
+     "p_value_wilson_hilferty": 0.08427099006633343,
+     "pass": true,
+     "singleton_mass_fraction": 1.0000000000000002,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 157,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat25": {
+     "bonferroni_bound": 3.764823649533927,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 5.200325545215198,
+     "chi2_all_selected_bins": 5.2003255452149935,
+     "groups": [
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ]
+     ],
+     "hull": [
+      97,
+      102
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 1.4629682735715845,
+     "max_abs_z_all_bins": 1.4629682735715845,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 6,
+     "n_groups": 6,
+     "n_merged_groups": 0,
+     "n_supported_bins": 6,
+     "p_value": 0.504247876061969,
+     "p_value_max_z": 0.5667166416791605,
+     "p_value_wilson_hilferty": 0.5197339616670704,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 98,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat50": {
+     "bonferroni_bound": 4.003167571450172,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 26.79021210627043,
+     "chi2_all_selected_bins": 26.790212106269948,
+     "groups": [
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ]
+     ],
+     "hull": [
+      92,
+      107
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.56273039719548,
+     "max_abs_z_all_bins": 2.5627303971954514,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 16,
+     "n_groups": 16,
+     "n_merged_groups": 0,
+     "n_supported_bins": 16,
+     "p_value": 0.08045977011494253,
+     "p_value_max_z": 0.17541229385307347,
+     "p_value_wilson_hilferty": 0.043772192137249144,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 102,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat90": {
+     "bonferroni_bound": 4.2510549462159695,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 48.386320704409826,
+     "chi2_all_selected_bins": 48.386320704409535,
+     "groups": [
+      [
+       76,
+       77
+      ],
+      [
+       77,
+       78
+      ],
+      [
+       78,
+       79
+      ],
+      [
+       79,
+       80
+      ],
+      [
+       80,
+       81
+      ],
+      [
+       81,
+       82
+      ],
+      [
+       82,
+       83
+      ],
+      [
+       83,
+       84
+      ],
+      [
+       84,
+       85
+      ],
+      [
+       85,
+       86
+      ],
+      [
+       86,
+       87
+      ],
+      [
+       87,
+       88
+      ],
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ],
+      [
+       112,
+       113
+      ],
+      [
+       113,
+       114
+      ],
+      [
+       114,
+       115
+      ],
+      [
+       115,
+       116
+      ],
+      [
+       116,
+       117
+      ],
+      [
+       117,
+       118
+      ],
+      [
+       118,
+       119
+      ],
+      [
+       119,
+       120
+      ],
+      [
+       120,
+       121
+      ],
+      [
+       121,
+       122
+      ],
+      [
+       122,
+       123
+      ]
+     ],
+     "hull": [
+      76,
+      122
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.899749434327277,
+     "max_abs_z_all_bins": 2.899749434327196,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 47,
+     "n_groups": 47,
+     "n_merged_groups": 0,
+     "n_supported_bins": 47,
+     "p_value": 0.4587706146926537,
+     "p_value_max_z": 0.22138930534732634,
+     "p_value_wilson_hilferty": 0.41669093309380834,
+     "pass": true,
+     "singleton_mass_fraction": 1.0000000000000002,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 98,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    }
+   },
+   "bootstrap": {
+    "n_boot": 2000,
+    "seed": 20261004
+   },
+   "calibration": "studentized_bootstrap_t",
+   "max_z_calibration": "bootstrap_max_t",
+   "n_batches": [
+    40,
+    100
+   ],
+   "pass": true,
+   "permutation": {
+    "n_perm": 2000,
+    "seed": 20261004
+   },
+   "scalars": {
+    "r80_mm": {
+     "a": 159.07439052350722,
+     "b": 159.07758680988437,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.0029755104112318535,
+     "se_b": 0.0011435801413673934,
+     "z": -1.0026932777888913
+    },
+    "sigma_lat_05R_mm": {
+     "a": 0.5554627421130576,
+     "b": 0.5563313579270415,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.0007508900662862352,
+     "se_b": 0.0003610729220198877,
+     "z": -1.0425153085567056
+    },
+    "total_deposit_mev": {
+     "a": 599.9999999999952,
+     "b": 600.0000002500107,
+     "bound": 1e-05,
+     "noise_allowance": 2.0652534425123875e-09,
+     "pass": true,
+     "relative_difference": 4.1669238708808977e-10,
+     "rule": "deterministic_precision_bound",
+     "se_a": 2.0070138168787087e-11,
+     "se_b": 5.897309904779912e-10,
+     "z": -423.70296799268556
+    }
+   }
+  },
+  "o350-cpu64_vs_o350-cuda32": {
+   "arrays": {
+    "idd": {
+     "bonferroni_bound": 4.528073745976146,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 151.09785184686922,
+     "chi2_all_selected_bins": 151.0978518468042,
+     "groups": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       3,
+       4
+      ],
+      [
+       4,
+       5
+      ],
+      [
+       5,
+       6
+      ],
+      [
+       6,
+       7
+      ],
+      [
+       7,
+       8
+      ],
+      [
+       8,
+       9
+      ],
+      [
+       9,
+       10
+      ],
+      [
+       10,
+       11
+      ],
+      [
+       11,
+       12
+      ],
+      [
+       12,
+       13
+      ],
+      [
+       13,
+       14
+      ],
+      [
+       14,
+       15
+      ],
+      [
+       15,
+       16
+      ],
+      [
+       16,
+       17
+      ],
+      [
+       17,
+       18
+      ],
+      [
+       18,
+       19
+      ],
+      [
+       19,
+       20
+      ],
+      [
+       20,
+       21
+      ],
+      [
+       21,
+       22
+      ],
+      [
+       22,
+       23
+      ],
+      [
+       23,
+       24
+      ],
+      [
+       24,
+       25
+      ],
+      [
+       25,
+       26
+      ],
+      [
+       26,
+       27
+      ],
+      [
+       27,
+       28
+      ],
+      [
+       28,
+       29
+      ],
+      [
+       29,
+       30
+      ],
+      [
+       30,
+       31
+      ],
+      [
+       31,
+       32
+      ],
+      [
+       32,
+       33
+      ],
+      [
+       33,
+       34
+      ],
+      [
+       34,
+       35
+      ],
+      [
+       35,
+       36
+      ],
+      [
+       36,
+       37
+      ],
+      [
+       37,
+       38
+      ],
+      [
+       38,
+       39
+      ],
+      [
+       39,
+       40
+      ],
+      [
+       40,
+       41
+      ],
+      [
+       41,
+       42
+      ],
+      [
+       42,
+       43
+      ],
+      [
+       43,
+       44
+      ],
+      [
+       44,
+       45
+      ],
+      [
+       45,
+       46
+      ],
+      [
+       46,
+       47
+      ],
+      [
+       47,
+       48
+      ],
+      [
+       48,
+       49
+      ],
+      [
+       49,
+       50
+      ],
+      [
+       50,
+       51
+      ],
+      [
+       51,
+       52
+      ],
+      [
+       52,
+       53
+      ],
+      [
+       53,
+       54
+      ],
+      [
+       54,
+       55
+      ],
+      [
+       55,
+       56
+      ],
+      [
+       56,
+       57
+      ],
+      [
+       57,
+       58
+      ],
+      [
+       58,
+       59
+      ],
+      [
+       59,
+       60
+      ],
+      [
+       60,
+       61
+      ],
+      [
+       61,
+       62
+      ],
+      [
+       62,
+       63
+      ],
+      [
+       63,
+       64
+      ],
+      [
+       64,
+       65
+      ],
+      [
+       65,
+       66
+      ],
+      [
+       66,
+       67
+      ],
+      [
+       67,
+       68
+      ],
+      [
+       68,
+       69
+      ],
+      [
+       69,
+       70
+      ],
+      [
+       70,
+       71
+      ],
+      [
+       71,
+       72
+      ],
+      [
+       72,
+       73
+      ],
+      [
+       73,
+       74
+      ],
+      [
+       74,
+       75
+      ],
+      [
+       75,
+       76
+      ],
+      [
+       76,
+       77
+      ],
+      [
+       77,
+       78
+      ],
+      [
+       78,
+       79
+      ],
+      [
+       79,
+       80
+      ],
+      [
+       80,
+       81
+      ],
+      [
+       81,
+       82
+      ],
+      [
+       82,
+       83
+      ],
+      [
+       83,
+       84
+      ],
+      [
+       84,
+       85
+      ],
+      [
+       85,
+       86
+      ],
+      [
+       86,
+       87
+      ],
+      [
+       87,
+       88
+      ],
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ],
+      [
+       112,
+       113
+      ],
+      [
+       113,
+       114
+      ],
+      [
+       114,
+       115
+      ],
+      [
+       115,
+       116
+      ],
+      [
+       116,
+       117
+      ],
+      [
+       117,
+       118
+      ],
+      [
+       118,
+       119
+      ],
+      [
+       119,
+       120
+      ],
+      [
+       120,
+       121
+      ],
+      [
+       121,
+       122
+      ],
+      [
+       122,
+       123
+      ],
+      [
+       123,
+       124
+      ],
+      [
+       124,
+       125
+      ],
+      [
+       125,
+       126
+      ],
+      [
+       126,
+       127
+      ],
+      [
+       127,
+       128
+      ],
+      [
+       128,
+       129
+      ],
+      [
+       129,
+       130
+      ],
+      [
+       130,
+       131
+      ],
+      [
+       131,
+       132
+      ],
+      [
+       132,
+       133
+      ],
+      [
+       133,
+       134
+      ],
+      [
+       134,
+       135
+      ],
+      [
+       135,
+       136
+      ],
+      [
+       136,
+       137
+      ],
+      [
+       137,
+       138
+      ],
+      [
+       138,
+       139
+      ],
+      [
+       139,
+       140
+      ],
+      [
+       140,
+       141
+      ],
+      [
+       141,
+       142
+      ],
+      [
+       142,
+       143
+      ],
+      [
+       143,
+       144
+      ],
+      [
+       144,
+       145
+      ],
+      [
+       145,
+       146
+      ],
+      [
+       146,
+       147
+      ],
+      [
+       147,
+       148
+      ],
+      [
+       148,
+       149
+      ],
+      [
+       149,
+       150
+      ],
+      [
+       150,
+       151
+      ],
+      [
+       151,
+       152
+      ],
+      [
+       152,
+       153
+      ],
+      [
+       153,
+       154
+      ],
+      [
+       154,
+       155
+      ],
+      [
+       155,
+       156
+      ],
+      [
+       156,
+       157
+      ],
+      [
+       157,
+       158
+      ],
+      [
+       158,
+       159
+      ],
+      [
+       159,
+       160
+      ],
+      [
+       160,
+       161
+      ],
+      [
+       161,
+       162
+      ],
+      [
+       162,
+       163
+      ],
+      [
+       163,
+       164
+      ],
+      [
+       164,
+       165
+      ],
+      [
+       165,
+       166
+      ],
+      [
+       166,
+       167
+      ],
+      [
+       167,
+       168
+      ]
+     ],
+     "hull": [
+      0,
+      167
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.2528117518643906,
+     "max_abs_z_all_bins": 2.252811751857681,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 168,
+     "n_groups": 168,
+     "n_merged_groups": 0,
+     "n_supported_bins": 168,
+     "p_value": 0.6646676661669165,
+     "p_value_max_z": 0.9450274862568716,
+     "p_value_wilson_hilferty": 0.8208200807499386,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 59,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat25": {
+     "bonferroni_bound": 3.662259930887615,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 9.064188836883638,
+     "chi2_all_selected_bins": 9.064188836882987,
+     "groups": [
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ]
+     ],
+     "hull": [
+      98,
+      101
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.2378340396496514,
+     "max_abs_z_all_bins": 2.2378340396495195,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 4,
+     "n_groups": 4,
+     "n_merged_groups": 0,
+     "n_supported_bins": 4,
+     "p_value": 0.10194902548725637,
+     "p_value_max_z": 0.09545227386306847,
+     "p_value_wilson_hilferty": 0.05871188004598027,
+     "pass": true,
+     "singleton_mass_fraction": 0.9999999999999999,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 100,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat50": {
+     "bonferroni_bound": 3.89059188641312,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 11.295361672949136,
+     "chi2_all_selected_bins": 11.295361672948564,
+     "groups": [
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ]
+     ],
+     "hull": [
+      95,
+      104
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 2.5612830395242474,
+     "max_abs_z_all_bins": 2.5612830395241044,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 10,
+     "n_groups": 10,
+     "n_merged_groups": 0,
+     "n_supported_bins": 10,
+     "p_value": 0.34182908545727136,
+     "p_value_max_z": 0.11494252873563218,
+     "p_value_wilson_hilferty": 0.3346732341590334,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 100,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    },
+    "lat90": {
+     "bonferroni_bound": 4.098038123646298,
+     "bonferroni_informative_pass": true,
+     "calibration": "studentized_bootstrap_t",
+     "chi2": 19.04152279131837,
+     "chi2_all_selected_bins": 19.041522791318364,
+     "groups": [
+      [
+       88,
+       89
+      ],
+      [
+       89,
+       90
+      ],
+      [
+       90,
+       91
+      ],
+      [
+       91,
+       92
+      ],
+      [
+       92,
+       93
+      ],
+      [
+       93,
+       94
+      ],
+      [
+       94,
+       95
+      ],
+      [
+       95,
+       96
+      ],
+      [
+       96,
+       97
+      ],
+      [
+       97,
+       98
+      ],
+      [
+       98,
+       99
+      ],
+      [
+       99,
+       100
+      ],
+      [
+       100,
+       101
+      ],
+      [
+       101,
+       102
+      ],
+      [
+       102,
+       103
+      ],
+      [
+       103,
+       104
+      ],
+      [
+       104,
+       105
+      ],
+      [
+       105,
+       106
+      ],
+      [
+       106,
+       107
+      ],
+      [
+       107,
+       108
+      ],
+      [
+       108,
+       109
+      ],
+      [
+       109,
+       110
+      ],
+      [
+       110,
+       111
+      ],
+      [
+       111,
+       112
+      ]
+     ],
+     "hull": [
+      88,
+      111
+     ],
+     "inconclusive_reason": null,
+     "max_abs_z": 1.6827083897967812,
+     "max_abs_z_all_bins": 1.682708389796775,
+     "max_z_rule": "bootstrap_max_t",
+     "n_bins": 24,
+     "n_groups": 24,
+     "n_merged_groups": 0,
+     "n_supported_bins": 24,
+     "p_value": 0.7321339330334833,
+     "p_value_max_z": 0.8845577211394303,
+     "p_value_wilson_hilferty": 0.7502685609595956,
+     "pass": true,
+     "singleton_mass_fraction": 1.0,
+     "unsupported_bins": [],
+     "verdict": "pass",
+     "worst_bin_all": {
+      "batches_with_deposit": [
+       40,
+       100
+      ],
+      "index": 109,
+      "required": [
+       20,
+       50
+      ],
+      "supported": true
+     }
+    }
+   },
+   "bootstrap": {
+    "n_boot": 2000,
+    "seed": 20261004
+   },
+   "calibration": "studentized_bootstrap_t",
+   "max_z_calibration": "bootstrap_max_t",
+   "n_batches": [
+    40,
+    100
+   ],
+   "pass": true,
+   "permutation": {
+    "n_perm": 2000,
+    "seed": 20261004
+   },
+   "scalars": {
+    "r80_mm": {
+     "a": 166.72241003078824,
+     "b": 166.72264945380672,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.00013363329219238506,
+     "se_b": 6.0208645085732556e-05,
+     "z": -1.633499730037613
+    },
+    "sigma_lat_05R_mm": {
+     "a": 0.2973419640149375,
+     "b": 0.2979646280778748,
+     "bound": 3.5,
+     "pass": true,
+     "rule": "z",
+     "se_a": 0.0004391807132991005,
+     "se_b": 0.00019886702462015407,
+     "z": -1.2915456840331065
+    },
+    "total_deposit_mev": {
+     "a": 5599.999999999998,
+     "b": 5600.000004885763,
+     "bound": 1e-05,
+     "noise_allowance": 2.06538861871513e-08,
+     "pass": true,
+     "relative_difference": 8.724579654285657e-10,
+     "rule": "deterministic_precision_bound",
+     "se_a": 1.8344940487372862e-11,
+     "se_b": 5.90108182441215e-09,
+     "z": -827.9398841636407
+    }
+   }
+  }
+ }
+}
+#JSON-END
+
+# exit=0

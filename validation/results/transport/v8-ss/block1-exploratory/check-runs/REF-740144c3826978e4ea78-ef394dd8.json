@@ -1,0 +1,7 @@
+{
+ "cmd": "check-run",
+ "error": "RecordError: bundle v5ss-helium-water-250mevu-scorer-smoke: SS manifest entry missing or changed after the run",
+ "generated_at": "2026-11-13T11:12:21.101584+00:00",
+ "note": "fail closed: nothing established; not a pass",
+ "status": "ERROR"
+}

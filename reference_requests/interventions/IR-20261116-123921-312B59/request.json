@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "git_sha": "930b7a9c1601b0a9bff95748bcd22982ae8c8193",
+  "request_id": "IR-20261116-123921-312B59",
+  "created_at_utc": "2026-11-16T12:39:21.359116+00:00",
+  "task_id": "v3-008",
+  "category": "authorization",
+  "summary": "V3-008 amendment I3-FU-1 (follow-up diagnostics on the row-I3 FAIL: committed band/z-scan diagnostic and a TOPAS thin-slab stopping check of the acceptance reference) is ready at task-branch commit 7df946b6 but cannot start: the independent Codex review has converged to exactly two findings that need infrastructure outside the repository's means (a signing review service; an authenticated immutable launcher), and the evaluator — by its own reviewed design — requires a passed review record as its chronology pin. Decision requested: proceed under disclosed limitations, build signed review records first (needs an operator restart of the codex-worker service), or stop the follow-up.",
+  "investigation": {
+    "blocked_claim": "Execution of the pre-registered I3 follow-up diagnostics (amendment I3-FU-1 steps 1-2: what stopping the TOPAS acceptance reference carries for C/O at 2.4-50 MeV/u, and the committed band/z-scan attribution of the row-I3 FAIL) under the plan's F.4/F.5 gate 're-reviewed until passed': the Codex review retains only two infrastructure-bound findings and the evaluator requires a passed review record as its chronology pin.",
+    "budget": "If (A): step 1 minutes; step 2 about 63 TOPAS runs of <= 2 min each, one at a time (about 1-2 h reference compute), plus repeats on trigger; evaluation minutes. If (B): one infrastructure PR (signed review records in infrastructure/experiment_v3/review.py + MCP wrapper, tests), one operator restart, then one more review round before the same runs. If (C): nothing.",
+    "alternatives": "Considered and rejected: (1) keep iterating the review loop - nine rounds show the two findings are infrastructure-bound and will not converge; (2) relax the evaluator's pin rule autonomously to accept a 'changes required' record - this is exactly the self-certification the reviewer objects to and is a gate change reserved to you; (3) run step 1 alone (it does not need the pin) - plan section 5 orders the step-1 run after the passed review of the carrying commit, so it would breach the same gate; (4) implement signed review records now - the server restart is an operator action, hence option (B).",
+    "attempts": [
+      {
+        "approach": "Revision 2-4: review pins as verbatim passed codex-worker records with plan-note binding; then accompanied by signed validation-manager records embedding the pin",
+        "outcome": "Codex REVIEW-22f384ed / aa4e7b1b / c4f3fdd1 / 183057ce: still 'caller-asserted' because the review service itself does not sign",
+        "artifact": "validation/scripts/stopping/i3fu2_evaluate.py (check_pin_attestation), plan revision records 2-5"
+      },
+      {
+        "approach": "Revision 3-7: sealed import closure + uv.lock, numpy RECORD verification, committed environment seal (interpreter/extension hashes), module-origin check, -B with fresh empty pycache_prefix, import hooks recorded",
+        "outcome": "Codex REVIEW-aa4e7b1b ... 60fe6c01: 'not an authenticated immutable environment; start-up/import machinery unsealed'",
+        "artifact": "validation/scripts/stopping/env_seal.py; validation/results/stopping/v3-008-i3fu1/environment-seal.json; plan revisions 3-8"
+      },
+      {
+        "approach": "Every scientific finding of Codex and of the independent reviewer (SR-3 passes 1-5) resolved: de-confounded gate, fine-step point values, P13 source-derived stepping bound, energy-convention sensitivity, deterministic repeats, rounding policy",
+        "outcome": "Codex REVIEW-60fe6c01 on 7df946b6 lists only the two infrastructure findings; reviewer SR-3 pass 5: APPROVE WITH CHANGES, no blocking finding",
+        "artifact": "commits 777b4561, d493e9cf, 59522166, 2aaf1b67, 9706fd01, 2c19caf7, 62059510, eea08d3c, 7df946b6 with VAL records; validation/plans/v3-008/p13-i3fu2-stepping-bound.md"
+      }
+    ],
+    "task_branch_head": "7df946b6667cb0b4f8f1aded827a532743be5b78",
+    "pr": 84,
+    "last_codex_review": "REVIEW-60fe6c01751d4f909c21c865cefb37d1 (changes_required; two findings: review provenance caller-asserted; launch seal does not bind start-up/import machinery)",
+    "plan_section": "validation/plans/v3-008-acceptance.md, '### Amendment I3-FU-1' with revision records 1-8",
+    "no_clinical_claim": true
+  },
+  "reason_autonomous_resolution_not_possible": "Categories 4 (Authorization) and 5 (Ambiguous experimental boundary). Facts: (1) Row I3 (ionmc C/O stopping vs the revised ICRU 73 table) FAILED on 2026-11-15; plan F.6 is unmet and PR #84 stays open, not merged. (2) The prospective amendment I3-FU-1 (plan validation/plans/v3-008-acceptance.md, section \"Amendment I3-FU-1\", revisions 1-8 of 2026-11-16) defines step 1 (model-only band diagnostic, minutes), step 2 (TOPAS thin-slab mean energy-loss runs for 12C/16O at 2.4-50 MeV/u plus 4He and controls: 5 smokes + 58 evidence runs of 50 000 primaries, roughly 1-2 h of reference compute; pre-declared classification ICRU-like / model-like / mixed / inconclusive) and step 3 (pre-declared choice between a model change and a declared uncertainty; the latter is followed by a separate scope request to you). (3) Nine Codex review rounds (REVIEW-cfdff398 ... REVIEW-60fe6c01) and five independent scientific-reviewer passes (SR-3) were run; every scientific finding was resolved (the reviewer's last verdict: approve with changes, no blocking finding; the de-confounded gate, the fine-step design and the energy convention confirmed). (4) The last Codex round (REVIEW-60fe6c01 on 7df946b6) retains exactly two findings, repeated since revision 2: (a) the review pin is not authenticated by the review service — the codex-worker service does not sign or export its records (V3-INFRA-005 lists signed review records as a future item; adding signing to infrastructure/experiment_v3/review.py is a repository change that needs a restart of the running MCP server, which only you can perform); (b) the execution environment is not an authenticated immutable launcher — the diagnostics now verify the numpy distribution file by file against its wheel manifest, pin the interpreter and extension-module hashes in a committed seal, seal the full import closure plus uv.lock, run with bytecode writing disabled and a fresh empty bytecode-cache prefix, and record the import hooks; Python start-up and the stdlib remain unsealed (disclosed). (5) The step-2 evaluator requires, by its reviewed design, a review record with status \"passed\" as the chronology pin before any run; with (a)/(b) unresolved it fails closed, so the runs cannot start, and plan F.4/F.5 (\"re-reviewed until passed\") cannot be met. Autonomous resolution is not possible: a signing review service or an authenticated launcher require infrastructure deployment/restart by the operator (category 4: deployment to infrastructure outside the experimental workspace), and whether \"re-reviewed until passed\" can be satisfied by disclosed infrastructure limitations is a protocol-boundary question (category 5). No merge is at stake in this request; PR #84 stays unmerged whatever the answer (row I3 FAIL). The nine commits of 2026-11-16 are on the local task branch, each with an exact-SHA local-validation record; they are not pushed because the per-commit push gate requires a passed review.",
+  "requested_input": "Choose exactly one: (A) PROCEED under disclosed limitations — the orchestrator amends the evaluator so that the chronology pin may be a review record whose only remaining findings are the two infrastructure findings quoted above, listed in a committed disposition that names this intervention; then runs step 1, the smokes and the 58 evidence runs, evaluates once, and returns with the step-3 result (and, if option (c) results, the separate scope request). (B) BUILD SIGNED REVIEW RECORDS FIRST — the orchestrator implements signed codex-worker review records (V3-INFRA-006) on a separate branch; you restart the codex-worker MCP server when the orchestrator reports the merge is ready; the review loop is then repeated and the runs start only after a passed review. (C) STOP the follow-up here: V3-008 stays open with row I3 FAILED, the amendment stays a prospective record, no runs. Optional for (A): also state whether the nine unpushed commits of 2026-11-16 may be pushed to the remote task branch despite their \"changes required\" review status (yes/no).",
+  "decisions_or_tasks_blocked": "whether the I3 follow-up diagnostics run at all; the step-3 option (model change vs declared uncertainty); the later validation-scope request on PR #84; whether a V3-INFRA-006 (signed review records) task is created",
+  "status": "open",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  }
+}

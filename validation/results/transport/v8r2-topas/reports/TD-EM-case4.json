@@ -1,0 +1,551 @@
+{
+ "case": 4,
+ "case_info": {
+  "case": 4,
+  "hx_mm": 0.01,
+  "hz_mm": 0.02,
+  "ion": "carbon",
+  "length_mm": 50.0,
+  "mev_u": 80.0,
+  "r_plan_mm": 17.5,
+  "set": "main"
+ },
+ "criteria": [
+  {
+   "criterion": "(a)",
+   "gated": true,
+   "note": "pass",
+   "observable": "r80",
+   "r": 17.517939431491357,
+   "sigma_comb": 0.0001390669388281451,
+   "sigma_i": 9.920063907716723e-05,
+   "sigma_t": 9.746202687053382e-05,
+   "statistic": 0.016135294398172396,
+   "tol": 0.06131278801021975,
+   "verdict": "PASS",
+   "x": 17.502032902207556
+  },
+  {
+   "criterion": "(b)",
+   "gated": false,
+   "note": "outside tolerance",
+   "observable": "w",
+   "r": 0.08679994877759611,
+   "sigma_comb": 0.0004326730829239118,
+   "sigma_i": 0.0001586554539825919,
+   "sigma_t": 0.00040253502159248196,
+   "statistic": 0.015814029367409457,
+   "tol": 0.008679994877759611,
+   "verdict": "REPORT-ONLY",
+   "x": 0.07169766663159649
+  },
+  {
+   "criterion": "(c)",
+   "gated": true,
+   "note": "pass",
+   "observable": "z_peak",
+   "r": 17.431067723277778,
+   "sigma_comb": 0.00013280116475572156,
+   "sigma_i": 3.8386212207421104e-05,
+   "sigma_t": 0.00012713240370905893,
+   "statistic": 0.0020606499693545215,
+   "tol": 0.5,
+   "verdict": "PASS",
+   "x": 17.429225531224446
+  },
+  {
+   "criterion": "(d)",
+   "gated": true,
+   "note": "outside tolerance",
+   "observable": "pe",
+   "r": 10.34802988016393,
+   "sigma_comb": 0.007576019705311511,
+   "sigma_i": 0.003746441997541782,
+   "sigma_t": 0.006584849803474902,
+   "statistic": 1.1345789022276158,
+   "tol": 0.3104408964049179,
+   "verdict": "FAIL",
+   "x": 11.470146229976308
+  },
+  {
+   "criterion": "(e)",
+   "end_mm": 14.014351545193087,
+   "failing_groups": [],
+   "gated": true,
+   "group_mm": 1.0,
+   "groups": 13,
+   "observable": "plateau",
+   "per_group": [
+    {
+     "note": "pass",
+     "r": 31.51440636544848,
+     "sigma_comb": 0.004865697307151945,
+     "sigma_i": 0.0005270984235348099,
+     "sigma_t": 0.004837062903946237,
+     "statistic": 0.04402017843880031,
+     "tol": 0.6302881273089697,
+     "verdict": "PASS",
+     "x": 31.550422471817015
+    },
+    {
+     "note": "pass",
+     "r": 32.35987565894835,
+     "sigma_comb": 0.0015794814358809606,
+     "sigma_i": 0.0005716755614265238,
+     "sigma_t": 0.0014723955510528581,
+     "statistic": 0.05035972528483615,
+     "tol": 0.647197513178967,
+     "verdict": "PASS",
+     "x": 32.40763713727116
+    },
+    {
+     "note": "pass",
+     "r": 33.29717405738151,
+     "sigma_comb": 0.0009036759454668985,
+     "sigma_i": 0.00043390239380866684,
+     "sigma_t": 0.0007926909404443838,
+     "statistic": 0.053775519198067674,
+     "tol": 0.6659434811476302,
+     "verdict": "PASS",
+     "x": 33.349463029649286
+    },
+    {
+     "note": "pass",
+     "r": 34.337315573921714,
+     "sigma_comb": 0.0032754447756849206,
+     "sigma_i": 0.0006558516725659418,
+     "sigma_t": 0.003209111568978881,
+     "statistic": 0.06042956381795011,
+     "tol": 0.6867463114784343,
+     "verdict": "PASS",
+     "x": 34.39235703108366
+    },
+    {
+     "note": "pass",
+     "r": 35.50154148816027,
+     "sigma_comb": 0.001292425823362419,
+     "sigma_i": 0.000607576353989573,
+     "sigma_t": 0.0011407083251062755,
+     "statistic": 0.05651163153293411,
+     "tol": 0.7100308297632054,
+     "verdict": "PASS",
+     "x": 35.555927079213774
+    },
+    {
+     "note": "pass",
+     "r": 36.815612111988614,
+     "sigma_comb": 0.0019968775256159624,
+     "sigma_i": 0.0006642804851852416,
+     "sigma_t": 0.001883149300855402,
+     "statistic": 0.052767367380527515,
+     "tol": 0.7363122422397723,
+     "verdict": "PASS",
+     "x": 36.8650946158395
+    },
+    {
+     "note": "pass",
+     "r": 38.31010657504954,
+     "sigma_comb": 0.0036926809294310584,
+     "sigma_i": 0.0005588780906885671,
+     "sigma_t": 0.003650143521333391,
+     "statistic": 0.049426761864026156,
+     "tol": 0.7662021315009908,
+     "verdict": "PASS",
+     "x": 38.35345887678465
+    },
+    {
+     "note": "pass",
+     "r": 40.034684254778824,
+     "sigma_comb": 0.004977442338096917,
+     "sigma_i": 0.0005365534402752379,
+     "sigma_t": 0.004948438403659129,
+     "statistic": 0.04028639153826635,
+     "tol": 0.8006936850955765,
+     "verdict": "PASS",
+     "x": 40.06678275367092
+    },
+    {
+     "note": "pass",
+     "r": 42.03767875005621,
+     "sigma_comb": 0.0022154639319141188,
+     "sigma_i": 0.0006523756599471414,
+     "sigma_t": 0.0021172355636350196,
+     "statistic": 0.03416888730260889,
+     "tol": 0.8407535750011242,
+     "verdict": "PASS",
+     "x": 42.06820319919082
+    },
+    {
+     "note": "pass",
+     "r": 44.40805234584439,
+     "sigma_comb": 0.00763017767977642,
+     "sigma_i": 0.0004966048706094596,
+     "sigma_t": 0.007613999936133782,
+     "statistic": 0.054575809780925764,
+     "tol": 0.8881610469168878,
+     "verdict": "PASS",
+     "x": 44.45007651334208
+    },
+    {
+     "note": "pass",
+     "r": 47.2865313988441,
+     "sigma_comb": 0.0023366832713879364,
+     "sigma_i": 0.0006335844506586695,
+     "sigma_t": 0.002249146383557055,
+     "statistic": 0.0686435102208282,
+     "tol": 0.945730627976882,
+     "verdict": "PASS",
+     "x": 47.35133106508349
+    },
+    {
+     "note": "pass",
+     "r": 50.92043213797462,
+     "sigma_comb": 0.0023734030534875343,
+     "sigma_i": 0.0007151327745866456,
+     "sigma_t": 0.0022631012281857737,
+     "statistic": 0.07938281413553089,
+     "tol": 1.0184086427594925,
+     "verdict": "PASS",
+     "x": 50.995910704087166
+    },
+    {
+     "note": "pass",
+     "r": 55.73671486551108,
+     "sigma_comb": 0.004107770325520728,
+     "sigma_i": 0.00055201066715567,
+     "sigma_t": 0.00407051118049994,
+     "statistic": 0.04399015962529434,
+     "tol": 1.1147342973102217,
+     "verdict": "PASS",
+     "x": 55.773947742950895
+    }
+   ],
+   "start_mm": 0.5,
+   "verdict": "PASS",
+   "worst_group": {
+    "note": "pass",
+    "r": 31.51440636544848,
+    "sigma_comb": 0.004865697307151945,
+    "sigma_i": 0.0005270984235348099,
+    "sigma_t": 0.004837062903946237,
+    "statistic": 0.04402017843880031,
+    "tol": 0.6302881273089697,
+    "verdict": "PASS",
+    "x": 31.550422471817015
+   }
+  }
+ ],
+ "evaluator": {
+  "committed_inputs": {
+   "infrastructure/keys/trusted_attestation_keys.json": "31f6a82c3b0d0379c9ce32d3db9c83cb1c07825765ab42dcdfa334fc459337b8",
+   "validation/plans/v3-008-acceptance.md": "df8fe5343d421090e31e55c19ad39b1a9349b3c7a87d6c501584677d2f909f15",
+   "validation/results/transport/v8r2-samples/sample-seal.json": "0c3130dc462632551005d4cca3cc0e6a25e2204721fb669f80f1d0d08412b4dc",
+   "validation/results/transport/v8r2-topas/frozen-bundles.json": "f5e39fe6c7c1c846070e34970024717d86c36dd04b8b287b993a07947856400d",
+   "validation/results/transport/v8r2-topas/records/index.json": "264fba78aa314c04ac72574eb02e79a9e58798238de77ca5a85adaa9da209b98",
+   "validation/results/transport/v8r2-topas/records/review.json": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "validation/results/transport/v8r2-topas/records/runs/REF-0881c06b2c79cc46abe9-d9b3783d/artifacts.json": "b90a3e4401c923bd1d4016d49d23378dfb3e8633ed8676650b05e0d7b1c451c8",
+   "validation/results/transport/v8r2-topas/records/runs/REF-0881c06b2c79cc46abe9-d9b3783d/record.json": "990474c3fdca7ca0832190407af716262aae8d3f0335fbe313f8c979c05a0658",
+   "validation/results/transport/v8r2-topas/records/runs/REF-72ef20c9ce60ae1dd228-6783b617/artifacts.json": "a38d6b2be0005114cb2c2ecd1519b8e4809c736f213e5428f446c959bb49c0ad",
+   "validation/results/transport/v8r2-topas/records/runs/REF-72ef20c9ce60ae1dd228-6783b617/record.json": "b4a46d56b8c6cfbd31be14734e6e3c0bbe8cab304d2fb36df1c7635382c032d2",
+   "validation/results/transport/v8r2-topas/records/runs/REF-844b1cf2bfc4b3287667-fc8a609d/artifacts.json": "c9a7c24f74bb7310b05abec669aa910972a032eba4cdbec5ca0284ee95d59b79",
+   "validation/results/transport/v8r2-topas/records/runs/REF-844b1cf2bfc4b3287667-fc8a609d/record.json": "c9d836f39bcbc28e83fe623a62b4b1ef43300e099792995cac2296d963de0925",
+   "validation/results/transport/v8r2-topas/records/runs/REF-85bf230318944e37467a-35b2cabb/artifacts.json": "cb4b4d6e1e2bacd85353dd9c106f97a0959f45f5ff6cf1c2a66939693e1d977b",
+   "validation/results/transport/v8r2-topas/records/runs/REF-85bf230318944e37467a-35b2cabb/record.json": "83d8b8309f700bbec1d94bb52b6d1cf3dafca7a36edc5f2f9452c4aad4dab363"
+  },
+  "committed_inputs_clean": true,
+  "head_sha": "94bc948e875072f4867cf68b0cf8479183e878f0"
+ },
+ "evaluator_head": "94bc948e875072f4867cf68b0cf8479183e878f0",
+ "generated_at": "2026-11-09T20:12:21.129168+00:00",
+ "held_out": false,
+ "implementation_decisions": [
+  "D1 pooled point values (estimator on pooled batches / summed TOPAS parts)",
+  "D2 batch-means / part substitution uncertainties; sigma_T = 1.430 SD/sqrt(4), K = 4 only",
+  "D3 relative tolerances graded as |x - r| + 1.645 sigma_comb <= frac * r_TOPAS",
+  "D4 whole-bin windows by bin centre; fit window = bins with |centre| <= 2 sigma",
+  "D5 range classes of section 4.1 from R_plan (section 3)",
+  "D6 chunks combined per batch: history-weighted mean of the chunks' batch b (B = 40)",
+  "D7 r and <r> of TL use the pooled TOPAS sigma per point; D_ext sigma from the same substitution (depth correlations kept)",
+  "D8 TL (a) with no gated point and TL (b) without common gated depths: NOT EVALUABLE"
+ ],
+ "ionmc_chunks": [
+  {
+   "case": 4,
+   "k": 1,
+   "npz_sha256": "63f8140d2136de2f9c135f22d5213a68bb312c41f5dfc3f009769f00b3102014",
+   "run_id": "RUN-20261108T113539Z-cd21fd84"
+  },
+  {
+   "case": 4,
+   "k": 2,
+   "npz_sha256": "f3f5ef984667b87ab4d4f1b8ae4c8cfeb99714ce703f0d27b9df204fa1ccdafe",
+   "run_id": "RUN-20261108T115425Z-70487412"
+  },
+  {
+   "case": 4,
+   "k": 3,
+   "npz_sha256": "b1a644d9850b234282ffb94709b68acaf03662a1049d8ff95afdc50bf490a145",
+   "run_id": "RUN-20261108T121311Z-a178af37"
+  },
+  {
+   "case": 4,
+   "k": 4,
+   "npz_sha256": "db162d7c923d64dec18595259e7d29d97ed2043e783a55ecfd7f818ff39351fc",
+   "run_id": "RUN-20261108T123156Z-159e06e5"
+  }
+ ],
+ "module_markers_unverifiable": [],
+ "not_computed": [
+  "TD-EM report-only: ratio curve E_i/E_T over [0, R80_T + 5 sigma_R]",
+  "TD-EM report-only: C/O 430 equal-velocity R80 ratio",
+  "TD-FULL report-only: tail dose beyond R80_T + 3 sigma_R",
+  "TD-FULL report-only: primary fluence vs depth (and TF-DIAG primary survival at R80)",
+  "TL report-only: D_std; C/O 430 equal-velocity sigma ratio",
+  "TF-DIAG: FULL/EM plateau and peak ratios"
+ ],
+ "part_validity": [
+  {
+   "case": 4,
+   "config": "idd-em",
+   "module_markers_unverifiable": [],
+   "part": 0,
+   "problems": [],
+   "run_id": "REF-72ef20c9ce60ae1dd228-6783b617"
+  },
+  {
+   "case": 4,
+   "config": "idd-em",
+   "module_markers_unverifiable": [],
+   "part": 1,
+   "problems": [],
+   "run_id": "REF-0881c06b2c79cc46abe9-d9b3783d"
+  },
+  {
+   "case": 4,
+   "config": "idd-em",
+   "module_markers_unverifiable": [],
+   "part": 2,
+   "problems": [],
+   "run_id": "REF-844b1cf2bfc4b3287667-fc8a609d"
+  },
+  {
+   "case": 4,
+   "config": "idd-em",
+   "module_markers_unverifiable": [],
+   "part": 3,
+   "problems": [],
+   "run_id": "REF-85bf230318944e37467a-35b2cabb"
+  }
+ ],
+ "plan": {
+  "seal_review_id": "REVIEW-9691e1b098e940d7bdfd1063c09325ee",
+  "seal_sha": "0c68b78ac191c850bf9101dbacf8eca12f4e9b1b"
+ },
+ "pooled": {
+  "d_ent": {
+   "ionmc": 31.550422471817015,
+   "topas": 31.51440636544848
+  },
+  "d_peak": {
+   "ionmc": 361.8879593692717,
+   "topas": 326.1120187252892
+  },
+  "pe": {
+   "ionmc": 11.470146229976308,
+   "topas": 10.34802988016393
+  },
+  "r20": {
+   "ionmc": 17.573730568839153,
+   "topas": 17.604739380268953
+  },
+  "r80": {
+   "ionmc": 17.502032902207556,
+   "topas": 17.517939431491357
+  },
+  "w": {
+   "ionmc": 0.07169766663159649,
+   "topas": 0.08679994877759611
+  },
+  "z_peak": {
+   "ionmc": 17.429225531224446,
+   "topas": 17.431067723277778
+  }
+ },
+ "replicate_gate": [
+  {
+   "case": 4,
+   "config": "idd-em",
+   "problems": []
+  }
+ ],
+ "report_only": {
+  "r90": {
+   "criterion": "R90",
+   "gated": false,
+   "note": "invalid",
+   "observable": "r90",
+   "r": 17.500694927747503,
+   "sigma_comb": null,
+   "sigma_i": 0.00018713144493946038,
+   "sigma_t": 0.00020044410278413082,
+   "statistic": null,
+   "tol": null,
+   "verdict": "REPORT-ONLY",
+   "x": 17.489992939569053
+  }
+ },
+ "review": {
+  "finished_at": "2026-11-09T09:15:57.707596+00:00",
+  "head_sha": "0c68b78ac191c850bf9101dbacf8eca12f4e9b1b",
+  "review_id": "REVIEW-9691e1b098e940d7bdfd1063c09325ee",
+  "status": "passed"
+ },
+ "row": "TD-EM",
+ "run_validity": [
+  {
+   "ancestry": true,
+   "case": 4,
+   "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+   "config": "idd-em",
+   "manifest_bundle_set_digest": "b5fa180fa5e8a7fee59ef22716048b1ad3e06e683897bd7962ea0c9f4e3afb75",
+   "part": 0,
+   "plan_sha256_at_code_sha": "df8fe5343d421090e31e55c19ad39b1a9349b3c7a87d6c501584677d2f909f15",
+   "review_before_start": true,
+   "review_finished_at": "2026-11-09T09:15:57.707596+00:00",
+   "review_sha256_at_code_sha": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "review_sha256_at_head": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "run_id": "REF-72ef20c9ce60ae1dd228-6783b617",
+   "valid": true
+  },
+  {
+   "ancestry": true,
+   "case": 4,
+   "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+   "config": "idd-em",
+   "manifest_bundle_set_digest": "b5fa180fa5e8a7fee59ef22716048b1ad3e06e683897bd7962ea0c9f4e3afb75",
+   "part": 1,
+   "plan_sha256_at_code_sha": "df8fe5343d421090e31e55c19ad39b1a9349b3c7a87d6c501584677d2f909f15",
+   "review_before_start": true,
+   "review_finished_at": "2026-11-09T09:15:57.707596+00:00",
+   "review_sha256_at_code_sha": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "review_sha256_at_head": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "run_id": "REF-0881c06b2c79cc46abe9-d9b3783d",
+   "valid": true
+  },
+  {
+   "ancestry": true,
+   "case": 4,
+   "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+   "config": "idd-em",
+   "manifest_bundle_set_digest": "b5fa180fa5e8a7fee59ef22716048b1ad3e06e683897bd7962ea0c9f4e3afb75",
+   "part": 2,
+   "plan_sha256_at_code_sha": "df8fe5343d421090e31e55c19ad39b1a9349b3c7a87d6c501584677d2f909f15",
+   "review_before_start": true,
+   "review_finished_at": "2026-11-09T09:15:57.707596+00:00",
+   "review_sha256_at_code_sha": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "review_sha256_at_head": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "run_id": "REF-844b1cf2bfc4b3287667-fc8a609d",
+   "valid": true
+  },
+  {
+   "ancestry": true,
+   "case": 4,
+   "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+   "config": "idd-em",
+   "manifest_bundle_set_digest": "b5fa180fa5e8a7fee59ef22716048b1ad3e06e683897bd7962ea0c9f4e3afb75",
+   "part": 3,
+   "plan_sha256_at_code_sha": "df8fe5343d421090e31e55c19ad39b1a9349b3c7a87d6c501584677d2f909f15",
+   "review_before_start": true,
+   "review_finished_at": "2026-11-09T09:15:57.707596+00:00",
+   "review_sha256_at_code_sha": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "review_sha256_at_head": "87988397d4c14304d75f987117e4c22199d4452a0b48030e131a2bd52edb1199",
+   "run_id": "REF-85bf230318944e37467a-35b2cabb",
+   "valid": true
+  }
+ ],
+ "schema": "ionmc-v3-008-r2-grade-1",
+ "seal_record": {
+  "path": "validation/results/transport/v8r2-samples/sample-seal.json",
+  "sha256": "0c3130dc462632551005d4cca3cc0e6a25e2204721fb669f80f1d0d08412b4dc"
+ },
+ "status": "FAIL",
+ "topas_runs": [
+  {
+   "bundle": "carbon-water-80mevu-r2-idd-em-part0",
+   "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+   "config": "idd-em",
+   "configuration_id": "72ef20c9ce60ae1dd228218ea4bcb77277aa13da7312a6cb5e5ec06d7c096c22",
+   "files_sha256": {
+    "request.json": "5cadbcae8f2a783ab8e0b94ead4f2b23c835c6203cf30c0400e24a320118e2fa",
+    "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.txt": "a9bde5b41fa12905c2b0a109cfd7fd455ce5832b731cb00083a9e53e8d498445",
+    "work/idd_dose.csv": "5513c0ac9b63d814ed3ae5f5a9c221b03e36f8676a226cda246a1844a803084e"
+   },
+   "finished_at": "2026-11-09T18:36:08.420204+00:00",
+   "histories": 25000,
+   "part": 0,
+   "reference_started": "2026-11-09T18:35:16.552194+00:00",
+   "run_id": "REF-72ef20c9ce60ae1dd228-6783b617",
+   "seconds": 51.868014426203445
+  },
+  {
+   "bundle": "carbon-water-80mevu-r2-idd-em-part1",
+   "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+   "config": "idd-em",
+   "configuration_id": "0881c06b2c79cc46abe97d6658aed69d8952ede9dd14bd8ece887a64459ff400",
+   "files_sha256": {
+    "request.json": "ab03bce52b1268bdcc12e5bf6d47d9f3cc8339f8d5b6c070139bf409320d18d5",
+    "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.txt": "9d8badf1b14a3520b64043c165f5cf5bce33f1d08e78cf0fd23ae33ea88f8847",
+    "work/idd_dose.csv": "bbdbca5d5567897e2d95c8328cca468fb4ce24078b584dbcb237e84afc7b7c4d"
+   },
+   "finished_at": "2026-11-09T18:37:15.924728+00:00",
+   "histories": 25000,
+   "part": 1,
+   "reference_started": "2026-11-09T18:36:23.153779+00:00",
+   "run_id": "REF-0881c06b2c79cc46abe9-d9b3783d",
+   "seconds": 52.77095339796506
+  },
+  {
+   "bundle": "carbon-water-80mevu-r2-idd-em-part2",
+   "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+   "config": "idd-em",
+   "configuration_id": "844b1cf2bfc4b3287667507c5297c740304637d82ca01f5ab29289a540f52211",
+   "files_sha256": {
+    "request.json": "df0eb8fbe95ebaf3deb9e0896a59307f32cdd296006c9bfd32bc74ef3c323f0b",
+    "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.txt": "2935d083d6c3cd26368a88b1d27854701b3973d486d6e89d24d0e432312acc39",
+    "work/idd_dose.csv": "cb676d0d0340115da45f866270ef1244bd3205edcb88e3aee2736808d77e7b9b"
+   },
+   "finished_at": "2026-11-09T18:38:23.415728+00:00",
+   "histories": 25000,
+   "part": 2,
+   "reference_started": "2026-11-09T18:37:30.996648+00:00",
+   "run_id": "REF-844b1cf2bfc4b3287667-fc8a609d",
+   "seconds": 52.41908343695104
+  },
+  {
+   "bundle": "carbon-water-80mevu-r2-idd-em-part3",
+   "code_sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+   "config": "idd-em",
+   "configuration_id": "85bf230318944e37467a6f0dc4ddb50695002a24da5bf8d2c52ddf4fb7b426f6",
+   "files_sha256": {
+    "request.json": "23c504e4eb8c1510202d0baa6ca2012172e657e182705b7d9d30201c206ea630",
+    "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.txt": "24f91e52dcdf508de2c89839d66e4d4f05a2c6b840014b16e23fce634b4c01bc",
+    "work/idd_dose.csv": "76f73df127dd3e1a2f8469b2d2e1da2783e9d3e009bd0f14b0c10b7d0b158d2d"
+   },
+   "finished_at": "2026-11-09T18:39:30.109546+00:00",
+   "histories": 25000,
+   "part": 3,
+   "reference_started": "2026-11-09T18:38:37.941322+00:00",
+   "run_id": "REF-85bf230318944e37467a-35b2cabb",
+   "seconds": 52.168228803901
+  }
+ ],
+ "trust_file": {
+  "head_sha": "94bc948e875072f4867cf68b0cf8479183e878f0",
+  "path": "infrastructure/keys/trusted_attestation_keys.json",
+  "sha256": "31f6a82c3b0d0379c9ce32d3db9c83cb1c07825765ab42dcdfa334fc459337b8"
+ }
+}

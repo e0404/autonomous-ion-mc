@@ -194,3 +194,155 @@ and any `cpu_workers > 1` row; conformance of V2 / V2-probe needs all shards and
 invocation (Amendment 5). Crash observations during this task: two intermittent sandbox pytest crashes
 (one segfault, one faulthandler trace) in worker sessions, each clean on an identical rerun; none of the
 22 host runs failed.
+
+## V3-008 lv8 re-run block (steps 22–135) and hr8 at head 712f484a (single-process diagnostic mode)
+
+`lv8-712f484a-steps22-135-single-process.json` is the `summarize.py --combine --subset` summary of the 114 host-runner
+subset runs of the lv8 rows I9, I12, I14 and I15 (shard steps 22–27, 29–64, 66–113, 115–134 and their combine steps 28,
+65, 114, 135; `run_suite.py --suite lv8 --single-process --workers 1 --seed-base 20572004 --only <step>`, one host call
+per step) at the exact head `712f484a13dbee4a181d15addf127b1c58dc1cbc` (amendment I9-REF; lv8 re-run base 20572004,
+plan section C). `pass` is true for every step; `complete` is false and the summary carries the reason "subset of the
+suite: 21 of 135 steps absent" because the A-row block (steps 01–21) ran at f5f3a701 (plan item 4d, validation record
+VAL-20261111-032337-9F2C85) and is not combinable across SHAs; the other recorded reasons are the single-process diagnostic
+execution mode and the four combine steps that read imported partials (`imported_partials_unverified_by_code`).
+`hr8-712f484a-single-process.json` is the `--combine` summary of the complete hr8 suite (steps 01 T13-ion and 02–12
+T12-ion HR, base 20591004) at the same head: `pass` and `complete` true, `conformant: false` for the diagnostic mode and
+the combine step only. Grades, host run ids and findings: dated results note of 2026-11-13 in
+`validation/plans/v3-008-acceptance.md` (I9, I12, I14, I15, T13-ion, T12-ion HR all PASS).
+
+`v8-lvhr/host-records/<run_id>.json` holds the **complete signed host-runner record** of every host run of the block
+(136 files; signer `host-runner`, key 4d02f521f3fb9344), retrieved through the archived-record tools and committed
+verbatim: the 114 lv8 and 12 hr8 evidence runs, one superseded duplicate (lv8 step 70: a completed run whose outputs were
+not visible after a WSL restart; its re-run produced the byte-identical partial), one rejected launch (hr8 `--only 1`,
+not zero-padded; nothing ran), and the eight runs of the preserved first I9 run and the abandoned I12 shard at e602a583
+(plan item 4k). `v8-lvhr/index.json` is a derived index (every field re-derived from the records by the test; the
+roles are curated) that also lists the one interrupted call without an archived record (`RUN-20261111T183304Z-bd523546`,
+lv8 step 57, re-run). `tests/ionmc/test_v3_008_lvhr_host_records.py` verifies every record's signature, requires the
+signed `argv` to be byte-identical to the single reviewed wrapper template rendered with the run's suite, SHA, step,
+declared seed base and import list, re-derives the index, and binds every `attestation.partials` entry and every step
+of the two combined summaries to the record that produced it (digest and step name in the signed stdout). The code
+still cannot read the protected store, hence `conformant: false`; the committed records are what the summaries'
+`attestation.statement` asks the reader to compare against. The npz/partial arrays stay in the published run
+directories (git-ignored).
+
+`v8-lvhr/published-outputs/validation/generated/<run_id>/transport/<dir>/` holds verbatim copies of the host runner's
+published outputs of the five combine runs at 712f484a (I9, I12, I14, I15, T12-ion HR), the T13-ion run and the preserved
+first I9 combine at e602a583: the step file with its result document, `summary.json`, `manifest.txt` and `environment.txt`.
+The signed record's `output_manifest_sha256` is reproduced from exactly these files (`r2_io.published_manifest`), so the
+combine step document — which carries the sha256 of the partials manifest the step read and the content digest the step
+recomputed for every imported partial together with its host run id — is bound by the host-runner signature; the inventory
+test requires the committed combined summaries' `attestation.partials` to equal that signed set and every digest to equal
+the `PARTIAL` line of the shard record it names (Codex REVIEW-195f5f58, finding 1). The chain is therefore signed shard
+stdout → consumed digest in the signed combine output → committed summary.
+
+# Ion TD/TL sample seal (V3-008 revision 2)
+
+`v8r2-samples/sample-seal.json` is the **sample seal record** of the twelve 1e6-history ionmc samples
+of the TOPAS-agreement rows (TD-EM, TD-FULL, TL-EM, TL-FULL; `validation/plans/v3-008/r2-topas-target.md`,
+section "Order" step 0 and section 7; dated chunk-plan note of 2026-11-08). Every sample was produced
+by the controlled host runner at the frozen implementation SHA recorded in the file, in the
+single-process diagnostic mode, as independent chunks (`validation/scripts/transport/steps_v8.py
+td-tl-sample --case c --k k --scale 1/n`; seeds `20581004 + 100 (29 + case) + k`, `k = 1 .. n`;
+n = 4, 5, 10, 4, 8, 20, 4, 8, 10, 4, 4, 5 for cases 1–12), combined per batch by the evaluator after the
+seal. The record holds per chunk: case, k, seed, histories, host run id and its signed output-manifest
+digest, the sha256 and size of the npz, the sha256 of the step's stdout (which carries the full step
+document), wall time, the all-zero diagnostic counters and the host-runner attestation block of the run
+record; `host_runs` lists the unique runs (case 6 ran two chunks per host call) for the
+`details.host_runs` binding of the validation record. The npz arrays themselves are **not in Git**: they
+stay in the published run directories (`validation/generated/<run id>/r2-samples/case<c>/`, git-ignored)
+and in the protected host-run store. One superseded run is listed (case 1 k 1 at the pre-compression
+commit 20021d2a; re-run at the frozen SHA), and one failed run record (`failed_runs`: case 12 k 5,
+RUN-20261109T074122Z-9838df64, step passed but the signed record says `succeeded: false` because the
+orchestrator edited the task worktree while the run was in flight; the clean-tree re-run
+RUN-20261109T080127Z-1011e276 reproduced the identical npz sha256). `tests/ionmc/test_v3_008_sample_seal.py` checks the record's
+structure against the frozen chunk plan (counts, seeds, 1e6 totals per case, unique digests, run
+binding); it reads no physics value. No TOPAS run of the revision-2 set may start before the commit
+holding this record has been reviewed and pushed (plan rule R2-TOPAS-4). Not a clinical claim.
+
+`v8r2-samples/host-records/<run_id>.json` holds the **complete signed host-runner record** of every sample chunk
+run of both seals (`sample-seal.json`, `sample-seal-heldout-r2stop3.json`; 76 + 13 runs), copied verbatim from the
+protected host-run store (IR-20261111-101840-EDCAE6, resolved 2026-11-11). The evaluator (`validation/scripts/ion_em/r2_io.py`,
+`verify_host_records`) verifies each record against the committed trust file (signer `host-runner`), binds it to the
+sealed chunk(s) of the run (attestation block, run id, `implementation_sha`, clean successful run, times, stdout and
+output-manifest digests), requires the signed `argv` to be exactly `["python", "-c", <source>]` with the source
+byte-identical to one of the four reviewed wrapper templates of `validation/scripts/ion_em/r2_wrapper_templates.py`
+rendered with the run's sealed case, k value(s) and scale (T1/T2 single-chunk main, T3 multi-chunk main, T4 held-out
+with `--seed-base 20621004`), reproduces the signed output manifest from the published run directory (whose file set
+must be exactly the sealed chunks' npz, stdout and stderr), and checks the step document in each published stdout
+(sha256 = the sealed `step_stdout_sha256`) against the chunk (case, k, seed, seed base, r_index, histories, npz
+digest, git SHA, pass/valid, all-zero counters, effective configuration). Any gap fails closed (ERROR).
+`tests/ionmc/test_v3_008_host_records.py` checks, cache-free, that every sealed run has a committed record that
+verifies, binds and matches a template (counts T1 1, T2 30, T3 45, T4 13).
+
+# V5-SS ionmc thin-slab sample seal (V3-008, branch B)
+
+`v8-ss/ss-sample-seal.json` is the **sample seal record** of the eight 4e5-history ionmc thin-slab samples of row V5-SS
+(plan V5-SS execution note of 2026-11-13; P10 §7.5.1–7.5.2): cases 22 (He 150), 25 (C 150), 26 (O 150), 27 (C 250),
+28 (He 250), 29 (C 430), 30 (O 430), 31 (O 250 MeV/u), each one host-runner call at the implementation SHA recorded in
+the file (`steps_v8.py ss-sample --case <c> --k 0 --seed-base 20631004`; seeds 20631004 + 100·r_index, r_index = case
+order 0–7; warp-cpu float64, single-process diagnostic mode; 1 mm G4_WATER slab, TD/TL default physics), built by
+`ss_evaluate.py seal` from the eight complete signed host-run records committed verbatim at
+`v8-ss/host-records/<run_id>.json` (signer `host-runner`, key 4d02f521f3fb9344). Per case it holds the run id, the
+attestation block, the signed output-manifest digest, the npz sha256 and size, the sha256 of the step stdout (the full step
+document) and of the wrapper stdout, the per-history exit-angle statistics that fix the evaluation window before any
+TOPAS output exists — θ_anchor (untruncated pooled projected rms), W = 2.5 θ_anchor, the windowed rms θ_w, the number of
+projections in the window and P(window) — and the sha256 of the single reviewed wrapper template. The npz arrays (per-history
+exit angles) are **not in Git**: they stay in the published run directories (`validation/generated/<run id>/v5ss-samples/case<c>/`,
+git-ignored) and in the protected host-run store. Binding rule SS-SEAL-1 (plan execution note; mirror of R2-TOPAS-4): no V5-SS
+TOPAS run (smoke or evidence) is valid unless its `code_sha` descends from the commit holding this record and that commit's
+independent review finished before the run's controlled start; `ss_evaluate.py check-run` / `grade` fail closed otherwise and
+read the seal and review ids from the plan's SS seal note. Not a clinical claim.
+
+# V5-SS TOPAS evidence runs and scorer smokes (V3-008, branch B)
+
+`v8-ss/block1-exploratory/topas-runs/<run_id>/{record.json, artifacts.json}` (block 1, EXPLORATORY, never evidence — amendment V5-SS-B2, section below) are the 16 **signed reference-runner records of the exploratory block 1** (signer
+`reference-runner`, key 303cce4c129d387c; schema 3) of row V5-SS — cases 22, 25–31 × parts 0–1, 30000
+primaries per part, bundles `validation/reference_cases/topas/v5ss-<ion>-water-<E>mevu-case<NN>-part<P>` — all run at
+`code_sha` a508afd8 on 2026-11-13 (07:56–10:21 UTC, one run at a time, exit 0), `record.json` verbatim as returned by the
+reference runner and `artifacts.json` the `list_reference_artifacts` result (path, bytes, sha256 of the ten archived files:
+inputs, request, record, stdout/stderr and the four `work/` outputs including `ss_exit.header` / `ss_exit.phsp`).
+`block1-exploratory/topas-runs/index.json` maps (case, part) to the run id. The **evidence block 2** (parts 2–3, seeds 20619000 + 100·part + case, 16 runs at 769f2dd6 on 2026-11-15 11:13–13:38 UTC, exit 0) is committed in the same layout under `v8-ss/topas-runs/<run_id>/` with `v8-ss/topas-runs/index.json`. The phase spaces (3.3 MB each) are **not in Git**: they stay in
+the reference-runner archive and are materialized into the ignored task cache (`.ionmc-cache/reference-runs/<run_id>/`)
+where `ss_evaluate.py check-run` / `grade` read them under the signed digests of `artifacts.json`
+(`output_files_sha256` of the record must be reproduced by the listed `work/` files). `v8-ss/smoke-runs/` holds the two
+scorer smokes in the same layout: REF-740144c3826978e4ea78-ef394dd8 (seed 20600438 at 677e7c27, bundle later regenerated —
+superseded, kept as the record of the first run) and REF-8358f3c4f2f32a8453f4-a7dbae17 (seed 20600439 at ea10ce6a, the
+run-condition evidence); their angles are never used. `v8-ss/check-runs/<run_id>.json` (block 1: `v8-ss/block1-exploratory/check-runs/`) are the per-run run-validity
+reports (chronology SS-SEAL-1, process list, couple table, phase-space count rule and column checks; nothing graded).
+Not a clinical claim.
+
+# V5-SS block 1 (exploratory) and block 2 (evidence) — amendment V5-SS-B2 (2026-11-15)
+
+`v8-ss/block1-exploratory/` holds the 16 signed records, listings and validity reports of the 2026-11-13 block (parts 0–1 at
+a508afd8) and the single grade run on it (`ss-report.json`, SEEN by the orchestrator on 2026-11-15 before the validity
+commit's review had finished). Codex REVIEW-2446fe2d ruled that block exploratory: the phase-space count rule was amended
+after its headers had been inspected (plan amendment V5-SS-B2). Nothing in that directory is evidence; it is preserved
+verbatim as the record of the first block and of the two process lapses. The evidence block is block 2 (parts 2–3, fresh
+seeds, count rule frozen before the runs) under `v8-ss/topas-runs/`, `v8-ss/check-runs/` and `v8-ss/ss-report.json`, filled
+by the later commits of the amendment's order. Not a clinical claim.
+
+# V5-SS grade (V3-008, branch B)
+
+`v8-ss/ss-report.json` is the **single grade** of row V5-SS (`ss_evaluate.py grade`, run once on the evidence block 2 at HEAD 833ccdcd on
+2026-11-15, after the validity commit's review; never re-graded): per gated pair the deviation of the equal-velocity ion/ion ratio of windowed projected rms
+angles (ionmc over TOPAS single scattering), its bootstrap σ (B = 2000, analysis seed 20261113, TOPAS resampled within part,
+ionmc over histories), |dev| + 1.645 σ against the 3 % tolerance and the verdict (`ss_budget.gate`); per case the windowed
+rms of both sides, the window (2.5 × the sealed ionmc anchor), window fractions, counts and, report-only, the absolute ratio,
+the expected reference factor, per-part widths, scored/deficit counts, window kurtosis and θx²/θy² correlation; the 16 run
+records it consumed (verdict, problems, primaries, file digests), the seal it re-verified, the trust file and the evaluator's
+committed inputs. Row verdict PASS 5/5 (dated results note of 2026-11-15 in the plan). Not a clinical claim.
+
+# Section-A LV block at f5f3a701 (V3-008 lv8 steps 01–21; committed 2026-11-15 after scientific review SR-1)
+
+`lv8-f5f3a701-steps01-21-single-process.json` is the `summarize.py --combine --subset` summary of the seven host-runner
+calls that ran lv8 steps 01–21 at the frozen SHA f5f3a701 on 2026-11-11 (rows I6-LV, I8 × 3, I13 × 9, T1-ion K = 256,
+R1-ion, R2, T12-ion LV; seed base 20581004; `pass` true, `complete` false (steps 22–135 are the later block at 712f484a),
+`conformant` false by code: diagnostic mode, imported partials, subset). `v8-lvhr/a-rows-f5f3a701/host-records/<run_id>.json`
+are the 13 complete signed host-runner records retrieved through the archived-record tools (signer `host-runner`, key
+4d02f521f3fb9344): the seven evidence calls at f5f3a701 and six earlier calls at a8a7c638 (two launch failures before any
+step — a missing `PYTHONPATH` / `sys.path` bootstrap — and four superseded rehearsal calls, never graded), with the derived
+`index.json` (roles and notes). `a-rows-f5f3a701/published-outputs/` holds the published step documents of the three
+non-shard calls (steps 01–13, 14–16 and the T12-ion LV combine 21); their signed `output_manifest_sha256` reproduces from
+the committed files (`r2_io.published_manifest`). The four T12-ion LV shard calls (steps 17–20) published npz partials that
+are not in Git; each partial is bound by content sha256 and host run id in the combine step's `attestation.partials`.
+Numbers: plan evidence archive (rows I6-LV/I8/I13, T1-ion LV/R1-ion/R2, T12-ion LV). Not a clinical claim.

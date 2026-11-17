@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "IR-20261111-101840-EDCAE6",
+  "resolved_at_utc": "2026-11-11T11:21:51.554677+00:00",
+  "task_id": "V3-008",
+  "response": "The operator copied the V3-008 host-run records into the requested directory (106 files RUN-*.json, present by 2026-11-11 12:16 local time; no textual note). The orchestrator verified, before use, that all 89 records needed by the two sample seals (76 main + 13 held-out) carry a valid host-runner Ed25519 attestation against the committed trust file (key_id 4d02f521f3fb9344) and agree with the seals (run id, implementation_sha, output_manifest_sha256, attestation blocks, stdout digests, start/finish times): 89 verified, 0 problems (scratchpad script install_host_records.py). The 17 further records are A-row/other V3-008 host runs and are not part of the seals.",
+  "operator_note": "Files delivered by copy into the agent-readable scratchpad directory; no operator text accompanied them."
+}

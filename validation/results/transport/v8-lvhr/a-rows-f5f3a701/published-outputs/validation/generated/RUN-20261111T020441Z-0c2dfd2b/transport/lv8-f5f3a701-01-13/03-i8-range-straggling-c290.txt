@@ -1,0 +1,68 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py i8 --point 1 --scale 1.0 --timeout 1350 --seed-base 20581004
+# git_sha: f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d
+# started_utc: 2026-11-11T02:04:56Z
+# step_timeout_s: 1500
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /cache/warp/1.17.0
+Module transport_float64_diag_f805e80a f805e80 load on device 'cpu' took 1.07 ms  (cached)
+Module transport_float64_diag_f805e80a a0a96a2 load on device 'cpu' took 0.28 ms  (cached)
+#JSON-BEGIN
+{
+ "counters": {
+  "accumulator_overflow": 0,
+  "energy_inversion": 0,
+  "genealogy_overflow": 0,
+  "mcs_mapping_failure": 0,
+  "mcs_table_bracket_miss": 0,
+  "queue_overflow": 0,
+  "scoring_pieces_overflow": 0,
+  "source_energy_out_of_range": 0,
+  "stall": 0,
+  "step_truncation": 0,
+  "straggling_rejection": 0
+ },
+ "csda_range_mm": 163.2359426121403,
+ "e_cut_mev": 24.0,
+ "e_mev_per_u": 290.0,
+ "end_codes_all_cutoff": true,
+ "format": 1,
+ "frozen_histories": 100000,
+ "git_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "histories": 100000,
+ "i8b_report_only": {
+  "finding_vs_literature": false,
+  "finding_vs_proton": false,
+  "literature_band_C": [
+   0.003,
+   0.004
+  ],
+  "proton_energy_same_range_mev": 152.4838476189342,
+  "proton_sigma_R_over_R_scaled": 0.003115304504564828,
+  "ratio_vs_proton_scaled": 0.9310066754186787,
+  "sigma_R_over_R_quadrature": 0.0029073601231079604,
+  "sigma_R_over_R_transport": 0.0029003692897117345
+ },
+ "ion": "carbon",
+ "mean_end_depth_mm": 163.19515667635142,
+ "pass": true,
+ "quadrature_range_mm": 163.19333294961433,
+ "reduced": false,
+ "relative_deviation": -0.0024045295732929572,
+ "seed": 20585205,
+ "seed_base": 20581004,
+ "sigma_end_depth_mm": 0.4734445149293988,
+ "sigma_quadrature_mm": 0.47458567020847614,
+ "step": "i8",
+ "suite": "lv8",
+ "tolerance": 0.05,
+ "valid": true,
+ "wall_s": 12.307028930999877
+}
+#JSON-END
+
+# exit=0

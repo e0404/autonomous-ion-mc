@@ -18,6 +18,17 @@ relative deviation of Bethe (75 eV) from the NIST range and of Bethe (78 eV) fro
 integral (200 points per decade, from 1 MeV/u, started from the NIST range at 1 MeV/u), and
 the model-only Bethe 78 eV - 75 eV range shift in mm per energy.
 
+Row I2 of ``validation/plans/v3-008-acceptance.md`` (He table reproduction; a regression
+guard on SEEN values, not evidence) is evaluated under the top-level key ``"i2"``: the alpha
+stopping-power aggregates (Bethe 75 eV vs ASTAR, Bethe 78 eV vs ICRU 90) in the separate bands
+2 <= E < 10 MeV/u and 10 <= E <= 500 MeV/u, the maximum absolute relative CSDA-range deviation
+over 50/100/150/200/250 MeV/u per reference together with the energy attaining it (no
+per-energy deviation is written), the pre-registered gates (S <= 1.0 % for 2-10 MeV/u and
+<= 0.30 % for >= 10 MeV/u per reference; range <= 0.20 % vs ASTAR and <= 0.25 % vs the
+integrated ICRU 90 table), per-criterion booleans and an overall ``pass``, the statement of the
+ASTAR (75 eV) versus model-default (78 eV) I-value difference and the model-only Bethe
+78 eV - 75 eV range shift at the five energies.
+
 NIST tables are SRD 124 data (attribution required) and are not redistributed here.
 """
 
@@ -35,12 +46,26 @@ from ionmc.data.icru90 import load_icru90_water
 from ionmc.data.nist_star import StarTable, load_star_table
 from ionmc.materials import water
 from ionmc.physics.projectiles import ALPHA, PROTON, Projectile
-from ionmc.physics.stopping import BetheStoppingSource, build_table, log_grid
+from ionmc.physics.stopping import BetheStoppingSource, StoppingTable, build_table, log_grid
 
 E_COMPARE_MIN = 2.0  # MeV/u
 E_MAX = 500.0  # MeV/u
 PROTON_ENERGIES = (100.0, 150.0, 200.0, 250.0)  # MeV
 ALPHA_ENERGIES_PER_U = (100.0, 150.0, 200.0)  # MeV/u
+# Row I2 (validation/plans/v3-008-acceptance.md): CSDA-range energies and pre-registered gates
+# (bounds = 1.5x the SEEN decision-0038 maxima, rounded up; a regression guard, not evidence).
+I2_ENERGIES_PER_U = (50.0, 100.0, 150.0, 200.0, 250.0)  # MeV/u
+I2_BAND_LOW = "2_to_10_MeV_u"  # 2 <= E < 10 MeV/u
+I2_BAND_HIGH = "ge_10_MeV_u"  # 10 <= E <= E_MAX MeV/u
+I2_S_MAX_ABS = {I2_BAND_LOW: 0.010, I2_BAND_HIGH: 0.0030}
+I2_RANGE_MAX_ABS = {"vs_astar_75eV": 0.0020, "vs_icru90_integral_78eV": 0.0025}
+I2_I_VALUE_STATEMENT = (
+    "NIST ASTAR (SRD 124) liquid water uses I = 75 eV (ICRU Report 49); the ionmc default "
+    "water uses I = 78 eV (ICRU Report 90). Bethe is therefore compared at I = 75 eV with "
+    "ASTAR and at the default I = 78 eV with ICRU 90 (stopping and integrated CSDA range); "
+    "the model-only Bethe 78 eV - 75 eV CSDA-range shift at the I2 energies is reported in "
+    "bethe_78eV_minus_75eV_range_shift_mm_by_energy_per_u_mev."
+)
 
 
 def _nist_range(star: StarTable, e_total_mev: float) -> float:
@@ -69,15 +94,146 @@ def _aggregate(e_u: np.ndarray, dev: np.ndarray) -> dict[str, Any]:
     return out
 
 
+def band_aggregate(
+    e_u: np.ndarray, dev: np.ndarray, lo: float, hi: float, *, include_hi: bool
+) -> dict[str, Any]:
+    """Max abs and RMS of ``dev`` for ``lo <= e_u < hi`` (``<= hi`` if ``include_hi``).
+
+    An empty band gives ``n_points = 0`` and ``None`` statistics (gates on it fail closed).
+    """
+    m = (e_u >= lo) & ((e_u <= hi) if include_hi else (e_u < hi))
+    n = int(np.count_nonzero(m))
+    out: dict[str, Any] = {
+        "band_per_u_mev": [lo, hi],
+        "upper_bound_inclusive": include_hi,
+        "n_points": n,
+        "energy_per_u_range_mev": None,
+        "max_abs_relative_deviation": None,
+        "rms_relative_deviation": None,
+    }
+    if n:
+        out["energy_per_u_range_mev"] = [float(e_u[m].min()), float(e_u[m].max())]
+        out["max_abs_relative_deviation"] = float(np.max(np.abs(dev[m])))
+        out["rms_relative_deviation"] = float(np.sqrt(np.mean(dev[m] ** 2)))
+    return out
+
+
+def _deviation(
+    proj: Projectile, e_total: np.ndarray, s_ref: np.ndarray, i_ev: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Energies per nucleon in the window and relative deviations Bethe(i_ev)/reference - 1."""
+    e_u = e_total / proj.a
+    sel = window_mask(e_u)
+    s = BetheStoppingSource().table(water(i_ev), proj)
+    return e_u[sel], s.stopping_at(e_u[sel]) / s_ref[sel] - 1.0
+
+
 def _stopping_deviation(
     proj: Projectile, e_total: np.ndarray, s_ref: np.ndarray, i_ev: float
 ) -> dict[str, Any]:
     """Aggregate relative deviation of the Bethe model from reference stopping powers."""
-    e_u = e_total / proj.a
-    sel = window_mask(e_u)
-    s = BetheStoppingSource().table(water(i_ev), proj)
-    dev = s.stopping_at(e_u[sel]) / s_ref[sel] - 1.0
-    return {"I_eV": i_ev, **_aggregate(e_u[sel], dev)}
+    e_u, dev = _deviation(proj, e_total, s_ref, i_ev)
+    return {"I_eV": i_ev, **_aggregate(e_u, dev)}
+
+
+def _icru_range_table(
+    proj: Projectile, star: StarTable, e_icru: np.ndarray, s_icru: np.ndarray
+) -> StoppingTable:
+    """ICRU 90 range table: log-log interpolation of the coarse grid onto 200 points/decade from
+    1 MeV/u, integrated like the analytic tables (`build_table`), started at the NIST range."""
+    e_u_icru = e_icru / proj.a
+    e_fine = log_grid(1.0, min(E_MAX, float(e_u_icru[-1])), 200)
+    s_fine = np.exp(np.interp(np.log(e_fine), np.log(e_u_icru), np.log(s_icru)))
+    r_start = _nist_range(star, float(e_fine[0] * proj.a))
+    return build_table(proj, water(78.0), e_fine, s_fine, r_start, {"source": "icru90"})
+
+
+def _max_abs_at(energies: tuple[float, ...], dev: list[float]) -> dict[str, float]:
+    """Maximum absolute deviation and the energy attaining it (no per-energy values)."""
+    k = int(np.argmax(np.abs(dev)))
+    return {
+        "max_abs_relative_deviation": float(abs(dev[k])),
+        "energy_per_u_mev_at_max": float(energies[k]),
+    }
+
+
+def i2_gates(
+    stopping: dict[str, dict[str, Any]], range_dev: dict[str, dict[str, float]]
+) -> dict[str, Any]:
+    """Evaluate the pre-registered I2 gates; a missing or empty aggregate fails closed.
+
+    ``stopping[ref][band]`` are :func:`band_aggregate` results for ``ref`` in
+    ``("vs_astar_75eV", "vs_icru90_78eV")``; ``range_dev[ref]`` are :func:`_max_abs_at` results
+    for the keys of ``I2_RANGE_MAX_ABS``.
+    """
+    criteria: dict[str, bool] = {}
+    for ref in ("vs_astar_75eV", "vs_icru90_78eV"):
+        for band, bound in I2_S_MAX_ABS.items():
+            value = stopping.get(ref, {}).get(band, {}).get("max_abs_relative_deviation")
+            criteria[f"stopping_{ref}_{band}_max_abs_le_{bound:g}"] = (
+                value is not None and bool(np.isfinite(value)) and value <= bound
+            )
+    for ref, bound in I2_RANGE_MAX_ABS.items():
+        value = range_dev.get(ref, {}).get("max_abs_relative_deviation")
+        criteria[f"csda_range_{ref}_max_abs_le_{bound:g}"] = (
+            value is not None and bool(np.isfinite(value)) and value <= bound
+        )
+    return {"criteria": criteria, "pass": all(criteria.values())}
+
+
+def i2_block(astar: StarTable, e_icru: np.ndarray, s_icru: np.ndarray) -> dict[str, Any]:
+    """Row I2 (He table reproduction, regression guard): aggregates, gates and I-value note.
+
+    ``astar`` is the ASTAR water table (total alpha energy); ``e_icru``/``s_icru`` the ICRU 90
+    alpha arrays (total alpha energy [MeV], MeV cm2/g). Only aggregates are returned.
+    """
+    bands = {I2_BAND_LOW: (2.0, 10.0, False), I2_BAND_HIGH: (10.0, E_MAX, True)}
+    stopping: dict[str, dict[str, Any]] = {}
+    for ref, (e_tot, s_ref, i_ev) in {
+        "vs_astar_75eV": (astar.energy_mev, astar.s_electronic, 75.0),
+        "vs_icru90_78eV": (e_icru, s_icru, 78.0),
+    }.items():
+        e_u, dev = _deviation(ALPHA, e_tot, s_ref, i_ev)
+        stopping[ref] = {"I_eV": i_ev}
+        for band, (lo, hi, inc) in bands.items():
+            stopping[ref][band] = band_aggregate(e_u, dev, lo, hi, include_hi=inc)
+    t75 = BetheStoppingSource().table(water(75.0), ALPHA)
+    t78 = BetheStoppingSource().table(water(78.0), ALPHA)
+    t_icru = _icru_range_table(ALPHA, astar, e_icru, s_icru)
+    dev_astar, dev_icru, shift = [], [], {}
+    for e_u in I2_ENERGIES_PER_U:
+        r75 = float(t75.range_at(e_u))
+        r78 = float(t78.range_at(e_u))
+        dev_astar.append(r75 / _nist_range(astar, e_u * ALPHA.a) - 1.0)
+        dev_icru.append(r78 / float(t_icru.range_at(e_u)) - 1.0)
+        shift[f"{e_u:g}"] = (r78 - r75) * 10.0
+    range_dev = {
+        "vs_astar_75eV": _max_abs_at(I2_ENERGIES_PER_U, dev_astar),
+        "vs_icru90_integral_78eV": _max_abs_at(I2_ENERGIES_PER_U, dev_icru),
+    }
+    gates = i2_gates(stopping, range_dev)
+    return {
+        "row": "I2",
+        "role": "regression guard on SEEN values (decision 0038), not evidence",
+        "stopping": stopping,
+        "csda_range": {
+            "energies_per_u_mev": list(I2_ENERGIES_PER_U),
+            "construction": (
+                "Bethe tables 200 points/decade from 1 MeV/u (constant-S start); ICRU 90 "
+                "log-log interpolated to 200 points/decade from 1 MeV/u, started at the ASTAR "
+                "range at 1 MeV/u; ASTAR range log-log interpolated"
+            ),
+            **range_dev,
+            "bethe_78eV_minus_75eV_range_shift_mm_by_energy_per_u_mev": shift,
+        },
+        "thresholds": {
+            "stopping_max_abs": dict(I2_S_MAX_ABS),
+            "csda_range_max_abs": dict(I2_RANGE_MAX_ABS),
+        },
+        "gates": gates["criteria"],
+        "pass": gates["pass"],
+        "i_value_statement": I2_I_VALUE_STATEMENT,
+    }
 
 
 def run(cache_dir: str | None, offline: bool) -> dict[str, Any]:
@@ -93,6 +249,7 @@ def run(cache_dir: str | None, offline: bool) -> dict[str, Any]:
         "stopping": {},
         "range": {},
     }
+    result["i2"] = i2_block(astar, icru.alpha_energy_mev, icru.alpha_stopping)
     refs = {
         "proton": (PROTON, pstar, icru.proton_energy_mev, icru.proton_stopping),
         "alpha": (ALPHA, astar, icru.alpha_energy_mev, icru.alpha_stopping),
@@ -119,11 +276,7 @@ def run(cache_dir: str | None, offline: bool) -> dict[str, Any]:
         t78 = BetheStoppingSource().table(water(78.0), proj)
         # ICRU 90 range: log-log interpolation of its coarse grid onto a fine log grid,
         # then the same exact log-log quadrature as for the analytic tables (`build_table`).
-        e_u_icru = e_icru / proj.a
-        e_fine = log_grid(1.0, min(E_MAX, float(e_u_icru[-1])), 200)
-        s_fine = np.exp(np.interp(np.log(e_fine), np.log(e_u_icru), np.log(s_icru)))
-        r_start = _nist_range(star, float(e_fine[0] * proj.a))
-        t_icru = build_table(proj, water(78.0), e_fine, s_fine, r_start, {"source": "icru90"})
+        t_icru = _icru_range_table(proj, star, e_icru, s_icru)
         energies_u = PROTON_ENERGIES if proj is PROTON else ALPHA_ENERGIES_PER_U
         dev75, dev78, shift = [], [], {}
         for e_u in energies_u:

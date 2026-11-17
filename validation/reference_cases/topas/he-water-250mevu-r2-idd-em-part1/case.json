@@ -1,0 +1,23 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2), EM ONLY (intermediate configuration): sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\"; no hadronic, ion, elastic or decay modules"
+  ],
+  "source": "alpha (he 250 MeV/u), BeamEnergy 1000 MeV total kinetic energy (P4 convention), monoenergetic (BeamEnergySpread 0), zero-size, zero-divergence pencil beam from z=-0.001 mm along +z at the face centre",
+  "geometry": "G4_WATER box 120 x 120 x 500 mm (x,y centred on the beam axis; z from 0 to 500 mm) in a vacuum world 400 x 400 x 1200 mm; L = 1.3 x planning CSDA range (382.6 mm, project Bethe table) rounded up to 50 mm",
+  "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
+  "cuts": "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (accepted, P4 verbose smoke: e- production threshold 9.55 GeV in G4_WATER, no delta electrons); EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7",
+  "histories": 25000,
+  "seeds": [
+    20619103
+  ],
+  "scorers": [
+    "IDD: DoseToMedium, 1x1x5000 bins (full 120x120 mm lateral extent, 0.1 mm depth bins); Report Sum, Standard_Deviation"
+  ],
+  "units": "IDD: TOPAS CSV with '#' header, dose in Gy (run total; divide by histories); converted to laterally integrated energy per depth (MeV/mm per primary) with the slab mass 120 x 120 mm x bin depth at 1.0 g/cm3. Fluence 1/mm2 run total. Bins 0-based, z from the entrance face",
+  "rationale": "V3-008 plan revision 2 (validation/plans/v3-008/r2-topas-target.md): reference side of row TD-EM, case 3 (he 250 MeV/u), part 1 of 4 (parts 0-3); agreement with the specified TOPAS configuration is the acceptance reference (operator directive 2026-11-07); not run before the reviewed freeze of revision 2; outputs not materialized before the ionmc samples of the row are recorded",
+  "expected_outputs": [
+    "idd_dose.csv"
+  ],
+  "arguments": []
+}

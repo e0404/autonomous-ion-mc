@@ -20,6 +20,23 @@ TRUSTED_KEYS_PATH = (
     Path(__file__).resolve().parents[3] / "infrastructure" / "keys" / "trusted_attestation_keys.json"
 )
 
+BOOTSTRAP_TASKS = frozenset({"V3-INFRA-002"})
+"""Mirror of infrastructure/validation/local_validation.py BOOTSTRAP_TASKS (this script stays
+stdlib-only and never imports the infrastructure package; a test asserts both are equal): the
+only tasks for which require_verified(..., bootstrap=True) may tolerate an unverified record."""
+
+
+class _Omit:
+    """Type of OMIT."""
+
+    def __repr__(self):
+        return "OMIT"
+
+
+OMIT = _Omit()
+"""Default of require_verified's expected_output_manifest_sha256: no expectation (not checked).
+An explicit None requires a signed null manifest."""
+
 _P = 2**255 - 19
 _L = 2**252 + 27742317777372353535851937790883648493
 _D = -121665 * pow(121666, _P - 2, _P) % _P
@@ -197,24 +214,38 @@ def require_verified(
     expected_task_id=None,
     expected_git_sha=None,
     expected_run_id=None,
-    expected_output_manifest_sha256=None,
+    expected_output_manifest_sha256=OMIT,
     bootstrap=False,
 ):
     """Raise AttestationRequired unless ``record`` may be consumed as evidence.
 
     Strict by default: only a ``verified`` record passes; ``invalid`` and
-    ``unverified`` raise. ``bootstrap=True`` (explicit; for the migration task
-    only) additionally tolerates ``unverified`` while the trust map lists no
-    key for ``expected_signer``; invalid always raises.
+    ``unverified`` raise. ``bootstrap=True`` (explicit) is the migration-only
+    exception: it is accepted only when ``expected_task_id`` is given and is in
+    BOOTSTRAP_TASKS (else AttestationRequired, whatever the record), and it then
+    tolerates an ``unverified`` record only while the trust map lists no key for
+    ``expected_signer``; invalid always raises.
 
-    Identity binding (replay protection): each ``expected_*`` that is not None
-    must equal the signed record's field, else AttestationRequired. The git
-    SHA is read from ``git_sha`` (VAL- records) or ``sha`` (RUN- records).
-    Returns the verify_record result dict.
+    Identity binding (replay protection): each of ``expected_task_id``,
+    ``expected_git_sha`` and ``expected_run_id`` that is not None must equal the
+    signed record's field, else AttestationRequired. The git SHA is read from
+    ``git_sha`` (VAL- records) or ``sha`` (RUN- records).
+    ``expected_output_manifest_sha256``: OMIT (default) = no expectation; any
+    other value, including None (a signed null manifest), must equal the signed
+    ``output_manifest_sha256`` field, and a record without that field is then
+    rejected. Returns the verify_record result dict.
 
     Production consumer: infrastructure/validation/local_validation.py (via
     infrastructure/validation/host_run_records.py) for RUN- records.
     """
+    if bootstrap and (
+        not isinstance(expected_task_id, str)
+        or expected_task_id.strip().upper() not in BOOTSTRAP_TASKS
+    ):
+        raise AttestationRequired(
+            f"bootstrap is reserved for the migration task(s) {sorted(BOOTSTRAP_TASKS)}; "
+            f"expected_task_id is {expected_task_id!r}"
+        )
     trusted = load_trusted() if trust is None else trust
     result = verify_record(record, expected_signer, trusted)
     if result["status"] == "invalid":
@@ -224,16 +255,23 @@ def require_verified(
         ("task_id", expected_task_id, record.get("task_id")),
         ("git_sha", expected_git_sha, git_sha),
         ("run_id", expected_run_id, record.get("run_id")),
-        (
-            "output_manifest_sha256",
-            expected_output_manifest_sha256,
-            record.get("output_manifest_sha256"),
-        ),
     )
     for name, want, got in expected:
         if want is not None and got != want:
             raise AttestationRequired(
                 f"signed identity mismatch: {name} is {got!r}, expected {want!r}"
+            )
+    if expected_output_manifest_sha256 is not OMIT:
+        if "output_manifest_sha256" not in record:
+            raise AttestationRequired(
+                "signed identity mismatch: output_manifest_sha256 is missing, expected "
+                f"{expected_output_manifest_sha256!r}"
+            )
+        got = record["output_manifest_sha256"]
+        if got != expected_output_manifest_sha256:
+            raise AttestationRequired(
+                f"signed identity mismatch: output_manifest_sha256 is {got!r}, expected "
+                f"{expected_output_manifest_sha256!r}"
             )
     if result["status"] != "verified":
         if bootstrap and not trusted.get(expected_signer):

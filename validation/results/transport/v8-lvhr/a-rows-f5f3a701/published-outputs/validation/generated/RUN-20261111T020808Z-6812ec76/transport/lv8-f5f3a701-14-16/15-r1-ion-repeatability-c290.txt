@@ -1,0 +1,58 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py r1-ion --scale 1.0 --timeout 1350 --seed-base 20581004
+# git_sha: f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d
+# started_utc: 2026-11-11T02:12:20Z
+# step_timeout_s: 1500
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /cache/warp/1.17.0
+Module _table_node_kernel__locals__nodes_160cf81d 930f1d7 load on device 'cpu' took 1.10 ms  (cached)
+#JSON-BEGIN
+{
+ "format": 1,
+ "frozen_histories": [
+  100,
+  10000,
+  10000
+ ],
+ "git_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "histories": [
+  100,
+  10000,
+  10000
+ ],
+ "pass": true,
+ "r1": {
+  "python:float64:100": {
+   "first_difference": null,
+   "identical": true,
+   "n_histories": 100,
+   "seed": 20586004,
+   "valid": true
+  },
+  "warp-cpu:float32:10000": {
+   "first_difference": null,
+   "identical": true,
+   "n_histories": 10000,
+   "seed": 20586006,
+   "valid": true
+  },
+  "warp-cpu:float64:10000": {
+   "first_difference": null,
+   "identical": true,
+   "n_histories": 10000,
+   "seed": 20586005,
+   "valid": true
+  }
+ },
+ "reduced": false,
+ "seed_base": 20581004,
+ "step": "r1-ion",
+ "suite": "lv8"
+}
+#JSON-END
+
+# exit=0

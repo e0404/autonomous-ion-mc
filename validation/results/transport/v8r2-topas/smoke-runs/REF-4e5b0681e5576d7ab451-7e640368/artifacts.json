@@ -1,0 +1,70 @@
+[
+  {
+    "run_id": "REF-4e5b0681e5576d7ab451-7e640368",
+    "sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+    "total_files": 12,
+    "next_offset": null,
+    "files": [
+      {
+        "path": "inputs/case.json",
+        "bytes": 2000,
+        "sha256": "812c1335cd298ae102af825b80d781409b83d0dc612fd48c74b83637ec74aead"
+      },
+      {
+        "path": "inputs/input.txt",
+        "bytes": 2971,
+        "sha256": "37f21fee0a6e64b3a90e9c67e0865a72bab4f6764234cce41db210872fa76ddb"
+      },
+      {
+        "path": "record.json",
+        "bytes": 3701,
+        "sha256": "e47eb958c4457dfef7cddc84af00435fa71d6d15a69f3b7b8b4e8058cae77f98"
+      },
+      {
+        "path": "request.json",
+        "bytes": 3552,
+        "sha256": "04799c4a064598a838ca41f8b5c228d609fb00eff625a82c3233e15f8186a7ca"
+      },
+      {
+        "path": "stderr.txt",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "stdout.txt",
+        "bytes": 1715997,
+        "sha256": "83d1f4c480ec1d74e27e1efc99243170dc24de61f453bbf2697b34ea9bed2afb"
+      },
+      {
+        "path": "work/case.json",
+        "bytes": 2000,
+        "sha256": "812c1335cd298ae102af825b80d781409b83d0dc612fd48c74b83637ec74aead"
+      },
+      {
+        "path": "work/input.txt",
+        "bytes": 2971,
+        "sha256": "37f21fee0a6e64b3a90e9c67e0865a72bab4f6764234cce41db210872fa76ddb"
+      },
+      {
+        "path": "work/lat_x.bin",
+        "bytes": 12000000,
+        "sha256": "612818beaac0792314a135da1cc6ed2e0afb8a2f81a4b0b384a35bb782cbe02f"
+      },
+      {
+        "path": "work/lat_x.binheader",
+        "bytes": 239,
+        "sha256": "9eb94f795d892a37692643ba8784fd18ee9b82390adbeeae7daf803e94a4bc75"
+      },
+      {
+        "path": "work/lat_y.bin",
+        "bytes": 12000000,
+        "sha256": "3afec213694f04245987618c2098dbd99402389188212ca6ddcf630334885648"
+      },
+      {
+        "path": "work/lat_y.binheader",
+        "bytes": 239,
+        "sha256": "4f1b34324e2ab7725db5a60599b27cac84e889f1b6db493a88852daa8606810a"
+      }
+    ]
+  }
+]

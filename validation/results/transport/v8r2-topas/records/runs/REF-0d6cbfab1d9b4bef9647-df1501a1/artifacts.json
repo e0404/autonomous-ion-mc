@@ -1,0 +1,55 @@
+[
+  {
+    "files": [
+      {
+        "bytes": 1892,
+        "path": "inputs/case.json",
+        "sha256": "5df63253f8ce43b52660cf43ae27513402c814746842db868930275fe6b5f8e0"
+      },
+      {
+        "bytes": 2405,
+        "path": "inputs/input.txt",
+        "sha256": "93b4ec5b4d37ccc4e3a834a2868f38793de14dea0dc51e6440e6823d0570dd08"
+      },
+      {
+        "bytes": 3709,
+        "path": "record.json",
+        "sha256": "f98e843088cfab9e9c63a6b3e23993fb4a207642849194391e882b25a064d3eb"
+      },
+      {
+        "bytes": 3437,
+        "path": "request.json",
+        "sha256": "510654292f197f93e22b7cb5e830739079e9c7f090618882df12972d3abb16a5"
+      },
+      {
+        "bytes": 0,
+        "path": "stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 1319564,
+        "path": "stdout.txt",
+        "sha256": "8ee42710eb51fa400871fe6af5759c23f726ec6792686e3704db61ef5ef4c1e4"
+      },
+      {
+        "bytes": 1892,
+        "path": "work/case.json",
+        "sha256": "5df63253f8ce43b52660cf43ae27513402c814746842db868930275fe6b5f8e0"
+      },
+      {
+        "bytes": 87608,
+        "path": "work/idd_dose.csv",
+        "sha256": "8ecf254c3a3b103e662aa4ca5c2e8e7eb077c9952fae99bb7eca8ba374ec84e6"
+      },
+      {
+        "bytes": 2405,
+        "path": "work/input.txt",
+        "sha256": "93b4ec5b4d37ccc4e3a834a2868f38793de14dea0dc51e6440e6823d0570dd08"
+      }
+    ],
+    "next_offset": null,
+    "run_id": "REF-0d6cbfab1d9b4bef9647-df1501a1",
+    "sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+    "total_files": 9
+  }
+]

@@ -27,7 +27,11 @@ from ionmc.config import (
     CHANNEL_BACKENDS,
     DEFAULT_CHUNK_HISTORIES,
     DELTA_ELECTRON_MODELS,
+    E_CUT_ION_DEFAULT_MEV_PER_U,
+    ION_DOMAIN_MEV_PER_U,
+    ION_PROJECTILES,
     MAX_CPU_WORKERS,
+    MCS_MAPPING_EVALS,
     MCS_MODELS,
     MIN_CHUNK_HISTORIES,
     PRECISIONS,
@@ -41,6 +45,13 @@ from ionmc.environment import describe_environment
 from ionmc.errors import TransportLimitError
 from ionmc.lookup import AXES as LOOKUP_AXES
 from ionmc.lookup import AXIS_SPACINGS as LOOKUP_AXIS_SPACINGS
+from ionmc.physics.exact_omega import (
+    RESIDUAL_TOL,
+    STEP_TOL,
+    TABLE_BRACKET_FACTOR,
+    TABLE_BRACKET_MIN,
+    TABLE_EVAL_CONTRACT,
+)
 from ionmc.physics.projectiles import PROTON
 from ionmc.scoring import (
     GENERATION_CHOICES,
@@ -52,7 +63,7 @@ from ionmc.scoring import (
     reduce_ratio,
     voxel_mass_g,
 )
-from ionmc.species import producible
+from ionmc.species import REGISTRY, producible
 from ionmc.transport.channels import (
     CLASS_LOCAL,
     CLASS_STEP,
@@ -115,6 +126,38 @@ class TransportCounters:
 
 
 @dataclass(frozen=True)
+class IonTransportCounters(TransportCounters):
+    """The counters of an ion run (z >= 2): the transport-limit counters plus
+    ``mcs_mapping_failure``, the number of steps whose exact-Omega mapping of f_dM returned a
+    nonzero status (decision 0043 section 3; the step scatters with zero variance and the result
+    is invalid), and the diagnostic ``mcs_table_bracket_miss``, the number of steps of the
+    table-accelerated root (``mcs_mapping_eval = "table"``) whose initial tight starting bracket
+    had no sign change, so that the widened or the full bracket was used (performance only: the
+    step still returns the exact root; it never invalidates a result). A step without a starting
+    guess (state outside the table or in an uncovered cell) uses the full bracket from the start
+    and is not counted."""
+
+    mcs_mapping_failure: int = 0
+    mcs_table_bracket_miss: int = 0
+
+    @property
+    def any_nonzero(self) -> bool:
+        """True if any counter that invalidates a result is nonzero (not the diagnostic
+        ``mcs_table_bracket_miss``)."""
+        d = self.as_dict()
+        d.pop("mcs_table_bracket_miss")
+        return any(d.values())
+
+    def as_dict(self) -> dict[str, int]:
+        """The counters as a dictionary (with the ion block)."""
+        return {
+            **super().as_dict(),
+            "mcs_mapping_failure": self.mcs_mapping_failure,
+            "mcs_table_bracket_miss": self.mcs_table_bracket_miss,
+        }
+
+
+@dataclass(frozen=True)
 class NuclearTransportCounters(TransportCounters):
     """The counters of a ``nuclear=True`` run (decision 0041 section 5): the transport-limit
     counters plus the conditional block. ``majorant_violation``: candidates with
@@ -140,8 +183,10 @@ class NuclearTransportCounters(TransportCounters):
 class EnergyBalance:
     """Energy bookkeeping summed over all histories [MeV] (not per primary).
 
-    Every tally is accumulated independently. ``cutoff_mev`` (energy deposited locally below
-    ``E_cut``) is part of the grid and outside deposits; the closure identity is
+    Every tally is accumulated independently. ``cutoff_mev`` (the energy below ``E_cut``
+    deposited by the end-of-range model: at the end point for ``point_v1``, along the residual
+    path for ``continuous_residual_v1``, whose part beyond the world is excluded here and tallied
+    in ``escaped_mev``) is part of the grid and outside deposits; the closure identity is
     ``initial = step_deposit + cutoff + escaped + truncated + unaccounted`` and, for every
     grid, ``in_grid + quantization + outside = step_deposit + cutoff`` (``quantization`` is the
     summed rounding residual of the fixed-point grids, at most q/2 per deposited piece).
@@ -330,6 +375,17 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
         },
         **(deferred if nuclear else {}),
         "producible": [{"species": n, "generation": g} for n, g in pairs],
+        "producible_scope": (
+            "proton source; the matrix of every source species is 'producible_by_source' "
+            "(equal to species_details[<species>]['tallies']['producible'])"
+        ),
+        "producible_by_source": {
+            proj.name: [
+                {"species": n, "generation": g}
+                for n, g in sorted(producible(proj, nuclear=nuclear and proj.z == 1))
+            ]
+            for proj in (PROTON, *ION_PROJECTILES)
+        },
         "generations": {
             "accepted": [
                 g for g in GENERATION_CHOICES if g == "all" or g in producible_generations
@@ -341,7 +397,8 @@ def _tally_capabilities(nuclear: bool = False) -> dict[str, Any]:
                 "secondary protons and deuterons (generation >= 1) are transported and accepted "
                 "(nuclear=True, decision 0041)"
                 if nuclear
-                else "secondary particles are not transported yet (V3-005A); no secondary species"
+                else "no secondary particles without nuclear interactions (nuclear=False); "
+                "secondaries need nuclear=True (proton source, decision 0041)"
             ),
         },
         "let_medium": ["water"],
@@ -401,20 +458,183 @@ def _nuclear_capabilities() -> dict[str, Any]:
     }
 
 
+_PROTON_DOMAIN_NOTE = (
+    "source energy E0 in [2 e_cut_mev, stopping-table maximum] total MeV (default e_cut_mev 2.0 "
+    "MeV; the default Bethe table reaches 500 MeV); with nuclear=True E0 + 6 sigma_E <= 250 MeV"
+)
+
+
+def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
+    """Per-species capability matrix, derived from the objects that enforce it
+    (``ION_PROJECTILES``, ``ION_DOMAIN_MEV_PER_U``, ``producible``, ``validate``)."""
+    out: dict[str, Any] = {}
+    channel_quantities = list(TALLY_QUANTITIES)
+    for proj in (PROTON, *ION_PROJECTILES):
+        ion = proj.z >= 2
+        pairs = sorted(producible(proj, nuclear=nuclear and not ion))
+        entry: dict[str, Any] = {
+            "symbol": proj.symbol,
+            "z": proj.z,
+            "a": proj.a,
+            "kind": "ion (z >= 2)" if ion else "proton",
+            "energy_domain": (
+                {
+                    "unit": "MeV/u",
+                    "min": ION_DOMAIN_MEV_PER_U[proj.name][0],
+                    "max": ION_DOMAIN_MEV_PER_U[proj.name][1],
+                    "rule": "min <= E0/A and (E0 + 6 sigma_E)/A <= max (decision 0043 section 5)",
+                }
+                if ion
+                else {"unit": "MeV (total kinetic energy)", "rule": _PROTON_DOMAIN_NOTE}
+            ),
+            "cutoff": (
+                {
+                    "rule": "e_cut_ion_mev_per_u x A (total MeV); e_cut_mev stays at its default",
+                    "e_cut_ion_mev_per_u_default": E_CUT_ION_DEFAULT_MEV_PER_U,
+                    "e_cut_effective_mev_default": E_CUT_ION_DEFAULT_MEV_PER_U * proj.a,
+                }
+                if ion
+                else {"rule": "e_cut_mev (total MeV)", "e_cut_mev_default": 2.0}
+            ),
+            "nuclear": (
+                "not supported (z >= 2: nuclear=True fails closed; nuclear interactions, "
+                "fragments and secondary ions are V3-009)"
+                if ion
+                else "supported on the python backend with nuclear=True (proton source only)"
+            ),
+            "mcs": (
+                {
+                    "model": "differential_moliere with the exact-Omega mapping of f_dM",
+                    "evaluation": (
+                        "exact root solve on every step in both modes: mcs_mapping_eval 'table' "
+                        "(default: the root started from a tight bracket around a bilinear "
+                        "pv_eq/pv table built by the root solve; the table is an accelerator "
+                        "only) or 'root' (the root from the full proton-path bracket)"
+                    ),
+                    "mapping_domain": (
+                        "the mapping is defined where the proton-equivalent state stays inside "
+                        "the proton b-slab range; a source whose reachable states leave it fails "
+                        "closed at validation in both modes (observed: oxygen16 at 100 and 150 "
+                        "MeV/u in copper and lead; a monoenergetic scan of the oxygen16 domain "
+                        "found the failure in copper up to 175 MeV/u (200 MeV/u and above "
+                        "validate) and in lead up to 350 MeV/u (405 MeV/u validates); alpha and "
+                        "carbon12 validate in every built-in material at both domain ends), so "
+                        "every validated run has table coverage 1.0; runs with "
+                        "multiple_scattering=False build no mapping table and are unaffected: "
+                        "for an ion source no f_dM domain check, no proton path, no packing and "
+                        "no root solve happen"
+                    ),
+                    "table_evaluation": {
+                        "contract": TABLE_EVAL_CONTRACT,
+                        "root_residual_tol": RESIDUAL_TOL["float64"],
+                        "root_step_tol": STEP_TOL["float64"],
+                        "bracket_factor": TABLE_BRACKET_FACTOR,
+                        "bracket_min": TABLE_BRACKET_MIN,
+                        "diagnostic_counter": "mcs_table_bracket_miss (never invalidates)",
+                        "recorded": (
+                            "summary mcs_mapping.table: interp_estimate (overall and per "
+                            "material, a performance diagnostic), bracket half-widths, "
+                            "table_coverage (overall minimum and per material: fraction of the "
+                            "band cells with four valid nodes; 1.0 for every validated run)"
+                        ),
+                    },
+                    "fdm_domain_status": (
+                        "recorded per run (mcs_mapping: fdm_extrapolated, proton-equivalent "
+                        "energies, domain edge); fails closed above the proton table edge; "
+                        "not evaluated with multiple_scattering=False (mcs_mapping.fdm_domain)"
+                    ),
+                }
+                if ion
+                else {
+                    "model": "differential_moliere (proton f_dM)",
+                    "fdm_domain_status": "not applicable (no mapping; fdm_extrapolated False)",
+                }
+            ),
+            "ls_default": "off" if ion else "not applicable (the proton model never changes)",
+            "stopping": (
+                "Bethe tables (Lindhard-Sorensen option 'ls' default 'off'); NIST ASTAR for "
+                "alpha in water only, none for carbon12 and oxygen16"
+                if ion
+                else "tabulated (Bethe, NIST PSTAR) or analytic"
+            ),
+            "tallies": {
+                "producible": [{"species": n, "generation": g} for n, g in pairs],
+                "quantities": channel_quantities,
+                "note": (
+                    "primary generation of the source species only; other species and "
+                    "generation 'secondary' fail closed"
+                    if not nuclear or ion
+                    else "primary and nuclear secondaries (protons, deuterons, nuclear_local)"
+                ),
+            },
+        }
+        out[proj.name] = entry
+    return out
+
+
+def _species_roles(nuclear: bool = False) -> dict[str, list[str]]:
+    """The species by role (derived from ``ION_PROJECTILES``, ``producible`` and the registry):
+    ``source`` the primary source species; ``producible_secondary`` the transported species that
+    a source of the report's mode can produce as secondaries (generation >= 1; with
+    ``nuclear=True`` the nuclear secondaries of a proton source); ``producible_pseudo`` the
+    pseudo-species (local deposits, not transported) that can be produced."""
+    sources = [PROTON, *ION_PROJECTILES]
+    secondary: set[str] = set()
+    for proj in sources:
+        secondary |= {
+            n for n, g in producible(proj, nuclear=nuclear and proj.z == 1) if g == "secondary"
+        }
+    transported = {sp.name for sp in REGISTRY if sp.transported}
+    return {
+        "source": [p.name for p in sources],
+        "producible_secondary": [sp.name for sp in REGISTRY if sp.name in secondary & transported],
+        "producible_pseudo": [
+            sp.name for sp in REGISTRY if sp.name in secondary and sp.name not in transported
+        ],
+    }
+
+
+def _unsupported_species(nuclear: bool = False) -> list[dict[str, str]]:
+    """Registry species with a transport path that are not supported as a primary source, with
+    their status as a producible secondary in the report's mode (``nuclear``): a species that a
+    proton source produces with ``nuclear=True`` (deuteron) is reported as producible there."""
+    supported = {PROTON.name, *(p.name for p in ION_PROJECTILES)}
+    secondary = set(_species_roles(nuclear)["producible_secondary"])
+    return [
+        {
+            "species": s.name,
+            "as_source": "not supported (fails closed)",
+            "as_secondary": (
+                "producible (nuclear secondary of a proton source, nuclear=True, decision 0041)"
+                if s.name in secondary
+                else "not producible (a request fails closed)"
+            ),
+        }
+        for s in REGISTRY
+        if s.transported and s.name not in supported
+    ]
+
+
 def capabilities(nuclear: bool = False) -> dict[str, Any]:
     """What the engine supports (reported, not negotiated: unsupported requests raise).
-    ``nuclear=True`` adds the ``nuclear`` section; the default report is unchanged."""
+    ``nuclear=True`` adds the ``nuclear`` section and the nuclear proton channels."""
     report = _capabilities_base()
     if nuclear:
         report["nuclear"] = _nuclear_capabilities()
         report["physics"]["nuclear"] = True
         report["tallies"] = _tally_capabilities(nuclear=True)
+        report["species_details"] = _species_capabilities(nuclear=True)
+        report["species_roles"] = _species_roles(nuclear=True)
+        report["unsupported_species"] = _unsupported_species(nuclear=True)
     return report
 
 
 def _capabilities_base() -> dict[str, Any]:
     return {
-        "species": ["proton"],
+        "species": [PROTON.name, *(p.name for p in ION_PROJECTILES)],
+        "species_details": _species_capabilities(),
+        "species_roles": _species_roles(),
+        "unsupported_species": _unsupported_species(),
         "backends": {
             "python": "available (float64 reference; cpu_workers > 1 splits over processes)",
             "warp-cpu": "available (float32 production, float64 validation; cpu_workers > 1)",
@@ -434,6 +654,7 @@ def _capabilities_base() -> dict[str, Any]:
             "stopping": "tabulated or analytic electronic stopping (CSDA, inverse range)",
             "straggling_models": list(STRAGGLING_MODELS),
             "mcs_models": list(MCS_MODELS),
+            "mcs_mapping_evals": list(MCS_MAPPING_EVALS),
             "delta_electrons": list(DELTA_ELECTRON_MODELS),
         },
         "geometry": ["VoxelGeometry", "BoxPhantom"],
@@ -475,7 +696,11 @@ class Simulation:
         }
         result = _with_timings(result, timings)
         if not result.valid and not self.config.run.allow_invalid_result:
-            nonzero = {k: v for k, v in result.counters.as_dict().items() if v}
+            nonzero = {
+                k: v
+                for k, v in result.counters.as_dict().items()
+                if v and k != "mcs_table_bracket_miss"
+            }
             if result.channel_raw is not None and result.channel_raw.lookup_out_of_domain:
                 nonzero["lookup_out_of_domain"] = result.channel_raw.lookup_out_of_domain
             if result.channel_raw is not None and result.channel_raw.path_bound_exceeded:
@@ -716,11 +941,13 @@ def _grid_result(
 
 def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
     cfg = eff.requested
-    counters = (
-        NuclearTransportCounters(**raw.counters)
-        if eff.nuclear is not None
-        else TransportCounters(**raw.counters)
-    )
+    counters: TransportCounters
+    if eff.nuclear is not None:
+        counters = NuclearTransportCounters(**raw.counters)
+    elif eff.is_ion:
+        counters = IonTransportCounters(**raw.counters)
+    else:
+        counters = TransportCounters(**raw.counters)
     ood = 0 if raw.channels is None else raw.channels.lookup_out_of_domain
     pbe = 0 if raw.channels is None else raw.channels.path_bound_exceeded
     valid = not counters.any_nonzero and ood == 0 and pbe == 0

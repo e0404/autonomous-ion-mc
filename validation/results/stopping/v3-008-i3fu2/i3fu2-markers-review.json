@@ -1,0 +1,42 @@
+{
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "b53b2800f81a4e64",
+    "payload_sha256": "2e0a0203c692553de63ea83127cec565c26a4719d81d70fa1bbf9b40c0645b0e",
+    "public_key": "2fa323ebc164551322a8268176a463563f8036a2a91cf6de02d7a1ebfe407bfe",
+    "schema": "ionmc-attestation-1",
+    "signature": "6c227e4895fdc150ed3fc3ff9785388124d66dff24ef4a9ea63de31b7014f92e0b4c49969974553a8369be7c537a0f9b3836b3466ad97865150a9035a72faf00",
+    "signed_at_utc": "2026-11-16T20:07:25.007453+00:00",
+    "signer": "codex-worker"
+  },
+  "base_sha": "8dfbeb37ec200fa6d9044aef69c0e4bb9a5d7a24",
+  "experiment_id": "experiment-v3",
+  "finished_at": "2026-11-16T20:07:25.004863+00:00",
+  "head_sha": "054ecbf5b0bf7e6403cb687f67c7558170da8f79",
+  "model": "gpt-5.6-sol",
+  "provider": "openai",
+  "report": {
+    "findings": [
+      {
+        "description": "The plan still says the diagnostic smoke seeds are “consumed once” after observation, but revision 17 reruns the previously observed seeds 20600440–20600445. Because these runs are explicitly ungraded diagnostics, this does not undermine the fresh evidence family, but the seed-ledger wording should be reconciled.",
+        "path": "validation/plans/v3-008-acceptance.md:340",
+        "severity": "minor"
+      },
+      {
+        "description": "The final rebinding note lists the identical topas-smokes/index.json hash transition twice. Remove the duplicate entry to keep the freeze record unambiguous.",
+        "path": "validation/plans/v3-008/p9-freeze-record.md:1951",
+        "severity": "minor"
+      }
+    ],
+    "head_sha": "054ecbf5b0bf7e6403cb687f67c7558170da8f79",
+    "summary": "The prior important finding is resolved. Revision 17 consumes the disclosed 20619000 seed family and freezes a disjoint 20627200 family for all 116 evidence/repeat bundles. Generator, evaluator, bundle metadata, native inputs, manifest hashes, guard coverage, review binding, and smoke chronology agree; the old result remains explicitly inconclusive seen data. No blocking or important findings remain. Review was read-only, and tests were not executed as instructed.",
+    "verdict": "pass"
+  },
+  "report_sha256": "8d1ba41d67c2d851eb96cb081dcf9a77b8da532f9018ea6cccc6f6231fff8564",
+  "review_id": "REVIEW-be33eda9d6d34628a5bbbb6544093919",
+  "schema_version": 1,
+  "started_at": "2026-11-16T20:03:00.768491+00:00",
+  "status": "passed",
+  "task_id": "V3-008",
+  "tool": "codex exec"
+}

@@ -1,0 +1,51 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys, json, time, pathlib\ncase, k, scale = 12, 2, '0.2'\nsha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()\nos.environ.update({'PYTHONPATH': '/workspace/src', 'IONMC_CACHE_DIR': '/workspace/.ionmc-cache/ionmc-data', 'IONMC_REQUIRE_DATA': '1', 'IONMC_SINGLE_PROCESS': '1', 'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1', 'MKL_NUM_THREADS': '1', 'NUMEXPR_NUM_THREADS': '1', 'PYTHONUNBUFFERED': '1', 'PYTHONFAULTHANDLER': '1', 'IONMC_RUN_SHA': sha, 'IONMC_RUN_SUITE': 'lv8'})\nout = pathlib.Path(f'validation/generated/r2-samples-heldout/case{case}'); out.mkdir(parents=True, exist_ok=True)\ncmd = [sys.executable, 'validation/scripts/transport/steps_v8.py', 'td-tl-sample', '--case', str(case), '--k', str(k), '--scale', scale, '--seed-base', '20621004', '--out-dir', str(out)]\nt0 = time.time(); p = subprocess.run(cmd, text=True, capture_output=True)\n(out / f'case{case}-k{k}.stdout.txt').write_text(p.stdout); (out / f'case{case}-k{k}.stderr.txt').write_text(p.stderr)\ndoc = json.loads(p.stdout.split('#JSON-BEGIN')[1].split('#JSON-END')[0]) if '#JSON-BEGIN' in p.stdout else None\nkeep = {k2: doc.get(k2) for k2 in ('case', 'k', 'seed', 'seed_base', 'r_index', 'histories', 'npz', 'npz_sha256', 'valid', 'pass', 'wall_s', 'git_sha', 'suite', 'counters', 'end_of_range_model')} if doc else None\nprint('#JSON-BEGIN'); print(json.dumps(keep)); print('#JSON-END')\nnpz = out / f'ionmc-case{case}-k{k}.npz'\nprint(f'case {case} k {k} rc={p.returncode} elapsed={time.time()-t0:.1f}s npz_bytes={npz.stat().st_size if npz.exists() else None}')\nif p.returncode != 0 or not doc or not doc.get('pass'):\n    print(p.stdout[-3000:]); print(p.stderr[-3000:]); sys.exit(1)\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "3137f010e2f5477a1fce65ec6cd725810f9468862336b90522ea3cd583a35149",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "0680fef1bd0c5685cf4930cfdcbef71d5a5e7fb218088935ade2e7a1e94195d11be71678cd3980036d7a73600442b9559157fc3b605ca0b6c38346ffcafc7f0a",
+    "signed_at_utc": "2026-11-11T06:48:20.121540+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-008-helium-carbon-and-oxygen-electromagnetic-transport-effective",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 1161.6499285399987,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261111T062857Z-6b98f3f0/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-11T06:48:20.105651+00:00",
+  "output_manifest_sha256": "4ac6ee7681bb105f76aad9fbaad45b7c94345729d9f7e4156a9ad1e74fe875b1",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261111T062857Z-6b98f3f0",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/benchmarks/generated/RUN-20261111T062857Z-6b98f3f0"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261111T062857Z-6b98f3f0",
+  "run_id": "RUN-20261111T062857Z-6b98f3f0",
+  "schema_version": 1,
+  "sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+  "sha_after": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+  "started_at": "2026-11-11T06:28:58.455700+00:00",
+  "stderr": "",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261111T062857Z-6b98f3f0/stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_total_chars": 0,
+  "stderr_truncated": false,
+  "stdout": "#JSON-BEGIN\n{\"case\": 12, \"k\": 2, \"seed\": 20625106, \"seed_base\": 20621004, \"r_index\": 41, \"histories\": 200000, \"npz\": \"ionmc-case12-k2.npz\", \"npz_sha256\": \"e389eef9dd7d6755029d5c04312ec4da4808ecfaa4ae98d19d2fe7d7c0b3ea02\", \"valid\": true, \"pass\": true, \"wall_s\": 1160.0465993009966, \"git_sha\": \"f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d\", \"suite\": \"lv8\", \"counters\": {\"accumulator_overflow\": 0, \"energy_inversion\": 0, \"genealogy_overflow\": 0, \"mcs_mapping_failure\": 0, \"mcs_table_bracket_miss\": 0, \"queue_overflow\": 0, \"scoring_pieces_overflow\": 0, \"source_energy_out_of_range\": 0, \"stall\": 0, \"step_truncation\": 0, \"straggling_rejection\": 0}, \"end_of_range_model\": null}\n#JSON-END\ncase 12 k 2 rc=0 elapsed=1161.6s npz_bytes=3031524\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261111T062857Z-6b98f3f0/stdout.txt",
+  "stdout_sha256": "6da5b74c097a82ac5f2e91795dabfc065a777a990a0374e6044257214aa42dcf",
+  "stdout_total_chars": 730,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-008",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-008"
+}

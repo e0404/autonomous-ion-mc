@@ -1,0 +1,70 @@
+[
+  {
+    "files": [
+      {
+        "bytes": 2067,
+        "path": "inputs/case.json",
+        "sha256": "543753d65dc76196f31643f42333ddc31b33a84172f93100c319aa7c88f86ca2"
+      },
+      {
+        "bytes": 2768,
+        "path": "inputs/input.txt",
+        "sha256": "373bd257845f1835cc27b0eac6cdec8a5d7f8a8b9c72aa68b41b3b4c9e8eeaa2"
+      },
+      {
+        "bytes": 3710,
+        "path": "record.json",
+        "sha256": "2bb5944a0a4a62e3e2d85f83981b3bf26bde5bbb690254ad5de32c7bab814aab"
+      },
+      {
+        "bytes": 3620,
+        "path": "request.json",
+        "sha256": "c01aeff11658437ab2ad732ba821e45e479936cd6a215e3846467b0915d921d9"
+      },
+      {
+        "bytes": 0,
+        "path": "stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 1319836,
+        "path": "stdout.txt",
+        "sha256": "db2d1a0eaeb9ab2a24a356a845b27757ff38c1924cfca7046d2a76e9e1a3c793"
+      },
+      {
+        "bytes": 2067,
+        "path": "work/case.json",
+        "sha256": "543753d65dc76196f31643f42333ddc31b33a84172f93100c319aa7c88f86ca2"
+      },
+      {
+        "bytes": 2768,
+        "path": "work/input.txt",
+        "sha256": "373bd257845f1835cc27b0eac6cdec8a5d7f8a8b9c72aa68b41b3b4c9e8eeaa2"
+      },
+      {
+        "bytes": 12000000,
+        "path": "work/lat_x.bin",
+        "sha256": "e0ec97312cbf56c0a22c2b719015ce542ea2da42ac3b04e10782ae4c56ccadc6"
+      },
+      {
+        "bytes": 239,
+        "path": "work/lat_x.binheader",
+        "sha256": "9eb94f795d892a37692643ba8784fd18ee9b82390adbeeae7daf803e94a4bc75"
+      },
+      {
+        "bytes": 12000000,
+        "path": "work/lat_y.bin",
+        "sha256": "2b919d7d14a3a8f08a0d459f97c2246dd5fa83a7e0922dcead8da07c61ddf9b3"
+      },
+      {
+        "bytes": 239,
+        "path": "work/lat_y.binheader",
+        "sha256": "4f1b34324e2ab7725db5a60599b27cac84e889f1b6db493a88852daa8606810a"
+      }
+    ],
+    "next_offset": null,
+    "run_id": "REF-b3507ec2481cbf21ebce-65cedd9b",
+    "sha": "ead583f141c66bcfdbff18ac7588f5f70c380695",
+    "total_files": 12
+  }
+]

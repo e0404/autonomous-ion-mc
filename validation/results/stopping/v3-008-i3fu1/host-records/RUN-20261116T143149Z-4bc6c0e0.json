@@ -1,0 +1,51 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, sys\nprefix = '/workspace/validation/generated/i3fu1-pycache'\nos.makedirs(prefix, exist_ok=True)\nassert not os.listdir(prefix), 'pycache prefix not empty'\nenv = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}\nprint('execve', sys.executable, 'dropped', sorted(k for k in os.environ if k.startswith('GIT_')), flush=True)\nos.execve(sys.executable, [sys.executable, '-I', '-S', '-B', '-X', 'pycache_prefix=' + prefix, '/workspace/validation/scripts/stopping/sealed_launch.py', 'validation/scripts/stopping/i3_band_diagnostic.py', '--repo', '/workspace', '--write-environment-seal', '--environment-seal', 'validation/generated/i3fu1-seal/environment-seal.json'], env)\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "51a60a21e898bca5e459a4b4484376494679e1f56ab859c894024afeaaab63ea",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "e0ac4756db620878ff6c78eec1d36d5d57cd11cd97c32d558e166f6e409881e231f496f7a409c7b0e58e500a2a9aa097d988a72c1556554b1aa4d7369eb03f03",
+    "signed_at_utc": "2026-11-16T14:31:52.953051+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-008-helium-carbon-and-oxygen-electromagnetic-transport-effective",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 1.166030018008314,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261116T143149Z-4bc6c0e0/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-16T14:31:52.939981+00:00",
+  "output_manifest_sha256": "227b6153876f5885f0b43458dae4d7c978b0acde25da6a16995b3fd5fdba88fe",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/validation/generated/RUN-20261116T143149Z-4bc6c0e0",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-008/benchmarks/generated/RUN-20261116T143149Z-4bc6c0e0"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261116T143149Z-4bc6c0e0",
+  "run_id": "RUN-20261116T143149Z-4bc6c0e0",
+  "schema_version": 1,
+  "sha": "c89e9b06e48d8e4607944c4c372c2acf7ba0cf41",
+  "sha_after": "c89e9b06e48d8e4607944c4c372c2acf7ba0cf41",
+  "started_at": "2026-11-16T14:31:51.773916+00:00",
+  "stderr": "",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261116T143149Z-4bc6c0e0/stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_total_chars": 0,
+  "stderr_truncated": false,
+  "stdout": "execve /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python dropped ['GIT_WORK_TREE']\n/workspace/validation/generated/i3fu1-seal/environment-seal.json\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-008/RUN-20261116T143149Z-4bc6c0e0/stdout.txt",
+  "stdout_sha256": "6e1a20541d8014336b9d329c0695b604872ca66ee086b7441ac8a2888b48da87",
+  "stdout_total_chars": 176,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-008",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-008"
+}

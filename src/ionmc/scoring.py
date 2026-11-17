@@ -8,7 +8,10 @@ each voxel receives the integral of that density over the path piece inside it (
 incremental voxel walk, see ``ionmc.transport.reference``). The result has a residual step
 dependence of second order (the curvature of the stopping power along the step), instead of the
 aliasing of a point deposit with the voxel edges or the first-order error of a uniform deposit;
-the energy left at the cutoff is a point deposit at the end point. Deposits are quantized into int64
+the energy left at the cutoff is deposited by the end-of-range model (a point deposit at the end
+point for ``point_v1``, the proton default; for ``continuous_residual_v1``, the ion default, along
+the straight residual path through the materials it crosses, the part beyond the world excluded;
+see ``docs/architecture/transport.md``). Deposits are quantized into int64
 fixed-point accumulators (``ionmc.transport.tally``). The mass of a scoring
 voxel is the exact overlap integral of the piecewise-constant density of the geometry over
 the voxel (the geometry is vacuum outside, so partially covered voxels have a correspondingly

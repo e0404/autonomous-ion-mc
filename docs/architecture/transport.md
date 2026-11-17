@@ -1,6 +1,7 @@
 # Transport engine
 
-Packages and modules of the proton electromagnetic transport engine: the reference (Python)
+Packages and modules of the electromagnetic transport engine for protons and the ions 4He, 12C and
+16O (see "Ion sources" below): the reference (Python)
 backend of task V3-003A and the Warp CPU and CUDA backends, process pool and validation runner of
 V3-003B. A requested backend that is unavailable (for example `warp-cuda` without a usable CUDA
 device) raises `BackendUnavailableError`; nothing falls back to another backend. Design decisions:
@@ -19,7 +20,7 @@ lookup scoring). The models are described in [EM transport](../physics/em-transp
 | `ionmc.geometry` | `VoxelGeometry` (materials per voxel, optional density override), `BoxPhantom` (one-voxel box) |
 | `ionmc.sources` | `PencilBeamSource` |
 | `ionmc.scoring` | `ScoringGrid`, exact voxel-mass overlap `voxel_mass_g`, batch estimator `reduce_batches` |
-| `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha; pseudo-species `nuclear_local`), `producible()` engine capability |
+| `ionmc.species` | append-only species registry (ids 0 p, 1 d, 2 t, 3 He-3, 4 alpha, 5 carbon12, 6 oxygen16; pseudo-species `nuclear_local`; source species p, alpha, carbon12 and oxygen16, each producible as a primary; with `nuclear=True` a proton source also produces secondary protons and deuterons and `nuclear_local`), `producible()` engine capability |
 | `ionmc.lookup` | `LookupTable` (uniform grid, sha256, provenance), `resample_uniform` |
 | `ionmc.transport.channels` | channel compiler: `compile_channels`, `ChannelPlan`, quantum rule, shared lookup/spectrum axis parameters |
 | `ionmc.transport.scoring_funcs`, `ionmc.transport.scoring_ref` | shared scoring functions (Warp + Python twin) and the Python channel hook |
@@ -114,7 +115,8 @@ counter starting at 0.
    (the block is always drawn, the values are ignored for a zero sigma). A sampled energy outside
    `[E_cut, table maximum]` is not transported and increments `source_energy_out_of_range`. The
    particle is moved to the world box (`ray_box`); the voxel index is found by `floor` and clamped.
-2. If `E <= E_cut`: the energy is deposited at the current position (tallied as `cutoff` and scored)
+2. If `E <= E_cut`: the residual energy is deposited according to the end-of-range model (see
+   "End of range" below; tallied as `cutoff`, the part beyond the world as `escaped`, and scored)
    and the history ends. This step draws nothing. If the step count reached `max_steps` the history
    ends as truncated (counter, energy tallied as `truncated`, never scored).
 3. Read `S(E)` and `R(E)` of the current voxel's material, compute the distance to the next voxel
@@ -148,12 +150,62 @@ counter starting at 0.
    `[ta, tb]` inside one scoring voxel receives `ΔE · ∫ w dt / ∫ w dt` over the whole step (so the pieces sum to
    the deposit); the pieces come from a per-grid incremental DDA over each leg (`seg_piece`, the transport DDA pattern;
    no floor-and-nudge); a piece outside a grid is tallied in that grid's `outside`. The residual is the curvature of
-   `S` along the step (second order in `s / R`). The energy left at the cutoff is a point deposit at the end point.
+   `S` along the step (second order in `s / R`). The energy left at the cutoff is deposited by the end-of-range model (below).
    Each piece is quantized (below). (V3-003A scored the midpoint, V3-003B first the uniform track length: with steps
    comparable to the bin width the former aliased with the bin edges, the latter left a deterministic step dependence of
    the depth-dose of order 5e-4 to 1e-3, see the T9-CI test.)
 8. Leaving the geometry tallies the remaining energy as `escaped`. More than three consecutive
    zero-length steps tally the energy as `truncated` and increment `stall`.
+
+
+## End of range (`PhysicsOptions.end_of_range_model`)
+
+Decision 0043 section 4 (V3-008 R2-STOP3 amendment; review REVIEW-00cd55d4). What happens to the
+residual energy `E <= E_cut` of a history:
+
+* `"default"`: `continuous_residual_v1` for an ion source (z >= 2), `point_v1` for a proton.
+  Explicit values: `"point_v1"` (any source) and `"continuous_residual_v1"` (ion sources only;
+  a proton source fails closed). The requested and the effective model are recorded in the run
+  summary (`physics.end_of_range_model`, `physics.end_of_range_model_effective`).
+* `point_v1`: the whole residual energy is a point deposit at the current position (class
+  "local" for the channels). Proton transport is unchanged (bit-identical to before the option).
+* `continuous_residual_v1`: the residual energy is deposited along the straight continuation of
+  the current direction (no straggling, no scattering) over the CSDA range of the transport's own
+  table, walked exactly through the transport geometry (review REVIEW-b6484e56). The
+  continuation is split into legs of constant material and density by the transport's own voxel
+  traversal (`dda_next_clip` from the cutoff point and voxel, with the transport's plane
+  snapping); a leg ends at the first voxel plane behind which the material or the density
+  differs, at the end of the remaining range, or at the world boundary. A leg in a material `m`
+  of density `rho` starting with the energy `E_s` has the remaining range `r_s = R_tab,m(E_s)`
+  (length `l_s = r_s 10 / rho` mm); its length is `L = min(l_s, distance to the medium change or
+  the world boundary)` and the range left at its end `r_e = r_s - L rho / 10` (`r_e = 0` when the
+  leg stops inside). The leg is divided into `n = max(1, ceil(RESIDUAL_SUBSTEPS L / l_s))` equal
+  sub-steps (`RESIDUAL_SUBSTEPS = 32`); sub-step `j` gets `E_tab(r_{j-1}) - E_tab(r_j)` with
+  `r_j = r_e + (r_s - r_e) (n - 1 - j) / n` (`E_tab` the table inverse, `E_tab(0) = 0` at the end
+  of a stopping leg), spread uniformly over its length (track-length apportioning in every grid).
+  Below the table floor `E_lo` the table is continued with the constant stopping power of the
+  start-range convention, `E = E_lo r / R(E_lo)`.
+  * Material stepping: the next leg starts at the crossed plane with the energy left there,
+    `E_tab,m(r_e)`, in the medium of the voxel behind it: range `R_tab,new(E)`, length
+    `R 10 / rho_new`. Every voxel of another medium on the path is entered, however thin (no
+    sampling at sub-step starts). A homogeneous medium has a single leg of 32 sub-steps and is
+    bit-identical to the first implementation (pinned hashes). More than `scoring_pieces` voxel
+    planes crossed by the walk fail closed: the rest continues in the current medium and
+    `scoring_pieces_overflow` (validity) is raised.
+  * Escape: a leg cut by the world box (or the `z_exit_mm` plane) ends there; the energy left at
+    the boundary, `E_tab,m(r_e)`, is not deposited and is tallied as `escaped`. If any energy escapes, the history ends as an
+    escape (`end_code` 1) at the boundary-crossing point with the escaped energy (the energy left
+    there) as `end_energy_mev`, so `escape_records` contains it; otherwise it ends as `cutoff`
+    (code 0) at the cutoff point with the residual energy.
+  * Scoring channels: the sub-steps are class "step" pieces. A sub-step that ends at or above
+    `E_lo` of its material is an ordinary step (water `S_mid`, ramp slope `k`, `Edot` at its mean
+    energy). A sub-step that reaches below `E_lo` follows the constant-stopping convention: it is
+    scored at `S_w(E_lo)` with `k = 0` and `E = E_lo` for every piece (so its `LET_t` is
+    `S_w(E_lo)`), and its lookups are evaluated at the floor, clamped by definition and not
+    counted as `lookup_out_of_domain` (piece flag `CLASS_RESIDUAL_FLOOR`). A lookup table whose
+    domain starts exactly at the transport-table floor is therefore complete. The residual path
+    inside the world counts towards the per-history path bound `B_L`, and the capacity envelope of
+    the primary covers midpoint energies from `min(E_cut / 2, E_lo)`.
 
 ## Deviations from the plan text of decision 0039 (accepted)
 
@@ -205,10 +257,13 @@ track-length scoring walks each leg over as many scoring voxels as it crosses, u
 Each rule raises before any transport and nothing is clamped or substituted (test C1,
 `tests/ionmc/test_config_validation.py`):
 
-* the projectile is not exactly the canonical proton (all fields; projectile fields are validated
-  when a `Projectile` is built); a stopping source that returns a table for another projectile or
+* the projectile is neither exactly the canonical proton nor one of the ions alpha, carbon12,
+  oxygen16 (all fields; projectile fields are validated when a `Projectile` is built; deuteron,
+  triton and He-3 fail closed); an ion source with `nuclear=True`, with `e_cut_mev` other than its
+  default, or with an energy outside its domain (see "Ion sources"); a stopping source that returns a table for another projectile or
   material than requested (the complete `Material` definition must be identical: composition,
-  density, I and density-effect parameters); `nuclear=True`; unknown model names;
+  density, I and density-effect parameters); `nuclear=True` on a non-proton source or on a Warp
+  backend; unknown model names;
 * `backend="python"` with `float32`; `warp-cuda` without a usable CUDA device (`BackendUnavailableError`, no
   fallback); `cpu_workers > 1` on `warp-cuda`, more workers than histories or more than 256;
   accumulators (one private copy per worker process) above `memory_budget_bytes`;
@@ -268,8 +323,10 @@ charged particles contribute; neutrals, cutoff and nuclear-local deposits are ex
 lookup averages and reported in the automatic channel `edep_excluded_from_let`.
 
 **Species.** `ionmc.species` holds the append-only registry; the set of species the engine can
-produce is an engine capability (`producible(projectile)`, V3-004: the source projectile as a
-primary). A request for any other species, or generation `"secondary"`, fails closed.
+produce is an engine capability (`producible(projectile, nuclear)`): the source projectile as a
+primary (V3-004) and, with `nuclear=True` and a proton source (decision 0041), secondary protons,
+secondary deuterons and `nuclear_local`. A request for any other species or generation fails closed
+(generation `"secondary"` whenever the run produces no secondaries).
 
 **Channels.** `compile_channels` turns the requests into deduplicated linear channels of the kinds
 E, L, LS, LS2, ES, FE, FL and N (module docstring of `ionmc.transport.channels`), ordered by grid,
@@ -324,7 +381,7 @@ Lookup magnitudes: the largest value of a table for the species a request select
 `[2^-60, 2^60]` (representable FE quantum, scale and bound); `validate()` rejects others.
 
 Fail-closed rules added by V3-004 (test A12, `tests/ionmc/test_scoring_channels.py`): unknown or
-unproducible species, generation `"secondary"` (no secondary transport until V3-005A),
+unproducible species, generation `"secondary"` without nuclear interactions (`nuclear=False`),
 `let_medium` other than water, dose-to-water, unknown grid or lookup, duplicate request names,
 lookup species gaps, axis coverage gaps (energy axis `[table floor, E_hi]/A`, LET axis the water-S
 interval of that energy range), a sha256 mismatch, non-uniform tables or spectrum edges, negative or
@@ -335,7 +392,9 @@ above the budget and a backend without channels.
 objects that enforce it (a test compares it with `CHANNEL_BACKENDS`, `TALLY_QUANTITIES`, the `TallyRequest`
 literals, the lookup axes and `producible`): per backend the supported quantities (`edep`, `dose`,
 `fluence`, `let_t`, `let_d`, `let_d_eps`, `lookup_sum`, `lookup_dose_avg`, `fluence_spectrum`) and its
-availability, the producible `(species, generation)` pairs (proton, primary; no secondaries before V3-005A),
+availability, the producible `(species, generation)` pairs of a proton source (`producible`, scope stated in
+`producible_scope`: proton primary, plus the nuclear secondaries with `nuclear=True`) and of every source species
+(`producible_by_source`, equal to `species_details[...]["tallies"]["producible"]`),
 the accepted and rejected generation choices, `let_medium` water and `dose_reference` medium only, the lookup
 axes with the uniform-axis rule, the spectrum edge rule, the automatic channels and the fail-closed rules.
 The single-process mode of the test suite is a diagnostic and not an engine capability.
@@ -363,7 +422,7 @@ per-batch estimates and its variance `sum (x_b - mean)^2 / (B (B - 1))`.
 
 `EnergyBalance` (MeV summed over all histories, every tally accumulated independently):
 `initial`, `step_deposit`, `cutoff`, `escaped`, `truncated`, `unaccounted`, and per grid `in_grid` and
-`outside`. `cutoff` is energy that is deposited locally below `E_cut` and scored like any other
+`outside`. `cutoff` is energy that is deposited below `E_cut` (by the end-of-range model) and scored like any other
 deposit, so it is part of `in_grid + outside`. The identities are
 `initial = step_deposit + cutoff + escaped + truncated + unaccounted` and, per grid,
 `in_grid + outside = step_deposit + cutoff` (`closure_residual_mev`, `relative_residual`,
@@ -378,6 +437,62 @@ position, direction and energy of every escaping particle; `trace_histories = K`
 the first K histories (`ionmc.transport.reference.TRACE_COLUMNS`: voxel index, step reason, blocks drawn,
 straggling attempts, position, direction, energy, deposit, step length). The trace is the reference
 for trajectory-level parity with the Warp backends.
+
+## Ion sources (decision 0043)
+
+`PencilBeamSource` accepts the projectiles `PROTON`, `ALPHA` (4He), `CARBON12` and `OXYGEN16`;
+`ionmc.capabilities()["species_details"]` reports the matrix below (derived from the objects that
+enforce it). The ion models are electromagnetic only.
+
+| Species | Source energy domain [MeV/u] | Cutoff (default) |
+|---|---|---|
+| proton | `E0` in [2 `e_cut_mev`, stopping-table maximum] total MeV | `e_cut_mev` = 2 MeV |
+| alpha | 50 to 250 | `e_cut_ion_mev_per_u` x 4 = 8 MeV |
+| carbon12 | 80 to 430 | `e_cut_ion_mev_per_u` x 12 = 24 MeV |
+| oxygen16 | 100 to 430 | `e_cut_ion_mev_per_u` x 16 = 32 MeV |
+
+* **Domain.** For an ion, `E0 / A` and `(E0 + 6 sigma_E) / A` must lie in the domain; otherwise
+  `validate()` raises `UnsupportedCombinationError`.
+* **Cutoff.** The ion cutoff is `e_cut_ion_mev_per_u * A` (default 2 MeV/u) in total kinetic energy,
+  at least twice the table floor; `e_cut_mev` must stay at its default for an ion. Below the cutoff
+  the remaining energy is deposited along the residual range (`continuous_residual_v1`, the ion
+  default; see "End of range"), or locally with `end_of_range_model="point_v1"`.
+* **Nuclear interactions.** Protons only: an ion source with `nuclear=True` fails closed (nuclear
+  interactions, fragments and secondary ions are V3-009).
+* **Multiple scattering.** The model is `differential_moliere`; for z >= 2 the ion's `f_dM` is
+  obtained through the exact-Omega mapping of the ion state to a proton-equivalent state
+  ([EM transport](../physics/em-transport.md)). The effective configuration records the status
+  (`mcs_mapping`: the proton-equivalent energies, `fdm_extrapolated` when above the `f_dM` domain
+  edge of 300 MeV); a proton-equivalent energy above the proton table edge (4000 MeV) fails closed.
+  The mapping is evaluated from a `pv_eq/pv` table (`mcs_mapping_eval="table"`, default) or by the per-step
+  root solve (`"root"`); the kernel variant is selected by `make_transport_kernel(real, diag, ion, ion_eval)`.
+  Both evaluate the exact root on every step: the table only supplies the starting bracket of
+  the same Illinois iteration (`exact_omega.pv_equivalent_seeded`; a miss of the initial tight
+  bracket, resolved by the widened or the full bracket, is counted in the diagnostic
+  `mcs_table_bracket_miss`), and its build-time interpolation estimate
+  (`exact_omega.estimate_pv_eq_table`) only sets the bracket width. A table cell with a node
+  where the root solve fails stays invalid; states there (or outside the table) use the full
+  bracket, as `"root"` (not counted as a miss), and the covered fraction is recorded
+  (`table_coverage`). The mapping is defined where the proton-equivalent state stays inside the
+  proton b-slab range: with multiple scattering on, `validate()` root-solves the table nodes of
+  the reachable states in both modes and fails closed otherwise (observed: oxygen16 at 100 and
+  150 MeV/u in copper and lead), so validated runs have coverage 1.0. With
+  `multiple_scattering=False` an ion source gets no f_dM domain check, no proton path, no
+  packing and no root solve (`evaluation = "root"`, `unused = True`, zero placeholder arrays
+  never read; `fdm_domain = "not evaluated (multiple_scattering=False)"`).
+  Ion stopping tables are keyed by the full material identity (name, density, composition, I,
+  density-effect parameters), not by the material name.
+* **Stopping.** Bethe tables with the Lindhard-Sorensen option `ls` (default `"off"`; `"eff"` and
+  `"bare_mixed"` are opt-in and recorded as requested and effective modes outside the table hash);
+  NIST ASTAR serves alpha in water only; there is no NIST table for carbon12 and oxygen16.
+* **Tallies.** The scoring channels of decision 0040 are available for ions on the backends that implement them
+  (`CHANNEL_BACKENDS`); the producible species of an ion source is the source species at generation `primary`
+  only (another species or generation `secondary` fails closed).
+* **Species roles.** `capabilities()["species_roles"]` lists the primary source species and, per report mode,
+  the producible secondary species (`nuclear=True`: proton and deuteron from a proton source) and pseudo-species;
+  `unsupported_species` lists the transported registry species that are not a source (deuteron, triton,
+  helium3) with their status as a secondary in that mode (deuteron producible with `nuclear=True`). A test
+  checks that all sections agree for `nuclear` False and True.
 
 ## Nuclear interactions (decision 0041, python reference backend)
 
@@ -464,7 +579,8 @@ quantized `floor(x 2^k + 1/2)` and added with an int64 `atomic_add`; the roundin
 out-of-domain count go to the history's own tally-row columns after the `6 + 2 G` fixed ones (`N` and `N_local` have no
 residual). Per step with `s_act > 0`, `step_state` does one water lookup at `E_mid` (`S_mid`, `k`,
 `Edot`). With channels present the legs of a step with `s_act > 0` are walked even if `eps = 0`;
-cutoff and `s_act = 0` deposits are class "local" (`score_local`). With `n_ch = 0` no scoring code runs
+cutoff point deposits (`point_v1`) and `s_act = 0` deposits are class "local" (`score_local`);
+the `continuous_residual_v1` sub-steps are class "step" (see "End of range"). With `n_ch = 0` no scoring code runs
 and the outputs are bit-identical to the qualified path (row A16). The driver merges `acc` across chunks
 (it stays on the device) and workers (exact int64 sums). Python and warp-cpu float64 agree bit for bit
 on the channels in the cases tested (row A11-CI allows `1e-10` relative plus `n_v q_c`). Float64 CUDA and CPU trajectories are not bitwise identical (ulp-level differences of transcendental

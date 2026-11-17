@@ -1,0 +1,372 @@
+{
+ "all_valid": false,
+ "checker": "validation/scripts/ion_em/r2_evaluate.py check-run (r2_evaluate.check_run)",
+ "evaluator_head": [
+  "f5512c4e1d9de141d351aea3f12db1adfb48eb36"
+ ],
+ "n_runs": 14,
+ "outputs_note": "only request.json, stdout.txt, stderr.txt were materialized and read; the scorer outputs are bound through the signed output_files_sha256 recomputed from the artifact listing's work/ hashes",
+ "purpose": "run validity of the 14 signed smoke re-runs (plan amendment 2026-11-09, REVIEW-8429c50e): r2_io.run_checks + R2-TOPAS-4 chronology against the seal review; execution records only, never evidence",
+ "runs": [
+  {
+   "case": "he-water-250mevu-r2-idd-em-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "idd-em",
+   "exec_real_s": 6.934,
+   "histories": 1000,
+   "previous_unsigned_run_id": "REF-2e6aa910d11b42743db3-8c849b0e",
+   "run_id": "REF-97622ace316bf969f405-947c0413",
+   "seconds": 7.083466426003724,
+   "seed": 20600411,
+   "started_at": "2026-11-09T17:12:57.893208+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "he-water-250mevu-r2-lat-em-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "lat-em",
+   "exec_real_s": 2.444,
+   "histories": 1000,
+   "previous_unsigned_run_id": "REF-41e5cd181534df36e9c8-e5593c8b",
+   "run_id": "REF-127b2dd92a8dd609c560-ff8db64b",
+   "seconds": 2.7501659288536757,
+   "seed": 20600412,
+   "started_at": "2026-11-09T17:13:20.831151+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "he-water-250mevu-r2-idd-full-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated",
+     "module g4decay: printout marker missing"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "idd-full",
+   "exec_real_s": 14.265,
+   "histories": 200,
+   "previous_unsigned_run_id": "REF-2062230d57537b7b0937-f9d8f342",
+   "run_id": "REF-d784c6d81d2a2ca6df30-313c4c31",
+   "seconds": 14.598852154100314,
+   "seed": 20600413,
+   "started_at": "2026-11-09T17:13:39.020150+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "carbon-water-430mevu-r2-idd-em-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "idd-em",
+   "exec_real_s": 6.313,
+   "histories": 1000,
+   "previous_unsigned_run_id": "REF-ffb564df1f51ba35230c-cefae526",
+   "run_id": "REF-95f5caff95494e521eba-c5edd170",
+   "seconds": 6.432053893106058,
+   "seed": 20600415,
+   "started_at": "2026-11-09T17:14:08.086001+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "carbon-water-430mevu-r2-lat-em-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "lat-em",
+   "exec_real_s": 1.935,
+   "histories": 1000,
+   "previous_unsigned_run_id": "REF-2f873a5c175201c630b3-261c7cc6",
+   "run_id": "REF-8bf4ca70fe3b29de6260-11223111",
+   "seconds": 2.1970190161373466,
+   "seed": 20600416,
+   "started_at": "2026-11-09T17:14:29.406206+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "carbon-water-430mevu-r2-idd-full-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated",
+     "module g4decay: printout marker missing"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "idd-full",
+   "exec_real_s": 71.432,
+   "histories": 200,
+   "previous_unsigned_run_id": "REF-cdce63177f55f3cc127f-b9207658",
+   "run_id": "REF-7020741cc2707c255204-a567db01",
+   "seconds": 71.75837913295254,
+   "seed": 20600417,
+   "started_at": "2026-11-09T17:14:46.333416+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "oxygen-water-430mevu-r2-idd-em-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "idd-em",
+   "exec_real_s": 5.018,
+   "histories": 1000,
+   "previous_unsigned_run_id": "REF-83f7c7330ea44bb41ee7-7b6cb28c",
+   "run_id": "REF-878a53365185a3360106-6ceac04f",
+   "seconds": 5.179421816021204,
+   "seed": 20600419,
+   "started_at": "2026-11-09T17:16:12.715810+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "oxygen-water-430mevu-r2-lat-em-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "lat-em",
+   "exec_real_s": 1.609,
+   "histories": 1000,
+   "previous_unsigned_run_id": "REF-709c1045ddb63b94355c-b88c9d4a",
+   "run_id": "REF-f1cb893d737b990068a3-bdb32d20",
+   "seconds": 1.8413657709024847,
+   "seed": 20600420,
+   "started_at": "2026-11-09T17:16:32.235220+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "oxygen-water-430mevu-r2-idd-full-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated",
+     "module g4decay: printout marker missing"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "idd-full",
+   "exec_real_s": 93.829,
+   "histories": 200,
+   "previous_unsigned_run_id": "REF-793fe683e32d69efe0c1-5b3d237d",
+   "run_id": "REF-84df1a6d3f6427a74474-1306ceb2",
+   "seconds": 94.15059062605724,
+   "seed": 20600421,
+   "started_at": "2026-11-09T17:16:49.120893+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "he-water-250mevu-r2-lat-full-ecut1km-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "PASS",
+    "run_checks_problems": []
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "lat-full",
+   "exec_real_s": 8.886,
+   "histories": 200,
+   "previous_unsigned_run_id": "REF-fe3eb38a06c93dfcd4da-4dbe8e46",
+   "run_id": "REF-87d804e7bd55f38370b0-4e7af629",
+   "seconds": 9.488774330820888,
+   "seed": 20600424,
+   "started_at": "2026-11-09T17:18:38.053325+00:00",
+   "verdict": "VALID"
+  },
+  {
+   "case": "carbon-water-430mevu-r2-lat-full-ecut1km-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "PASS",
+    "run_checks_problems": []
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "lat-full",
+   "exec_real_s": 22.974,
+   "histories": 200,
+   "previous_unsigned_run_id": "REF-b07c8cb0f27e0da26d60-9903bf4c",
+   "run_id": "REF-ba0afbd01523d5d68398-153f9b26",
+   "seconds": 23.560950607061386,
+   "seed": 20600425,
+   "started_at": "2026-11-09T17:19:02.172919+00:00",
+   "verdict": "VALID"
+  },
+  {
+   "case": "oxygen-water-430mevu-r2-lat-full-ecut1km-timing-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "PASS",
+    "run_checks_problems": []
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "lat-full",
+   "exec_real_s": 23.005,
+   "histories": 200,
+   "previous_unsigned_run_id": "REF-9433e888c8a566eecc8b-77d7385e",
+   "run_id": "REF-c32fd0fa07582b3fdb5b-717b2259",
+   "seconds": 23.501325991004705,
+   "seed": 20600426,
+   "started_at": "2026-11-09T17:19:40.494123+00:00",
+   "verdict": "VALID"
+  },
+  {
+   "case": "carbon-water-290mevu-r2-idd-em-steps-verbose-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "FAIL",
+    "run_checks_problems": [
+     "frozen line 'b:Ph/ListProcesses = \"True\"' missing or repeated"
+    ]
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "idd-em",
+   "exec_real_s": 0.715,
+   "histories": 3,
+   "previous_unsigned_run_id": "REF-ab109b030ce4d1189160-ba55a77b",
+   "run_id": "REF-ac5f93bc5cc1507f3e27-8af01fff",
+   "seconds": 0.8720164739061147,
+   "seed": 20600423,
+   "started_at": "2026-11-09T17:20:19.781468+00:00",
+   "verdict": "RUN-VALIDITY FAIL"
+  },
+  {
+   "case": "carbon-water-290mevu-r2-lat-em-steps-verbose-smoke",
+   "checks": {
+    "chronology": "PASS",
+    "chronology_ancestry": true,
+    "chronology_review_before_start": true,
+    "module_markers_unverifiable": [],
+    "record_binding": "PASS",
+    "replicate_gate": "not applicable (single run)",
+    "run_checks": "PASS",
+    "run_checks_problems": []
+   },
+   "code_sha": "fce29f49282f4392bbb44866c4814f4dac72d57d",
+   "config": "lat-em",
+   "exec_real_s": 0.631,
+   "histories": 3,
+   "previous_unsigned_run_id": "REF-8f7842c1487b5df484aa-31f28612",
+   "run_id": "REF-4e5b0681e5576d7ab451-7e640368",
+   "seconds": 0.8345729778520763,
+   "seed": 20600427,
+   "started_at": "2026-11-09T17:20:34.961073+00:00",
+   "verdict": "VALID"
+  }
+ ],
+ "schema": "ionmc-v3-008-r2-smoke-reruns-1",
+ "scorer_outputs_read": false,
+ "seal_review": [
+  {
+   "finished_at": "2026-11-09T09:15:57.707596+00:00",
+   "review_id": "REVIEW-9691e1b098e940d7bdfd1063c09325ee"
+  }
+ ],
+ "task_id": "V3-008",
+ "trust_file": {
+  "path": "infrastructure/keys/trusted_attestation_keys.json",
+  "sha256": [
+   "31f6a82c3b0d0379c9ce32d3db9c83cb1c07825765ab42dcdfa334fc459337b8"
+  ]
+ }
+}

@@ -1,0 +1,120 @@
+# command: /home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python /workspace/validation/scripts/transport/steps_v8.py t1-ion --scale 1.0 --timeout 1350 --seed-base 20581004
+# git_sha: f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d
+# started_utc: 2026-11-11T02:08:10Z
+# step_timeout_s: 1500
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /cache/warp/1.17.0
+Module _table_node_kernel__locals__nodes_160cf81d 930f1d7 load on device 'cpu' took 1.04 ms  (cached)
+#JSON-BEGIN
+{
+ "format": 1,
+ "frozen_histories": 256,
+ "git_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "histories": 256,
+ "k": 256,
+ "pass": true,
+ "reduced": false,
+ "runs": {
+  "carbon": {
+   "python_seconds": 114.04277123400061,
+   "seed": 20585804,
+   "t1": {
+    "atol": 1e-10,
+    "continuous_max_abs_diff": {
+     "deposit_mev": 0.0,
+     "energy_mev": 0.0,
+     "step_mm": 0.0,
+     "ux": 0.0,
+     "uy": 0.0,
+     "uz": 0.0,
+     "x_mm": 0.0,
+     "y_mm": 0.0,
+     "z_mm": 0.0
+    },
+    "continuous_violations": {
+     "deposit_mev": 0,
+     "energy_mev": 0,
+     "step_mm": 0,
+     "ux": 0,
+     "uy": 0,
+     "uz": 0,
+     "x_mm": 0,
+     "y_mm": 0,
+     "z_mm": 0
+    },
+    "discrete_mismatches": {
+     "attempts": 0,
+     "blocks": 0,
+     "history": 0,
+     "ix": 0,
+     "iy": 0,
+     "iz": 0,
+     "reason": 0,
+     "step": 0
+    },
+    "end_codes_equal": true,
+    "pass": true,
+    "rtol": 1e-10,
+    "steps_other": 80502,
+    "steps_reference": 80502
+   },
+   "warp-cpu_seconds": 2.183753194000019
+  },
+  "oxygen": {
+   "python_seconds": 131.00286688199958,
+   "seed": 20585805,
+   "t1": {
+    "atol": 1e-10,
+    "continuous_max_abs_diff": {
+     "deposit_mev": 0.0,
+     "energy_mev": 0.0,
+     "step_mm": 0.0,
+     "ux": 0.0,
+     "uy": 0.0,
+     "uz": 0.0,
+     "x_mm": 0.0,
+     "y_mm": 0.0,
+     "z_mm": 0.0
+    },
+    "continuous_violations": {
+     "deposit_mev": 0,
+     "energy_mev": 0,
+     "step_mm": 0,
+     "ux": 0,
+     "uy": 0,
+     "uz": 0,
+     "x_mm": 0,
+     "y_mm": 0,
+     "z_mm": 0
+    },
+    "discrete_mismatches": {
+     "attempts": 0,
+     "blocks": 0,
+     "history": 0,
+     "ix": 0,
+     "iy": 0,
+     "iz": 0,
+     "reason": 0,
+     "step": 0
+    },
+    "end_codes_equal": true,
+    "pass": true,
+    "rtol": 1e-10,
+    "steps_other": 83275,
+    "steps_reference": 83275
+   },
+   "warp-cpu_seconds": 2.3941753990002326
+  }
+ },
+ "seed_base": 20581004,
+ "step": "t1-ion",
+ "suite": "lv8"
+}
+#JSON-END
+
+# exit=0

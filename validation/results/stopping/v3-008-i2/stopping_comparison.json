@@ -1,0 +1,265 @@
+{
+  "redistribution_note": "This file contains aggregate statistics only; no NIST SRD 124 or ICRU 90 table values, per-energy deviations or ratios are reproduced.",
+  "stopping": {
+    "proton": {
+      "vs_nist_75eV": {
+        "I_eV": 75.0,
+        "n_points": 52,
+        "energy_per_u_range_mev": [
+          2.0,
+          500.0
+        ],
+        "max_abs_relative_deviation_ge_2_MeV_u": 0.01835122675216283,
+        "rms_relative_deviation_ge_2_MeV_u": 0.005139855511013902,
+        "n_points_ge_2_MeV_u": 52,
+        "max_abs_relative_deviation_ge_10_MeV_u": 0.0007925629899621089,
+        "rms_relative_deviation_ge_10_MeV_u": 0.0002826859483064968,
+        "n_points_ge_10_MeV_u": 34
+      },
+      "vs_icru90_78eV": {
+        "I_eV": 78.0,
+        "n_points": 20,
+        "energy_per_u_range_mev": [
+          2.0,
+          500.0
+        ],
+        "max_abs_relative_deviation_ge_2_MeV_u": 0.018709382150799314,
+        "rms_relative_deviation_ge_2_MeV_u": 0.005427331392333981,
+        "n_points_ge_2_MeV_u": 20,
+        "max_abs_relative_deviation_ge_10_MeV_u": 0.0007684367737856856,
+        "rms_relative_deviation_ge_10_MeV_u": 0.0003154687196485547,
+        "n_points_ge_10_MeV_u": 14
+      },
+      "icru90_vs_nist_shared_energies": {
+        "n_points": 20,
+        "energy_per_u_range_mev": [
+          2.0,
+          500.0
+        ],
+        "max_abs_relative_deviation_ge_2_MeV_u": 0.010094637223974745,
+        "rms_relative_deviation_ge_2_MeV_u": 0.006454836470400514,
+        "n_points_ge_2_MeV_u": 20,
+        "max_abs_relative_deviation_ge_10_MeV_u": 0.007011393514461006,
+        "rms_relative_deviation_ge_10_MeV_u": 0.005318920246403414,
+        "n_points_ge_10_MeV_u": 14
+      }
+    },
+    "alpha": {
+      "vs_nist_75eV": {
+        "I_eV": 75.0,
+        "n_points": 48,
+        "energy_per_u_range_mev": [
+          2.0,
+          250.0
+        ],
+        "max_abs_relative_deviation_ge_2_MeV_u": 0.007105320142653415,
+        "rms_relative_deviation_ge_2_MeV_u": 0.0027757369873409156,
+        "n_points_ge_2_MeV_u": 48,
+        "max_abs_relative_deviation_ge_10_MeV_u": 0.0020345896013955755,
+        "rms_relative_deviation_ge_10_MeV_u": 0.0011380513959160963,
+        "n_points_ge_10_MeV_u": 35
+      },
+      "vs_icru90_78eV": {
+        "I_eV": 78.0,
+        "n_points": 18,
+        "energy_per_u_range_mev": [
+          2.0,
+          250.0
+        ],
+        "max_abs_relative_deviation_ge_2_MeV_u": 0.0071196493782668124,
+        "rms_relative_deviation_ge_2_MeV_u": 0.0028524868821725976,
+        "n_points_ge_2_MeV_u": 18,
+        "max_abs_relative_deviation_ge_10_MeV_u": 0.001999662564049931,
+        "rms_relative_deviation_ge_10_MeV_u": 0.001142252712021746,
+        "n_points_ge_10_MeV_u": 13
+      },
+      "icru90_vs_nist_shared_energies": {
+        "n_points": 18,
+        "energy_per_u_range_mev": [
+          2.0,
+          250.0
+        ],
+        "max_abs_relative_deviation_ge_2_MeV_u": 0.009839707982859935,
+        "rms_relative_deviation_ge_2_MeV_u": 0.006597886783523079,
+        "n_points_ge_2_MeV_u": 18,
+        "max_abs_relative_deviation_ge_10_MeV_u": 0.007162534435261825,
+        "rms_relative_deviation_ge_10_MeV_u": 0.005579375416328385,
+        "n_points_ge_10_MeV_u": 13
+      }
+    }
+  },
+  "range": {
+    "proton": {
+      "energies_per_u_mev": [
+        100.0,
+        150.0,
+        200.0,
+        250.0
+      ],
+      "max_abs_relative_deviation_bethe75_vs_nist": 0.0007011943882901939,
+      "max_abs_relative_deviation_bethe78_vs_icru90_integral": 0.0017452775878128435,
+      "bethe_78eV_minus_75eV_shift_mm_by_energy_per_u_mev": {
+        "100": 0.4188373717865268,
+        "150": 0.814024806036695,
+        "200": 1.2958688860648238,
+        "250": 1.8482647861347345
+      }
+    },
+    "alpha": {
+      "energies_per_u_mev": [
+        100.0,
+        150.0,
+        200.0
+      ],
+      "max_abs_relative_deviation_bethe75_vs_nist": 0.0010453663007068403,
+      "max_abs_relative_deviation_bethe78_vs_icru90_integral": 0.0006732474308381864,
+      "bethe_78eV_minus_75eV_shift_mm_by_energy_per_u_mev": {
+        "100": 0.41999176017816886,
+        "150": 0.8157760363828181,
+        "200": 1.2980499316723737
+      }
+    }
+  },
+  "i2": {
+    "row": "I2",
+    "role": "regression guard on SEEN values (decision 0038), not evidence",
+    "stopping": {
+      "vs_astar_75eV": {
+        "I_eV": 75.0,
+        "2_to_10_MeV_u": {
+          "band_per_u_mev": [
+            2.0,
+            10.0
+          ],
+          "upper_bound_inclusive": false,
+          "n_points": 13,
+          "energy_per_u_range_mev": [
+            2.0,
+            8.75
+          ],
+          "max_abs_relative_deviation": 0.007105320142653415,
+          "rms_relative_deviation": 0.004996119457275017
+        },
+        "ge_10_MeV_u": {
+          "band_per_u_mev": [
+            10.0,
+            500.0
+          ],
+          "upper_bound_inclusive": true,
+          "n_points": 35,
+          "energy_per_u_range_mev": [
+            10.0,
+            250.0
+          ],
+          "max_abs_relative_deviation": 0.0020345896013955755,
+          "rms_relative_deviation": 0.0011380513959160963
+        }
+      },
+      "vs_icru90_78eV": {
+        "I_eV": 78.0,
+        "2_to_10_MeV_u": {
+          "band_per_u_mev": [
+            2.0,
+            10.0
+          ],
+          "upper_bound_inclusive": false,
+          "n_points": 5,
+          "energy_per_u_range_mev": [
+            2.0,
+            7.5
+          ],
+          "max_abs_relative_deviation": 0.0071196493782668124,
+          "rms_relative_deviation": 0.005089177322079238
+        },
+        "ge_10_MeV_u": {
+          "band_per_u_mev": [
+            10.0,
+            500.0
+          ],
+          "upper_bound_inclusive": true,
+          "n_points": 13,
+          "energy_per_u_range_mev": [
+            10.0,
+            250.0
+          ],
+          "max_abs_relative_deviation": 0.001999662564049931,
+          "rms_relative_deviation": 0.001142252712021746
+        }
+      }
+    },
+    "csda_range": {
+      "energies_per_u_mev": [
+        50.0,
+        100.0,
+        150.0,
+        200.0,
+        250.0
+      ],
+      "construction": "Bethe tables 200 points/decade from 1 MeV/u (constant-S start); ICRU 90 log-log interpolated to 200 points/decade from 1 MeV/u, started at the ASTAR range at 1 MeV/u; ASTAR range log-log interpolated",
+      "vs_astar_75eV": {
+        "max_abs_relative_deviation": 0.0011348624310331124,
+        "energy_per_u_mev_at_max": 250.0
+      },
+      "vs_icru90_integral_78eV": {
+        "max_abs_relative_deviation": 0.0007393587532769086,
+        "energy_per_u_mev_at_max": 250.0
+      },
+      "bethe_78eV_minus_75eV_range_shift_mm_by_energy_per_u_mev": {
+        "50": 0.13372243347088641,
+        "100": 0.41999176017816886,
+        "150": 0.8157760363828181,
+        "200": 1.2980499316723737,
+        "250": 1.85064479130574
+      }
+    },
+    "thresholds": {
+      "stopping_max_abs": {
+        "2_to_10_MeV_u": 0.01,
+        "ge_10_MeV_u": 0.003
+      },
+      "csda_range_max_abs": {
+        "vs_astar_75eV": 0.002,
+        "vs_icru90_integral_78eV": 0.0025
+      }
+    },
+    "gates": {
+      "stopping_vs_astar_75eV_2_to_10_MeV_u_max_abs_le_0.01": true,
+      "stopping_vs_astar_75eV_ge_10_MeV_u_max_abs_le_0.003": true,
+      "stopping_vs_icru90_78eV_2_to_10_MeV_u_max_abs_le_0.01": true,
+      "stopping_vs_icru90_78eV_ge_10_MeV_u_max_abs_le_0.003": true,
+      "csda_range_vs_astar_75eV_max_abs_le_0.002": true,
+      "csda_range_vs_icru90_integral_78eV_max_abs_le_0.0025": true
+    },
+    "pass": true,
+    "i_value_statement": "NIST ASTAR (SRD 124) liquid water uses I = 75 eV (ICRU Report 49); the ionmc default water uses I = 78 eV (ICRU Report 90). Bethe is therefore compared at I = 75 eV with ASTAR and at the default I = 78 eV with ICRU 90 (stopping and integrated CSDA range); the model-only Bethe 78 eV - 75 eV CSDA-range shift at the I2 energies is reported in bethe_78eV_minus_75eV_range_shift_mm_by_energy_per_u_mev."
+  },
+  "provenance": {
+    "ionmc_version": "0.1.0.dev0",
+    "numpy_version": "2.5.3",
+    "code_sha": "7d0e796bddab18e4d89fc896b30ab59f211b82ff",
+    "datasets": {
+      "nist-pstar-water-2005": {
+        "version": "PSTAR 2.0.1 (2005), liquid water (matno 276)",
+        "pinned_sha256": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
+        "cached_sha256": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
+        "retrieved_at": "2026-10-03T18:29:04+00:00"
+      },
+      "nist-astar-water-2005": {
+        "version": "ASTAR 2.0.1 (2005), liquid water (matno 276)",
+        "pinned_sha256": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
+        "cached_sha256": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
+        "retrieved_at": "2026-10-03T18:29:05+00:00"
+      },
+      "geant4-icru90-stopping-11.4.2": {
+        "version": "Geant4 v11.4.2 G4ICRU90StoppingData.cc",
+        "pinned_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+        "cached_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+        "retrieved_at": "2026-10-03T18:29:05+00:00"
+      }
+    },
+    "i_values_eV": {
+      "bethe_vs_nist": 75.0,
+      "bethe_vs_icru90": 78.0
+    }
+  }
+}

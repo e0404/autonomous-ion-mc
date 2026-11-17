@@ -82,13 +82,15 @@ def test_registry_ids_are_frozen_and_append_only() -> None:
         (2, "triton"),
         (3, "helium3"),
         (4, "alpha"),
+        (5, "carbon12"),
+        (6, "oxygen16"),
     ]
     assert species_by_name("nuclear_local").transported is False
     assert species_by_name("nuclear_local").id == 64 < N_SPECIES_SLOTS
     assert species_by_id(0).name == "proton"
-    assert transported_ids() == (0, 1, 2, 3, 4)
+    assert transported_ids() == (0, 1, 2, 3, 4, 5, 6)
     with pytest.raises(ValueError):
-        species_by_name("carbon12")  # not appended yet (V3-009)
+        species_by_name("nitrogen14")  # not appended (V3-009)
     assert species_of_projectile(PROTON).id == 0
 
 
@@ -637,8 +639,108 @@ def test_capability_report_matches_the_enforced_scoring_contract() -> None:
         PIECE_COUNT_NAME, LOCAL_PIECE_COUNT_NAME, EXCLUDED_CHANNEL_NAME
     }  # fmt: skip
     assert t["fail_closed"] and any("secondary" in r for r in t["fail_closed"])
-    assert cap["species"] == ["proton"]
+    assert cap["species"] == ["proton", "alpha", "carbon12", "oxygen16"]
     # the report is JSON-serialisable
+    json.dumps(cap)
+
+
+def test_capability_report_is_species_aware() -> None:
+    """Every registry species with a transport path is either supported (full matrix entry derived
+    from the enforcing objects) or listed as unsupported; ions fail closed for nuclear."""
+    import ionmc
+    from ionmc.config import E_CUT_ION_DEFAULT_MEV_PER_U, ION_DOMAIN_MEV_PER_U, ION_PROJECTILES
+    from ionmc.physics.projectiles import PROTON
+    from ionmc.species import REGISTRY, producible
+
+    cap = ionmc.capabilities()
+    det = cap["species_details"]
+    assert set(det) == set(cap["species"])
+    unsupported = {u["species"] for u in cap["unsupported_species"]}
+    for s in REGISTRY:
+        if s.transported:
+            assert (s.name in det) != (s.name in unsupported), s.name
+    assert unsupported == {"deuteron", "triton", "helium3"}
+    assert det["proton"]["energy_domain"]["unit"].startswith("MeV")
+    assert "supported" in det["proton"]["nuclear"]
+    for proj in ION_PROJECTILES:
+        d = det[proj.name]
+        lo, hi = ION_DOMAIN_MEV_PER_U[proj.name]
+        dom = d["energy_domain"]
+        assert (dom["unit"], dom["min"], dom["max"]) == ("MeV/u", lo, hi)
+        assert d["cutoff"]["e_cut_effective_mev_default"] == E_CUT_ION_DEFAULT_MEV_PER_U * proj.a
+        assert d["nuclear"].startswith("not supported")
+        assert (
+            "exact-Omega" in d["mcs"]["model"]
+            and "fdm_extrapolated" in d["mcs"]["fdm_domain_status"]
+        )
+        assert d["ls_default"] == "off"
+        assert (
+            {(t["species"], t["generation"]) for t in d["tallies"]["producible"]}
+            == set(producible(proj))
+            == {(proj.name, "primary")}
+        )
+        assert d["tallies"]["quantities"] == cap["tallies"]["quantities"]
+    assert {(t["species"], t["generation"]) for t in det["proton"]["tallies"]["producible"]} == set(
+        producible(PROTON)
+    )
+    json.dumps(cap)
+
+
+@pytest.mark.parametrize("nuclear", [False, True])
+def test_capability_report_sections_agree(nuclear: bool) -> None:
+    """Every section of the capability report agrees on the species, for nuclear False and True:
+    the species list, species_roles, species_details, the top-level tallies (proton scope and the
+    per-source matrix), unsupported_species and the nuclear section (Codex REVIEW-d0f41eff)."""
+    import ionmc
+    from ionmc.config import ION_PROJECTILES
+    from ionmc.physics.projectiles import PROTON
+    from ionmc.species import REGISTRY, producible
+
+    cap = ionmc.capabilities(nuclear=nuclear)
+    sources = [PROTON, *ION_PROJECTILES]
+    names = [p.name for p in sources]
+    assert cap["species"] == names == cap["species_roles"]["source"] == list(cap["species_details"])
+    t = cap["tallies"]
+    assert list(t["producible_by_source"]) == names
+
+    def pairs(entries: list[dict[str, str]]) -> set[tuple[str, str]]:
+        return {(e["species"], e["generation"]) for e in entries}
+
+    for proj in sources:
+        expected = set(producible(proj, nuclear=nuclear and proj.z == 1))
+        assert pairs(t["producible_by_source"][proj.name]) == expected, proj.name
+        assert pairs(cap["species_details"][proj.name]["tallies"]["producible"]) == expected
+    # the top-level list is the proton scope, stated and cross-checked
+    assert "proton source" in t["producible_scope"]
+    assert t["producible"] == t["producible_by_source"]["proton"]
+    # secondaries: exactly the generation-'secondary' species of the per-source matrix
+    secondary = {
+        n for proj in sources for n, g in pairs(t["producible_by_source"][proj.name])
+        if g == "secondary"
+    }  # fmt: skip
+    transported = {sp.name for sp in REGISTRY if sp.transported}
+    roles = cap["species_roles"]
+    assert set(roles["producible_secondary"]) == secondary & transported
+    assert set(roles["producible_pseudo"]) == secondary - transported
+    if nuclear:
+        assert set(roles["producible_secondary"]) == {"proton", "deuteron"}
+        assert roles["producible_pseudo"] == ["nuclear_local"]
+        assert pairs(cap["nuclear"]["producible"]) == pairs(t["producible"])
+        assert "secondary" in t["generations"]["accepted"]
+    else:
+        assert roles["producible_secondary"] == roles["producible_pseudo"] == []
+        assert "nuclear" not in cap and t["generations"]["rejected"] == ["secondary"]
+    # unsupported species: every transported non-source species, and its secondary status is
+    # the one of species_roles (deuteron is producible with nuclear=True, never unproducible)
+    unsupported = {u["species"]: u for u in cap["unsupported_species"]}
+    assert set(unsupported) == transported - set(names) == {"deuteron", "triton", "helium3"}
+    for name, u in unsupported.items():
+        assert u["as_source"].startswith("not supported")
+        producible_here = name in roles["producible_secondary"]
+        assert u["as_secondary"].startswith("producible" if producible_here else "not producible")
+    assert unsupported["deuteron"]["as_secondary"].startswith(
+        "producible" if nuclear else "not producible"
+    )
     json.dumps(cap)
 
 

@@ -1,0 +1,57 @@
+{
+ "bundle": "v5ss-carbon-water-150mevu-case25-part1",
+ "bundle_kind": "part",
+ "case": 25,
+ "chronology": {
+  "ancestry": true,
+  "review_before_start": true,
+  "review_finished_at": "2026-11-13T06:10:46.335228+00:00",
+  "review_sha256_at_code_sha": "8836b102174408980679cf679ace280cd7d2ac5044b61ab8231dff6d4f7e7f52",
+  "valid": true
+ },
+ "code_sha": "a508afd8802980a8dcf4996f961f2d4bc542d285",
+ "evaluator": {
+  "committed_inputs": {
+   "infrastructure/keys/trusted_attestation_keys.json": "31f6a82c3b0d0379c9ce32d3db9c83cb1c07825765ab42dcdfa334fc459337b8",
+   "validation/plans/v3-008-acceptance.md": "06c093da2c2aa360b5359a0e29f847276aa3dcada10db7432fd64265eb941f90",
+   "validation/reference_cases/topas/v5ss-frozen-manifest.json": "fc03285668ef5f9e6a8daa950a143a12883f89e7035e8c2a5065ad5b13dab13f",
+   "validation/results/transport/v8-ss/ss-seal-review.json": "8836b102174408980679cf679ace280cd7d2ac5044b61ab8231dff6d4f7e7f52",
+   "validation/results/transport/v8-ss/topas-runs/REF-98e6160303a4ec989443-732245e3/artifacts.json": "32c44d819e0729fd804a2e6748179d84e1aaf22a49d533bac6e87fc164354391",
+   "validation/results/transport/v8-ss/topas-runs/REF-98e6160303a4ec989443-732245e3/record.json": "260e26c4f7cf145cede47ff5547e75eac7263bc34e54100946ee67390d0c7d97"
+  },
+  "head_sha": "d03ce6cb67f72a9b5ab721ee196cd7aa111d97f5"
+ },
+ "files_sha256": {
+  "request.json": "b58615c5e4d1ef58628e3da703794d9e089ea2e62c83e0cf90dd5a1216ebd1d4",
+  "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout.txt": "1f2dc6767940994560d10b036493fe3cd127b4818c17883b66f135e8da8cb495",
+  "work/ss_exit.header": "964df0e348b76d94460e3c169750be32ea88fcad8f67f789a9579639c81a1472",
+  "work/ss_exit.phsp": "da6acc864d49961f4c683e9aef6266c2cbec57260e9ae63f359db2e43aef7eb9"
+ },
+ "generated_at": "2026-11-13T11:12:17.465233+00:00",
+ "histories": 30000,
+ "msc_blocks_for": [],
+ "part": 1,
+ "primaries": {
+  "deficit": 1,
+  "original_histories": 30000,
+  "scored": 29999
+ },
+ "problems": [],
+ "reference_started": "2026-11-13T08:14:17.837964+00:00",
+ "registered_msc_entry": true,
+ "run_id": "REF-98e6160303a4ec989443-732245e3",
+ "schema": "ionmc-v8-ss-check-run-1",
+ "seconds": 645.6803147249884,
+ "seeds": [
+  20619125
+ ],
+ "ss_seal_review_id": "REVIEW-5d9e8df442e94669aef5fe609794b608",
+ "ss_seal_sha": "7fe6ab1d7b7eb18ab377156e0551057264fba40b",
+ "trust_file": {
+  "head_sha": "d03ce6cb67f72a9b5ab721ee196cd7aa111d97f5",
+  "path": "infrastructure/keys/trusted_attestation_keys.json",
+  "sha256": "31f6a82c3b0d0379c9ce32d3db9c83cb1c07825765ab42dcdfa334fc459337b8"
+ },
+ "verdict": "VALID"
+}

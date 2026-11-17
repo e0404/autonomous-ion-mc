@@ -1,0 +1,483 @@
+{
+ "schema": "ionmc-v8r2-sample-seal-heldout-1",
+ "task_id": "V3-008",
+ "revision": 2,
+ "implementation_sha": "f5f3a701a06cef29753bfea8fbfbc0100a3a5a5d",
+ "suite": "lv8",
+ "backend": "warp-cpu",
+ "single_process": true,
+ "seed_formula": "20621004 + 100 * (29 + case) + k, k = 1..n(case) (re-run base, amendment R2-STOP3)",
+ "seed_base": 20621004,
+ "npz_subdir": "r2-samples-heldout",
+ "end_of_range_model_effective": "continuous_residual_v1 (PhysicsOptions default for z >= 2 at the implementation SHA; decision 0043 section 4 amendment)",
+ "amendment": "R2-STOP3 (validation/plans/v3-008-acceptance.md); re-run base declared there before use",
+ "chunk_plan": {
+  "n": {
+   "10": 4,
+   "11": 4,
+   "12": 5
+  },
+  "scale": {
+   "10": "0.25",
+   "11": "0.25",
+   "12": "0.2"
+  }
+ },
+ "chunks": [
+  {
+   "case": 10,
+   "k": 1,
+   "seed": 20624905,
+   "r_index": 39,
+   "histories": 250000,
+   "scale": "0.25",
+   "run_id": "RUN-20261111T032108Z-0f2c091b",
+   "run_started_at": "2026-11-11T03:21:10.170834+00:00",
+   "run_finished_at": "2026-11-11T03:41:29.568095+00:00",
+   "output_manifest_sha256": "3528ed1d03cb1f9fdc00b6d2c5833d5895e7ca88d4ec078e52dc9220bd671604",
+   "wrapper_stdout_sha256": "4e827d352c0473bbde8ffb34b8eeb614cdc72108e88787b7ff51a47383ad65ae",
+   "npz": "ionmc-case10-k1.npz",
+   "npz_sha256": "b426cc28c9ac21a8ff05c9e674f573c31d2243fb87d7ca808d989da748796e5e",
+   "npz_bytes": 6994301,
+   "step_stdout_sha256": "09593be39c97fe4a302f850e68d6cf13bbb3920b58452ff393a8c6bdf3f929ff",
+   "wall_s": 1217.1250988229986,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T03:41:29.586493+00:00",
+    "payload_sha256": "fceb52f604417f51384656a572bd3caff4d9ac2411b30cdab0bae0b5d2da824c",
+    "signature": "9f316df0cc66c06e153a91ba615c950ac7ac995bef97fb6ba0e7b543048d954a2a92f32605649fed7e5441e87ee893384ea3c5e746581fdb0c2376b028f5c90f"
+   }
+  },
+  {
+   "case": 10,
+   "k": 2,
+   "seed": 20624906,
+   "r_index": 39,
+   "histories": 250000,
+   "scale": "0.25",
+   "run_id": "RUN-20261111T034144Z-3d718129",
+   "run_started_at": "2026-11-11T03:41:46.151760+00:00",
+   "run_finished_at": "2026-11-11T04:01:59.736569+00:00",
+   "output_manifest_sha256": "ae203269a5864a0d7c63cb6c2c18e1cb72fde21db9c7467c9e0279272c2ef653",
+   "wrapper_stdout_sha256": "7e676f8422cb683225333f79587bdd97d9746df9d124ca03b8dcf6ed68acf206",
+   "npz": "ionmc-case10-k2.npz",
+   "npz_sha256": "2f031a8268aa4ce24aa5d34c2cd8c4884e765f7f0e0acfe093883a675eb0e3c0",
+   "npz_bytes": 6975158,
+   "step_stdout_sha256": "6ce6673b51ca3e39d6249470adb580aa67abdfab1f1e4d2c2a0ccca80d83238a",
+   "wall_s": 1211.350381045002,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T04:01:59.756080+00:00",
+    "payload_sha256": "00e3f9f6b7c7b423baa4599871d7a6788f096b42ab455cc7734f32718d88ac9a",
+    "signature": "f6e8b4757f48d1a94ed57035afc897b8c749daee3ee383195cfe3b4e714a79e19b553823ad32edf68bc04607a44a906adb3065fdb43790c8bd56f4108d32450c"
+   }
+  },
+  {
+   "case": 10,
+   "k": 3,
+   "seed": 20624907,
+   "r_index": 39,
+   "histories": 250000,
+   "scale": "0.25",
+   "run_id": "RUN-20261111T040210Z-bed1ad5f",
+   "run_started_at": "2026-11-11T04:02:12.318458+00:00",
+   "run_finished_at": "2026-11-11T04:22:24.710025+00:00",
+   "output_manifest_sha256": "d8ef15a2142423fba1500913afd8c2852b322536be2a1d88499c417bf910e122",
+   "wrapper_stdout_sha256": "e993d854e688f3973b495157bc956ef4f8cef65720ae13ee3b7492b3543512d8",
+   "npz": "ionmc-case10-k3.npz",
+   "npz_sha256": "618b6e25653ffe582ccaf2e2d18942d7c2667d1768bc81115aba1eb4218c9729",
+   "npz_bytes": 6967760,
+   "step_stdout_sha256": "81a33e8832952e35cc5bc443f514e608a7d362133b02a6d42c3110b14232c6e1",
+   "wall_s": 1210.1342879860022,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T04:22:24.731457+00:00",
+    "payload_sha256": "9604a9f193963cc5f459bbf306fdfedbaf39d7a16aacf1a17e1ecd652f8695f7",
+    "signature": "a758cf82a29301d68c56ed22f464ddab806c62288cf139cc3e1ccdbb5bea4648c3cbedcde3da8e8424b772b2535954fd511e390b5459eafc1a88cd0519d31308"
+   }
+  },
+  {
+   "case": 10,
+   "k": 4,
+   "seed": 20624908,
+   "r_index": 39,
+   "histories": 250000,
+   "scale": "0.25",
+   "run_id": "RUN-20261111T042235Z-eb5e4f67",
+   "run_started_at": "2026-11-11T04:22:36.769347+00:00",
+   "run_finished_at": "2026-11-11T04:42:51.926283+00:00",
+   "output_manifest_sha256": "a59d517103b0bbc56609eba796b8cc61e28d9bbaaccd5bf1b275093c4192b54c",
+   "wrapper_stdout_sha256": "6b137149d0c59a03c6f45af237a51c817fac4801600088ce8f609858576098d3",
+   "npz": "ionmc-case10-k4.npz",
+   "npz_sha256": "f5baee00ea8a570cd34efa6fbe00324e064dc2329abb2dcd3bce5dfae5ee23bf",
+   "npz_bytes": 7010317,
+   "step_stdout_sha256": "8a200b620928547bb666042773aae8cb06a87db0191218cd0a94fa36e6f9b3ce",
+   "wall_s": 1212.9301368320012,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T04:42:51.946257+00:00",
+    "payload_sha256": "7e51cc177f33291acb7b7cb8ed116b9abe996fa9274dff027aab15352dfa74b7",
+    "signature": "8b82f37ae4e7ff88acc8d80988d24026188c823eb117b2fc43bc14ecb849316a7c1a77cbfadfc763ff3cb25e8033e97c4b4d39d9fffdf44159d420b5f204900e"
+   }
+  },
+  {
+   "case": 11,
+   "k": 1,
+   "seed": 20625005,
+   "r_index": 40,
+   "histories": 250000,
+   "scale": "0.25",
+   "run_id": "RUN-20261111T044303Z-10ad7312",
+   "run_started_at": "2026-11-11T04:43:04.619127+00:00",
+   "run_finished_at": "2026-11-11T05:04:21.270450+00:00",
+   "output_manifest_sha256": "a383f81b08a592dea57723c6ae453234bda930ab3897126a676e0ffb2c5b660f",
+   "wrapper_stdout_sha256": "6595f71fb5be0c6289ebe66e7ffadf4f12803df05109c0d0af6c39fbb72d76d9",
+   "npz": "ionmc-case11-k1.npz",
+   "npz_sha256": "9500a67bc11fc9a31be64ea654c9c7582ca0d858e66567cd55233c2909572196",
+   "npz_bytes": 2560309,
+   "step_stdout_sha256": "2bb12a320e8e79f4ae687b4c58dca872bd83b873e48bee439cddd4f800aba240",
+   "wall_s": 1275.0136956170027,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T05:04:21.285913+00:00",
+    "payload_sha256": "16243cb36700c886bef0ba7622a3d2a4f70bfbe797312769a62de728b97f0f5e",
+    "signature": "d15d3548be3d5b85258d6e1adb10b1782bf95f5a1ee1a65f4aea8e23d449a0d61c2fdabd0b5275ab2be78395af29acbc45163465287fd3f0582d4f3b676bb707"
+   }
+  },
+  {
+   "case": 11,
+   "k": 2,
+   "seed": 20625006,
+   "r_index": 40,
+   "histories": 250000,
+   "scale": "0.25",
+   "run_id": "RUN-20261111T050431Z-9d8383b2",
+   "run_started_at": "2026-11-11T05:04:33.373119+00:00",
+   "run_finished_at": "2026-11-11T05:25:46.852241+00:00",
+   "output_manifest_sha256": "bd1f5eebbb87b0e716e7205ef81824b4747dd7efe9b6d48810a19e682c47a0b3",
+   "wrapper_stdout_sha256": "4e67341ec08ad43c0286f57b18a9f37248072b92aaa77535555e9f46faf48c5d",
+   "npz": "ionmc-case11-k2.npz",
+   "npz_sha256": "03d0340cd70406921b22e29babb5d692cad383b74d82206b005663df936fa24e",
+   "npz_bytes": 2556123,
+   "step_stdout_sha256": "5e2120d128d9b5c3f23bc2aa16adab5d19576b15e67b47cac587fdf40d946672",
+   "wall_s": 1271.8645587049978,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T05:25:46.867875+00:00",
+    "payload_sha256": "d3ad54125e427a54118c1eef97dc6aa490f9c694586ca4bcafcc3459ade8dbb3",
+    "signature": "fd26fb7be4ea8981fe12a94cf486a39f53152ed835320acddbecbf094130392a4a0f9fbc7b0669752fc1857294b1a3a878e66191ca57b4da8a6a3fe4fc15510b"
+   }
+  },
+  {
+   "case": 11,
+   "k": 3,
+   "seed": 20625007,
+   "r_index": 40,
+   "histories": 250000,
+   "scale": "0.25",
+   "run_id": "RUN-20261111T052557Z-6ca8729d",
+   "run_started_at": "2026-11-11T05:25:58.821985+00:00",
+   "run_finished_at": "2026-11-11T05:47:19.581306+00:00",
+   "output_manifest_sha256": "048d6b055f8f516da5ec1ef3f97bd39b3b7bd3c391306d4fd76e04aab9714dd5",
+   "wrapper_stdout_sha256": "d43c07342d55dfb041162a104d15d7060b42d2deceb96bc15c66ded79d65ada4",
+   "npz": "ionmc-case11-k3.npz",
+   "npz_sha256": "a0297a2f797b5cc184c6f735589035e6a6a156928befbd28439b201f09a227d0",
+   "npz_bytes": 2562909,
+   "step_stdout_sha256": "487b33d2a643b33d3ac4d531c81ad67d02af3196ff14abbb6ed39d86c752e5f6",
+   "wall_s": 1279.1633556529996,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T05:47:19.596394+00:00",
+    "payload_sha256": "938bcc342e5c783e4e076cd5c8c2e27a45fa21d04965f327abcd8634b9796dea",
+    "signature": "f8febfc20e3b15604362ebecd81c406b10fb6ccdae50ee516ff7fdd7b259938ba3b2cdf24a89f7bda73ebc62a1453a747a976dab858beff0c58c6d4bb005130f"
+   }
+  },
+  {
+   "case": 11,
+   "k": 4,
+   "seed": 20625008,
+   "r_index": 40,
+   "histories": 250000,
+   "scale": "0.25",
+   "run_id": "RUN-20261111T054739Z-333f15dd",
+   "run_started_at": "2026-11-11T05:47:41.034645+00:00",
+   "run_finished_at": "2026-11-11T06:08:57.343831+00:00",
+   "output_manifest_sha256": "5eac8853a9b4ca91dc715af753ff5af0a32f136b8e26e13e3346844e94c351cd",
+   "wrapper_stdout_sha256": "486f0723384f069a85a3e3f4444c3ab177753c649bae1e32604d0abe4464afae",
+   "npz": "ionmc-case11-k4.npz",
+   "npz_sha256": "318835fa50fc1bc909f552a10b9a60fe1af1ba4a3e0ee81dd41c3535c6ae507b",
+   "npz_bytes": 2566096,
+   "step_stdout_sha256": "1dc323c7fe3a2aa18a6d29bc5afc98d53d9d2eb18a67f41f590855a6ef3a4f22",
+   "wall_s": 1274.7320362809987,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T06:08:57.359559+00:00",
+    "payload_sha256": "4085a09e210f442a5a424a3c10567c3f6385b8e658bf58ae668ededbca729683",
+    "signature": "92d872bfcf7872b3da103a563dec808194ca8e62035e76c5d04236c066ccee050c4c14248f976702cc407aa1393ba362b2279b91416f57572d992f9244801801"
+   }
+  },
+  {
+   "case": 12,
+   "k": 1,
+   "seed": 20625105,
+   "r_index": 41,
+   "histories": 200000,
+   "scale": "0.2",
+   "run_id": "RUN-20261111T060908Z-fa584e14",
+   "run_started_at": "2026-11-11T06:09:09.646126+00:00",
+   "run_finished_at": "2026-11-11T06:28:35.786234+00:00",
+   "output_manifest_sha256": "13e52dae3d96a2e5c8cdd31d3db17b7534a98aa9f736cae530653e7c1bfc208b",
+   "wrapper_stdout_sha256": "6527c092523b81257cabe14e3bd6dd093b79aa6b54a9551251e063a5f522c4fd",
+   "npz": "ionmc-case12-k1.npz",
+   "npz_sha256": "11d064ea4653eb61d3f1311e84945216c7d681f41ab69dac251ec8938e6a7502",
+   "npz_bytes": 3027282,
+   "step_stdout_sha256": "d23305ee3a1f8c1e797779298220eb0cbd233ddaaac182926718000e1b66a7aa",
+   "wall_s": 1164.5290053019999,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T06:28:35.802375+00:00",
+    "payload_sha256": "4f9603dcce3e6e74a1ba88bdfc6254070c87d212cddaa4f29a0cf8d0ded0d718",
+    "signature": "baad62105096c83093781f1081dfcc0b9475bb0938b966d2b4719bcda2ab0cbe4b61bed877440931fb98af89e2f3ebf7b306b22bc91f7a88fec518a95b6fff0a"
+   }
+  },
+  {
+   "case": 12,
+   "k": 2,
+   "seed": 20625106,
+   "r_index": 41,
+   "histories": 200000,
+   "scale": "0.2",
+   "run_id": "RUN-20261111T062857Z-6b98f3f0",
+   "run_started_at": "2026-11-11T06:28:58.455700+00:00",
+   "run_finished_at": "2026-11-11T06:48:20.105651+00:00",
+   "output_manifest_sha256": "4ac6ee7681bb105f76aad9fbaad45b7c94345729d9f7e4156a9ad1e74fe875b1",
+   "wrapper_stdout_sha256": "6da5b74c097a82ac5f2e91795dabfc065a777a990a0374e6044257214aa42dcf",
+   "npz": "ionmc-case12-k2.npz",
+   "npz_sha256": "e389eef9dd7d6755029d5c04312ec4da4808ecfaa4ae98d19d2fe7d7c0b3ea02",
+   "npz_bytes": 3031524,
+   "step_stdout_sha256": "61158f49e944ac806a174847e85a39b491e516fc1845a42eb158ddb410944251",
+   "wall_s": 1160.0465993009966,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T06:48:20.121540+00:00",
+    "payload_sha256": "3137f010e2f5477a1fce65ec6cd725810f9468862336b90522ea3cd583a35149",
+    "signature": "0680fef1bd0c5685cf4930cfdcbef71d5a5e7fb218088935ade2e7a1e94195d11be71678cd3980036d7a73600442b9559157fc3b605ca0b6c38346ffcafc7f0a"
+   }
+  },
+  {
+   "case": 12,
+   "k": 3,
+   "seed": 20625107,
+   "r_index": 41,
+   "histories": 200000,
+   "scale": "0.2",
+   "run_id": "RUN-20261111T064831Z-daec24ca",
+   "run_started_at": "2026-11-11T06:48:32.454214+00:00",
+   "run_finished_at": "2026-11-11T07:07:54.543736+00:00",
+   "output_manifest_sha256": "1a960fd133bdcb380905616a7f4be450d53670933312b00e2dec7d052b47bb79",
+   "wrapper_stdout_sha256": "6cd3c8d36c5bbd65717599ce937fb11fed257538fdc3e6ba66fd08d856f9b7e7",
+   "npz": "ionmc-case12-k3.npz",
+   "npz_sha256": "ec64206ce53b5b8214308036701a40627674847492bb0b721a191a6c296e3a53",
+   "npz_bytes": 3025215,
+   "step_stdout_sha256": "96e4af8781ccaeb5b86e3a4fbabb069c86faaba258a6c68d2b15e6c9dccf1bc6",
+   "wall_s": 1160.4204168809993,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T07:07:54.559480+00:00",
+    "payload_sha256": "f7741f0109564636da897abbb1613b9c73bf7ec54a934090234f06df6373825b",
+    "signature": "7cbdeeaf0f1a5671a193eef1c653270673b3024bf65f96333e96ab0391a24d80aaf3e0d8ca659e126f86aefd92938027f63eb722d58040af641b3e57ef97dd04"
+   }
+  },
+  {
+   "case": 12,
+   "k": 4,
+   "seed": 20625108,
+   "r_index": 41,
+   "histories": 200000,
+   "scale": "0.2",
+   "run_id": "RUN-20261111T070805Z-71ec22bc",
+   "run_started_at": "2026-11-11T07:08:06.989854+00:00",
+   "run_finished_at": "2026-11-11T07:27:28.730286+00:00",
+   "output_manifest_sha256": "8a34836086c47023f63b35cd4ff36b466a40e19304386f6b90fa2089ff710078",
+   "wrapper_stdout_sha256": "5418eb32563b52e96535df35bedf86a5c95c2b7d998423f8acc3f6cb76490964",
+   "npz": "ionmc-case12-k4.npz",
+   "npz_sha256": "3755d7d398b907dc27be0750b3ada666f361577480fe207e71a7728a4fefe1ea",
+   "npz_bytes": 3021983,
+   "step_stdout_sha256": "fb7c8e71d41dadfe34bfa71ddcd13f779276474e27187d57f4cca4d4e0201489",
+   "wall_s": 1160.1111602389974,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T07:27:28.746339+00:00",
+    "payload_sha256": "f8791a657c5d0779c91392652d0e11ce4a62f2a41138625e890bbeab9e688ffb",
+    "signature": "02fcbfa8c3b9cb14cc931e1169a60cadea379b3babc2bdaf07e6735c75db48f4b83b325337ce244d575613be8b002c52e491ea0084f1bdb26e39b5f3f539ac05"
+   }
+  },
+  {
+   "case": 12,
+   "k": 5,
+   "seed": 20625109,
+   "r_index": 41,
+   "histories": 200000,
+   "scale": "0.2",
+   "run_id": "RUN-20261111T072739Z-2ca81843",
+   "run_started_at": "2026-11-11T07:27:40.909152+00:00",
+   "run_finished_at": "2026-11-11T07:47:04.117767+00:00",
+   "output_manifest_sha256": "b93b7c3bb1f40d8840355decdfcb98542328e9f7bcac95f8b0702f72f9475641",
+   "wrapper_stdout_sha256": "a17af0aed8ba02efefc2e38cf18d551c2f01ab502bf3babc91175050a1cc0e6e",
+   "npz": "ionmc-case12-k5.npz",
+   "npz_sha256": "992a0064c5d53c8992354426729f7aa81204c41bab99b7061a5ff18ab449e1b8",
+   "npz_bytes": 3027263,
+   "step_stdout_sha256": "1445508b13b6bdab4d82a0a85ae24e688a04b54efdf2396b0ec3ecdfc1daf164",
+   "wall_s": 1161.559614881,
+   "counters_all_zero": true,
+   "host_runner_attestation": {
+    "schema": "ionmc-attestation-1",
+    "alg": "ed25519",
+    "signer": "host-runner",
+    "key_id": "4d02f521f3fb9344",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "signed_at_utc": "2026-11-11T07:47:04.134087+00:00",
+    "payload_sha256": "09c980ddc3aed286324d79223a11d828757ae8acf4cd9d90f394d20bfe17016a",
+    "signature": "03d761a062512ca90afdd6794bede0ffc6d155057d092c739acf5e6d6f4ad4901b589a663e6e653a545143cfff716f6acdb71e02f88b9051a9eab7089c10e905"
+   }
+  }
+ ],
+ "chunk_count": 13,
+ "host_runs": [
+  {
+   "run_id": "RUN-20261111T032108Z-0f2c091b",
+   "output_manifest_sha256": "3528ed1d03cb1f9fdc00b6d2c5833d5895e7ca88d4ec078e52dc9220bd671604"
+  },
+  {
+   "run_id": "RUN-20261111T034144Z-3d718129",
+   "output_manifest_sha256": "ae203269a5864a0d7c63cb6c2c18e1cb72fde21db9c7467c9e0279272c2ef653"
+  },
+  {
+   "run_id": "RUN-20261111T040210Z-bed1ad5f",
+   "output_manifest_sha256": "d8ef15a2142423fba1500913afd8c2852b322536be2a1d88499c417bf910e122"
+  },
+  {
+   "run_id": "RUN-20261111T042235Z-eb5e4f67",
+   "output_manifest_sha256": "a59d517103b0bbc56609eba796b8cc61e28d9bbaaccd5bf1b275093c4192b54c"
+  },
+  {
+   "run_id": "RUN-20261111T044303Z-10ad7312",
+   "output_manifest_sha256": "a383f81b08a592dea57723c6ae453234bda930ab3897126a676e0ffb2c5b660f"
+  },
+  {
+   "run_id": "RUN-20261111T050431Z-9d8383b2",
+   "output_manifest_sha256": "bd1f5eebbb87b0e716e7205ef81824b4747dd7efe9b6d48810a19e682c47a0b3"
+  },
+  {
+   "run_id": "RUN-20261111T052557Z-6ca8729d",
+   "output_manifest_sha256": "048d6b055f8f516da5ec1ef3f97bd39b3b7bd3c391306d4fd76e04aab9714dd5"
+  },
+  {
+   "run_id": "RUN-20261111T054739Z-333f15dd",
+   "output_manifest_sha256": "5eac8853a9b4ca91dc715af753ff5af0a32f136b8e26e13e3346844e94c351cd"
+  },
+  {
+   "run_id": "RUN-20261111T060908Z-fa584e14",
+   "output_manifest_sha256": "13e52dae3d96a2e5c8cdd31d3db17b7534a98aa9f736cae530653e7c1bfc208b"
+  },
+  {
+   "run_id": "RUN-20261111T062857Z-6b98f3f0",
+   "output_manifest_sha256": "4ac6ee7681bb105f76aad9fbaad45b7c94345729d9f7e4156a9ad1e74fe875b1"
+  },
+  {
+   "run_id": "RUN-20261111T064831Z-daec24ca",
+   "output_manifest_sha256": "1a960fd133bdcb380905616a7f4be450d53670933312b00e2dec7d052b47bb79"
+  },
+  {
+   "run_id": "RUN-20261111T070805Z-71ec22bc",
+   "output_manifest_sha256": "8a34836086c47023f63b35cd4ff36b466a40e19304386f6b90fa2089ff710078"
+  },
+  {
+   "run_id": "RUN-20261111T072739Z-2ca81843",
+   "output_manifest_sha256": "b93b7c3bb1f40d8840355decdfcb98542328e9f7bcac95f8b0702f72f9475641"
+  }
+ ],
+ "per_case": {
+  "10": {
+   "histories": 1000000,
+   "wall_s": 4851.5
+  },
+  "11": {
+   "histories": 1000000,
+   "wall_s": 5100.8
+  },
+  "12": {
+   "histories": 1000000,
+   "wall_s": 5806.7
+  }
+ },
+ "total_wall_h": 4.38,
+ "total_npz_bytes": 53326240,
+ "superseded_runs": [],
+ "failed_runs": [],
+ "local_verification": {
+  "problems": [],
+  "ok": true
+ },
+ "npz_location": "validation/generated/<run_id>/r2-samples-heldout/case<c>/ in the task worktree and the host-run store (not in Git)"
+}

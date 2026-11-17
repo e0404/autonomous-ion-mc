@@ -321,7 +321,8 @@ def test_diagnostics_trace_and_end_records(make_config: MakeConfig) -> None:
 
 def test_capabilities_report() -> None:
     cap = capabilities()
-    assert cap["species"] == ["proton"] and cap["physics"]["nuclear"] is False
+    assert cap["species"] == ["proton", "alpha", "carbon12", "oxygen16"]
+    assert cap["physics"]["nuclear"] is False
     assert cap["backends"]["python"].startswith("available")
     assert cap["backends"]["warp-cpu"].startswith("available")
     assert cap["chunk_histories"]["default"] == 2**18

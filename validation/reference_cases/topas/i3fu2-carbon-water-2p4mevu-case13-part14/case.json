@@ -1,0 +1,39 @@
+{
+  "input": "input.txt",
+  "physics": [
+    "Geant4_Modular (OpenTOPAS 4.3 / Geant4 11.4.2), EM ONLY: sv:Ph/Default/Modules = 1 \"g4em-standard_opt4\" (physics lines of the TD-EM bundles); no hadronic, ion, elastic or decay modules"
+  ],
+  "source": "GenericIon(6,12) (carbon 2.4 MeV/u), BeamEnergy 28.8 MeV total kinetic energy (P4 convention), monoenergetic (BeamEnergySpread 0), zero-size, zero-divergence pencil beam from z=-0.001 mm along +z at the face centre",
+  "geometry": "G4_WATER slab 120 x 120 x 0.00208 mm (x,y centred on the beam axis; z from 0 to 0.00208 mm) in a vacuum world 400 x 400 x 800 mm; slab t fine-step, t from the ionmc default Bethe model (78 eV) for Delta E / E = 3 % at E0, 3 significant digits; fine-step: MaxStepSize = 0.0515 t = 0.10712 um",
+  "materials": "G4_WATER (Geant4 NIST material, I=78 eV, density 1.0 g/cm3)",
+  "cuts": "CutForAllParticles = 0.05 mm; CutForElectron = 1 km (no delta electrons); EMRangeMax = 10 GeV; Ts/MaxStepNumber = 1e7",
+  "histories": 50000,
+  "seeds": [
+    20628613
+  ],
+  "scorers": [
+    "PhaseSpace SSExit at Water/ZPlusSurface, primaries, outgoing, ASCII",
+    "EDep: EnergyDeposit in Water, 1x1x1 bin; Report Sum, Standard_Deviation; csv"
+  ],
+  "units": "phase space: cm; direction cosines; kinetic energy MeV (total per ion); EDep: MeV, run total (divide by histories)",
+  "rationale": "V3-008 amendment I3-FU-1 step 2 (plan validation/plans/v3-008-acceptance.md): pre-declared repeat (part 14 = part 6 + 8, same configuration) of the thin-slab mean energy loss of carbon at E0 = 2.4 MeV/u in G4_WATER, case 13 (slab t fine-step = 0.00208 mm, fluctuations on), seed 20627200 + 100*14 + 13 = 20628613; used only if the original run or its point is invalid; diagnostic, no validation claim",
+  "expected_outputs": [
+    "ss_exit.header",
+    "ss_exit.phsp",
+    "edep.csv"
+  ],
+  "arguments": [],
+  "i3fu2": {
+    "case": 13,
+    "part": 14,
+    "ion": "carbon",
+    "z": 6,
+    "a": 12,
+    "e0_per_u_mev": 2.4,
+    "slab_mm": 0.00208,
+    "thickness_factor": 0.03,
+    "kind": "repeat",
+    "fluctuations": true,
+    "max_step_um": 0.10712
+  }
+}

@@ -1,0 +1,21 @@
+{
+ "_provenance": "copied verbatim by the orchestrator from the codex-worker inspect_codex_review result of the V5-SS seal commit 7fe6ab1d (2026-11-13); the review service record is authoritative",
+ "base_sha": "930b7a9c1601b0a9bff95748bcd22982ae8c8193",
+ "experiment_id": "experiment-v3",
+ "finished_at": "2026-11-13T06:10:46.335228+00:00",
+ "head_sha": "7fe6ab1d7b7eb18ab377156e0551057264fba40b",
+ "model": "gpt-5.6-sol",
+ "provider": "openai",
+ "report": {
+  "findings": [],
+  "head_sha": "7fe6ab1d7b7eb18ab377156e0551057264fba40b",
+  "summary": "The prior important provenance finding is resolved: signed output-manifest digests now bind each combine run\u2019s step document to the partials it actually consumed, and tests cross-check those partials against signed shard records and committed summaries. The intervention status inconsistency is also fixed. The new V5-SS seal consistently binds eight pre-TOPAS ionmc samples to reviewed invocations and signed host records, with frozen windows, seeds, and implementation SHA. No unresolved blocking or important issues were found.",
+  "verdict": "pass"
+ },
+ "report_sha256": "def7ef1aee83b5f96ac8e6877123b98fccde613522943068ba5fa5829b6421d7",
+ "review_id": "REVIEW-5d9e8df442e94669aef5fe609794b608",
+ "started_at": "2026-11-13T06:07:07.034383+00:00",
+ "status": "passed",
+ "task_id": "V3-008",
+ "tool": "codex exec"
+}
