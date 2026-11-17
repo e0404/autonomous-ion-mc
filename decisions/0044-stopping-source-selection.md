@@ -219,7 +219,10 @@ domain, data pins, licence role and evidence status.
 `EffectiveConfig.summary()["stopping"]` (always present, outside the table hash):
 `model_id_requested`, `model_id_effective`, `version`, `kind`, `spec_sha256`, `options` (complete, incl.
 `ls_requested/ls_effective` and the I-value rule), `interpolation`, `range_construction`, `range_start`, `domain`,
-`data` (each pin with `role_in_this_run = "construction"`), `content_sha256` of the parsed arrays, `evidence_at_run` (the evidence records of the effective spec at run time),
+`data_declared` (every pin of the spec) and `data_used` (only the pins actually read for the resolved projectile
+and material tables of this run, each with `role_in_this_run = "construction"` and the table it built; a proton
+run of `nist-pstar-astar-water-2005` lists PSTAR only, an alpha run ASTAR only; Codex REVIEW-c661e903 finding 1),
+`content_sha256` of the parsed arrays, `evidence_at_run` (the evidence records of the effective spec at run time),
 `decision`, `mcs_proton_path_stopping` (ion runs), `circular_rows` (dataset ids also used as evaluation references),
 `selected_by` (`"stopping_model"` or `"stopping-object"`).
 - Table metadata: models registered before this decision (`bethe-ionmc-v1` and its LS variants,
@@ -337,6 +340,12 @@ produced and committed before any TOPAS run (plan §D).
   in plan v3-008 §C. M4: V-C1-A results committed whatever the outcome. M5: the V2-OUTPUT ledger row reworded
   (identity block only; no writer). M6: the ledger's "pending the remaining gates" wording marked as superseded by
   the integration note.
+- **Codex REVIEW-c661e903895c44eb9b7d41fb7d95f404 at 625ddab0 (changes_required, 2 important).** (1) Every pin of a
+  spec was marked construction in the persisted block, so a proton run of the combined NIST model would have
+  reported ASTAR as construction data → `data_declared` vs `data_used` (section 4). (2) The seal pinned the
+  evaluator, its dependencies and the TOPAS bundles but the stated evaluator gates did not verify them → the
+  evaluator runs from the sealed closure, verifies its own bytes, every manifest member and each executed TOPAS
+  run's input hashes against the seal, and fails closed (plan §D).
 - **Second pass of the scientific review (verification of 92cf8929):** all findings above and both Codex findings
   RESOLVED; new findings N1–N5 (plan section H) applied in the plan: the V-C2-D prediction compares telescoped end
   points Z_m = mean(z_end + R_m(E_end)) with a per-model round-trip gate (N1), V-C2-D uses seed r_index 15 (N2), the

@@ -192,7 +192,15 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
    tests on synthetic inputs), the three TOPAS bundles (parts 0–7, 19) with their hashes, the ionmc sample step
    definitions, the committed V-C2/V-C2-D prediction file with both informativeness preconditions evaluated, and
    the pins `spec_sha256`, `content_sha256` and table identities of both models plus the tree hash of `src/ionmc`
-   at the seal.
+   at the seal. **Sealed closure (Codex REVIEW-c661e903 finding 2; the V3-008 I3-FU-1 mechanism):** the seal
+   commit also carries a frozen manifest (`validation/reference_cases/topas/v13-frozen-manifest.json`) with the
+   sha256 of the evaluator, of every analysis module it imports (its transitive closure inside the repository;
+   `src/ionmc` is covered by the tree hash), of every TOPAS bundle file (`input.txt`, `case.json`) and of the
+   ionmc sample step definitions. The evaluator is launched only through `sealed_launch.py` (target added to
+   `ALLOWED_TARGETS`), re-hashes itself and every manifest member at start and refuses to run on any mismatch;
+   for every TOPAS run it compares the executed `input.txt`/`case.json` hashes recorded in the host-run record
+   with the sealed bundle hashes and marks the run invalid on any difference. A change to any sealed file after
+   the seal is a new seal (dated amendment, reviewed before any further run; seen samples consumed).
 4. **ionmc samples first** (scientific review B1; the step-0 rule of r2-topas-target.md §6): the V-C2-D runs and the
    V-C1/V-C2 samples of both models (`icru90-water-v1` and the default, common random numbers) are produced at the
    seal commit; their records (sample digests, identity blocks) are committed and reviewed **before any TOPAS run,
@@ -202,8 +210,9 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
    the tables unchanged are thereby excluded as well).
 5. **TOPAS smokes** (execution only, part 19), then **TOPAS evidence runs**, one heavy job at a time. A TOPAS run is
    valid only if the seal review and the ionmc-sample commit's review both finished before the run's controlled
-   `reference_started` event (the V3-008 R2-TOPAS-4 rule; controlled records, not Git timestamps). The evaluator
-   enforces these checks and fails closed.
+   `reference_started` event (the V3-008 R2-TOPAS-4 rule; controlled records, not Git timestamps), and only if
+   its executed input hashes equal the sealed bundle hashes (step 3). The evaluator enforces these checks and
+   fails closed.
 6. **Evaluate once** at a committed SHA; commit the reports and run records; dated results note in this plan; ledger
    update. A defect found after the seal is handled by a prospective dated amendment, reviewed before any re-run;
    seen samples are consumed (the I3-FU-1 revision-17 precedent).
@@ -241,6 +250,9 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
 
 ## H. Pre-freeze review log (2026-11-17)
 
+Codex REVIEW-c661e903895c44eb9b7d41fb7d95f404 at 625ddab0: changes_required, two important findings, applied
+(decision 0044 review log): per-run data pins `data_declared`/`data_used` (0044 §4) and the sealed closure
+with manifest, self-verification and executed-input hash checks (§D step 3, step 5).
 Codex REVIEW-8e40febed0a04536ab61b1c354190a4d at 92cf8929: **pass** (signed), two minor findings: the V-C2-D end
 point (same defect as N1 below; resolved by the telescoped end point) and the undefined relative error at the
 first CC-I2 node (resolved: exact equality there). Second pass (verification of 92cf8929 by the same reviewer):
