@@ -187,7 +187,7 @@
   "input_sha256": {
     "geant4-icru90-stopping-11.4.2 (cache object)": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
     "src/ionmc/data/icru90.py": "8cb50ce7b67ed2969c405f81cf930a0282ba6b8c06f303116e7478f87d8ebfe8",
-    "src/ionmc/physics/stopping.py": "4be0934a76219e4e56d3eb7c329137e5781f75ba923899cc44b0d2dc66cd6c08",
+    "src/ionmc/physics/stopping.py": "5788c4fdf2303be69d163bb81ab0e4cdc9cb2b95c28c21c586b901649e413576",
     "validation/results/transport/v8r2-topas/reports/TD-EM-case1.json": "d7e2f1c6f2bcf988c8ebf0b87f981b3ebed7e28f8b7f98f098157a620495841f",
     "validation/results/transport/v8r2-topas/reports/TD-EM-case2.json": "61c5dbb7d4dd8e8e5c275dc055bdef526e047e9e183d68c77c5dbefdfab3dd2d",
     "validation/results/transport/v8r2-topas/reports/TD-EM-case3.json": "d7a160df3b7c5a1a0bd7abe074890dec5e7590170c0b020615f1c94f52d914e4",
