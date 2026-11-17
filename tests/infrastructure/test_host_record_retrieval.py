@@ -266,3 +266,33 @@ def test_mcp_registration_and_dispatch(setup, monkeypatch):
         "list_host_run_records",
         "materialize_host_run_records",
     } <= names
+
+
+def test_materialize_input_manifest_with_signed_digest(setup):
+    import hashlib
+    root, worktree, state, archive, key, data = setup
+    manifest = b'{"schema_version":1,"entries":[]}\n'
+    (archive / "input-manifest.json").write_bytes(manifest)
+    record = json.loads(data)
+    record.pop("attestation")
+    record["input_manifest_sha256"] = hashlib.sha256(manifest).hexdigest()
+    record = attest.sign_record(record, key, "host-runner")
+    encoded = json.dumps(record).encode()
+    (archive / "record.json").write_bytes(encoded)
+    result = hr.materialize_input_manifest(TASK, RUN, state=state, root=root)
+    assert Path(result["path"]).read_bytes() == manifest
+    assert result["sha256"] == record["input_manifest_sha256"]
+    assert hr.materialize_input_manifest(TASK, RUN, state=state, root=root)["status"] == "existing"
+    assert (archive / "record.json").read_bytes() == encoded
+    (archive / "input-manifest.json").write_bytes(manifest + b" ")
+    with pytest.raises(ValueError, match="digest"):
+        hr.materialize_input_manifest(TASK, RUN, state=state, root=root)
+
+
+def test_manifest_retrieval_rejects_symlink_and_missing_legacy_manifest(setup):
+    root, _, state, archive, *_ = setup
+    with pytest.raises(FileNotFoundError):
+        hr.materialize_input_manifest(TASK, RUN, state=state, root=root)
+    (archive / "input-manifest.json").symlink_to(archive / "record.json")
+    with pytest.raises(OSError):
+        hr.materialize_input_manifest(TASK, RUN, state=state, root=root)

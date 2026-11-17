@@ -92,7 +92,11 @@ requirements and exact-SHA qualification/promotion gates remain in force.
 Host execution creates a protected snapshot from the recorded Git commit with an
 independent Git database, then mounts it at /workspace read-only. Live worktree
 edits cannot change the running source or its Git provenance. Ignored .ionmc-cache
-inputs are copied as regular files; committed symlinks are rejected. Write
+inputs are captured as regular files in a protected, content-addressed store at
+state/host-inputs and hard-linked read-only into each run's snapshot. Identical
+bytes and executable modes share storage across runs; live task files are never
+hard-linked. Source mutation checks and SHA-256 verification reject changing or
+corrupt inputs. Committed symlinks and non-regular cache inputs are rejected. Write
 generated evidence to /workspace/validation/generated or
 /workspace/benchmarks/generated. These are fresh protected directories for each
 run, published afterwards under the corresponding ignored directory / <run-id>.
@@ -103,6 +107,52 @@ validation. The runner verifies the task SHA and clean state again after executi
 Generic Codex workers must use the registered V3 task ID and matching worktree;
 archived and primary checkouts are rejected. Release retries always upload the
 qualification report before claiming promotion complete.
+
+### Host input storage and admission checks
+
+Each new host run retains `input-manifest.json` alongside its request, signed
+record, logs and outputs. The manifest lists directories and each input's path,
+size, SHA-256, read-only mode and store object name. Its exact byte digest is bound
+into the signed run record as `input_manifest_sha256`. Retrieve it with
+`materialize_host_input_manifest(task_id, run_id)` (one manifest, up to 64 MiB),
+and retrieve/verify the signed record separately using `materialize_host_run_records`.
+Old archives and signatures are not rewritten; old runs have no input manifest.
+Private Git/source snapshots and run outputs remain separate. Only ignored input
+payloads share storage. This prevents repeated full input copies; it does not bound
+new unique inputs, Git snapshots, per-run directory entries, outputs or logs.
+
+The service serializes input capture with a store lock. New objects are staged,
+hashed, fsynced and published without replacing existing objects. Existing objects
+are verified before reuse. After a process kill, the next
+admission removes only unpublished staging names under that same lock before
+checking free space; named content objects and archives are retained. Do not edit, chmod or
+replace shared objects or linked archive inputs. Do not link store files into live
+worktrees or writable sandbox mounts. There is no automatic archive deletion.
+
+Before snapshot creation, before each new input object, and before execution, the
+host runner checks free space. Default headroom is 10 GiB **per checked volume**,
+plus the next new object's size when staging it. On WSL, the operator must identify
+the Windows volume containing this distribution's VHD; Linux free space alone
+cannot detect an almost-full Windows drive. Configure the protected experiment
+state file `host-storage.json`, for example **only when the VHD is on C:**:
+
+```json
+{"backing_volume": "/mnt/c", "reserve_bytes": 10737418240}
+```
+
+Alternatively, export `IONMC_HOST_BACKING_VOLUME=/mnt/c` in the launcher/MCP
+service environment; this overrides the file's volume. Native Linux does not
+require a backing volume. A missing WSL configuration, invalid path or insufficient
+space stops admission with an actionable MCP error. The orchestrator should request
+operator storage intervention rather than retrying or deleting evidence. The
+runner does not send an approval or resolve an intervention itself.
+
+These checks are admission checks, **not reservations or output quotas**. Concurrent
+jobs, logs, compilation caches and unbounded output can still exhaust a volume.
+The guard conservatively assumes new bytes may grow the VHD even when it already
+contains unused blocks. Compacting the VHD remains an operator action with WSL shut
+down. Keep heavy jobs paused until this infrastructure PR is integrated, the
+backing-volume setting is configured, and the host-runner MCP is reconnected.
 
 The host/reference runners and preflight require bubblewrap >= 0.12.0, including
 its [CVE-2026-87766 fix](https://github.com/containers/bubblewrap/security/advisories/GHSA-pxhw-h44j-8pfx).

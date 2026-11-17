@@ -331,6 +331,14 @@ def run_validation(
                     "sha": git_text(release_root, "rev-parse", "HEAD")}
 
 
+    from infrastructure.experiment_v3.storage_guard import StorageGuard
+    guard = StorageGuard(RUN_ROOT.parent)
+    from infrastructure.experiment_v3.host_inputs import InputStore
+    # Reclaim interrupted staging under its lock before testing free space.
+    # Content objects and all archived run evidence remain untouched.
+    with InputStore(RUN_ROOT.parent / "host-inputs", guard):
+        pass
+    guard.require()
     run_id, run_dir = create_run_dir(task_id)
 
     request = {
@@ -349,7 +357,11 @@ def run_validation(
 
     from infrastructure.experiment_v3.host_snapshot import create
     snapshot = create(REPO, worktree["path"], worktree["sha"],
-                      worktree["branch"], run_dir / "snapshot")
+                      worktree["branch"], run_dir / "snapshot",
+                      input_store=RUN_ROOT.parent / "host-inputs", guard=guard)
+    input_manifest = run_dir / "input-manifest.json"
+    input_manifest_hash = file_sha256(input_manifest)
+    guard.require()
     bwrap_command = build_bwrap_command(snapshot, argv, run_dir / "outputs")
 
     started_wall = utc_now()
@@ -414,6 +426,8 @@ def run_validation(
         "sha": worktree["sha"],
         "dirty_before": False,
         "execution_snapshot": str(snapshot),
+        "input_manifest": str(input_manifest),
+        "input_manifest_sha256": input_manifest_hash,
         "dirty_after": dirty_after,
         "sha_after": after_sha,
         "committed_state_unchanged": unchanged,

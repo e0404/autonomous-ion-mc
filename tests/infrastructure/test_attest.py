@@ -209,7 +209,11 @@ def test_host_runner_signs_record(tmp_path, monkeypatch):
     monkeypatch.setattr(hr, "inspect_worktree", lambda t: {"path": wt, "branch": "task/x", "sha": "b" * 40})
     monkeypatch.setattr(hr, "git_text", lambda cwd, *a: "b" * 40 if a[0] == "rev-parse" else "")
     import infrastructure.experiment_v3.host_snapshot as snap
-    monkeypatch.setattr(snap, "create", lambda *a: tmp_path / "snap")
+    monkeypatch.setenv("IONMC_HOST_BACKING_VOLUME", str(tmp_path))
+    def fake_snapshot(*args, **kwargs):
+        (args[4].parent / "input-manifest.json").write_text('{"entries": []}')
+        return tmp_path / "snap"
+    monkeypatch.setattr(snap, "create", fake_snapshot)
     monkeypatch.setattr(hr, "build_bwrap_command", lambda *a: ["sh", "-c", "echo hi; echo err >&2"])
     result = hr.run_validation("V3-X1", ["true"], 30)
     run_dir = Path(result["run_directory"])
@@ -219,6 +223,9 @@ def test_host_runner_signs_record(tmp_path, monkeypatch):
     assert result["stdout_sha256"] == hashlib.sha256((run_dir / "stdout.txt").read_bytes()).hexdigest()
     assert result["stderr_sha256"] == hashlib.sha256((run_dir / "stderr.txt").read_bytes()).hexdigest()
     assert result["output_manifest_sha256"] is None
+    assert result["input_manifest_sha256"] == hashlib.sha256(
+        (run_dir / "input-manifest.json").read_bytes()
+    ).hexdigest()
     for field in ("run_id", "task_id", "sha", "argv", "started_at", "finished_at",
                   "duration_seconds", "exit_code", "timed_out"):
         assert field in result

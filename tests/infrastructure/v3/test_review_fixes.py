@@ -12,12 +12,15 @@ def git(root, *args):
 
 
 @pytest.fixture
-def registered(tmp_path):
+def registered(tmp_path, monkeypatch):
+    monkeypatch.setenv("IONMC_HOST_BACKING_VOLUME", str(tmp_path))
     root = tmp_path / "repo"
     root.mkdir()
     git(root, "init", "-b", "v3/develop")
     (root / "README.md").write_text("tracked source")
-    (root / ".gitignore").write_text("validation/generated/\nbenchmarks/generated/\n")
+    (root / ".gitignore").write_text(
+        "validation/generated/\nbenchmarks/generated/\n.ionmc-cache/\n"
+    )
     git(root, "add", ".")
     git(
         root,
@@ -293,6 +296,9 @@ def test_real_sandbox_snapshot_provenance_and_restore_race(
     monkeypatch.setattr(host_runner, "REPO", root)
     monkeypatch.setattr(host_runner, "WORKTREE_ROOT", wt.parent)
     monkeypatch.setattr(host_runner, "RUN_ROOT", tmp_path / "protected/runs")
+    monkeypatch.setattr(host_runner, "CACHE_ROOT", tmp_path / "runtime-cache")
+    (wt / ".ionmc-cache").mkdir()
+    (wt / ".ionmc-cache/input").write_text("reference")
     expected = git(wt, "rev-parse", "HEAD")
     original_run = subprocess.run
     source = wt / "README.md"
@@ -316,6 +322,13 @@ def test_real_sandbox_snapshot_provenance_and_restore_race(
             "assert git('branch','--show-current') == 'task/v3-test-worker'",
             "assert not git('status','--porcelain')",
             "assert Path('README.md').read_text() == 'tracked source'",
+            "assert Path('.ionmc-cache/input').read_text() == 'reference'",
+            "try: Path('.ionmc-cache/input').chmod(0o644)",
+            "except OSError: pass",
+            "else: raise AssertionError('input chmod was allowed')",
+            "try: Path('.ionmc-cache/input').write_text('changed')",
+            "except OSError: pass",
+            "else: raise AssertionError('input write was allowed')",
             "Path('validation/generated/result').write_text('passed')",
             "print('snapshot provenance and restored live mutation passed')",
         ]
