@@ -45,4 +45,17 @@ def _initial() -> dict[str, tuple[EvidenceRecord, ...]]:
 
 
 # Append-only by convention and by type: records are added in this module's source, never mutated.
-STOPPING_EVIDENCE: Mapping[str, tuple[EvidenceRecord, ...]] = MappingProxyType(_initial())
+_RECORDS: dict[str, tuple[EvidenceRecord, ...]] = _initial()
+STOPPING_EVIDENCE: Mapping[str, tuple[EvidenceRecord, ...]] = MappingProxyType(_RECORDS)
+
+
+def add_test_record(record: EvidenceRecord) -> None:
+    """TEST ONLY (``register_test_model``): add the record of a temporarily registered model."""
+    if record.spec_sha256 in _RECORDS:
+        raise ValueError(f"evidence for {record.spec_sha256} already exists")
+    _RECORDS[record.spec_sha256] = (record,)
+
+
+def remove_test_record(digest: str) -> None:
+    """TEST ONLY (``register_test_model``): remove the record added by :func:`add_test_record`."""
+    _RECORDS.pop(digest, None)

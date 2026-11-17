@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, fields, is_dataclass, replace
 from types import MappingProxyType
 from typing import Any
@@ -179,9 +180,13 @@ _LS_IDS = {
 }
 
 # nist-pstar-astar-water-2005 (S3) and icru90-water-v1 (S4) are added by their steps.
-STOPPING_MODELS: Mapping[str, StoppingModelSpec] = MappingProxyType(
-    {mid: _bethe_spec(mid, "1", _registered_bethe(ls), "0044") for mid, ls in _LS_IDS.items()}
-)
+_REGISTRY: dict[str, StoppingModelSpec] = {
+    mid: _bethe_spec(mid, "1", _registered_bethe(ls), "0044") for mid, ls in _LS_IDS.items()
+}
+STOPPING_MODELS: Mapping[str, StoppingModelSpec] = MappingProxyType(_REGISTRY)
+# constructors of the registered models that are not one of the Bethe variants (empty in src; the
+# test hook below is the only writer)
+_FACTORIES: dict[str, Callable[[], StoppingSource]] = {}
 
 
 def resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource:
@@ -200,9 +205,49 @@ def resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource:
                 f"stopping model {model_id!r} cannot be resolved: its data pin "
                 f"{pin.dataset_id!r} has use_role {pin.use_role!r}, not 'construction-permitted'"
             )
+    if model_id in _FACTORIES:
+        return _FACTORIES[model_id]()
     if model_id not in _LS_IDS:
         raise ValueError(f"stopping model {model_id!r} is registered without a constructor")
     return _registered_bethe(_LS_IDS[model_id])
+
+
+@contextmanager
+def register_test_model(
+    spec: StoppingModelSpec, factory: Callable[[], StoppingSource]
+) -> Iterator[StoppingModelSpec]:
+    """TEST ONLY: register ``spec`` and its constructor ``factory`` for the duration of a ``with``.
+
+    Extends the registry (``STOPPING_MODELS``, the ``resolve`` constructor map and an
+    ``unvalidated`` record in ``STOPPING_EVIDENCE``) and restores all three on exit, also on an
+    exception. This is the hook of the consumer-consistency rows (plan v3-013 A.2); it is never
+    used in ``src`` and a model registered through it is not part of the library. It refuses an id
+    that does not start with ``"test-"``, an id already registered and a spec whose ``spec_sha256``
+    equals a registered one, and a spec with data pins (a test model has none).
+    """
+    from ionmc.physics import stopping_evidence as ev  # noqa: PLC0415
+
+    mid = spec.model_id
+    if not mid.startswith("test-"):
+        raise ValueError(f"a test model id must start with 'test-', got {mid!r}")
+    if mid in _REGISTRY or mid in _FACTORIES:
+        raise ValueError(f"stopping model id {mid!r} is already registered")
+    if spec.data:
+        raise ValueError("a test model cannot declare data pins")
+    digest = spec_sha256(spec)
+    if any(spec_sha256(s) == digest for s in _REGISTRY.values()):
+        raise ValueError(f"spec_sha256 of {mid!r} equals a registered model's")
+    _REGISTRY[mid] = spec
+    _FACTORIES[mid] = factory
+    ev.add_test_record(
+        ev.EvidenceRecord(digest, "unvalidated", None, "test-only registration", None)
+    )
+    try:
+        yield spec
+    finally:
+        _REGISTRY.pop(mid, None)
+        _FACTORIES.pop(mid, None)
+        ev.remove_test_record(digest)
 
 
 def _nist_star_instance_spec(source: NistStarStoppingSource) -> StoppingModelSpec:
@@ -264,6 +309,14 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
     """
     if type(source) is NistStarStoppingSource:
         return UNREGISTERED_ID, _nist_star_instance_spec(source)
+    from ionmc.physics.stopping_tabulated import TabulatedStoppingSource  # noqa: PLC0415
+
+    if isinstance(source, TabulatedStoppingSource):  # structural match, content digest included
+        candidate = source.instance_spec()
+        for model_id, spec in STOPPING_MODELS.items():
+            if _structure(spec) == _structure(candidate):
+                return model_id, spec
+        return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
     if type(source) is not BetheStoppingSource:
         hook = getattr(source, "stopping_spec", None)
         if callable(hook):  # the one documented hook: a source declares itself (decision "user")
