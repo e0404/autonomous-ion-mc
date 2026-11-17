@@ -243,9 +243,11 @@ def test_id_def_default_table_identity_equals_the_base_commit() -> None:
             assert "model_id" not in ident["metadata"]  # type: ignore[index]
 
 
+@pytest.mark.host
 def test_id_def_default_table_sha256_equals_the_base_commit_on_the_same_host() -> None:
     # machine dependent (platform libm ulps, decision 0044 Q4): the fixture was computed on the
-    # development host; compared separately from the portable identity assertion above.
+    # development host; compared separately from the portable identity assertion above and run
+    # only under the controlled host runner (plan row ID-DEF: sha256 in LV; Codex REVIEW-7e3c915c).
     fx = _fixture()
     src = resolve(DEFAULT_STOPPING_MODEL_ID)
     for name in PROJECTILES:
