@@ -340,6 +340,9 @@ produced and committed before any TOPAS run (plan §D).
   in plan v3-008 §C. M4: V-C1-A results committed whatever the outcome. M5: the V2-OUTPUT ledger row reworded
   (identity block only; no writer). M6: the ledger's "pending the remaining gates" wording marked as superseded by
   the integration note.
+- **Codex REVIEW-fd8c722d432349a5b2f2c2a9b4c90837 at cbfe16bb (changes_required, 1 important).** numpy sibling
+  native libraries and Warp's generated kernel cache outside the digest → complete installed distributions and a
+  fresh, attested Warp kernel cache per evidence run (plan §D step 3).
 - **Codex REVIEW-0e4576e72e644515a7fffa05e9b21efd at 61ab457e (changes_required, 2 important).** (1) The manifest
   was required to hash itself → bound by its blob at the signed seal SHA and its digest in the reviewed pin note.
   (2) Runtime and trust map unbound → sealed environment record (`env_digest.py`: interpreter, stdlib, numpy,

@@ -207,11 +207,18 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
    one-line dated pin note `seal review <id> at <sha>; manifest sha256 <digest>` in the form of the V3-008 I3-FU-1
    pins (that commit is itself reviewed and signed). **Sealed environment (finding 2):** `env_digest.py` (stdlib only)
    computes one digest per component — the interpreter executable, the stdlib tree (`sysconfig` `stdlib` and
-   `platstdlib`, extension modules included), the installed `numpy` and `warp` package trees (every regular file,
-   `.so` extensions included) — as the sha256 over the sorted list of (relative path, file sha256), plus the
-   `uv.lock` sha256; the seal file `validation/results/stopping/v3-013/seal-environment.json` holds these digests
-   as recorded by a controlled host-run record (`run_host_validation` of `env_digest.py` on the execution
-   environment, made before the seal commit and cited by id). The evaluator (a) verifies the seal review record
+   `platstdlib`, extension modules included), the complete installed distributions of `numpy` and `warp` (every
+   file listed in each distribution's `RECORD` via `importlib.metadata`, plus every sibling native-library
+   directory such as `numpy.libs` and every `*.libs` directory next to them; Codex REVIEW-fd8c722d) — as the
+   sha256 over the sorted list of (relative path, file sha256), plus the `uv.lock` sha256; the seal file
+   `validation/results/stopping/v3-013/seal-environment.json` holds these digests as recorded by a controlled
+   host-run record (`run_host_validation` of `env_digest.py` on the execution environment, made before the seal
+   commit and cited by id). **Warp generated code (REVIEW-fd8c722d):** every ionmc evidence run on a Warp backend
+   starts with a fresh, empty kernel cache (the sample runner sets `WARP_CACHE_PATH` to a new empty directory
+   inside the run's output directory before importing `warp`; a non-empty cache at start is a run-validity
+   failure), and at its end records the sha256 of every generated shared object and source file in that cache
+   (`warp_modules`) in its run record; the evaluator requires that every evidence run of the same backend lists
+   identical `warp_modules` hashes and records them in the result, and marks a run invalid otherwise. The evaluator (a) verifies the seal review record
    against the sealed trusted-keys file (blob at the seal SHA) and the pinned seal SHA, (b) for every sealed path
    compares the on-disk bytes AND the blob at the pinned seal SHA (`git cat-file -p <seal>:<path>`, stdlib
    subprocess, read-only) with the manifest hash, and the on-disk manifest with its blob at the seal SHA and with
@@ -278,6 +285,10 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
 
 ## H. Pre-freeze review log (2026-11-17)
 
+Codex REVIEW-fd8c722d432349a5b2f2c2a9b4c90837 at cbfe16bb: changes_required, one important finding, applied:
+numpy sibling native libraries and Warp's generated kernel cache were outside the digest → complete installed
+distributions (RECORD plus `*.libs`), fresh Warp kernel cache per evidence run with every generated module
+hashed into the run record and required identical across runs of a backend (§D step 3).
 Codex REVIEW-0e4576e72e644515a7fffa05e9b21efd at 61ab457e: changes_required, two important findings, applied:
 (1) the manifest could not list its own digest → the manifest is bound by its blob at the signed seal SHA and by
 its sha256 in the reviewed pin note; (2) runtime and trust map not bound → sealed environment record
