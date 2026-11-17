@@ -353,3 +353,4 @@ OPEN. Not a clinical claim."
   and the table-range, LET-water-row and deuteron checks still apply to it. Reason: a frozen row contradicted a
   tested pre-existing behaviour; recorded here rather than silently narrowed.
 - 2026-11-17 (orchestrator): **frozen at 7c139ca1** (Codex REVIEW-65665aa0ec074fa285c5e65da13646be, pass, signed; scientific review two passes applied); S1 starts from this commit.
+- 2026-11-17 (orchestrator, S5a): seal material part 1 committed (bundles manifest digest aa2f24e436f5cfb22b6bc0920367bfe7d2677bb00ea05cd9a05d407cd1466b83, predictions file sha256 f30ac1f7265ace91cbf341d337a98e5103da68b9adda558d032d79042f733663); no run yet.
