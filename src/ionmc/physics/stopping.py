@@ -636,5 +636,7 @@ class NistStarStoppingSource:
 
 
 def default_source() -> StoppingSource:
-    """Return the default analytic source (decision 0038)."""
-    return BetheStoppingSource()
+    """Return the default source: the registered model ``bethe-ionmc-v1`` (decisions 0038, 0044)."""
+    from ionmc.physics.stopping_models import DEFAULT_STOPPING_MODEL_ID, resolve
+
+    return resolve(DEFAULT_STOPPING_MODEL_ID)

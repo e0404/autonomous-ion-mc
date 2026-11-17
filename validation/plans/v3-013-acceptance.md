@@ -342,3 +342,4 @@ OPEN. Not a clinical claim."
   the V3-008 reservation gap 20610000–20618999 for the V3-013 seed families, and V-C1-A as report-only.
 - 2026-11-17 (orchestrator, S0 revision): Codex REVIEW-0f80fad8 (changes_required) and the independent scientific
   review applied in place (section H); still a freeze candidate pending the re-review.
+- 2026-11-17 (orchestrator): **frozen at 7c139ca1** (Codex REVIEW-65665aa0ec074fa285c5e65da13646be, pass, signed; scientific review two passes applied); S1 starts from this commit.

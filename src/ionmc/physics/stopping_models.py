@@ -1,0 +1,222 @@
+"""Registry of stopping-power models (decision 0044, section 1; V3-013 step S1).
+
+A model is described by an immutable :class:`StoppingModelSpec` (no evidence status: that lives in
+the append-only registry of :mod:`ionmc.physics.stopping_evidence`, keyed by :func:`spec_sha256`).
+:func:`resolve` maps a registered ``model_id`` to the existing source class and never returns a
+source of another id; :func:`spec_of` identifies a source *instance* from its fields, so a modified
+source is never reported under a registered id.
+
+Registered in step S1: the default ``bethe-ionmc-v1`` and its two Lindhard-Sorensen sensitivity
+variants. ``nist-pstar-astar-water-2005`` (S3) and ``icru90-water-v1`` (S4) are registered by the
+steps that implement them; nothing here constructs from tabulated data.
+
+The default is guarded like ``A16_INTENDED_CHANGE``: the default id and its ``spec_sha256`` are
+pinned by a test, and a change requires ``STOPPING_DEFAULT_INTENDED_CHANGE`` to name a decision.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Mapping
+from dataclasses import dataclass, fields, is_dataclass
+from types import MappingProxyType
+from typing import Any
+
+from ionmc.physics.stopping import BetheOptions, BetheStoppingSource, StoppingSource
+
+DEFAULT_STOPPING_MODEL_ID = "bethe-ionmc-v1"
+
+# None in V3-013. A future change of the default id or of its spec_sha256 must replace this by a
+# record that names a decision (decision 0044 section 5), mirroring A16_INTENDED_CHANGE.
+STOPPING_DEFAULT_INTENDED_CHANGE: Mapping[str, str] | None = None
+
+UNREGISTERED_ID = "unregistered"
+USE_ROLES = ("construction-permitted", "evaluation-only", "lineage-only")
+KINDS = ("analytic", "tabulated")
+
+_BETHE_SPECIES = ("proton", "deuteron", "alpha", "carbon12", "oxygen16")
+_BETHE_MATERIAL_RULE = "any ionmc.materials material (evidence: liquid water only)"
+_BETHE_INTERPOLATION = "analytic on a log grid; range exact-loglog-quadrature-v1"
+_BETHE_RANGE_START = "constant-S approximation a*E_min/S(E_min)"
+
+
+def _freeze(mapping: Mapping[str, Any]) -> Mapping[str, Any]:
+    return MappingProxyType(dict(mapping))
+
+
+@dataclass(frozen=True)
+class StoppingDomain:
+    """Species, material rule and per-species energy window (MeV per nucleon) of a model."""
+
+    species: frozenset[str]
+    material_rule: str
+    e_min_per_u: Mapping[str, float]
+    e_max_per_u: Mapping[str, float]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "species", frozenset(self.species))
+        object.__setattr__(self, "e_min_per_u", _freeze(self.e_min_per_u))
+        object.__setattr__(self, "e_max_per_u", _freeze(self.e_max_per_u))
+
+
+@dataclass(frozen=True)
+class DataPin:
+    """A construction-data member of a tabulated model (none in S1)."""
+
+    dataset_id: str
+    archive_sha256: str
+    member: str | None
+    member_sha256: str | None
+    parser: str
+    licence: str
+    use_role: str
+
+    def __post_init__(self) -> None:
+        if self.use_role not in USE_ROLES:
+            raise ValueError(f"DataPin.use_role must be one of {USE_ROLES}, got {self.use_role!r}")
+
+
+@dataclass(frozen=True)
+class StoppingModelSpec:
+    """Immutable description of a stopping model; carries no evidence status."""
+
+    model_id: str
+    version: str
+    kind: str
+    options: Mapping[str, Any]
+    interpolation: str
+    range_start: str
+    data: tuple[DataPin, ...]
+    domain: StoppingDomain
+    decision: str
+
+    def __post_init__(self) -> None:
+        if self.kind not in KINDS:
+            raise ValueError(f"StoppingModelSpec.kind must be one of {KINDS}, got {self.kind!r}")
+        object.__setattr__(self, "options", _freeze(self.options))
+        object.__setattr__(self, "data", tuple(self.data))
+
+
+def _canonical(value: Any) -> Any:
+    """JSON-ready structure: dataclasses and mappings to dicts, sets to sorted lists."""
+    if is_dataclass(value) and not isinstance(value, type):
+        return {f.name: _canonical(getattr(value, f.name)) for f in fields(value)}
+    if isinstance(value, Mapping):
+        return {str(k): _canonical(v) for k, v in value.items()}
+    if isinstance(value, frozenset | set):
+        return sorted(_canonical(v) for v in value)
+    if isinstance(value, list | tuple):
+        return [_canonical(v) for v in value]
+    return value
+
+
+def spec_sha256(spec: StoppingModelSpec) -> str:
+    """SHA-256 of the canonical JSON of ``spec`` (sorted keys, no whitespace, float ``repr``)."""
+    text = json.dumps(
+        _canonical(spec), sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False
+    )
+    return hashlib.sha256(text.encode("ascii")).hexdigest()
+
+
+def _bethe_options(source: BetheStoppingSource) -> dict[str, Any]:
+    o = source.options
+    return {
+        "shell": bool(o.shell),
+        "barkas": bool(o.barkas),
+        "bloch": bool(o.bloch),
+        "mott": bool(o.mott),
+        "effective_charge": bool(o.effective_charge),
+        "effective_charge_model": "barkas-125",
+        "ls": str(o.ls),
+        "points_per_decade": int(source.points_per_decade),
+        "i_value": "material",
+        "source_name": str(source.name),
+    }
+
+
+def _bethe_domain(source: BetheStoppingSource) -> StoppingDomain:
+    lo, hi = float(source.e_min_per_u), float(source.e_max_per_u)
+    return StoppingDomain(
+        frozenset(_BETHE_SPECIES),
+        _BETHE_MATERIAL_RULE,
+        {s: lo for s in _BETHE_SPECIES},
+        {s: hi for s in _BETHE_SPECIES},
+    )
+
+
+def _bethe_spec(
+    model_id: str, version: str, source: BetheStoppingSource, decision: str
+) -> StoppingModelSpec:
+    return StoppingModelSpec(
+        model_id,
+        version,
+        "analytic",
+        _bethe_options(source),
+        _BETHE_INTERPOLATION,
+        _BETHE_RANGE_START,
+        (),
+        _bethe_domain(source),
+        decision,
+    )
+
+
+def _registered_bethe(ls: str) -> BetheStoppingSource:
+    return BetheStoppingSource(options=BetheOptions(ls=ls))
+
+
+_LS_IDS = {
+    "bethe-ionmc-v1": "off",
+    "bethe-ionmc-v1+ls-eff": "eff",
+    "bethe-ionmc-v1+ls-bare_mixed": "bare_mixed",
+}
+
+# nist-pstar-astar-water-2005 (S3) and icru90-water-v1 (S4) are added by their steps.
+STOPPING_MODELS: Mapping[str, StoppingModelSpec] = MappingProxyType(
+    {mid: _bethe_spec(mid, "1", _registered_bethe(ls), "0044") for mid, ls in _LS_IDS.items()}
+)
+
+
+def resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource:
+    """Return the source of the registered ``model_id``; an unknown id raises ``ValueError``.
+
+    ``cache_dir`` is for tabulated models (S3/S4); the analytic models read no data.
+    """
+    if model_id not in STOPPING_MODELS:
+        raise ValueError(
+            f"unknown stopping model id {model_id!r}; registered: {sorted(STOPPING_MODELS)}"
+        )
+    return _registered_bethe(_LS_IDS[model_id])
+
+
+def _structure(spec: StoppingModelSpec) -> tuple[Any, ...]:
+    """The fields that define a model apart from its name, version and decision."""
+    return (
+        spec.kind,
+        _canonical(spec.options),
+        spec.interpolation,
+        spec.range_start,
+        _canonical(spec.data),
+        _canonical(spec.domain),
+    )
+
+
+def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
+    """Identify ``source`` from its instance fields (decision 0044 section 2).
+
+    An exact structural match with a registered spec (class, every option, grid bounds and
+    density, start-range rule, data pins) yields ``(model_id, spec)``; any other supported source
+    yields ``("unregistered", spec built from the instance)`` with ``decision = "user"``. A source
+    type without support raises ``TypeError`` (fail closed). The identification is purely
+    structural: the z = 1 no-op of the Lindhard-Sorensen variants is handled by the effective id
+    of the selection layer, not here.
+    """
+    if type(source) is not BetheStoppingSource:
+        raise TypeError(
+            f"spec_of supports BetheStoppingSource only in this step, got {type(source).__name__}"
+        )
+    candidate = _bethe_spec(UNREGISTERED_ID, "1", source, "user")
+    for model_id, spec in STOPPING_MODELS.items():
+        if _structure(spec) == _structure(candidate):
+            return model_id, spec
+    return UNREGISTERED_ID, candidate
