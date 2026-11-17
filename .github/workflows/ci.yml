@@ -39,7 +39,9 @@ jobs:
   tests:
     name: tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30 minutes: the lightweight suite takes 12-18 minutes on the hosted runner (20 minutes was hit
+    # on 2026-11-17, run 44060676734, job cancelled by this limit, not by a test failure).
+    timeout-minutes: 30
     env:
       # The sealed diagnostics of V3-008 amendment I3-FU-1 require the running interpreter's
       # major.minor to equal the lower bound of uv.lock's requires-python (3.12); without a pin
