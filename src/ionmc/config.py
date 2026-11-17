@@ -929,6 +929,13 @@ def _nuclear_setup_checks(
             "deuterons need a deuteron stopping table, which NIST PSTAR/ASTAR do not provide; "
             "use an analytic Bethe source"
         )
+    sel = ph.selection
+    if sel.requested_id != "unregistered" and DEUTERON.name not in sel.spec.domain.species:
+        raise fail(
+            f"nuclear=True is not available with stopping model {sel.requested_id!r}: secondary "
+            "deuterons need a deuteron stopping table and its domain has species "
+            f"{sorted(sel.spec.domain.species)} (no fallback model, no automatic composite)"
+        )
     if ph.nuclear_table_id is None:
         raise fail("nuclear=True needs PhysicsOptions.nuclear_table_id (the derived nuclear table)")
     table = NuclearTable.load(None, ph.nuclear_table_id)

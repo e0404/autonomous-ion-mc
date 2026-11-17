@@ -61,7 +61,11 @@ def _tables(source: BetheStoppingSource, name: str) -> TransportTables:
 
 
 def test_registry_holds_the_s1_models_only_and_is_immutable() -> None:
-    assert tuple(STOPPING_MODELS) == (*REGISTERED_S1, "nist-pstar-astar-water-2005")  # S3
+    assert tuple(STOPPING_MODELS) == (
+        *REGISTERED_S1,
+        "nist-pstar-astar-water-2005",  # S3
+        "icru90-water-v1",  # S4
+    )
     assert isinstance(STOPPING_MODELS, MappingProxyType)
     with pytest.raises(TypeError):
         STOPPING_MODELS["x"] = STOPPING_MODELS[DEFAULT_STOPPING_MODEL_ID]  # type: ignore[index]
@@ -74,7 +78,7 @@ def test_registry_holds_the_s1_models_only_and_is_immutable() -> None:
 
 
 def test_resolve_unknown_id_raises_and_never_returns_another_id() -> None:
-    for bad in ("nist-star", "icru90-water-v1", "", "bethe"):
+    for bad in ("nist-star", "icru90-water", "", "bethe"):
         with pytest.raises(ValueError, match="unknown stopping model id"):
             resolve(bad)
     for mid in REGISTERED_S1:
@@ -90,7 +94,7 @@ def test_default_resolves_to_the_default_source_and_default_source_uses_it() -> 
 
 def test_spec_content_of_the_registered_models() -> None:
     for mid, spec in STOPPING_MODELS.items():
-        if mid not in REGISTERED_S1:  # the NIST model: tests/ionmc/test_stopping_nist_model.py
+        if mid not in REGISTERED_S1:  # the tabulated models: tests/ionmc/test_stopping_*_model.py
             continue
         assert spec.model_id == mid and spec.decision == "0044" and spec.version == "1"
         assert spec.kind == "analytic" and spec.data == ()
@@ -154,6 +158,7 @@ def test_evidence_registry_is_separate_keyed_by_spec_hash_and_initial() -> None:
         "bethe-ionmc-v1+ls-eff": "unvalidated",
         "bethe-ionmc-v1+ls-bare_mixed": "unvalidated",
         "nist-pstar-astar-water-2005": "consistency-only",
+        "icru90-water-v1": "consistency-only",
     }
     assert all(r.spec_sha256 == h for h, rs in ev.items() for r in rs)
     assert not any("validated" == r.status for rs in ev.values() for r in rs)
@@ -167,7 +172,7 @@ def test_spec_of_round_trip_for_every_registered_model() -> None:
     for mid, spec in STOPPING_MODELS.items():
         if (
             mid not in REGISTERED_S1
-        ):  # NIST: cache-dependent, tests/ionmc/test_stopping_nist_model.py
+        ):  # tabulated models: cache-dependent, tests/ionmc/test_stopping_*_model.py
             continue
         got_id, got_spec = spec_of(resolve(mid))
         assert got_id == mid and got_spec == spec and got_spec.decision == "0044"

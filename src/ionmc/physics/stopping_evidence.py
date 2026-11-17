@@ -41,12 +41,13 @@ def _initial() -> dict[str, tuple[EvidenceRecord, ...]]:
         out[h] = (
             EvidenceRecord(h, "unvalidated", None, "validation/plans/v3-013-acceptance.md", None),
         )
-    nist = spec_sha256(ids["nist-pstar-astar-water-2005"])
-    out[nist] = (
-        EvidenceRecord(
-            nist, "consistency-only", None, "validation/plans/v3-013-acceptance.md", None
-        ),
-    )
+    for mid in ("nist-pstar-astar-water-2005", "icru90-water-v1"):
+        h = spec_sha256(ids[mid])
+        out[h] = (
+            EvidenceRecord(
+                h, "consistency-only", None, "validation/plans/v3-013-acceptance.md", None
+            ),
+        )
     return out
 
 
@@ -56,13 +57,21 @@ STOPPING_EVIDENCE: Mapping[str, tuple[EvidenceRecord, ...]] = MappingProxyType(_
 
 
 # Dataset ids that are also used as evaluation references of the model's rows (decision 0044
-# section 1: the NIST model is circular for the PSTAR/ASTAR rows), keyed by spec_sha256.
+# section 1: the NIST model is circular for the PSTAR/ASTAR rows), keyed by spec_sha256. For
+# ``icru90-water-v1`` the dataset id is followed by the names of the rows that use the ICRU 90
+# arrays as an evaluation reference (row PER-2): the ICRU 90 part of I2 of plan v3-008 and the
+# ICRU 90 comparisons of decision 0038; all of them are circular for a run of that model.
 STOPPING_CIRCULAR_ROWS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         spec_sha256(STOPPING_MODELS["nist-pstar-astar-water-2005"]): (
             "nist-pstar-water-2005",
             "nist-astar-water-2005",
-        )
+        ),
+        spec_sha256(STOPPING_MODELS["icru90-water-v1"]): (
+            "geant4-icru90-stopping-11.4.2",
+            "I2 (ICRU 90 part)",
+            "decision-0038 ICRU 90 comparisons",
+        ),
     }
 )
 

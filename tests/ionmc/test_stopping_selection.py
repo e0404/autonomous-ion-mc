@@ -103,7 +103,7 @@ def test_dom7_unknown_id_both_neither_and_non_string() -> None:
         PhysicsOptions(nuclear=False, stopping_model=3)  # type: ignore[arg-type]
     with pytest.raises(UnsupportedCombinationError):
         PhysicsOptions(nuclear=False, stopping=object())  # type: ignore[arg-type]
-    for bad in ("nist-star", "bethe", "icru90-water-v1"):  # not registered in S2a
+    for bad in ("nist-star", "bethe", "icru90-water"):  # not registered ids
         with pytest.raises(UnsupportedCombinationError):
             PhysicsOptions(nuclear=False, stopping_model=bad)
 

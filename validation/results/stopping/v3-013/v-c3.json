@@ -1,0 +1,52 @@
+{
+  "input_sha256": {
+    "geant4-icru90-stopping-11.4.2 (cache object)": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+    "nist-astar-water-2005 (cache object)": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
+    "nist-pstar-water-2005 (cache object)": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
+    "src/ionmc/data/icru90.py": "8cb50ce7b67ed2969c405f81cf930a0282ba6b8c06f303116e7478f87d8ebfe8",
+    "src/ionmc/physics/stopping_icru90.py": "31d949793cda856c3af3e5ccb06a4b5e5274cb3c5dc0c8263e7f51299f725c3b",
+    "src/ionmc/physics/stopping_tabulated.py": "6f97d14da2e4523630c30dcfece09bc6ff0213ec4851eccfad99ba98a2721bd8"
+  },
+  "model_id": "icru90-water-v1",
+  "note": "Aggregates only: no ICRU 90, PSTAR or ASTAR table value, per-node value or per-energy ratio is written. Consistency results for implementation correctness, not evidence of physical accuracy.",
+  "row": "V-C3",
+  "script_sha256": "2c6023b24ae2ec0c1eb4d66684e4c1711fb093afbd0ce4dfe7a1b3fe91b62064",
+  "species": {
+    "alpha": {
+      "csda_range": {
+        "max_abs_relative_deviation": 0.023576706095022715,
+        "n_points": 55,
+        "rms_relative_deviation": 0.010962633245073032
+      },
+      "reference": "ASTAR",
+      "reference_dataset_id": "nist-astar-water-2005",
+      "stopping": {
+        "max_abs_relative_deviation": 0.01231907010062716,
+        "n_points": 55,
+        "rms_relative_deviation": 0.007233438408335492
+      },
+      "window_per_u_mev": [
+        1.0,
+        250.0
+      ]
+    },
+    "proton": {
+      "csda_range": {
+        "max_abs_relative_deviation": 0.014927405681145256,
+        "n_points": 55,
+        "rms_relative_deviation": 0.008477832121066136
+      },
+      "reference": "PSTAR",
+      "reference_dataset_id": "nist-pstar-water-2005",
+      "stopping": {
+        "max_abs_relative_deviation": 0.012885480707971353,
+        "n_points": 55,
+        "rms_relative_deviation": 0.006746751850082246
+      },
+      "window_per_u_mev": [
+        1.0,
+        500.0
+      ]
+    }
+  }
+}

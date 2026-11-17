@@ -37,6 +37,7 @@ from ionmc.physics.stopping_models import (
     DEFAULT_STOPPING_MODEL_ID,
     MATERIAL_RULE_ANY,
     MATERIAL_RULE_WATER,
+    MATERIAL_RULE_WATER_I78,
     UNREGISTERED_ID,
     StoppingModelSpec,
     spec_of,
@@ -171,13 +172,19 @@ def check_species_and_materials(
         for m in mats:
             if spec.domain.material_rule == MATERIAL_RULE_ANY:
                 continue
-            if spec.domain.material_rule == MATERIAL_RULE_WATER:
+            if spec.domain.material_rule in (MATERIAL_RULE_WATER, MATERIAL_RULE_WATER_I78):
                 from ionmc.physics.stopping import _require_nist_water  # noqa: PLC0415
 
                 try:
                     _require_nist_water(m)
                 except ValueError as exc:
                     raise _refuse(sel, sp.name, m.name, "any") from exc
+                if spec.domain.material_rule == MATERIAL_RULE_WATER_I78 and not math.isclose(
+                    m.mean_excitation_eV, _models.ICRU_I_VALUE_EV, rel_tol=0.0, abs_tol=1e-9
+                ):  # row DOM-4: the tabulated data are for I = 78 eV only
+                    raise _refuse(
+                        sel, sp.name, f"{m.name} (requested I = {m.mean_excitation_eV} eV)", "any"
+                    )
                 continue
             raise _refuse(
                 sel, sp.name, m.name, f"any (unknown material rule {spec.domain.material_rule!r})"

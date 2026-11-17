@@ -8,8 +8,8 @@ source is never reported under a registered id.
 
 Registered in step S1: the default ``bethe-ionmc-v1`` and its two Lindhard-Sorensen sensitivity
 variants; in step S3 ``nist-pstar-astar-water-2005`` (its source is built in
-:mod:`ionmc.physics.stopping_nist` from the cached PSTAR/ASTAR objects). ``icru90-water-v1`` (S4)
-is registered by its step.
+:mod:`ionmc.physics.stopping_nist` from the cached PSTAR/ASTAR objects); in step S4
+``icru90-water-v1`` (built in :mod:`ionmc.physics.stopping_icru90` from the cached ICRU 90 object).
 
 The default is guarded like ``A16_INTENDED_CHANGE``: the default id and its ``spec_sha256`` are
 pinned by a test, and a change requires ``STOPPING_DEFAULT_INTENDED_CHANGE`` to name a decision.
@@ -239,10 +239,69 @@ def registered_nist_spec() -> StoppingModelSpec:
     )
 
 
-# icru90-water-v1 (S4) is added by its step.
+ICRU_MODEL_ID = "icru90-water-v1"
+ICRU_DATASET_ID = "geant4-icru90-stopping-11.4.2"
+ICRU_SPECIES = ("proton", "alpha")
+ICRU_I_VALUE_EV = 78.0
+# per-species upper window ends [MeV per nucleon]: proton 500 MeV, alpha 250 MeV/u (the alpha array
+# ends at 1000 MeV total = 250 MeV/u, decision 0044 Q8; the resolved end is read from the array)
+_ICRU_E_MAX_PER_U = {"proton": 500.0, "alpha": 250.0}
+MATERIAL_RULE_WATER_I78 = (
+    "structural liquid water (composition and density, not the name) and requested I = 78 eV "
+    "(any other requested I fails closed)"
+)
+ICRU_INTERPOLATION = "log-log of S onto 200/decade from 1 MeV/u"
+ICRU_RANGE_START = "icru90-integrated-from-lowest-node-v1"
+
+
+def icru_pins() -> tuple[DataPin, ...]:
+    """The single construction pin (the Geant4 ICRU 90 source file), from the dataset registry
+    (no table values). The dataset's own role stays ``evaluation``; the per-use role of this model
+    is ``construction-permitted`` (licence-role extension of decision 0044 section 1)."""
+    ds = DATASETS[ICRU_DATASET_ID]
+    return (
+        DataPin(
+            ICRU_DATASET_ID, ds.sha256, None, None, ds.parser, ds.license, "construction-permitted"
+        ),
+    )
+
+
+def icru_options(source_name: str, ppd: int) -> dict[str, Any]:
+    return {
+        "points_per_decade": int(ppd),
+        "source_name": source_name,
+        "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
+        "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
+        "i_value": "78 eV required: any other requested water I fails closed",
+    }
+
+
+def registered_icru_spec() -> StoppingModelSpec:
+    """The spec registered as ``icru90-water-v1`` (windows: lower end 1 MeV/u and the per-species
+    upper ends; the upper end of each array is checked at resolve time)."""
+    species = frozenset(ICRU_SPECIES)
+    return StoppingModelSpec(
+        ICRU_MODEL_ID,
+        "1",
+        "tabulated",
+        icru_options("icru90", _POINTS_PER_DECADE),
+        ICRU_INTERPOLATION,
+        ICRU_RANGE_START,
+        icru_pins(),
+        StoppingDomain(
+            species,
+            MATERIAL_RULE_WATER_I78,
+            dict.fromkeys(species, _E_MIN_PER_U),
+            dict(_ICRU_E_MAX_PER_U),
+        ),
+        "0044",
+    )
+
+
 _REGISTRY: dict[str, StoppingModelSpec] = {
     **{mid: _bethe_spec(mid, "1", _registered_bethe(ls), "0044") for mid, ls in _LS_IDS.items()},
     NIST_MODEL_ID: registered_nist_spec(),
+    ICRU_MODEL_ID: registered_icru_spec(),
 }
 STOPPING_MODELS: Mapping[str, StoppingModelSpec] = MappingProxyType(_REGISTRY)
 # constructors of the registered models that are not one of the Bethe variants (empty in src; the
@@ -253,8 +312,8 @@ _FACTORIES: dict[str, Callable[[], StoppingSource]] = {}
 def resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource:
     """Return the source of the registered ``model_id``; an unknown id raises ``ValueError``.
 
-    ``cache_dir`` is for tabulated models (the NIST model of S3, S4's ICRU 90); the analytic models
-    read no data. A missing or corrupt cache object raises (``FileNotFoundError``,
+    ``cache_dir`` is for tabulated models (the NIST model of S3, the ICRU 90 model of S4); the
+    analytic models read no data. A missing or corrupt cache object raises (``FileNotFoundError``,
     ``IntegrityError``, ``ValueError``), never a fallback.
     """
     if model_id not in STOPPING_MODELS:  # the module-level mapping, looked up at call time
@@ -272,6 +331,10 @@ def resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource:
         from ionmc.physics.stopping_nist import load_nist_model  # noqa: PLC0415
 
         return load_nist_model(cache_dir)
+    if model_id == ICRU_MODEL_ID:  # reads the verified cache; never downloads (row DOM-6)
+        from ionmc.physics.stopping_icru90 import load_icru90_model  # noqa: PLC0415
+
+        return load_icru90_model(cache_dir)
     if model_id in _FACTORIES:
         return _FACTORIES[model_id]()
     if model_id not in _LS_IDS:
@@ -376,9 +439,15 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
     """
     if type(source) is NistStarStoppingSource:
         return UNREGISTERED_ID, _nist_star_instance_spec(source)
+    from ionmc.physics.stopping_icru90 import Icru90WaterSource  # noqa: PLC0415
     from ionmc.physics.stopping_nist import NistStarCombinedSource  # noqa: PLC0415
     from ionmc.physics.stopping_tabulated import TabulatedStoppingSource  # noqa: PLC0415
 
+    if isinstance(source, Icru90WaterSource):  # structural match incl. the verified pin
+        candidate = source.instance_spec()
+        if _structure(STOPPING_MODELS[ICRU_MODEL_ID]) == _structure(candidate):
+            return ICRU_MODEL_ID, STOPPING_MODELS[ICRU_MODEL_ID]
+        return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
     if isinstance(source, NistStarCombinedSource):  # structural match incl. the verified pins
         candidate = source.instance_spec()
         if _structure(STOPPING_MODELS[NIST_MODEL_ID]) == _structure(candidate):
