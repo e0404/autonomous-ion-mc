@@ -482,7 +482,10 @@ operator rules, and each host call ≤ 1500 s.
 5. Exact-SHA local validation record (lv8, hr8, REF summaries) at the PR head; PR, CI, merge,
    retire.
 6. **Integration criterion:**
-   - all gating rows pass at the frozen SHA, or are declared evidence gaps with interventions filed;
+   - all gating rows pass at the frozen SHA, or are declared evidence gaps with interventions filed; **[scope amendment by
+     operator authorization, 2026-11-17, IR-20261116-204824-29B867 option A: row I3 — historical FAIL at 7d0e796b, amendment
+     I3-FU-1 verdict INCONCLUSIVE at code_sha 48b41981 — is integrated as a documented model limitation (decision 0043 §1/§5),
+     neither re-graded nor relabelled; every other criterion below still applies; final experiment requirements unchanged]**
    - R2 bit-identical;
    - ledger updated (V1-MUST-005, V2-ION: He/C/O EM implemented with evidence @SHA, gaps listed,
      nuclear in V3-009);
@@ -1707,8 +1710,8 @@ information or an authorization outside the protocol). Not a clinical claim.
   SEEN); TOPAS-agreement main set consumed with FAILs under R2-STOP3; held-out TD-H/TL-H PASS 12/12; V5-SS PASS 5/5 on the
   evidence block 2 (block 1 exploratory). Scientific review rounds SR-1 and SR-2 (plan F.4) recorded with their
   dispositions.
-- **Integration: NOT performed.** Plan F.6 is unmet (gating row I3 FAIL without a declared gap or amendment); the orchestrator
-  does not merge; no intervention request is filed (EXPERIMENT.md permits none for this). The PR title still carries its
+- **Integration: NOT performed** [superseded 2026-11-17: integrated by operator authorization IR-20261116-204824-29B867, option A; see the dated integration note at the end of the plan]. Plan F.6 was unmet (gating row I3 FAIL without a declared gap or amendment); the orchestrator
+  did not merge; the sentence "no intervention request is filed (EXPERIMENT.md permits none for this)" was reconciled by amendment I3-FU-1 (Appendix A). The PR title still carries its
   pre-freeze "DRAFT — not for merge" wording, which is accurate for this state.
 - **Follow-up (next planning item, not started):** a prospective, reviewed amendment on the low-energy (≲ 50 MeV/u) C/O
   stopping model per the P12 options — first a committed, tested band diagnostic (to turn the recorded hypothesis into a
@@ -2669,3 +2672,25 @@ values are the fine-step runs (the one-step pair feeds only the emulation gate).
 0043 (marked) and by `ADDENDUM-1.md` in the intervention directory, which the operator is asked to read with the request;
 the options and the declared uncertainty values are unchanged. The step-3 decision (option (c)) is unaffected: the
 extent of the region does not enter rule 2a. Not a clinical claim.
+
+### Integration decision — operator authorization IR-20261116-204824-29B867, option A (2026-11-17, orchestrator)
+
+The operator's response (recorded verbatim in `reference_requests/interventions/IR-20261116-204824-29B867/response.json`)
+authorizes option A: integration of the V3-008 development milestone, retaining row I3's historical FAIL (7d0e796b), the
+I3-FU-1 verdict INCONCLUSIVE (code_sha 48b41981) and the documented limitation (decision 0043 §1/§5); all remaining
+applicable integration gates still apply; final experiment requirements are unchanged. Plan F.6 is amended in place
+accordingly (marked). Nothing is re-graded or relabelled; the ledger rows V1-MUST-005 and V2-ION state the limitation.
+Integration proceeds through the normal gates on the commit carrying this note: signed Codex review, exact-SHA validation
+record, push, CI green at the exact head, `merge_task_pull_request` (squash merge of PR #84 into `v3/develop`).
+**Follow-up work directed by the operator (tracked as the next task, not blocking this merge):** explicit selection of
+stopping-power models or tabulated sources — different references need not be forced into one universal model; a clearly
+documented default aligned with the TOPAS comparison objective without claiming exact TOPAS equivalence; alternative
+models with explicit species/material/energy domains, source and licence provenance and configuration-specific
+validation (reproducing an input table is a consistency check, not independent physical validation); model selection
+applied consistently to range construction, transport and dependent scoring; the effective model/table identity
+persisted in outputs; no silent switching and no model chosen after seeing a validation outcome merely to obtain a pass;
+the architecture, candidate sources and implementation sequence are chosen autonomously. **Unresolved qualification
+obligations preserved:** row I3 (C/O stopping vs the revised ICRU 73 table) FAIL; measured-data rows are evidence gaps
+(experimental validation deferred, directive 2026-11-07); carbon/oxygen nuclear interactions, fragmentation, secondary
+ions and distal fragment dose are V3-009; the low ends and 430 MeV/u ends of the domains were not re-measured after the
+R2-STOP3 model change; lineage identity of ICRU73_NEW with the 2009 revision OPEN. Not a clinical claim.

@@ -923,3 +923,15 @@ declared model limitation, not an excludable domain. No model change is made und
 low-energy C/O stopping) stays available to a later task with its own amendment, licence review and fresh held-out
 evidence. Integration of V3-008 with this gating FAIL declared is a material scope reduction reserved to the operator
 (Appendix A intervention). Not a clinical claim.
+
+**Dated note (2026-11-17, orchestrator; integration by operator authorization IR-20261116-204824-29B867, option A; follow-up
+directive).** V3-008 is integrated with row I3's historical FAIL, the I3-FU-1 INCONCLUSIVE verdict and the declared
+low-energy C/O stopping limitation (§1/§5 note of 2026-11-16) retained; nothing re-graded. The operator directs, as
+follow-up work for the next task: explicit selection of stopping-power models or tabulated sources (no universal model
+forced), a documented default aligned with the TOPAS comparison objective without claiming exact TOPAS equivalence,
+alternatives with explicit species/material/energy domains, source and licence provenance and configuration-specific
+validation (an input table reproduced is a consistency check, not independent physical validation), consistent
+application to range construction, transport and dependent scoring, the effective model/table identity persisted in
+outputs, no silent switching and no post-hoc model choice to obtain a pass; architecture, candidate sources and sequence
+chosen autonomously. The §1 "Selected" stopping model of this decision stays the default until that task's own decision
+record supersedes it. Not a clinical claim.

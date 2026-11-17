@@ -2120,6 +2120,13 @@ placeholder scorer output was deleted unread.
 **Dated note (2026-11-16, orchestrator) — ADDENDUM-1 wording corrected (the ≤ 0.8 % deficit is that of the 20–50 MeV/u band; Codex REVIEW-21409d5d minor); entries that changed:** `reference_requests/interventions/IR-20261116-204824-29B867/ADDENDUM-1.md` 3aa84256… → 9c7c0545…. All other entries unchanged (recomputed).
 
 **Dated note (2026-11-16, orchestrator) — ADDENDUM-1 step-count wording (20 slab steps = 19 limited + 1 boundary-limited; Codex REVIEW-5ca9fa4a minor); entries that changed:** `reference_requests/interventions/IR-20261116-204824-29B867/ADDENDUM-1.md` 9c7c0545… → 37ee0bd3…. All other entries unchanged (recomputed).
+
+**Dated note (2026-11-17, orchestrator) — the operator's response to IR-20261116-204824-29B867 (option A: integrate V3-008 with the I3 limitation retained; follow-up directive on explicit stopping-model selection), bound as committed:**
+
+| File | sha256 |
+|---|---|
+| `reference_requests/interventions/IR-20261116-204824-29B867/response.json` | `6f2e3d1d6401d4a4125d844f54021592e324f17e82fddb3c6f394891bc852bb5` |
+
 ## 3. Acquired and pinned external sources (hashes as recorded in the P-records; plan §G)
 
 Roles: exploratory / lineage unless stated. Nothing below is redistributed in Git.
