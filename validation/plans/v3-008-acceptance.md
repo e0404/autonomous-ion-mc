@@ -354,6 +354,12 @@ above (R2-TOPAS-4). The TD/TL statistics of `r2_evaluate.py` are implemented aft
 The V3-005 constants are copied as literals with a cross-reference, because that branch is unmerged. A base whose
 full-scale statistical results were observed is consumed, pass or fail.
 
+**Dated note (2026-11-17, orchestrator; seed-gap transfer to V3-013).** The unused gap **20610000–20618999** of this
+reservation (between rehearsal8, which ends at 20609999, and topas8, which starts at 20619001) is transferred to task
+V3-013 (`validation/plans/v3-013-acceptance.md` §C: families `topas13` = 20610000 + 100·part + case and `ion13` =
+20612004 + 100·r_index + k). No V3-008 family uses it; the V3-008 guard test is unchanged and the V3-013 guard asserts
+disjointness from every family listed here. No V3-008 seed is re-drawn.
+
 ## D. PASS / FAIL / STOP
 
 - **PASS (task):** every gating row of A and B passes at one clean frozen SHA with the declared

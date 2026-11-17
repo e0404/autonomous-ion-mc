@@ -1,6 +1,7 @@
 # V3-013 acceptance plan — explicit selection of stopping-power models and tabulated sources
 
-> **Status: DRAFT freeze candidate (S0, planner, 2026-11-17, base `v3/develop` a9563412).** Frozen together with
+> **Status: DRAFT freeze candidate (S0, planner, 2026-11-17, base `v3/develop` a9563412; revised 2026-11-17 after
+> the pre-freeze reviews, section H).** Frozen together with
 > decision 0044 (`decisions/0044-stopping-source-selection.md`) by one reviewed commit (independent Codex review and an
 > independent scientific reviewer) before any V3-013 code, transport run, TOPAS run or comparison output exists. Later
 > changes are dated amendments; earlier text is kept. No outcome changes the default or any registered spec within this
@@ -23,22 +24,25 @@ decision 0044, Context (Q4–Q8).
 | ID-NIST | As ID-DEF for `nist-pstar-astar-water-2005` (proton, alpha; water) against the `"nist-star"` source at a9563412, cached tables required (skip-with-record in CI if the cache is absent; run in LV) | identical | regression | LV |
 | ID-GUARD | `DEFAULT_STOPPING_MODEL_ID == "bethe-ionmc-v1"`, its `spec_sha256` pinned; `STOPPING_DEFAULT_INTENDED_CHANGE is None`; a synthetic change of the default without a record naming a decision fails (mirrors the A16 intended-change tests of `test_run_suite.py`) | exact | regression | CI |
 | ID-DIAG | The sources of `parity.py`, `ion_mcs_checks.py`, `nuclear/build.py` D6 and `a16_digest.py` equal `resolve("bethe-ionmc-v1")` (dataclass equality) | exact | regression | CI |
+| ID-USER | `stopping=BetheStoppingSource()` resolves to `bethe-ionmc-v1`; `BetheStoppingSource(e_min_per_u=1.5)`, `BetheStoppingSource(e_max_per_u=20)` and a source with `barkas=False` resolve to `model_id_effective = "unregistered"` with their complete options in the identity block, never to a registered id (decision 0044 §2) | exact | regression | CI |
 
 ### A.2 Consumer consistency (gating; synthetic test-only model, no reference data)
 
 A test-only model `test-bethe-x1.05` (registered in the test module only; tabulated kind; S = 1.05 × the default's S on
 the default grid, same start-range rule scaled consistently) is selected by `stopping_model` in a small water geometry
-(python backend, float64, fixed seed from §C r_index 10).
+(python and warp-cpu backends, float64, fixed seed from §C r_index 10). Every length parameter of the test-model run
+(voxel spacing, box length, `max_step_mm`, the residual-range fraction in mm, the cutoff residual length) is scaled
+by 1/1.05 so that both runs take the same step sequence in range units (scientific review I1).
 
 | Row | What | Tolerance | Class |
 |---|---|---|---|
 | CC-R | CSDA range at 10 energies (proton, alpha) = default range / 1.05 | ≤ 1e-12 relative | self-consistency |
-| CC-T | Mean depth of the cutoff points (proton 100 MeV, alpha 100 MeV/u; MCS and straggling off; 2 000 histories) = default mean depth / 1.05, same seed | ≤ 1e-9 relative (deterministic straight paths) | self-consistency |
+| CC-T | Mean depth of the cutoff points (proton 100 MeV, alpha 100 MeV/u; MCS and straggling off; 2 000 histories; lengths scaled as above) = default mean depth / 1.05, same seed, on python and on warp-cpu | ≤ 1e-9 relative (deterministic straight paths with identical step sequences in range units; a larger residual is a code defect to be attributed, not a tolerance to relax) | self-consistency |
 | CC-LET | LET water row (decision 0040; `_water_table`) of the run = 1.05 × the default's row at every node | ≤ 1e-12 relative | self-consistency |
-| CC-RES | `continuous_residual_v1` segment length for an alpha history = default / 1.05 | ≤ 1e-12 relative | self-consistency |
+| CC-RES | Unit level: the `continuous_residual_v1` residual-range segment (`_residual_range` / `_deposit_residual` of `transport/reference.py`) at fixed energies (E_cut and four energies below it; alpha and proton) = default / 1.05 | ≤ 1e-12 relative | self-consistency |
 | CC-ID | Identity block names `test-bethe-x1.05`; every table identity of the run (materials, water row) names the same model; `TransportTables.sha256` differs from the default's | exact | self-consistency |
 | CC-NEG | Monkeypatching one consumer at a time (material tables, water row, deuteron tables, exact-Ω ion rows) to the default source is detected by the single-model identity assertion of `validate` | each patch raises | capability |
-| CC-HASH | New-model metadata carry `model_id`/`version` (hash differs); pre-existing models' metadata byte-identical; the metadata → model-id map is injective over the registry | exact | regression |
+| CC-HASH | New-model metadata carry `model_id`/`version` (hash differs); pre-existing models' metadata byte-identical; the (metadata, projectile) → effective-model-id map is injective over the registry (z = 1 LS variants resolve to the default) | exact | regression |
 
 ### A.3 Domains and roles (gating; every case raises `UnsupportedCombinationError` naming model, species, material, energy and domain)
 
@@ -66,19 +70,31 @@ the default grid, same start-range rule scaled consistently) is selected by `sto
 
 | Row | What | Tolerance |
 |---|---|---|
-| CC-NODE | Resampled S reproduces the parsed ICRU 90 array at every node inside the window (proton, alpha) | ≤ 1e-12 relative |
+| CC-NODE | The transport table's S at every fine-grid node (200/decade) equals the log-log interpolant of the parsed ICRU 90 array evaluated there (proton, alpha); the chord error of the fine table at the ICRU nodes themselves (off the fine grid) is reported as an aggregate only (max, RMS) | ≤ 1e-12 relative at the fine nodes; ICRU-node error report-only |
 | CC-INT | Interpolation error between nodes: log-log vs a monotone cubic in log-log space (both from the array only), max and RMS per decade | report-only (aggregates in Git) |
-| CC-I2 | CSDA range above 1 MeV/u, R(E) − R(1 MeV/u), equals the I2 "integrated ICRU 90" construction of `compare_nist.py` (`_icru_range_table`) minus its value at 1 MeV/u (same interpolation and quadrature) at 50/75/100/125/150/200/250 MeV/u (alpha) and 100/150/200/250 MeV (proton); the start-range offset (own-array integral vs the I2 NIST start) is reported | ≤ 1e-12 relative; offset report-only |
+| CC-I2 | On the common fine grid (`compare_nist.py` uses `log_grid(1, min(500, last node))`, the same nodes), the node arrays R(E_i) − R(E_0) (cumulative exact log-log increments, E_0 = 1 MeV/u) of `icru90-water-v1` and of the I2 "integrated ICRU 90" construction (`_icru_range_table`) are compared node by node (alpha and proton); the start-range offset (own-array integral vs the I2 NIST start) is reported; off-node `range_at` values are not compared (the two constructions differ by their start offset inside the ln R interpolation) | ≤ 1e-12 relative at every node; offset report-only |
 | CC-SPAN | Loader test: counts and coverage of both grids (57 / 49 nodes; window inside the span); no value printed | exact |
 
 ### A.6 Configuration-specific validation of `icru90-water-v1` (graded once, after the seal of §D)
 
-**V-C1 — TOPAS agreement, helium (gating for the model's evidence status `validated:V-C1`).**
+**V-C1 — TOPAS agreement, helium (gating for the model's evidence record; shared-lineage transport agreement,
+never a validation of the stopping physics).**
 - Reference: TOPAS 4.3 / Geant4 11.4.2, `g4em-standard_opt4` only, the TD-EM configuration of plan v3-008 (water,
-  1 km electron cut, beam and scoring as TD-EM, IDD bins 0.02/0.1 mm), 4 parts × 2.5e4 primaries per case.
+  1 km electron cut, beam and scoring as TD-EM, IDD bins per the sizing table below), 4 parts × 2.5e4 primaries per case.
 - Cases (fresh, held-out; decision 0044 Q6): **He 75, 125 and 200 MeV/u** (cases 1, 2, 3 of §C). None was run in any
   V3-008 row; all lie inside the He domain, away from the domain ends whose behaviour was not re-measured after
   R2-STOP3, and away from He 220 MeV/u (declared for the superseded, never-run V1-held row).
+- Sizing by the §3 rules of r2-topas-target.md (scientific review I3): R_plan = CSDA range of the default model in
+  water (`BetheStoppingSource()`, rounded to 0.1 mm, computed before any run); L = 1.3 R_plan rounded up to 50 mm;
+  h_z = 0.02 / 0.05 / 0.1 mm for R < 30 / 30–120 / ≥ 120 mm; entrance window [1, 3] mm (R ≥ 30 mm); plateau group
+  g = 1 / 2 / 5 mm for R < 30 / 30–120 / ≥ 120 mm; IDD scorer only (no lateral scorers).
+
+| case | He MeV/u | total MeV | R_plan (mm) | box L (mm) | h_z (mm) | entrance window (mm) | plateau group g (mm) |
+|---|---|---|---|---|---|---|---|
+| 1 | 75 | 300 | 46.7 | 100 | 0.05 | [1, 3] | 2 |
+| 2 | 125 | 500 | 115.7 | 200 | 0.05 | [1, 3] | 2 |
+| 3 | 200 | 800 | 261.9 | 350 | 0.1 | [1, 3] | 5 |
+
 - ionmc: `stopping_model = "icru90-water-v1"`, warp-cpu float64, 1e6 histories, 40 batches, default end-of-range model
   for ions (`continuous_residual_v1`), all other options default.
 - Criteria and estimators: TD-EM (a)–(e) with the tolerances, the estimators (r2-topas-target.md §4.1), the TOST rule
@@ -89,11 +105,14 @@ the default grid, same start-range rule scaled consistently) is selected by `sto
   array (decision 0043 §6, FC-2); V-C1 is evidence for transport, straggling and end-of-range consistency of this
   configuration with the reference, **not** for stopping physics. Residual construction differences: table resampling
   and interpolation (ionmc log-log on 200/decade; Geant4 its own dE/dx table binning), start range below 1 MeV/u.
-- Outcome per case: PASS / FAIL. The model's status is `validated:V-C1` only if all three cases PASS; otherwise
-  `failed:V-C1` (recorded, never re-graded).
+- Outcome per case: PASS / FAIL. The evidence registry of decision 0044 (separate from the immutable spec) receives
+  one record: `topas-agreement-shared-lineage:V-C1:PASS` only if all three cases PASS, otherwise `failed:V-C1`;
+  never `validated` (Codex REVIEW-0f80fad8 finding 2; scientific review I5). The record is appended once and never
+  re-graded; the spec, its hash and the table hashes are unchanged either way.
 
 **V-C1-A — the default at the same energies (report-only).** The paired default-model samples of V-C2 graded with the
-same criteria. They never change a V3-008 verdict, the default or any spec.
+same criteria. They never change a V3-008 verdict, the default or any spec. Its results are committed in full and
+recorded in the ledger whatever the outcome.
 
 **V-C2 — selection reaches transport (gating for integration, §F).**
 - Prediction, computed and committed in the seal before any run (model-only quantities, no reference value):
@@ -104,6 +123,20 @@ same criteria. They never change a V3-008 verdict, the default or any spec.
 - PASS per energy iff |ΔR80 − ΔR_pred| + 1.645 σ ≤ max(0.02 mm, 0.10 |ΔR_pred|). Justification (ESTIMATE): the
   model-dependence of the R80 − CSDA offset through the Bohr-variance weighting is ≲ 0.005 mm; detour and binning
   terms cancel in the pair. The tolerance does not depend on any TOPAS output.
+- Informativeness precondition (scientific review I2), evaluated and committed in the seal before any run: at each
+  energy |ΔR_pred| ≥ 2 · (0.02 mm + 1.645 σ_exp), with σ_exp the expected paired jackknife σ of ΔR80 taken from the
+  V3-008 TD-EM He budget (R80 SE ≤ 0.01 mm at 1e5 primaries, r2-topas-target.md §6; ESTIMATE, scaled to 1e6). Where
+  the precondition holds, V-C2 is gating at that energy. Where it fails, V-C2 at that energy is non-informative, is
+  still run and reported, and the gate for that energy is V-C2-D alone.
+
+**V-C2-D — selection reaches transport, deterministic (gating for integration at every energy).**
+- For the three energies, MCS and straggling off, python and warp-cpu float64, 2 000 histories per model, ionmc
+  seeds of §C r_index 11: Δz = mean cutoff depth(`icru90-water-v1`) − mean cutoff depth(default) is compared with
+  ΔR_pred,D(E0) = R_CSDA,icru90(E0) − R_CSDA,default(E0) at E0 exactly (no σ_E), computed and committed in the seal.
+- PASS per energy and backend iff |Δz − ΔR_pred,D| ≤ 1e-4 · R_CSDA,default(E0) (inverse-table round-trip and
+  step-sequence residual ≲ 1e-5 relative per model, scientific review I1; ESTIMATE).
+- Informativeness: |ΔR_pred,D| ≥ 5e-4 · R_CSDA,default(E0) at every energy is checked in the seal; if it fails at an
+  energy, the seal records it and the synthetic-model row CC-T (both backends) is the declared substitute gate there.
 
 **V-C3 — table spread (report-only).** `icru90-water-v1` vs ASTAR (alpha) and PSTAR (proton) stopping and CSDA range
 over the common window, aggregates only (max, RMS; decision 0038 already reported this spread, SEEN).
@@ -134,6 +167,8 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
   others reserved. Extent 20612004–20618103.
 - Consumed by V3-008 and never re-drawn: every family listed above. Consumed by V3-013 once drawn: `topas13` parts used,
   `ion13` r_index used.
+- Ownership: the gap 20610000–20618999 is transferred from the V3-008 reservation to V3-013 by a dated note in plan
+  v3-008 §C (same commit; scientific review M3); the V3-008 guard is unchanged.
 - Guard: a new pure-python test (`tests/ionmc/test_v3_013_seed_families.py`) asserts both families lie inside the
   reservation, are mutually disjoint and disjoint from every V3-008 and V3-005 family of the existing guard, and that
   this section's literals match its constants.
@@ -147,12 +182,19 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
    review on the exact commit until passed → exact-SHA local validation record → push → CI at the exact head.
 3. **Seal:** one reviewed commit containing the V-C evaluator (`validation/scripts/stopping/v13_evaluate.py`, with
    tests on synthetic inputs), the three TOPAS bundles (parts 0–7, 19) with their hashes, the ionmc sample step
-   definitions and the committed V-C2 prediction file. A run (smoke or evidence) is valid only if its `code_sha` has
-   the seal commit as an ancestor and the seal review finished before the run's controlled `reference_started` /
-   host-run start event (the V3-008 R2-TOPAS-4 rule; controlled records, not Git timestamps). The evaluator enforces
-   both checks and fails closed.
-4. **Smokes** (execution only), then **evidence runs** (TOPAS, then ionmc), one heavy job at a time.
-5. **Evaluate once** at a committed SHA; commit the reports and run records; dated results note in this plan; ledger
+   definitions, the committed V-C2/V-C2-D prediction file with both informativeness preconditions evaluated, and
+   the pins `spec_sha256`, `content_sha256` and table identities of both models plus the tree hash of `src/ionmc`
+   at the seal.
+4. **ionmc samples first** (scientific review B1; the step-0 rule of r2-topas-target.md §6): the V-C2-D runs and the
+   V-C1/V-C2 samples of both models (`icru90-water-v1` and the default, common random numbers) are produced at the
+   seal commit; their records (sample digests, identity blocks) are committed and reviewed **before any TOPAS run,
+   smokes included**. The evaluator fails closed unless every ionmc evidence run's identity block equals the seal
+   pins exactly (equality, not ancestry) and its `code_sha` has the seal as an ancestor.
+5. **TOPAS smokes** (execution only, part 19), then **TOPAS evidence runs**, one heavy job at a time. A TOPAS run is
+   valid only if the seal review and the ionmc-sample commit's review both finished before the run's controlled
+   `reference_started` event (the V3-008 R2-TOPAS-4 rule; controlled records, not Git timestamps). The evaluator
+   enforces these checks and fails closed.
+6. **Evaluate once** at a committed SHA; commit the reports and run records; dated results note in this plan; ledger
    update. A defect found after the seal is handled by a prospective dated amendment, reviewed before any re-run;
    seen samples are consumed (the I3-FU-1 revision-17 precedent).
 
@@ -167,13 +209,14 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
 ## F. Gates and integration criterion
 
 - **STOP**: any R2, R1-ion, ID-DEF or ID-GUARD difference; any A.2–A.4 failure that is not a test defect.
-- **Integration of V3-013** requires: all A.1–A.4 rows PASS, A.5 gating rows PASS, V-C2 PASS for all three energies,
+- **Integration of V3-013** requires: all A.1–A.4 rows PASS, A.5 gating rows PASS, V-C2-D PASS for all three energies on both backends and V-C2 PASS at every energy where its
+  precondition holds,
   V-C1 graded (PASS or FAIL, never INCONCLUSIVE-by-omission: a run-validity failure after the frozen repeats is a FAIL),
   the documentation step S6 (default statement of decision 0044 §6, registry table, THIRD_PARTY_NOTICES update),
   the standard lifecycle gates (Codex review, exact-SHA validation record, CI, controlled merge).
 - **No outcome changes the default or any spec within this task.** A FAIL is recorded and sets the model's evidence
   status; a revised alternative is a new `model_id`/`version` with fresh, held-out evidence pre-registered by amendment.
-- A V-C2 FAIL blocks integration (selection does not reach transport as predicted) and triggers attribution by
+- A V-C2-D or V-C2 FAIL blocks integration (selection does not reach transport as predicted) and triggers attribution by
   prospective amendment.
 
 ## G. Acquisition list
@@ -185,6 +228,18 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
   (Geant4 licence; data provenance stated in the file) before any construction role. Optional, for lineage only:
   `G4ICRU90StoppingData.hh` and `G4BraggModel.cc` v11.4.2 (Q7 TO VERIFY items).
 - libdEdx ICRU73_NEW as construction: only after an operator authorization (GPL-3); not requested by this plan.
+
+## H. Pre-freeze review log (2026-11-17)
+
+Decision 0044, "Pre-freeze review log", records the Codex review REVIEW-0f80fad83827437582b3def7bf34b9b7 at
+14099895 (changes_required: evidence status inside the immutable spec; `validated:V-C1` overstatement) and the
+independent scientific review (B1 run order; I1 tolerances of CC-T/CC-RES/CC-I2/CC-NODE; I2 V-C2 informativeness;
+I3 bin sizes; I4 unregistered sources; I5 status label; I6 decision-0038 amendment; M1–M6) with their resolutions.
+In this plan the resolutions are: row ID-USER (A.1); the length-scaled, two-backend CC-T, the unit-level CC-RES and
+the (metadata, projectile) injectivity (A.2); the fine-node CC-NODE and the node-array CC-I2 (A.5); the per-case
+sizing table, the evidence-record wording, V-C1-A full commitment, the V-C2 precondition and the deterministic
+V-C2-D (A.6); the seed-gap transfer (§C); ionmc samples before any TOPAS run with exact seal pins (§D); the gates
+(§F). All applied before the freeze; no run exists.
 
 ## Preserved obligations (verbatim from the V3-008 integration note, `validation/plans/v3-008-acceptance.md`)
 
@@ -200,3 +255,5 @@ OPEN. Not a clinical claim."
   a9563412 (V3-008 integrated, PR #84). Open before freeze: independent Codex review and scientific review of decision
   0044 and this plan. Decision points reported to the orchestrator: Q3 (MCS proton path fixed and recorded), the use of
   the V3-008 reservation gap 20610000–20618999 for the V3-013 seed families, and V-C1-A as report-only.
+- 2026-11-17 (orchestrator, S0 revision): Codex REVIEW-0f80fad8 (changes_required) and the independent scientific
+  review applied in place (section H); still a freeze candidate pending the re-review.

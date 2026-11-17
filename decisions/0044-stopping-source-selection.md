@@ -1,6 +1,7 @@
 # 0044 — Explicit selection of stopping-power models and tabulated sources
 
-- Status: DRAFT (S0, planner, 2026-11-17), frozen together with `validation/plans/v3-013-acceptance.md` by one
+- Status: DRAFT (S0, planner, 2026-11-17; revised 2026-11-17 after the pre-freeze reviews, section
+  "Pre-freeze review log"), frozen together with `validation/plans/v3-013-acceptance.md` by one
   reviewed commit before any V3-013 code or comparison output exists. Until that commit this is a freeze candidate.
 - Task: V3-013 (follow-up directed by the operator in the V3-008 integration authorization IR-20261116-204824-29B867,
   option A; directive quoted in decision 0043, dated note of 2026-11-17, and in `validation/plans/v3-008-acceptance.md`,
@@ -10,7 +11,10 @@
   roles, validation strategy. **No physics default changes.**
 - Supersedes: only the *selection mechanism* of decision 0038 ("Tabulated layer": the free-form
   `stopping_source = "bethe" | "nist-star"`) and of decision 0043 §1 ("Selected": the source object passed as
-  `PhysicsOptions.stopping` with no registry, no domain, no identity). The default model, its options, its I-value,
+  `PhysicsOptions.stopping` with no registry, no domain, no identity), and amends decision 0038's data-role
+  record for the ICRU 90 arrays ("only as a cached evaluation reference"; data-role table row `evaluation`):
+  in `icru90-water-v1` runs they are construction data (section 1, licence-role extension); in every other
+  run their role is unchanged. The default model, its options, its I-value,
   its domains and every V3-008 verdict are preserved (section "Preserved obligations").
 - Markers: **FACT** (read in code or records at a9563412, file:line), **ESTIMATE**, **TO VERIFY**, **PROPOSAL**
   (a design choice frozen by this decision). Not a clinical claim.
@@ -56,15 +60,15 @@ packed by `_ion_mapping_data`, and `fdm_domain_status(..., ion_tables=…)` buil
   `fdm_domain_status` passes `ion_tables.get(fingerprint)`, which is `None` for a missing material
   (`exact_omega.py:1022–1023`) — a latent silent fallback (not reachable from `validate`, which supplies every
   geometry material).
-- Diagnostics and fixtures: `transport/parity.py:953`, `transport/ion_mcs_checks.py:42`, `nuclear/build.py:1039`
+- Diagnostics and fixtures: `transport/parity.py:953`, `transport/ion_mcs_checks.py:42`, `nuclear/build.py:1041`
   (gate D6), `validation/scripts/transport/a16_digest.py:51, 155`, `tests/ionmc/test_transport_diagnostic.py`
   (T1 trace fixture).
 
 **Identity and hash.** `TransportTables.identity` per material carries `source`, I requested/effective, `dataset_id`,
 `source_sha256`, `content_sha256`, `range_construction` and the full `metadata` (`src/ionmc/transport/tables.py:267–288`);
 `sha256` hashes the arrays and the identity (`tables.py:304`). `EffectiveConfig.summary()["tables"]` holds the sha256,
-`stopping_source` (the source name), the identities and the water row (`config.py:633–643`); `ls_requested/ls_effective`
-are outside the hash (`config.py:603–606`). No model id, version, domain, licence role or data-member pin exists.
+`stopping_source` (the source name), the identities and the water row (`config.py:635–644`); `ls_requested/ls_effective`
+are outside the hash (`config.py:612–613`). No model id, version, domain, licence role or data-member pin exists.
 
 **Q4 — what the R2 regression depends on.**
 - A16 digests (`validation/scripts/transport/a16_digest.py`): sha256 of the run *outputs* only — per-grid batch
@@ -121,11 +125,15 @@ DataPin(dataset_id: str, archive_sha256: str, member: str | None, member_sha256:
         parser: str, licence: str, use_role: "construction-permitted" | "evaluation-only" | "lineage-only")
 StoppingModelSpec(model_id: str, version: str, kind: "analytic" | "tabulated", options: Mapping,
                   interpolation: str, range_start: str, data: tuple[DataPin, ...], domain: StoppingDomain,
-                  evidence: Mapping[str, str], decision: str)
+                  decision: str)                       # immutable; carries NO evidence status
 STOPPING_MODELS: Mapping[str, StoppingModelSpec]      # immutable
 DEFAULT_STOPPING_MODEL_ID = "bethe-ionmc-v1"
 spec_sha256(spec) -> str                               # sha256 of the canonical JSON of the spec
+EvidenceRecord(spec_sha256: str, status: str, row: str | None, plan: str, graded_at_sha: str | None)
+STOPPING_EVIDENCE: Mapping[str, tuple[EvidenceRecord, ...]]   # keyed by spec_sha256; module
+                                                       # stopping_evidence.py; append-only
 resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource
+spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]   # id from the instance fields (section 2)
 ```
 
 - `resolve` returns the existing classes (and one new `TabulatedStoppingSource` for parsed arrays); every returned
@@ -133,16 +141,23 @@ resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource
   returns a source of another id. A spec's `version` changes with any numeric change of its formula, data or code path.
 - Composite models (table plus analytic with a join) are allowed only as explicit, separately named models with a
   frozen join rule; none is registered by this decision.
+- **Evidence status is not part of the spec** (Codex REVIEW-0f80fad8 finding 1). It lives in the append-only
+  evidence registry keyed by `spec_sha256`, with the statuses `unvalidated`, `consistency-only`,
+  `topas-agreement-shared-lineage:<row>:PASS`, `failed:<row>` (a FAIL of any gating row of the model) and
+  `as-graded:<decision>` (the default: its V3-008 rows as graded, I3 FAIL included). A grading appends one
+  record; it never changes a spec, a `spec_sha256` or a table hash. `capabilities()` joins the two registries;
+  the persisted block carries the records present at run time (`evidence_at_run`). No status is ever named
+  `validated`: shared-lineage agreement is recorded as such (finding 2).
 
 **Registered models (frozen by this decision):**
 
-| model_id | kind | options / data | domain (species; material; table window per u) | evidence status |
+| model_id | kind | options / data | domain (species; material; table window per u) | initial evidence record |
 |---|---|---|---|---|
-| `bethe-ionmc-v1` (**default**) | analytic | exactly `BetheOptions()` defaults: shell, barkas, bloch, mott, effective_charge on, `ls="off"`; Barkas-125 effective charge; grid 1–500 MeV/u, 200/decade; start range constant-S; I from the material (water 78 eV, ICRU 90) | proton, deuteron, alpha, carbon12, oxygen16; any `materials.py` material (evidence: water only); 1–500 MeV/u; source domains of decision 0043 §5 and the proton rules of `validate` | as graded in decisions 0038/0039/0043 and plan v3-008 (I3 FAIL retained) |
+| `bethe-ionmc-v1` (**default**) | analytic | exactly `BetheOptions()` defaults: shell, barkas, bloch, mott, effective_charge on, `ls="off"`; Barkas-125 effective charge; grid 1–500 MeV/u, 200/decade; start range constant-S; I from the material (water 78 eV, ICRU 90) | proton, deuteron, alpha, carbon12, oxygen16; any `materials.py` material (evidence: water only); 1–500 MeV/u; source domains of decision 0043 §5 and the proton rules of `validate` | `as-graded:0043` (decisions 0038/0039/0043 and plan v3-008; I3 FAIL retained) |
 | `bethe-ionmc-v1+ls-eff` | analytic (sensitivity) | as default with `ls="eff"` | as default; effective only for z ≥ 2 (z = 1: documented no-op, effective id `bethe-ionmc-v1`) | unvalidated (sensitivity) |
 | `bethe-ionmc-v1+ls-bare_mixed` | analytic (sensitivity/attribution) | as default with `ls="bare_mixed"` | as `+ls-eff` | unvalidated (sensitivity/attribution only, decision 0043 §1) |
 | `nist-pstar-astar-water-2005` (today `"nist-star"`) | tabulated | registry `nist-pstar-water-2005` f5fc6482…, `nist-astar-water-2005` dd4a2e50…; parser `nist_star`; NIST SRD 124 terms (decision 0038 legal assessment); I = 75 eV fixed by the table, requested I recorded | proton (PSTAR), alpha (ASTAR); structural liquid water; 1 MeV/u to the table end (≤ 250 MeV/u alpha; PSTAR upper end **TO VERIFY** by a loader test, counts/coverage only); nuclear and C/O rejected | consistency-only (decision 0038); circular for PSTAR/ASTAR rows |
-| `icru90-water-v1` (**first new alternative**) | tabulated | registry `geant4-icru90-stopping-11.4.2` afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd (single file, `member=None`), parser `icru90` (`data/icru90.py`), Geant4 Software License; log-log interpolation of S onto 200/decade from 1 MeV/u; range by `exact-loglog-quadrature-v1`; start range `icru90-integrated-from-lowest-node-v1` (the array's own nodes below 1 MeV/u, log-log quadrature, constant-S only below the lowest node) | proton (1–500 MeV), alpha (1–250 MeV/u); structural liquid water with requested I = 78 eV (otherwise fail closed); no deuteron (nuclear runs fail closed); no C/O | consistency-only until V-C1 is graded |
+| `icru90-water-v1` (**first new alternative**) | tabulated | registry `geant4-icru90-stopping-11.4.2` afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd (single file, `member=None`), parser `icru90` (`data/icru90.py`), Geant4 Software License; log-log interpolation of S onto 200/decade from 1 MeV/u; range by `exact-loglog-quadrature-v1`; start range `icru90-integrated-from-lowest-node-v1` (the array's own nodes below 1 MeV/u, log-log quadrature, constant-S only below the lowest node) | proton (1–500 MeV), alpha (1–250 MeV/u); structural liquid water with requested I = 78 eV (otherwise fail closed); no deuteron (nuclear runs fail closed); no C/O | `consistency-only` (a V-C1 grading appends `topas-agreement-shared-lineage:V-C1:PASS` or `failed:V-C1`; never `validated`) |
 
 **Licence-role extension for `icru90-water-v1` (written here).** Decision 0038 records the arrays as Geant4-licensed
 source-embedded data ("permits use and modification with attribution"; lead's assessment, not legal advice) and uses
@@ -150,7 +165,9 @@ them as an evaluation reference. Construction use is the same *use* under the sa
 time from the user's verified provenance cache, never committed, never redistributed; the ICRU report is cited, not
 reproduced; the Geant4 notice is already shipped (`src/ionmc/THIRD_PARTY_NOTICES.md`). The registry `Dataset.role`
 stays `evaluation` (its default role); the per-use role is carried by the model's `DataPin.use_role =
-"construction-permitted"`. No operator step is needed (ESTIMATE; the S6 documentation step re-states the basis).
+"construction-permitted"`. No operator step is needed (ESTIMATE; the S6 documentation step re-states the basis). No value derived node by
+node from the arrays (resampled tables, CC-NODE/CC-INT point outputs) is committed; the repository holds counts,
+coverage and aggregates only.
 
 **Circularity rule.** A run whose construction data are also the evaluation reference of a row makes that row
 circular for that run configuration (decision 0038 rule, generalised by `DataPin.dataset_id`). For `icru90-water-v1`:
@@ -167,9 +184,14 @@ SRIM/MSTAR and z²-scaled PSTAR/ASTAR stay rejected (decisions 0038, 0043 §1).
 ### 2. Single selection point (PROPOSAL)
 
 - `PhysicsOptions` gains `stopping_model: str | None`; exactly one of `stopping` (object, API-compatible) and
-  `stopping_model` (id, resolved by `resolve`) is given. A `stopping` object must carry `spec` and `identity()`
-  (sources built by `resolve`, or a user source declaring its own spec with `kind` and `decision="user"`, evidence
-  "unvalidated"); otherwise `PhysicsOptions` fails closed. `default_source()` returns `resolve(DEFAULT_STOPPING_MODEL_ID)`.
+  `stopping_model` (id, resolved by `resolve`) is given. A `stopping` object is identified from its
+  instance fields by `spec_of` (never from a class constant; scientific review I4): an exact match with a registered
+  spec (class, every option, grid bounds and density, start-range rule, data pins) yields that `model_id`; any other
+  source (for example `BetheStoppingSource(e_min_per_u=1.5)` or `barkas=False`, as existing tests use) is recorded as
+  `model_id_effective = "unregistered"` with its `kind`, class and complete options in the identity block,
+  `decision = "user"` and the evidence record `unvalidated`; a source without `spec_of` support fails closed.
+  `stopping=BetheStoppingSource()` therefore resolves to `bethe-ionmc-v1` (row R1-ion) and a modified source is never
+  reported under a registered id (row ID-USER). `default_source()` returns `resolve(DEFAULT_STOPPING_MODEL_ID)`.
 - `validate` derives every stopping-dependent object from that one source: material tables, LET water row, deuteron
   tables, exact-Ω ion rows, residual range and step bounds; it asserts that all table identities name one `model_id`.
   `ExactOmegaMapping.build` and `fdm_domain_status` fail closed on a missing ion table (no Bethe default in run paths).
@@ -197,15 +219,15 @@ domain, data pins, licence role and evidence status.
 `EffectiveConfig.summary()["stopping"]` (always present, outside the table hash):
 `model_id_requested`, `model_id_effective`, `version`, `kind`, `spec_sha256`, `options` (complete, incl.
 `ls_requested/ls_effective` and the I-value rule), `interpolation`, `range_construction`, `range_start`, `domain`,
-`data` (each pin with `role_in_this_run = "construction"`), `content_sha256` of the parsed arrays, `evidence`,
+`data` (each pin with `role_in_this_run = "construction"`), `content_sha256` of the parsed arrays, `evidence_at_run` (the evidence records of the effective spec at run time),
 `decision`, `mcs_proton_path_stopping` (ion runs), `circular_rows` (dataset ids also used as evaluation references),
 `selected_by` (`"stopping_model"` or `"stopping-object"`).
 - Table metadata: models registered before this decision (`bethe-ionmc-v1` and its LS variants,
   `nist-pstar-astar-water-2005`) keep **byte-identical** metadata, so their table identities and hashes, the T1 fixture
   and the A16 digests are unchanged; their existing metadata already distinguishes them (`source`, `options.ls`,
   dataset sha256). Every model registered by this decision or later carries `model_id` and `version` in its table
-  metadata, so its `TransportTables.sha256` differs from every existing model. A test asserts both directions and that
-  the metadata → model-id map is injective over the registry.
+  metadata, so its `TransportTables.sha256` differs from every existing model. A test asserts both directions and that the map (metadata, projectile) → effective model id is injective over the
+  registry (for z = 1 the LS variants share the default's metadata by design and resolve to the default's effective id).
 - Persistence on disk is the validation scripts' JSON step documents (Q5); a clean-process round trip of the block is a
   gating row of the plan.
 
@@ -216,8 +238,8 @@ domain, data pins, licence role and evidence status.
 - `DEFAULT_STOPPING_MODEL_ID` and the default's `spec_sha256` are pinned by a test and guarded like
   `A16_INTENDED_CHANGE`: a change requires a `STOPPING_DEFAULT_INTENDED_CHANGE` record that names a decision record;
   the record is `None` in V3-013.
-- Within V3-013 no validation outcome changes the default or any registered spec. A FAIL is recorded and the model's
-  evidence status becomes `failed:<row>`; a revised alternative is a new `model_id`/`version` with fresh, held-out
+- Within V3-013 no validation outcome changes the default or any registered spec. A FAIL is recorded by appending `failed:<row>` to the evidence registry (the spec, its hash and every table hash are
+  unchanged); a revised alternative is a new `model_id`/`version` with fresh, held-out
   evidence (new seeds, new energies), pre-registered before it runs.
 - No alternative motivated by a seen FAIL of the default (I3, TD-EM low and upper ends) is introduced without stating
   that motivation, consuming the affected rows and pre-registering fresh evidence. `icru90-water-v1` is not so
@@ -281,8 +303,10 @@ Not a clinical claim.
 Frozen in `validation/plans/v3-013-acceptance.md`: gating regression rows (R2 bit-identity, R1-ion, default identity),
 consumer-consistency rows with a synthetic test-only model, domain and role fail-closed rows, identity persistence,
 consistency checks of `icru90-water-v1` (not evidence), its configuration-specific validation V-C1 (He, TOPAS opt4
-EM-only, fresh held-out energies 75/125/200 MeV/u and a fresh seed family), the propagation check V-C2 and the
-report-only V-C3.
+EM-only, fresh held-out energies 75/125/200 MeV/u and a fresh seed family; shared-lineage transport agreement, never
+a validation of the stopping physics), the propagation checks V-C2 (stochastic, paired, with a seal-time informativeness
+precondition) and V-C2-D (deterministic straight paths) and the report-only V-C3; the ionmc samples of both models are
+produced and committed before any TOPAS run (plan §D).
 
 ## Expected tradeoffs and declared limitations
 
@@ -291,6 +315,31 @@ report-only V-C3.
   agreement is shared-construction evidence; its proton use has consistency checks only (no proton row pre-registered).
 - The MCS proton path stays Bethe for every model (declared mixed construction for non-default ion runs).
 - No library-level result writer; identity persistence relies on `EffectiveConfig.summary()` and the JSON step writers.
+
+## Pre-freeze review log (2026-11-17; findings recorded, resolutions applied in place before the freeze)
+
+- **Codex REVIEW-0f80fad83827437582b3def7bf34b9b7 at 14099895 (changes_required, 2 important).** (1) The evidence
+  status was part of the immutable spec and of `spec_sha256`, so a grading would have changed the model identity →
+  evidence status removed from the spec; append-only evidence registry keyed by `spec_sha256` (section 1).
+  (2) `validated:V-C1` overstated shared-lineage transport agreement as validation of the stopping model →
+  record `topas-agreement-shared-lineage:V-C1:PASS` or `failed:V-C1`; never `validated` (section 1; plan A.6).
+- **Independent scientific review (reviewer agent, read-only, at 14099895).** B1 (blocking): the plan ran TOPAS
+  before the ionmc samples with only an ancestry check, so the ionmc model could have been adjusted after seeing
+  TOPAS → ionmc samples of both models produced and committed before any TOPAS run, exact seal pins (plan §D).
+  I1: CC-T/CC-RES/CC-I2/CC-NODE tolerances not achievable or non-informative as written → rows rewritten (plan
+  A.2, A.5). I2: V-C2 could pass trivially where |ΔR_pred| is small → seal-time informativeness precondition and
+  the deterministic row V-C2-D (plan A.6). I3: V-C1 bin sizes contradicted the §3 rule of r2-topas-target.md →
+  per-case sizing table frozen (plan A.6). I4: a directly constructed source with modified fields would have been
+  recorded under a registered id → `spec_of` from instance fields, `unregistered` otherwise (section 2; row
+  ID-USER). I5: as Codex (2). I6: the licence-role extension silently amended decision 0038 → named in
+  "Supersedes"; no node-derived values committed (section 1). M1: three line citations corrected. M2: injectivity
+  stated over (metadata, projectile) → effective id. M3: the seed gap is transferred from V3-008 by a dated note
+  in plan v3-008 §C. M4: V-C1-A results committed whatever the outcome. M5: the V2-OUTPUT ledger row reworded
+  (identity block only; no writer). M6: the ledger's "pending the remaining gates" wording marked as superseded by
+  the integration note.
+- Confirmed by the scientific review: directive coverage (conditional on B1), the FACT claims of "Context"
+  (apart from M1), the seed families (numerically), no table values, ledger and 0043 note accuracy, internal
+  consistency, the R2/T1 dependence analysis.
 
 ## Preserved obligations (from the V3-008 integration note, verbatim)
 
