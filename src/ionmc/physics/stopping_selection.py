@@ -117,8 +117,10 @@ def select(stopping: StoppingSource | None, stopping_model: str | None) -> Stopp
             raise fail(f"stopping_model must be a string id, got {stopping_model!r}")
         try:
             source = _models.resolve(stopping_model)
-        except ValueError as exc:
-            raise fail(str(exc)) from exc
+        except (ValueError, OSError, RuntimeError) as exc:
+            # unknown id, or (tabulated models) a missing / corrupt / unparsable cache object: row
+            # DOM-6, fail closed with the loader's message (IntegrityError is a RuntimeError)
+            raise fail(f"{type(exc).__name__}: {exc}") from exc
         return StoppingSelection(
             stopping_model,
             "stopping_model",
@@ -199,6 +201,10 @@ def check_window(
     energy = f"{what} [{e_lo_mev:g}, {e_hi_mev:g}] MeV ({e_lo_mev / a:g} to {e_hi_mev / a:g} MeV/u)"
     if lo_u is None or hi_u is None:
         raise _refuse(sel, species.name, material, energy)
+    resolved = getattr(sel.source, "window_per_u", None)
+    if callable(resolved):  # a tabulated model: the window of the tables actually built
+        r_lo, r_hi = resolved(species)
+        lo_u, hi_u = max(lo_u, r_lo), min(hi_u, r_hi)
     if e_lo_mev / a < lo_u * (1.0 - _REL) or e_hi_mev / a > hi_u * (1.0 + _REL):
         raise _refuse(sel, species.name, material, energy)
 
@@ -236,6 +242,16 @@ def table_model_id(entry: Mapping[str, Any], projectile: Projectile) -> str:
     meta = entry["metadata"]
     if "model_id" in meta:
         return str(meta["model_id"])
+    if meta.get("source") == "nist-star":  # pre-freeze metadata, kept byte-identical (ID-NIST)
+        for mid, spec in _models.STOPPING_MODELS.items():
+            pins = {p.dataset_id: p.archive_sha256 for p in spec.data}
+            if (
+                projectile.name in spec.domain.species
+                and meta.get("dataset_id") in pins
+                and meta.get("sha256") == pins[meta["dataset_id"]]
+            ):
+                return mid
+        return UNREGISTERED_ID
     if meta.get("source") != "bethe" or not all(k in meta.get("options", {}) for k in _BETHE_FLAGS):
         return UNREGISTERED_ID
     seen = _bethe_view(
@@ -341,14 +357,20 @@ def identity_block(
     data_used: Sequence[Mapping[str, Any]] = (),
     content_sha256: str | None = None,
     range_construction: str | None = None,
+    materials: Sequence[Material] = (),
 ) -> dict[str, Any]:
     """The block ``EffectiveConfig.summary()["stopping"]`` (outside the table hash).
 
     ``data_used`` lists, for tabulated models, only the pins read for the resolved projectile and
     material tables of the run, each as ``{"pin": ..., "role_in_this_run": "construction",
     "table": [projectile, material]}``; ``content_sha256`` is the digest of the parsed arrays. Both
-    stay empty / ``None`` for the analytic models.
+    stay empty / ``None`` for the analytic models. For a source that reports what it read
+    (``datasets_used(projectile)``, ``content_sha256_for(projectile)``) and that the selection
+    maps to registered pins, they are derived from the source and ``materials`` (the materials
+    of the tables built); an explicit argument wins. A source with ``window_per_u`` adds the
+    resolved per-species window (MeV per nucleon) of the tables as ``domain_resolved``.
     """
+    from ionmc.physics.stopping_evidence import STOPPING_CIRCULAR_ROWS  # noqa: PLC0415
     from ionmc.transport.tables import RANGE_CONSTRUCTION  # noqa: PLC0415
 
     eid = sel.effective_id(projectile)
@@ -363,6 +385,22 @@ def identity_block(
         "ls_effective": ls_effective,
     }
     domain = _canon(spec.domain)
+    source = sel.source
+    used_ids = getattr(source, "datasets_used", None)
+    if not data_used and callable(used_ids) and spec.data:
+        data_used = [
+            {
+                "pin": _canon(p),
+                "role_in_this_run": "construction",
+                "table": [projectile.name, m.name],
+            }
+            for p in spec.data
+            if p.dataset_id in used_ids(projectile)
+            for m in materials
+        ]
+    digest_for = getattr(source, "content_sha256_for", None)
+    if content_sha256 is None and callable(digest_for) and spec.data:
+        content_sha256 = digest_for(projectile)
     fields: dict[str, Any] = {
         "version": spec.version,
         "kind": spec.kind,
@@ -387,10 +425,14 @@ def identity_block(
         "content_sha256": content_sha256,
         "evidence_at_run": _evidence(spec, digest),
         "decision": fields["decision"],
-        "circular_rows": [],
+        "circular_rows": list(STOPPING_CIRCULAR_ROWS.get(digest, ())),
         "selected_by": sel.selected_by,
         "species_transported": list(species_transported),
     }
+    window = getattr(source, "window_per_u", None)
+    if callable(window):
+        lo, hi = window(projectile)
+        block["domain_resolved"] = {projectile.name: {"e_min_per_u": lo, "e_max_per_u": hi}}
     if projectile.z >= 2:
         block["mcs_proton_path_stopping"] = MCS_PROTON_PATH_STOPPING
     return block

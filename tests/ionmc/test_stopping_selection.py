@@ -538,5 +538,14 @@ def test_no_environment_override_or_fallback_chain_in_the_selection_modules() ->
         assert "environ" not in text and "getenv" not in text, rel
 
 
-def test_nist_star_object_is_unregistered_until_s3_and_does_not_register_the_model() -> None:
-    assert "nist-pstar-astar-water-2005" not in STOPPING_MODELS
+def test_nist_model_is_registered_and_listed_by_the_capabilities() -> None:
+    # registered in S3 (cache-independent spec); its resolve needs the cached tables
+    assert "nist-pstar-astar-water-2005" in STOPPING_MODELS
+    cap = ionmc.capabilities()["physics"]["stopping_models"]["models"][
+        "nist-pstar-astar-water-2005"
+    ]
+    assert [p["dataset_id"] for p in cap["data_pins"]] == [
+        "nist-pstar-water-2005",
+        "nist-astar-water-2005",
+    ]
+    assert cap["evidence"][0]["status"] == "consistency-only"

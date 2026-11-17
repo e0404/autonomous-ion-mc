@@ -41,12 +41,30 @@ def _initial() -> dict[str, tuple[EvidenceRecord, ...]]:
         out[h] = (
             EvidenceRecord(h, "unvalidated", None, "validation/plans/v3-013-acceptance.md", None),
         )
+    nist = spec_sha256(ids["nist-pstar-astar-water-2005"])
+    out[nist] = (
+        EvidenceRecord(
+            nist, "consistency-only", None, "validation/plans/v3-013-acceptance.md", None
+        ),
+    )
     return out
 
 
 # Append-only by convention and by type: records are added in this module's source, never mutated.
 _RECORDS: dict[str, tuple[EvidenceRecord, ...]] = _initial()
 STOPPING_EVIDENCE: Mapping[str, tuple[EvidenceRecord, ...]] = MappingProxyType(_RECORDS)
+
+
+# Dataset ids that are also used as evaluation references of the model's rows (decision 0044
+# section 1: the NIST model is circular for the PSTAR/ASTAR rows), keyed by spec_sha256.
+STOPPING_CIRCULAR_ROWS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        spec_sha256(STOPPING_MODELS["nist-pstar-astar-water-2005"]): (
+            "nist-pstar-water-2005",
+            "nist-astar-water-2005",
+        )
+    }
+)
 
 
 def add_test_record(record: EvidenceRecord) -> None:

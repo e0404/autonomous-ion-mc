@@ -7,8 +7,9 @@ source of another id; :func:`spec_of` identifies a source *instance* from its fi
 source is never reported under a registered id.
 
 Registered in step S1: the default ``bethe-ionmc-v1`` and its two Lindhard-Sorensen sensitivity
-variants. ``nist-pstar-astar-water-2005`` (S3) and ``icru90-water-v1`` (S4) are registered by the
-steps that implement them; nothing here constructs from tabulated data.
+variants; in step S3 ``nist-pstar-astar-water-2005`` (its source is built in
+:mod:`ionmc.physics.stopping_nist` from the cached PSTAR/ASTAR objects). ``icru90-water-v1`` (S4)
+is registered by its step.
 
 The default is guarded like ``A16_INTENDED_CHANGE``: the default id and its ``spec_sha256`` are
 pinned by a test, and a change requires ``STOPPING_DEFAULT_INTENDED_CHANGE`` to name a decision.
@@ -24,6 +25,7 @@ from dataclasses import dataclass, fields, is_dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
+from ionmc.data.registry import DATASETS
 from ionmc.physics.stopping import (
     BetheOptions,
     BetheStoppingSource,
@@ -179,9 +181,68 @@ _LS_IDS = {
     "bethe-ionmc-v1+ls-bare_mixed": "bare_mixed",
 }
 
-# nist-pstar-astar-water-2005 (S3) and icru90-water-v1 (S4) are added by their steps.
+NIST_MODEL_ID = "nist-pstar-astar-water-2005"
+PROGRAM_OF = {"proton": "PSTAR", "alpha": "ASTAR"}
+DATASET_OF = {"proton": "nist-pstar-water-2005", "alpha": "nist-astar-water-2005"}
+_E_MIN_PER_U = 1.0
+_E_MAX_PER_U_CAP = 500.0  # the NistStarStoppingSource default; the grid ends at the table end below
+_POINTS_PER_DECADE = 200
+NIST_INTERPOLATION = "log-log on the NIST nodes"
+NIST_RANGE_START = "NIST CSDA range at e_min (log-log interpolation)"
+
+
+def nist_pins() -> tuple[DataPin, ...]:
+    """The two construction pins (PSTAR, ASTAR), from the dataset registry (no table values)."""
+    return tuple(
+        DataPin(
+            DATASET_OF[sp],
+            DATASETS[DATASET_OF[sp]].sha256,
+            None,
+            None,
+            DATASETS[DATASET_OF[sp]].parser,
+            DATASETS[DATASET_OF[sp]].license,
+            "construction-permitted",
+        )
+        for sp in ("proton", "alpha")
+    )
+
+
+def nist_options(source_name: str, ppd: int) -> dict[str, Any]:
+    return {
+        "points_per_decade": int(ppd),
+        "source_name": source_name,
+        "programs": dict(PROGRAM_OF),
+        "grid": "e_min_per_u to min(e_max_per_u, table end); log grid",
+        "i_value": "table (75 eV); requested I recorded in the table metadata",
+    }
+
+
+def registered_nist_spec() -> StoppingModelSpec:
+    """The spec registered as ``nist-pstar-astar-water-2005`` (windows: lower end and the grid cap;
+    the upper end of each program is read from its cached table at resolve time)."""
+    species = frozenset(PROGRAM_OF)
+    return StoppingModelSpec(
+        NIST_MODEL_ID,
+        "1",
+        "tabulated",
+        nist_options("nist-star", _POINTS_PER_DECADE),
+        NIST_INTERPOLATION,
+        NIST_RANGE_START,
+        nist_pins(),
+        StoppingDomain(
+            species,
+            MATERIAL_RULE_WATER,
+            dict.fromkeys(species, _E_MIN_PER_U),
+            dict.fromkeys(species, _E_MAX_PER_U_CAP),
+        ),
+        "0044",
+    )
+
+
+# icru90-water-v1 (S4) is added by its step.
 _REGISTRY: dict[str, StoppingModelSpec] = {
-    mid: _bethe_spec(mid, "1", _registered_bethe(ls), "0044") for mid, ls in _LS_IDS.items()
+    **{mid: _bethe_spec(mid, "1", _registered_bethe(ls), "0044") for mid, ls in _LS_IDS.items()},
+    NIST_MODEL_ID: registered_nist_spec(),
 }
 STOPPING_MODELS: Mapping[str, StoppingModelSpec] = MappingProxyType(_REGISTRY)
 # constructors of the registered models that are not one of the Bethe variants (empty in src; the
@@ -192,7 +253,9 @@ _FACTORIES: dict[str, Callable[[], StoppingSource]] = {}
 def resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource:
     """Return the source of the registered ``model_id``; an unknown id raises ``ValueError``.
 
-    ``cache_dir`` is for tabulated models (S3/S4); the analytic models read no data.
+    ``cache_dir`` is for tabulated models (the NIST model of S3, S4's ICRU 90); the analytic models
+    read no data. A missing or corrupt cache object raises (``FileNotFoundError``,
+    ``IntegrityError``, ``ValueError``), never a fallback.
     """
     if model_id not in STOPPING_MODELS:  # the module-level mapping, looked up at call time
         raise ValueError(
@@ -205,6 +268,10 @@ def resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource:
                 f"stopping model {model_id!r} cannot be resolved: its data pin "
                 f"{pin.dataset_id!r} has use_role {pin.use_role!r}, not 'construction-permitted'"
             )
+    if model_id == NIST_MODEL_ID:  # reads the verified cache; never downloads (row DOM-6)
+        from ionmc.physics.stopping_nist import load_nist_model  # noqa: PLC0415
+
+        return load_nist_model(cache_dir)
     if model_id in _FACTORIES:
         return _FACTORIES[model_id]()
     if model_id not in _LS_IDS:
@@ -253,9 +320,9 @@ def register_test_model(
 def _nist_star_instance_spec(source: NistStarStoppingSource) -> StoppingModelSpec:
     """Spec of a directly constructed ``NistStarStoppingSource``, built from its instance fields.
 
-    S3 registers ``nist-pstar-astar-water-2005``; until then the source is reported as
-    ``unregistered`` with ``data = ()`` (no registered pins, so ``data_used`` stays empty) so that
-    the existing nist-star runs keep validating. Nothing is registered or constructed here.
+    One program is not the combined model ``nist-pstar-astar-water-2005`` (that is
+    :class:`~ionmc.physics.stopping_nist.NistStarCombinedSource`), so it is always reported as
+    ``unregistered`` with ``data = ()`` (no registered pins, so ``data_used`` stays empty).
     """
     program = str(source.star_table.program)
     species = {"PSTAR": "proton", "ASTAR": "alpha"}.get(program)
@@ -309,7 +376,14 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
     """
     if type(source) is NistStarStoppingSource:
         return UNREGISTERED_ID, _nist_star_instance_spec(source)
+    from ionmc.physics.stopping_nist import NistStarCombinedSource  # noqa: PLC0415
     from ionmc.physics.stopping_tabulated import TabulatedStoppingSource  # noqa: PLC0415
+
+    if isinstance(source, NistStarCombinedSource):  # structural match incl. the verified pins
+        candidate = source.instance_spec()
+        if _structure(STOPPING_MODELS[NIST_MODEL_ID]) == _structure(candidate):
+            return NIST_MODEL_ID, STOPPING_MODELS[NIST_MODEL_ID]
+        return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
 
     if isinstance(source, TabulatedStoppingSource):  # structural match, content digest included
         candidate = source.instance_spec()

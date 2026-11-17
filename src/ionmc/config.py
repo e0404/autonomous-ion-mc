@@ -593,8 +593,14 @@ class EffectiveConfig:
         species = [self.requested.source.projectile.name]
         if self.nuclear is not None:
             species.append(DEUTERON.name)
+        materials = list(self.geometry.materials)
+        if self.requested.tallies and all(m.name != WATER.name for m in materials):
+            materials.append(WATER)  # the LET water row is a table of the run
         return identity_block(
-            self.requested.physics.selection, self.requested.source.projectile, species
+            self.requested.physics.selection,
+            self.requested.source.projectile,
+            species,
+            materials=materials,
         )
 
     def summary(self) -> dict[str, Any]:
