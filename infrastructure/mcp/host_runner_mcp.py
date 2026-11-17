@@ -17,7 +17,7 @@ RUNNER = (
 )
 
 sys.path.insert(0, str(REPO_ROOT))
-from infrastructure.experiment_v3.host_records import list_records, materialize_records
+from infrastructure.experiment_v3.host_records import list_records, materialize_records, materialize_input_manifest
 
 mcp = MCPServer("ionmc-host-runner")
 
@@ -43,6 +43,17 @@ def materialize_host_run_records(task_id: str, run_ids: list[str]) -> dict:
     Verify the records with the committed trust file before using as evidence.
     """
     return materialize_records(task_id, run_ids)
+
+
+@mcp.tool()
+def materialize_host_input_manifest(task_id: str, run_id: str) -> dict:
+    """Copy a host run's input manifest into the task cache (max 64 MiB).
+
+    Checks its digest against archived record.json; retrieve and independently
+    verify that signed record too. Old runs without manifests are not rewritten.
+    Returns metadata and a local path, never bulk manifest contents.
+    """
+    return materialize_input_manifest(task_id, run_id)
 
 
 @mcp.tool()

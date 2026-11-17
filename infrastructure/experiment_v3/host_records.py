@@ -1,6 +1,7 @@
 """Read-only archive access and byte-preserving host-run record transfer.
 
-Only record.json is exported. Signatures are neither created nor interpreted;
+Only record.json and its explicitly requested input manifest are exported.
+Signatures are neither created nor interpreted;
 consumers must verify the complete record against their committed trust root.
 Directory descriptors keep writes confined even if a task renames cache paths.
 """
@@ -63,15 +64,19 @@ def _archive(task_id, state):
         yield task_fd
 
 
-def _read(parent, name):
+def _read(parent, name, *, max_bytes=None):
+    if max_bytes is None:
+        max_bytes = MAX_RECORD_BYTES
     fd = os.open(name, FILE_FLAGS, dir_fd=parent)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_RECORD_BYTES:
-            raise ValueError("Record must be a regular file of at most 4 MiB")
-        data = stream.read(MAX_RECORD_BYTES + 1)
-    if len(data) > MAX_RECORD_BYTES:
-        raise ValueError("Record exceeds 4 MiB")
+        if not stat.S_ISREG(info.st_mode) or info.st_size > max_bytes:
+            raise ValueError(
+                f"Record must be a regular file of at most {max_bytes} bytes"
+            )
+        data = stream.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError(f"Record exceeds {max_bytes} bytes")
     return data
 
 
@@ -137,10 +142,10 @@ def list_records(task_id, offset=0, limit=50, *, state=SHARE_ROOT):
     }
 
 
-def _publish(destination_fd, name, data):
+def _publish(destination_fd, name, data, *, max_bytes=None):
     """Atomic publication without overwriting, following links or changing modes."""
     try:
-        existing = _read(destination_fd, name)
+        existing = _read(destination_fd, name, max_bytes=max_bytes)
     except FileNotFoundError:
         pass
     else:
@@ -168,12 +173,12 @@ def _publish(destination_fd, name, data):
                 follow_symlinks=False,
             )
         except FileExistsError:
-            if _read(destination_fd, name) != data:
+            if _read(destination_fd, name, max_bytes=max_bytes) != data:
                 raise ValueError(f"Conflicting destination record: {name}") from None
             status = "existing"
         else:
             status = "copied"
-        if _read(destination_fd, name) != data:
+        if _read(destination_fd, name, max_bytes=max_bytes) != data:
             raise ValueError(f"Record changed during transfer: {name}")
         return status
     finally:
@@ -220,3 +225,37 @@ def materialize_records(task_id, run_ids, *, state=SHARE_ROOT, root=ROOT):
                 {**metadata, "path": str(destination / name), "status": status}
             )
     return {"task_id": task_id, "files": files, "bytes": size}
+
+
+def materialize_input_manifest(task_id, run_id, *, state=SHARE_ROOT, root=ROOT):
+    """Copy one manifest (max 64 MiB), checking its archived record's digest.
+
+    The caller must independently verify record.json's signature. This transfer
+    does not create an attestation or assert scientific validity.
+    """
+    task_id, run_id = _task(task_id), _run(run_id)
+    root = Path(root).resolve()
+    worktree = root.parent / (root.name + "-worktrees") / task_id.lower()
+    _, worktree = validate_task(task_id, worktree, root=root)
+    with _archive(task_id, state) as task_fd:
+        _, record = _record(task_fd, task_id, run_id)
+        with _directory(run_id, task_fd) as run_fd:
+            data = _read(run_fd, "input-manifest.json", max_bytes=MAX_BATCH_BYTES)
+    digest = hashlib.sha256(data).hexdigest()
+    if record.get("input_manifest_sha256") != digest:
+        raise ValueError("Input manifest does not match archived record digest")
+    name = run_id + ".inputs.json"
+    with (
+        _directory(worktree) as work_fd,
+        _directory(".ionmc-cache", work_fd, create=True) as cache_fd,
+        _directory("host-run-records", cache_fd, create=True) as destination_fd,
+    ):
+        status = _publish(destination_fd, name, data, max_bytes=MAX_BATCH_BYTES)
+    return {
+        "task_id": task_id,
+        "run_id": run_id,
+        "bytes": len(data),
+        "sha256": digest,
+        "status": status,
+        "path": str(worktree / ".ionmc-cache" / "host-run-records" / name),
+    }

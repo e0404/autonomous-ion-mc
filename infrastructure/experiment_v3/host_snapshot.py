@@ -1,46 +1,39 @@
 """Protected validation snapshots from a recorded Git object, not live source."""
 
+import json
 import os
-import shutil
-import stat
 import subprocess
 from pathlib import Path
 
-DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+from infrastructure.experiment_v3.host_inputs import (
+    DIRECTORY_FLAGS,
+    InputStore,
+    sync_dir,
+)
+from infrastructure.experiment_v3.storage_guard import StorageGuard
 
 
-def copy_regular_tree(source_fd, destination):
-    """Copy data through anchored descriptors; never follow input symlinks."""
-    destination.mkdir()
-    for name in os.listdir(source_fd):
-        info = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
-        if stat.S_ISDIR(info.st_mode):
-            child = os.open(name, DIRECTORY_FLAGS, dir_fd=source_fd)
-            try:
-                copy_regular_tree(child, destination / name)
-            finally:
-                os.close(child)
-        elif stat.S_ISREG(info.st_mode):
-            fd = os.open(
-                name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=source_fd
-            )
-            with os.fdopen(fd, "rb") as incoming:
-                if not stat.S_ISREG(os.fstat(incoming.fileno()).st_mode):
-                    raise ValueError("Snapshot input changed to a special file")
-                with (destination / name).open("xb") as outgoing:
-                    shutil.copyfileobj(incoming, outgoing)
-        else:
-            raise ValueError("Snapshot inputs must not contain links or special files")
-
-
-def create(root, worktree, sha, branch, destination, *, include_inputs=True):
-    """Fetch exactly sha into a private object database; copy only ignored inputs.
+def create(
+    root,
+    worktree,
+    sha,
+    branch,
+    destination,
+    *,
+    include_inputs=True,
+    input_store=None,
+    guard=None,
+):
+    """Fetch exactly sha; capture ignored inputs through a protected shared store.
 
     Source edits/restoration during execution cannot affect this checkout. Git
     metadata is independent, so source ref/index updates cannot change provenance.
     Ignored .ionmc-cache data is an input snapshot, never committed source evidence.
     """
     root, worktree, destination = map(Path, (root, worktree, destination))
+    if include_inputs:
+        guard = guard or StorageGuard(destination.parent)
+        guard.require()
     env = dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
 
     def run(*args):
@@ -61,6 +54,7 @@ def create(root, worktree, sha, branch, destination, *, include_inputs=True):
         raise ValueError("Validation snapshots must not contain committed symlinks")
     if not include_inputs:
         return destination
+    entries = []
     fd = os.open(worktree, DIRECTORY_FLAGS)
     try:
         try:
@@ -69,9 +63,21 @@ def create(root, worktree, sha, branch, destination, *, include_inputs=True):
             inputs = None
         if inputs is not None:
             try:
-                copy_regular_tree(inputs, destination / ".ionmc-cache")
+                with InputStore(
+                    input_store or destination.parent / "input-objects", guard
+                ) as store:
+                    entries = store.capture_tree(inputs, destination / ".ionmc-cache")
             finally:
                 os.close(inputs)
     finally:
         os.close(fd)
+    manifest = {"schema_version": 1, "sha": sha, "entries": entries}
+    manifest_path = destination.parent / "input-manifest.json"
+    with manifest_path.open("x", encoding="utf-8") as stream:
+        json.dump(manifest, stream, sort_keys=True, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fchmod(stream.fileno(), 0o444)
+        os.fsync(stream.fileno())
+    sync_dir(destination.parent)
     return destination
