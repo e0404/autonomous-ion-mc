@@ -66,6 +66,7 @@ by 1/1.05 so that both runs take the same step sequence in range units (scientif
 |---|---|---|
 | PER-1 | No library writer exists (decision 0044 Q5): `EffectiveConfig.summary()` is written with the JSON writer of `steps_v8.py` (or its V3-013 successor), read back in a **clean process** (`python -I`, fresh interpreter); the reloaded `stopping` block resolves (`resolve(model_id_effective)`) to a source whose `spec_sha256`, data pins, `content_sha256` and table identities equal the block | exact |
 | PER-2 | Ion runs record `mcs_proton_path_stopping = "bethe-ionmc-v1"`; runs with `icru90-water-v1` record `circular_rows` (the ICRU 90 part of I2 and the decision-0038 ICRU 90 comparisons) | exact |
+| PER-3 | Per-run data pins (Codex REVIEW-88ef9d57 finding 3): a proton run of `nist-pstar-astar-water-2005` has `data_used` == [the PSTAR pin, `role_in_this_run = "construction"`, table `("proton", water)`] and `data_declared` == [PSTAR, ASTAR]; an alpha run has `data_used` == [the ASTAR pin, construction, `("alpha", water)`]; a run of `icru90-water-v1` with a proton lists the single ICRU 90 pin with table `("proton", water)`; negative control: a block whose `data_used` lists a pin of a projectile not transported is rejected by the block validator used by PER-1 | exact (S3 for the NIST cases, S4 for ICRU 90) |
 
 ### A.5 `icru90-water-v1` consistency checks (gating for implementation correctness; **not evidence**)
 
@@ -192,22 +193,35 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
    tests on synthetic inputs), the three TOPAS bundles (parts 0–7, 19) with their hashes, the ionmc sample step
    definitions, the committed V-C2/V-C2-D prediction file with both informativeness preconditions evaluated, and
    the pins `spec_sha256`, `content_sha256` and table identities of both models plus the tree hash of `src/ionmc`
-   at the seal. **Sealed closure (Codex REVIEW-c661e903 finding 2; the V3-008 I3-FU-1 mechanism):** the seal
-   commit also carries a frozen manifest (`validation/reference_cases/topas/v13-frozen-manifest.json`) with the
-   sha256 of the evaluator, of every analysis module it imports (its transitive closure inside the repository;
-   `src/ionmc` is covered by the tree hash), of every TOPAS bundle file (`input.txt`, `case.json`) and of the
-   ionmc sample step definitions. The evaluator is launched only through `sealed_launch.py` (target added to
-   `ALLOWED_TARGETS`), re-hashes itself and every manifest member at start and refuses to run on any mismatch;
-   for every TOPAS run it compares the executed `input.txt`/`case.json` hashes recorded in the host-run record
-   with the sealed bundle hashes and marks the run invalid on any difference. A change to any sealed file after
-   the seal is a new seal (dated amendment, reviewed before any further run; seen samples consumed).
+   at the seal. **Sealed closure (Codex REVIEW-c661e903 finding 2 and REVIEW-88ef9d57 findings 1–2; the V3-008
+   I3-FU-1 mechanism):** the seal commit also carries a frozen manifest
+   (`validation/reference_cases/topas/v13-frozen-manifest.json`) listing every sealed path: the evaluator, every
+   analysis module it imports (its transitive closure inside the repository), `sealed_launch.py`, `pyproject.toml`,
+   `uv.lock`, every TOPAS bundle file (`input.txt`, `case.json`), the ionmc sample step definitions and the
+   manifest itself, plus the `src/ionmc` tree hash. **Binding to the reviewed seal SHA:** the seal commit's signed
+   Codex review record (passed, `head_sha` = seal) is committed verbatim at
+   `validation/results/stopping/v3-013/seal-review.json` by the next commit, and the plan carries a one-line dated
+   pin note `seal review <id> at <sha>` in the form of the V3-008 I3-FU-1 pins. The evaluator (a) verifies that
+   record against the trusted-keys file and the pinned seal SHA, (b) for every sealed path compares the on-disk
+   bytes AND the blob at the pinned seal SHA (`git cat-file -p <seal>:<path>`, stdlib subprocess, read-only)
+   with the manifest hash — the manifest, the evaluator's own file and `sealed_launch.py` included — so that
+   evaluator and manifest cannot be changed together after outcomes while keeping the old seal review, (c) verifies
+   the `sealed_launch.py` launch record and records the interpreter and the `numpy`/`warp` versions in the result,
+   (d) for every evidence run (ionmc and TOPAS) requires that the blobs of every sealed path and the `src/ionmc`
+   tree at the run's `code_sha` are identical to the seal's (so sample definitions, scoring, extraction and the
+   validation scripts cannot be changed at the execution SHA and restored later; equality of blobs, not ancestry),
+   and (e) for every TOPAS run compares the executed `input.txt`/`case.json` hashes recorded in the host-run record
+   with the sealed bundle hashes. Any mismatch marks the run invalid (TOPAS) or stops the evaluation (seal files).
+   A change to any sealed file after the seal is a new seal (dated amendment, reviewed before any further run;
+   seen samples consumed).
 4. **ionmc samples first** (scientific review B1; the step-0 rule of r2-topas-target.md §6): the V-C2-D runs and the
    V-C1/V-C2 samples of both models (`icru90-water-v1` and the default, common random numbers) are produced at the
    seal commit; their records (sample digests, identity blocks) are committed and reviewed **before any TOPAS run,
    smokes included**. The evaluator fails closed unless every ionmc evidence run's identity block equals the seal
-   pins exactly (equality, not ancestry), its `code_sha` has the seal as an ancestor and the `src/ionmc` tree hash
-   of its `code_sha` equals the seal's pinned tree hash (second-pass finding N3: transport-code changes that leave
-   the tables unchanged are thereby excluded as well).
+   pins exactly (equality, not ancestry), its `code_sha` has the seal as an ancestor, and the blobs of every sealed
+   path and the `src/ionmc` tree at its `code_sha` are identical to the seal's (step 3 (d); second-pass finding N3
+   and Codex REVIEW-88ef9d57 finding 2: neither transport code nor sample definitions, scoring or extraction can
+   differ at the execution SHA).
 5. **TOPAS smokes** (execution only, part 19), then **TOPAS evidence runs**, one heavy job at a time. A TOPAS run is
    valid only if the seal review and the ionmc-sample commit's review both finished before the run's controlled
    `reference_started` event (the V3-008 R2-TOPAS-4 rule; controlled records, not Git timestamps), and only if
@@ -250,6 +264,13 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
 
 ## H. Pre-freeze review log (2026-11-17)
 
+Codex REVIEW-88ef9d57a5324a7286c5439282864c1c at 338db616: changes_required, three important findings, applied:
+(1) the manifest and closure were not bound to the reviewed seal SHA → committed seal review record, pin note,
+blob-level verification at the seal SHA of every sealed path including the manifest, the evaluator and
+`sealed_launch.py`, launch record and environment recorded (§D step 3); (2) ionmc runs were bound only by the
+`src/ionmc` tree hash → blobs of every sealed path at the execution SHA must equal the seal's (§D steps 3–4);
+(3) `data_declared`/`data_used` had no discriminating row → PER-3 with per-projectile exact assertions and a
+negative control (A.4).
 Codex REVIEW-c661e903895c44eb9b7d41fb7d95f404 at 625ddab0: changes_required, two important findings, applied
 (decision 0044 review log): per-run data pins `data_declared`/`data_used` (0044 §4) and the sealed closure
 with manifest, self-verification and executed-input hash checks (§D step 3, step 5).

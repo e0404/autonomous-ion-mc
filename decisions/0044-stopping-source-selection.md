@@ -340,6 +340,13 @@ produced and committed before any TOPAS run (plan §D).
   in plan v3-008 §C. M4: V-C1-A results committed whatever the outcome. M5: the V2-OUTPUT ledger row reworded
   (identity block only; no writer). M6: the ledger's "pending the remaining gates" wording marked as superseded by
   the integration note.
+- **Codex REVIEW-88ef9d57a5324a7286c5439282864c1c at 338db616 (changes_required, 3 important).** (1) Seal manifest
+  and closure not bound to the reviewed seal SHA → committed seal review record, pin note and blob-level
+  verification at the seal SHA of every sealed path (manifest, evaluator, `sealed_launch.py`, `uv.lock`,
+  `pyproject.toml` included), launch record and environment recorded. (2) ionmc evidence runs bound only by the
+  `src/ionmc` tree hash → every sealed path's blob at the execution SHA must equal the seal's. (3) No
+  discriminating row for `data_declared`/`data_used` → plan row PER-3 (per-projectile exact assertions, negative
+  control). All in the plan (§D steps 3–4, A.4).
 - **Codex REVIEW-c661e903895c44eb9b7d41fb7d95f404 at 625ddab0 (changes_required, 2 important).** (1) Every pin of a
   spec was marked construction in the persisted block, so a proton run of the combined NIST model would have
   reported ASTAR as construction data → `data_declared` vs `data_used` (section 4). (2) The seal pinned the
