@@ -629,6 +629,39 @@ def capabilities(nuclear: bool = False) -> dict[str, Any]:
     return report
 
 
+def _stopping_model_capabilities() -> dict[str, Any]:
+    """Every registered stopping model with domain, data pins (licence and use role) and the
+    evidence records (decision 0044 section 3); selected by ``PhysicsOptions.stopping_model``."""
+    from ionmc.physics.stopping_evidence import STOPPING_EVIDENCE
+    from ionmc.physics.stopping_models import (
+        DEFAULT_STOPPING_MODEL_ID,
+        STOPPING_MODELS,
+        _canonical,
+        spec_sha256,
+    )
+
+    models = {}
+    for mid, spec in STOPPING_MODELS.items():
+        digest = spec_sha256(spec)
+        models[mid] = {
+            "version": spec.version,
+            "kind": spec.kind,
+            "spec_sha256": digest,
+            "domain": _canonical(spec.domain),
+            "data_pins": [
+                {"dataset_id": p.dataset_id, "licence": p.licence, "use_role": p.use_role}
+                for p in spec.data
+            ],
+            "evidence": [_canonical(r) for r in STOPPING_EVIDENCE.get(digest, ())],
+            "decision": spec.decision,
+        }
+    return {
+        "selected_by": "PhysicsOptions.stopping_model (a registered id) or PhysicsOptions.stopping",
+        "default": DEFAULT_STOPPING_MODEL_ID,
+        "models": models,
+    }
+
+
 def _capabilities_base() -> dict[str, Any]:
     return {
         "species": [PROTON.name, *(p.name for p in ION_PROJECTILES)],
@@ -652,6 +685,7 @@ def _capabilities_base() -> dict[str, Any]:
         "physics": {
             "nuclear": False,
             "stopping": "tabulated or analytic electronic stopping (CSDA, inverse range)",
+            "stopping_models": _stopping_model_capabilities(),
             "straggling_models": list(STRAGGLING_MODELS),
             "mcs_models": list(MCS_MODELS),
             "mcs_mapping_evals": list(MCS_MAPPING_EVALS),

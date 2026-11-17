@@ -19,11 +19,16 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
-from ionmc.physics.stopping import BetheOptions, BetheStoppingSource, StoppingSource
+from ionmc.physics.stopping import (
+    BetheOptions,
+    BetheStoppingSource,
+    NistStarStoppingSource,
+    StoppingSource,
+)
 
 DEFAULT_STOPPING_MODEL_ID = "bethe-ionmc-v1"
 
@@ -36,7 +41,9 @@ USE_ROLES = ("construction-permitted", "evaluation-only", "lineage-only")
 KINDS = ("analytic", "tabulated")
 
 _BETHE_SPECIES = ("proton", "deuteron", "alpha", "carbon12", "oxygen16")
-_BETHE_MATERIAL_RULE = "any ionmc.materials material (evidence: liquid water only)"
+MATERIAL_RULE_ANY = "any ionmc.materials material (evidence: liquid water only)"
+MATERIAL_RULE_WATER = "structural liquid water (composition and density, not the name)"
+_BETHE_MATERIAL_RULE = MATERIAL_RULE_ANY
 _BETHE_INTERPOLATION = "analytic on a log grid; range exact-loglog-quadrature-v1"
 _BETHE_RANGE_START = "constant-S approximation a*E_min/S(E_min)"
 
@@ -182,11 +189,55 @@ def resolve(model_id: str, *, cache_dir: str | None = None) -> StoppingSource:
 
     ``cache_dir`` is for tabulated models (S3/S4); the analytic models read no data.
     """
-    if model_id not in STOPPING_MODELS:
+    if model_id not in STOPPING_MODELS:  # the module-level mapping, looked up at call time
         raise ValueError(
             f"unknown stopping model id {model_id!r}; registered: {sorted(STOPPING_MODELS)}"
         )
+    spec = STOPPING_MODELS[model_id]
+    for pin in spec.data:  # row ROLE-1: only construction-permitted data can build a source
+        if pin.use_role != "construction-permitted":
+            raise ValueError(
+                f"stopping model {model_id!r} cannot be resolved: its data pin "
+                f"{pin.dataset_id!r} has use_role {pin.use_role!r}, not 'construction-permitted'"
+            )
+    if model_id not in _LS_IDS:
+        raise ValueError(f"stopping model {model_id!r} is registered without a constructor")
     return _registered_bethe(_LS_IDS[model_id])
+
+
+def _nist_star_instance_spec(source: NistStarStoppingSource) -> StoppingModelSpec:
+    """Spec of a directly constructed ``NistStarStoppingSource``, built from its instance fields.
+
+    S3 registers ``nist-pstar-astar-water-2005``; until then the source is reported as
+    ``unregistered`` with ``data = ()`` (no registered pins, so ``data_used`` stays empty) so that
+    the existing nist-star runs keep validating. Nothing is registered or constructed here.
+    """
+    program = str(source.star_table.program)
+    species = {"PSTAR": "proton", "ASTAR": "alpha"}.get(program)
+    members = frozenset() if species is None else frozenset({species})
+    lo, hi = float(source.e_min_per_u), float(source.e_max_per_u)
+    return StoppingModelSpec(
+        UNREGISTERED_ID,
+        "1",
+        "tabulated",
+        {
+            "points_per_decade": int(source.points_per_decade),
+            "source_name": str(source.name),
+            "program": program,
+            "table_dataset_id": source.star_table.dataset_id,
+            "i_value": "table (75 eV)",
+        },
+        "log-log interpolation of S onto the grid; range from the table CSDA range at e_min",
+        "table CSDA range at e_min (log-log interpolation)",
+        (),
+        StoppingDomain(
+            members,
+            MATERIAL_RULE_WATER,
+            {s: lo for s in members},
+            {s: hi for s in members},
+        ),
+        "user",
+    )
 
 
 def _structure(spec: StoppingModelSpec) -> tuple[Any, ...]:
@@ -211,9 +262,27 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
     structural: the z = 1 no-op of the Lindhard-Sorensen variants is handled by the effective id
     of the selection layer, not here.
     """
+    if type(source) is NistStarStoppingSource:
+        return UNREGISTERED_ID, _nist_star_instance_spec(source)
     if type(source) is not BetheStoppingSource:
+        hook = getattr(source, "stopping_spec", None)
+        if callable(hook):  # the one documented hook: a source declares itself (decision "user")
+            declared = hook()
+            if not isinstance(declared, StoppingModelSpec):
+                raise TypeError(
+                    f"{type(source).__name__}.stopping_spec() must return a StoppingModelSpec, "
+                    f"got {type(declared).__name__}"
+                )
+            if declared.data:
+                raise ValueError(
+                    f"{type(source).__name__}.stopping_spec() must declare data=() (a user source "
+                    "has no registered data pins)"
+                )
+            return UNREGISTERED_ID, replace(declared, model_id=UNREGISTERED_ID, decision="user")
         raise TypeError(
-            f"spec_of supports BetheStoppingSource only in this step, got {type(source).__name__}"
+            "spec_of supports BetheStoppingSource and NistStarStoppingSource only in this step, "
+            f"and a source that declares itself by a stopping_spec() method; got "
+            f"{type(source).__module__}.{type(source).__qualname__}"
         )
     candidate = _bethe_spec(UNREGISTERED_ID, "1", source, "user")
     for model_id, spec in STOPPING_MODELS.items():

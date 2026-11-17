@@ -340,6 +340,10 @@ produced and committed before any TOPAS run (plan §D).
   in plan v3-008 §C. M4: V-C1-A results committed whatever the outcome. M5: the V2-OUTPUT ledger row reworded
   (identity block only; no writer). M6: the ledger's "pending the remaining gates" wording marked as superseded by
   the integration note.
+- **Dated note (2026-11-17, S2a amendment A-1 of the plan):** section 2's "a source without `spec_of` support fails
+  closed" is implemented with one explicit declaration hook (`stopping_spec()`, user spec, recorded as
+  `unregistered`); section 3's `E0 + 6σ_E` check fails closed for registered models and keeps the pre-existing
+  runtime overflow rule (counter, invalid result) for unregistered user sources. Details and reason: plan Status.
 - **Codex REVIEW-fd8c722d432349a5b2f2c2a9b4c90837 at cbfe16bb (changes_required, 1 important).** numpy sibling
   native libraries and Warp's generated kernel cache outside the digest → complete installed distributions and a
   fresh, attested Warp kernel cache per evidence run (plan §D step 3).

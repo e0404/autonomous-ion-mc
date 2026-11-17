@@ -40,12 +40,13 @@ from ionmc.transport.reference import run_reference_range
 from ionmc.transport.run import channel_columns, run_transport
 from ionmc.transport.scoring_ref import ReferenceChannelScorer
 from ionmc.transport.tally import RawTransport, build_diagnostics, merge_partials
+from tests.ionmc._user_sources import UserSpecMixin
 
 MakeConfig = Callable[..., SimulationConfig]
 RHO = 1.0e-12  # float rounding term of python / float64
 
 
-class ConstSource:
+class ConstSource(UserSpecMixin):
     """Synthetic stopping source with a constant mass stopping power per material (water
     ``c_water``, anything else ``c_other``, MeV cm2/g): constant S_w, exact linear range."""
 
@@ -768,7 +769,7 @@ def test_piece_counts_follow_the_class_mask_of_each_channel(make_config: MakeCon
 # --------------------------------------------------------------------------- ramp envelope
 
 
-class SteepSource:
+class SteepSource(UserSpecMixin):
     """Synthetic stopping source ``S_mass = c E^-1.5`` (log-log slope -1.5 everywhere): the LET
     ramp ``S_mid (1 -+ |gamma| f_E / 2)`` of a long final step can reach zero or go negative."""
 
@@ -838,7 +839,7 @@ def test_nonpositive_ramp_is_flagged_at_runtime(make_config: MakeConfig) -> None
     assert sc.lookup_ood == 1
 
 
-class DropSource:
+class DropSource(UserSpecMixin):
     """Water: constant mass stopping power 10 MeV cm2/g (gamma = 0). Any other material: 5 MeV cm2/g
     above ``e_drop`` MeV/u and falling as ``(E/e_drop)^3`` below it (log-log slope 3, ordinary above
     the cutoff, sharply lower stopping below it, so ``S_w / S_m`` grows by 8 between E_cut and
@@ -902,7 +903,7 @@ def test_ratio_bound_covers_the_cutoff_crossing_midpoint_domain(make_config: Mak
     assert (r.acc >= 0).all()
 
 
-class KinkSource:
+class KinkSource(UserSpecMixin):
     """Water: constant 10 MeV cm2/g except a narrow V-shaped dip of ``ln S`` (``depth``) around
     ``e_kink`` that lies entirely *inside one runtime-grid bin* (source nodes at ``e_kink exp(+-w)``
     with ``w`` a fraction of the bin). The runtime water row samples the source at its own nodes,
@@ -1011,7 +1012,7 @@ def test_ratio_bound_uses_the_runtime_water_row_not_the_source_interpolant(
     assert (r.acc >= 0).all()
 
 
-class SwapSource:
+class SwapSource(UserSpecMixin):
     """Water: constant 10 MeV cm2/g (the LET row). Aluminium and PMMA have *opposite* energy
     dependence of the linear stopping power (MeV/mm): PMMA 1 above ``e0`` and 10 below, aluminium
     10 above and 1 below. Each homogeneous CSDA range is short (about 0.55 of the mixed path), but

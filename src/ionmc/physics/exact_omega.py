@@ -789,18 +789,21 @@ class ExactOmegaMapping:
         proton: MappingPath | None = None,
     ) -> "ExactOmegaMapping":
         """Mapping of ``projectile`` in ``material``. ``ion_table`` is the projectile's stopping
-        table (default: the Bethe table 1 to 500 MeV/u with default options, as the reference);
-        ``proton`` the proton path (default :func:`proton_path`)."""
+        table of the run's selected model and is required for an ion (decision 0044 section 2,
+        row ROLE-2: there is no Bethe default in run paths; a diagnostic that needs a Bethe table
+        builds it explicitly); ``proton`` the proton path (default :func:`proton_path`)."""
         pro = proton_path(material) if proton is None else proton
         if projectile == PROTON:
             ion = pro
             flag = 1
         else:
-            tab = (
-                BetheStoppingSource().table(material, projectile)
-                if ion_table is None
-                else ion_table
-            )
+            if ion_table is None:
+                raise fail(
+                    f"no ion stopping table for {projectile.name} in {material.name!r}: the "
+                    "exact-Omega mapping takes the table of the run's selected stopping model "
+                    "(no Bethe default)"
+                )
+            tab = ion_table
             if tab.projectile != projectile:
                 raise fail("ion_table does not describe the requested projectile")
             ion = pack_path(tab)
@@ -1008,7 +1011,8 @@ def fdm_domain_status(
     (or the mapping of any scanned state fails). ``ion_tables`` maps the full material identity
     (``ionmc.transport.tables.material_fingerprint``: name, density, composition, I, density-effect
     parameters; not the name alone, since distinct materials may share a name) to the ion's
-    stopping table (default: Bethe tables, see :meth:`ExactOmegaMapping.build`)."""
+    stopping table of the run's selected model; a missing table raises (decision 0044 section 2,
+    row ROLE-2: no Bethe default)."""
     if projectile == PROTON:
         return PROTON_FDM_STATUS
     if not materials:
@@ -1020,6 +1024,12 @@ def fdm_domain_status(
     upper = 0.0
     for mat in materials:
         tab = None if ion_tables is None else ion_tables.get(material_fingerprint(mat))
+        if tab is None:
+            raise fail(
+                f"no ion stopping table for {projectile.name} in {mat.name!r}: fdm_domain_status "
+                "needs the table of the run's selected stopping model for every material "
+                "(no Bethe default)"
+            )
         mp = ExactOmegaMapping.build(projectile, mat, tab, proton_path(mat, proton_edge_mev))
         nominal = max(nominal, _max_p1v1_eq_energy(mp, e0_mev, fractions))
         upper = max(upper, _max_p1v1_eq_energy(mp, e_hi, fractions) if e_hi > e0_mev else nominal)

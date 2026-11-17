@@ -342,4 +342,14 @@ OPEN. Not a clinical claim."
   the V3-008 reservation gap 20610000–20618999 for the V3-013 seed families, and V-C1-A as report-only.
 - 2026-11-17 (orchestrator, S0 revision): Codex REVIEW-0f80fad8 (changes_required) and the independent scientific
   review applied in place (section H); still a freeze candidate pending the re-review.
+- 2026-11-17 (orchestrator, S2a amendment A-1; prospective, before any V-C run). (a) DOM-7 is implemented as frozen with
+  one explicit hook: a `stopping` object whose type `spec_of` does not support is refused unless it declares itself by
+  a method `stopping_spec()` returning a user spec (`decision = "user"`, recorded as `model_id_effective =
+  "unregistered"`, never a registered id); the duck-typed test-only sources of `test_config_validation.py` and
+  `test_scoring_transport.py` declare it. (b) The `E0 + 6σ_E` part of the window check of decision 0044 §3 (row DOM-3)
+  fails closed at `validate` for registered models; for unregistered user sources the pre-existing V3-003 runtime rule
+  is retained unchanged (`source_energy_out_of_range` counter, result invalid; `test_transport_reference.py::
+  test_source_energy_out_of_range_is_counted`): such a run cannot extrapolate silently because its result is invalid,
+  and the table-range, LET-water-row and deuteron checks still apply to it. Reason: a frozen row contradicted a
+  tested pre-existing behaviour; recorded here rather than silently narrowed.
 - 2026-11-17 (orchestrator): **frozen at 7c139ca1** (Codex REVIEW-65665aa0ec074fa285c5e65da13646be, pass, signed; scientific review two passes applied); S1 starts from this commit.

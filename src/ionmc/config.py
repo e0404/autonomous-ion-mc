@@ -49,6 +49,14 @@ from ionmc.physics.exact_omega import (
 from ionmc.physics.projectiles import ALPHA, CARBON12, DEUTERON, OXYGEN16, PROTON, Projectile
 from ionmc.physics.scattering import scattering_length_g_cm2
 from ionmc.physics.stopping import StoppingSource, StoppingTable
+from ionmc.physics.stopping_selection import (
+    StoppingSelection,
+    assert_single_model,
+    check_species_and_materials,
+    check_window,
+    identity_block,
+    select,
+)
 from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid, TallyRequest
 from ionmc.sources import PencilBeamSource
 from ionmc.species import producible
@@ -156,7 +164,7 @@ class PhysicsOptions:
     """
 
     nuclear: bool
-    stopping: StoppingSource
+    stopping: StoppingSource | None = None
     straggling: bool = True
     straggling_model: str = "bohr_gamma_v1"
     multiple_scattering: bool = True
@@ -174,6 +182,7 @@ class PhysicsOptions:
     e_cut_ion_mev_per_u: float = E_CUT_ION_DEFAULT_MEV_PER_U
     mcs_mapping_eval: str = "table"
     end_of_range_model: str = "default"
+    stopping_model: str | None = None
 
     def __post_init__(self) -> None:
         for name in ("nuclear", "straggling", "multiple_scattering", "truncated_hinge_diagnostic"):
@@ -190,9 +199,13 @@ class PhysicsOptions:
                 raise fail(f"{name} must be a string")
         choice("mcs_mapping_eval", self.mcs_mapping_eval, MCS_MAPPING_EVALS)
         choice("end_of_range_model", self.end_of_range_model, END_OF_RANGE_MODELS)
-        if not (hasattr(self.stopping, "table") and hasattr(self.stopping, "name")):
+        if self.stopping is not None and not (
+            hasattr(self.stopping, "table") and hasattr(self.stopping, "name")
+        ):
             raise fail("stopping must be a StoppingSource (with .name and .table())")
-        ls_mode = getattr(getattr(self.stopping, "options", None), "ls", "off")
+        # the single selection point (decision 0044 section 2): one source for every consumer
+        object.__setattr__(self, "_selection", select(self.stopping, self.stopping_model))
+        ls_mode = getattr(getattr(self.stopping_source, "options", None), "ls", "off")
         if ls_mode not in ("off", "eff", "bare_mixed"):
             raise fail(f"stopping options ls must be 'off', 'eff' or 'bare_mixed', got {ls_mode!r}")
         real("e_cut_mev", self.e_cut_mev, positive=True)
@@ -211,6 +224,18 @@ class PhysicsOptions:
         s = real("short_step_fraction", self.short_step_fraction, positive=True)
         if s > 0.01:
             raise fail(f"short_step_fraction must be in (0, 0.01], got {s}")
+
+    @property
+    def selection(self) -> StoppingSelection:
+        """The stopping selection (requested id, source, spec) of this configuration."""
+        sel: StoppingSelection = self.__dict__["_selection"]
+        return sel
+
+    @property
+    def stopping_source(self) -> StoppingSource:
+        """The one stopping source every stopping-dependent object of a run is derived from:
+        ``resolve(stopping_model)`` or the given ``stopping`` object."""
+        return self.selection.source
 
 
 @dataclass(frozen=True)
@@ -551,13 +576,26 @@ class EffectiveConfig:
     def ls_requested(self) -> str:
         """The requested Lindhard-Sorensen mode of the stopping source (``"off"`` for a source
         without the option)."""
-        return str(getattr(getattr(self.requested.physics.stopping, "options", None), "ls", "off"))
+        return str(
+            getattr(getattr(self.requested.physics.stopping_source, "options", None), "ls", "off")
+        )
 
     @property
     def ls_effective(self) -> str:
         """The LS mode in effect: ``"off"`` for z = 1 whatever was requested (the proton model
         never changes, its tables are bit-identical), the requested mode for z >= 2."""
         return self.ls_requested if self.requested.source.projectile.z >= 2 else "off"
+
+    def stopping_identity(self) -> dict[str, Any]:
+        """The persisted stopping identity block (decision 0044 section 4), outside the table hash:
+        the model requested and in effect, its spec hash, options, domain, data pins, evidence
+        records at run time and (ion runs) the fixed MCS proton path."""
+        species = [self.requested.source.projectile.name]
+        if self.nuclear is not None:
+            species.append(DEUTERON.name)
+        return identity_block(
+            self.requested.physics.selection, self.requested.source.projectile, species
+        )
 
     def summary(self) -> dict[str, Any]:
         """JSON-serialisable summary of the effective configuration."""
@@ -634,7 +672,7 @@ class EffectiveConfig:
             ],
             "tables": {
                 "sha256": self.tables.sha256,
-                "stopping_source": p.stopping.name,
+                "stopping_source": p.stopping_source.name,
                 "materials": thaw(self.tables.identity),
                 "n_e": self.tables.n_e,
                 "n_r": self.tables.n_r,
@@ -642,6 +680,7 @@ class EffectiveConfig:
                     {"water_row": thaw(self.tables.water_identity)} if self.tables.has_water else {}
                 ),
             },
+            "stopping": self.stopping_identity(),
             "scattering_length_g_cm2": list(self.scattering_length_g_cm2),
             "rng": dict(self.rng),
             "tallies": None if self.channels is None else self.channels.summary(),
@@ -797,13 +836,13 @@ def _water_table(
     ph = config.physics
     proj = config.source.projectile if projectile is None else projectile
     try:
-        water = ph.stopping.table(WATER, proj)
+        water = ph.stopping_source.table(WATER, proj)
     except (ValueError, KeyError) as exc:
         raise fail(
-            f"no water stopping table for the LET definition from source {ph.stopping.name!r}: "
-            f"{exc}"
+            "no water stopping table for the LET definition from source "
+            f"{ph.stopping_source.name!r}: {exc}"
         ) from exc
-    _check_table_identity(water, WATER, ph.stopping.name, proj)
+    _check_table_identity(water, WATER, ph.stopping_source.name, proj)
     return water
 
 
@@ -878,7 +917,7 @@ def _nuclear_setup_checks(
             f"nuclear=True requires backend 'python' (got {run.backend!r}): the Warp nuclear "
             "kernels are V3-005B"
         )
-    if ph.stopping.name == "nist-star":
+    if ph.stopping_source.name == "nist-star":
         raise fail(
             "nuclear=True is not available with the 'nist-star' stopping source: secondary "
             "deuterons need a deuteron stopping table, which NIST PSTAR/ASTAR do not provide; "
@@ -920,7 +959,7 @@ def _nuclear_tables(
     capacity inputs of a nuclear run; fail closed if the stopping source has no deuteron table
     or the table's energy bound exceeds a stopping-table maximum."""
     ph = config.physics
-    d_stop = _stopping_tables(ph.stopping, geometry.materials, DEUTERON)
+    d_stop = _stopping_tables(ph.stopping_source, geometry.materials, DEUTERON)
     d_water = _water_table(config, DEUTERON)
     d_tables = TransportTables.from_stopping_tables(
         d_stop, water=d_water, projectile=DEUTERON, energy_axis="total_kinetic_mev"
@@ -961,6 +1000,103 @@ def _nuclear_tables(
         capacity=capacity,
     )
     return replace(tables, deuteron=d_tables), setup
+
+
+def _check_stopping_domain(
+    sel: StoppingSelection,
+    config: SimulationConfig,
+    geometry: VoxelGeometry,
+    stopping_tables: list[StoppingTable],
+    water_table: StoppingTable | None,
+    nuclear: NuclearSetup | None,
+    e_cut: float,
+) -> None:
+    """Fail closed (``UnsupportedCombinationError``) unless every energy interval the run uses lies
+    inside the model's per-species window (decision 0044 section 3): the table ranges (floor and
+    cutoff of the material tables, the LET water row), the source interval from the cutoff to
+    ``E0 + 6 sigma_E`` and, for a nuclear run, the deuteron tables and cutoff."""
+    src = config.source
+    proj = src.projectile
+    for t in stopping_tables:
+        check_window(
+            sel,
+            proj,
+            t.material.name,
+            "stopping table range",
+            float(t.energy_per_u[0] * proj.a),
+            float(t.energy_per_u[-1] * proj.a),
+        )
+    if water_table is not None:
+        check_window(
+            sel,
+            proj,
+            WATER.name,
+            "LET water row range",
+            float(water_table.energy_per_u[0] * proj.a),
+            float(water_table.energy_per_u[-1] * proj.a),
+        )
+    if sel.requested_id != "unregistered":
+        # registered models only: a user source object keeps the existing runtime rule (sampled
+        # energies above the table maximum are counted and invalidate the result)
+        check_window(
+            sel,
+            proj,
+            ",".join(m.name for m in geometry.materials),
+            "source interval [E_cut, E0 + 6 sigma_E]",
+            e_cut,
+            src.kinetic_energy_mev + 6.0 * src.energy_sigma_mev,
+        )
+    if nuclear is not None:
+        d = nuclear.deuteron_tables
+        check_window(
+            sel,
+            DEUTERON,
+            ",".join(m.name for m in geometry.materials),
+            "deuteron table range",
+            float(d.e_min_mev.min()),
+            float(d.e_max_mev.max()),
+        )
+        if nuclear.deuteron_water is not None:
+            w = nuclear.deuteron_water
+            check_window(
+                sel,
+                DEUTERON,
+                WATER.name,
+                "deuteron LET water row range",
+                float(w.energy_per_u[0] * DEUTERON.a),
+                float(w.energy_per_u[-1] * DEUTERON.a),
+            )
+        check_window(
+            sel,
+            DEUTERON,
+            ",".join(m.name for m in geometry.materials),
+            "deuteron interval [e_cut_deuteron, transport bound]",
+            nuclear.e_cut_deuteron_mev,
+            nuclear.transport_energy_bound_mev,
+        )
+
+
+def _assert_single_model(
+    sel: StoppingSelection,
+    projectile: Any,
+    tables: TransportTables,
+    nuclear: NuclearSetup | None,
+) -> None:
+    """Every table identity of the run (material tables, LET water row, deuteron tables of a
+    nuclear run) names the effective model of the selection; the exact-Omega ion rows are packed
+    from the same material tables, so their identity is the first group (decision 0044 section
+    2)."""
+    groups: list[tuple[str, Any, Any]] = [
+        ("material tables", projectile, thaw(tables.identity)),
+        ("LET water row", projectile, [thaw(tables.water_identity)] if tables.has_water else []),
+    ]
+    if nuclear is not None:
+        d = nuclear.deuteron_tables
+        groups.append(("deuteron tables", DEUTERON, thaw(d.identity)))
+        groups.append(
+            ("deuteron LET water row", DEUTERON, [thaw(d.water_identity)] if d.has_water else [])
+        )
+    assert_single_model(sel, groups)
 
 
 def validate(config: SimulationConfig) -> EffectiveConfig:
@@ -1006,6 +1142,8 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     nuc_rows: tuple[Any, ...] = ()
     if ph.nuclear:
         nuc_table, nuc_rows = _nuclear_setup_checks(config, geometry)
+    sel = ph.selection  # the one stopping source of the run (decision 0044 section 2)
+    run_species = (src.projectile, DEUTERON) if ph.nuclear else (src.projectile,)
     choice("straggling_model", ph.straggling_model, STRAGGLING_MODELS)
     choice("mcs_model", ph.mcs_model, MCS_MODELS)
     if ph.end_of_range_model == "continuous_residual_v1" and not is_ion:
@@ -1056,7 +1194,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             f"limit of {MAX_SCORING_PIECES}; increase the scoring spacing or reduce max_step_mm"
         )
 
-    stopping_tables = _stopping_tables(ph.stopping, geometry.materials, src.projectile)
+    stopping_tables = _stopping_tables(ph.stopping_source, geometry.materials, src.projectile)
     water_table = _water_table(config)
     tables = TransportTables.from_stopping_tables(
         stopping_tables, water=water_table, projectile=src.projectile
@@ -1064,6 +1202,11 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     nuclear: NuclearSetup | None = None
     if nuc_table is not None:
         tables, nuclear = _nuclear_tables(config, geometry, tables, nuc_table, nuc_rows)
+    check_species_and_materials(
+        sel, run_species, (*geometry.materials, *((WATER,) if config.tallies else ()))
+    )
+    _check_stopping_domain(sel, config, geometry, stopping_tables, water_table, nuclear, e_cut)
+    _assert_single_model(sel, src.projectile, tables, nuclear)
     e_lo = float(tables.e_min_mev.max())
     e_hi_table = float(tables.e_max_mev.min())
     if e_lo > 0.5 * e_cut:
@@ -1102,12 +1245,30 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         fdm_domain = MCS_OFF_FDM_STATUS
         ion_mapping = _unused_ion_mapping()
     elif is_ion:  # row I0: f_dM domain status of the source; fails closed
+        ion_tables = {material_fingerprint(t.material): t for t in stopping_tables}
+        assert_single_model(  # the exact-Omega ion rows come from the same source's tables
+            sel,
+            [
+                (
+                    "exact-Omega ion tables",
+                    src.projectile,
+                    [
+                        {
+                            "metadata": t.metadata,
+                            "e_min_mev": float(t.energy_per_u[0] * src.projectile.a),
+                            "e_max_mev": float(t.energy_per_u[-1] * src.projectile.a),
+                        }
+                        for t in ion_tables.values()
+                    ],
+                )
+            ],
+        )
         fdm_domain = fdm_domain_status(
             src.projectile,
             geometry.materials,
             e0,
             src.energy_sigma_mev,
-            ion_tables={material_fingerprint(t.material): t for t in stopping_tables},
+            ion_tables=ion_tables,
         )
         ion_mapping = _ion_mapping_data(
             tables, geometry, config, max(e0 - 6.0 * src.energy_sigma_mev, e_cut), e_hi
