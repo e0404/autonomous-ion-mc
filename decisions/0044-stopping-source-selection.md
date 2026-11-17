@@ -337,6 +337,11 @@ produced and committed before any TOPAS run (plan §D).
   in plan v3-008 §C. M4: V-C1-A results committed whatever the outcome. M5: the V2-OUTPUT ledger row reworded
   (identity block only; no writer). M6: the ledger's "pending the remaining gates" wording marked as superseded by
   the integration note.
+- **Second pass of the scientific review (verification of 92cf8929):** all findings above and both Codex findings
+  RESOLVED; new findings N1–N5 (plan section H) applied in the plan: the V-C2-D prediction compares telescoped end
+  points Z_m = mean(z_end + R_m(E_end)) with a per-model round-trip gate (N1), V-C2-D uses seed r_index 15 (N2), the
+  evaluator checks the pinned `src/ionmc` tree hash (N3), σ_exp is fixed by literals (N4), the V-C2-D substitute
+  includes CC-ID/PER-1 for `icru90-water-v1` (N5).
 - Confirmed by the scientific review: directive coverage (conditional on B1), the FACT claims of "Context"
   (apart from M1), the seed families (numerically), no table values, ledger and 0043 note accuracy, internal
   consistency, the R2/T1 dependence analysis.

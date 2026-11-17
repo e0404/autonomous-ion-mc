@@ -31,7 +31,8 @@ decision 0044, Context (Q4–Q8).
 A test-only model `test-bethe-x1.05` (registered in the test module only; tabulated kind; S = 1.05 × the default's S on
 the default grid, same start-range rule scaled consistently) is selected by `stopping_model` in a small water geometry
 (python and warp-cpu backends, float64, fixed seed from §C r_index 10). Every length parameter of the test-model run
-(voxel spacing, box length, `max_step_mm`, the residual-range fraction in mm, the cutoff residual length) is scaled
+(voxel spacing, box length, source start position, `z_clip`, `max_step_mm`, the residual-range fraction in mm, the
+cutoff residual length) is scaled
 by 1/1.05 so that both runs take the same step sequence in range units (scientific review I1).
 
 | Row | What | Tolerance | Class |
@@ -72,7 +73,7 @@ by 1/1.05 so that both runs take the same step sequence in range units (scientif
 |---|---|---|
 | CC-NODE | The transport table's S at every fine-grid node (200/decade) equals the log-log interpolant of the parsed ICRU 90 array evaluated there (proton, alpha); the chord error of the fine table at the ICRU nodes themselves (off the fine grid) is reported as an aggregate only (max, RMS) | ≤ 1e-12 relative at the fine nodes; ICRU-node error report-only |
 | CC-INT | Interpolation error between nodes: log-log vs a monotone cubic in log-log space (both from the array only), max and RMS per decade | report-only (aggregates in Git) |
-| CC-I2 | On the common fine grid (`compare_nist.py` uses `log_grid(1, min(500, last node))`, the same nodes), the node arrays R(E_i) − R(E_0) (cumulative exact log-log increments, E_0 = 1 MeV/u) of `icru90-water-v1` and of the I2 "integrated ICRU 90" construction (`_icru_range_table`) are compared node by node (alpha and proton); the start-range offset (own-array integral vs the I2 NIST start) is reported; off-node `range_at` values are not compared (the two constructions differ by their start offset inside the ln R interpolation) | ≤ 1e-12 relative at every node; offset report-only |
+| CC-I2 | On the common fine grid (`compare_nist.py` uses `log_grid(1, min(500, last node))`, the same nodes), the node arrays R(E_i) − R(E_0) (cumulative exact log-log increments, E_0 = 1 MeV/u) of `icru90-water-v1` and of the I2 "integrated ICRU 90" construction (`_icru_range_table`) are compared node by node (alpha and proton); the start-range offset (own-array integral vs the I2 NIST start) is reported; off-node `range_at` values are not compared (the two constructions differ by their start offset inside the ln R interpolation); at the first node both arrays are exactly 0 (Codex REVIEW-8e40febe minor 2) | exact equality at the first node (both 0.0), ≤ 1e-12 relative at every later node; offset report-only |
 | CC-SPAN | Loader test: counts and coverage of both grids (57 / 49 nodes; window inside the span); no value printed | exact |
 
 ### A.6 Configuration-specific validation of `icru90-water-v1` (graded once, after the seal of §D)
@@ -124,19 +125,26 @@ recorded in the ledger whatever the outcome.
   model-dependence of the R80 − CSDA offset through the Bohr-variance weighting is ≲ 0.005 mm; detour and binning
   terms cancel in the pair. The tolerance does not depend on any TOPAS output.
 - Informativeness precondition (scientific review I2), evaluated and committed in the seal before any run: at each
-  energy |ΔR_pred| ≥ 2 · (0.02 mm + 1.645 σ_exp), with σ_exp the expected paired jackknife σ of ΔR80 taken from the
-  V3-008 TD-EM He budget (R80 SE ≤ 0.01 mm at 1e5 primaries, r2-topas-target.md §6; ESTIMATE, scaled to 1e6). Where
+  energy |ΔR_pred| ≥ 2 · (0.02 mm + 1.645 σ_exp), with σ_exp = √2 · SE_1e6 and SE_1e6 = 0.01 mm · √(1e5/1e6), the
+  R80 standard error of the V3-008 TD-EM He budget (r2-topas-target.md §6) scaled to 1e6 histories, with no credit
+  for the common random numbers (ESTIMATE; the precondition is therefore reproducible from these literals). Where
   the precondition holds, V-C2 is gating at that energy. Where it fails, V-C2 at that energy is non-informative, is
   still run and reported, and the gate for that energy is V-C2-D alone.
 
 **V-C2-D — selection reaches transport, deterministic (gating for integration at every energy).**
 - For the three energies, MCS and straggling off, python and warp-cpu float64, 2 000 histories per model, ionmc
-  seeds of §C r_index 11: Δz = mean cutoff depth(`icru90-water-v1`) − mean cutoff depth(default) is compared with
-  ΔR_pred,D(E0) = R_CSDA,icru90(E0) − R_CSDA,default(E0) at E0 exactly (no σ_E), computed and committed in the seal.
-- PASS per energy and backend iff |Δz − ΔR_pred,D| ≤ 1e-4 · R_CSDA,default(E0) (inverse-table round-trip and
-  step-sequence residual ≲ 1e-5 relative per model, scientific review I1; ESTIMATE).
+  seeds of §C r_index 15. Per model m the telescoped end point Z_m = mean over histories of
+  (z_end + R_m(E_end)), where z_end is the cutoff depth and E_end ≤ E_cut the energy at which the history ended
+  (the last step's overshoot below E_cut and the residual below E_cut are thereby removed; second-pass finding N1).
+  The prediction ΔR_pred,D(E0) = R_CSDA,icru90(E0) − R_CSDA,default(E0) at E0 exactly (no σ_E) is computed and
+  committed in the seal.
+- PASS per energy and backend iff (i) for each model |Z_m − R_m(E0)| ≤ 1e-4 · R_m(E0) (round trip of the forward
+  and inverse tables along the step sequence; residual ≲ 1e-5 relative, scientific review I1; ESTIMATE) and
+  (ii) |(Z_icru90 − Z_default) − ΔR_pred,D| ≤ 1e-4 · R_CSDA,default(E0).
 - Informativeness: |ΔR_pred,D| ≥ 5e-4 · R_CSDA,default(E0) at every energy is checked in the seal; if it fails at an
-  energy, the seal records it and the synthetic-model row CC-T (both backends) is the declared substitute gate there.
+  energy, the seal records it and the declared substitute gate there is the synthetic-model row CC-T (both
+  backends) together with CC-ID and PER-1 evaluated for `icru90-water-v1` (the identity block and every table
+  identity of the run name `icru90-water-v1`), so that the selected model's own path to transport is still tested.
 
 **V-C3 — table spread (report-only).** `icru90-water-v1` vs ASTAR (alpha) and PSTAR (proton) stopping and CSDA range
 over the common window, aggregates only (max, RMS; decision 0038 already reported this spread, SEEN).
@@ -163,7 +171,7 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
   part ≤ 19, case ≤ 40 reserved. Extent 20610001–20611940.
 - **ionmc family `ion13`: seed = 20612004 + 100·r_index + k**, k ≤ 99 (sample chunk/part index as in the V3-008 r2
   sample layout), r_index ≤ 60: r_index 0–2 = He 75/125/200 V-C1/V-C2 samples, used for **both** `icru90-water-v1`
-  and the default (common random numbers, V-C2); r_index 10 = A.2 test seed; r_index 11–14 = LV R1-ion/consumer runs;
+  and the default (common random numbers, V-C2); r_index 10 = A.2 test seed; r_index 11–14 = LV R1-ion/consumer runs; r_index 15 = V-C2-D;
   others reserved. Extent 20612004–20618103.
 - Consumed by V3-008 and never re-drawn: every family listed above. Consumed by V3-013 once drawn: `topas13` parts used,
   `ion13` r_index used.
@@ -189,7 +197,9 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
    V-C1/V-C2 samples of both models (`icru90-water-v1` and the default, common random numbers) are produced at the
    seal commit; their records (sample digests, identity blocks) are committed and reviewed **before any TOPAS run,
    smokes included**. The evaluator fails closed unless every ionmc evidence run's identity block equals the seal
-   pins exactly (equality, not ancestry) and its `code_sha` has the seal as an ancestor.
+   pins exactly (equality, not ancestry), its `code_sha` has the seal as an ancestor and the `src/ionmc` tree hash
+   of its `code_sha` equals the seal's pinned tree hash (second-pass finding N3: transport-code changes that leave
+   the tables unchanged are thereby excluded as well).
 5. **TOPAS smokes** (execution only, part 19), then **TOPAS evidence runs**, one heavy job at a time. A TOPAS run is
    valid only if the seal review and the ionmc-sample commit's review both finished before the run's controlled
    `reference_started` event (the V3-008 R2-TOPAS-4 rule; controlled records, not Git timestamps). The evaluator
@@ -230,6 +240,17 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
 - libdEdx ICRU73_NEW as construction: only after an operator authorization (GPL-3); not requested by this plan.
 
 ## H. Pre-freeze review log (2026-11-17)
+
+Codex REVIEW-8e40febed0a04536ab61b1c354190a4d at 92cf8929: **pass** (signed), two minor findings: the V-C2-D end
+point (same defect as N1 below; resolved by the telescoped end point) and the undefined relative error at the
+first CC-I2 node (resolved: exact equality there). Second pass (verification of 92cf8929 by the same reviewer):
+all first-pass findings and both first-pass Codex findings
+RESOLVED; new findings N1 (important: ΔR_pred,D compared with a cutoff depth that is R(E0) − R(E_end) plus the
+last-step overshoot, so the V-C2-D row could fail without a defect → telescoped end point Z_m = mean(z_end +
+R_m(E_end)) with a per-model round-trip gate), N2 (r_index 11 assigned twice → V-C2-D uses r_index 15), N3 (pinned
+`src/ionmc` tree hash never checked → evaluator checks it), N4 (σ_exp scaling ambiguous → literals fixed, no
+common-random-number credit), N5 (the CC-T substitute did not exercise `icru90-water-v1` → CC-ID/PER-1 for
+`icru90-water-v1` added to the substitute). Applied in place before the freeze.
 
 Decision 0044, "Pre-freeze review log", records the Codex review REVIEW-0f80fad83827437582b3def7bf34b9b7 at
 14099895 (changes_required: evidence status inside the immutable spec; `validated:V-C1` overstatement) and the
