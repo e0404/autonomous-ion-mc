@@ -924,8 +924,9 @@ low-energy C/O stopping) stays available to a later task with its own amendment,
 evidence. Integration of V3-008 with this gating FAIL declared is a material scope reduction reserved to the operator
 (Appendix A intervention). Not a clinical claim.
 
-**Dated note (2026-11-17, orchestrator; integration by operator authorization IR-20261116-204824-29B867, option A; follow-up
-directive).** V3-008 is integrated with row I3's historical FAIL, the I3-FU-1 INCONCLUSIVE verdict and the declared
+**Dated note (2026-11-17, orchestrator; integration authorized by operator authorization IR-20261116-204824-29B867, option A,
+pending the remaining gates; follow-up directive).** V3-008 is authorized for integration (the merge follows the signed
+review, the validation record and CI; the integration SHA is recorded by the follow-up task) with row I3's historical FAIL, the I3-FU-1 INCONCLUSIVE verdict and the declared
 low-energy C/O stopping limitation (§1/§5 note of 2026-11-16) retained; nothing re-graded. The operator directs, as
 follow-up work for the next task: explicit selection of stopping-power models or tabulated sources (no universal model
 forced), a documented default aligned with the TOPAS comparison objective without claiming exact TOPAS equivalence,

@@ -1710,7 +1710,7 @@ information or an authorization outside the protocol). Not a clinical claim.
   SEEN); TOPAS-agreement main set consumed with FAILs under R2-STOP3; held-out TD-H/TL-H PASS 12/12; V5-SS PASS 5/5 on the
   evidence block 2 (block 1 exploratory). Scientific review rounds SR-1 and SR-2 (plan F.4) recorded with their
   dispositions.
-- **Integration: NOT performed** [superseded 2026-11-17: integrated by operator authorization IR-20261116-204824-29B867, option A; see the dated integration note at the end of the plan]. Plan F.6 was unmet (gating row I3 FAIL without a declared gap or amendment); the orchestrator
+- **Integration: NOT performed** [2026-11-17: integration AUTHORIZED by operator authorization IR-20261116-204824-29B867, option A, pending the remaining gates; see the dated integration note at the end of the plan]. Plan F.6 was unmet (gating row I3 FAIL without a declared gap or amendment); the orchestrator
   did not merge; the sentence "no intervention request is filed (EXPERIMENT.md permits none for this)" was reconciled by amendment I3-FU-1 (Appendix A). The PR title still carries its
   pre-freeze "DRAFT — not for merge" wording, which is accurate for this state.
 - **Follow-up (next planning item, not started):** a prospective, reviewed amendment on the low-energy (≲ 50 MeV/u) C/O
@@ -2673,7 +2673,7 @@ values are the fine-step runs (the one-step pair feeds only the emulation gate).
 the options and the declared uncertainty values are unchanged. The step-3 decision (option (c)) is unaffected: the
 extent of the region does not enter rule 2a. Not a clinical claim.
 
-### Integration decision — operator authorization IR-20261116-204824-29B867, option A (2026-11-17, orchestrator)
+### Integration decision — operator authorization IR-20261116-204824-29B867, option A (2026-11-17, orchestrator; integration PENDING the remaining gates until the controlled merge succeeds)
 
 The operator's response (recorded verbatim in `reference_requests/interventions/IR-20261116-204824-29B867/response.json`)
 authorizes option A: integration of the V3-008 development milestone, retaining row I3's historical FAIL (7d0e796b), the
@@ -2681,7 +2681,10 @@ I3-FU-1 verdict INCONCLUSIVE (code_sha 48b41981) and the documented limitation (
 applicable integration gates still apply; final experiment requirements are unchanged. Plan F.6 is amended in place
 accordingly (marked). Nothing is re-graded or relabelled; the ledger rows V1-MUST-005 and V2-ION state the limitation.
 Integration proceeds through the normal gates on the commit carrying this note: signed Codex review, exact-SHA validation
-record, push, CI green at the exact head, `merge_task_pull_request` (squash merge of PR #84 into `v3/develop`).
+record, push, CI green at the exact head, `merge_task_pull_request` (squash merge of PR #84 into `v3/develop`). Until that
+merge has succeeded, V3-008 is AUTHORIZED for integration, not integrated; the integration SHA on `v3/develop` is recorded
+afterwards by the follow-up task (Codex REVIEW-4f74ad03 on 1b905a7d, important: no record may claim integration before the
+lifecycle has completed).
 **Follow-up work directed by the operator (tracked as the next task, not blocking this merge):** explicit selection of
 stopping-power models or tabulated sources — different references need not be forced into one universal model; a clearly
 documented default aligned with the TOPAS comparison objective without claiming exact TOPAS equivalence; alternative
