@@ -340,6 +340,11 @@ produced and committed before any TOPAS run (plan §D).
   in plan v3-008 §C. M4: V-C1-A results committed whatever the outcome. M5: the V2-OUTPUT ledger row reworded
   (identity block only; no writer). M6: the ledger's "pending the remaining gates" wording marked as superseded by
   the integration note.
+- **Codex REVIEW-0e4576e72e644515a7fffa05e9b21efd at 61ab457e (changes_required, 2 important).** (1) The manifest
+  was required to hash itself → bound by its blob at the signed seal SHA and its digest in the reviewed pin note.
+  (2) Runtime and trust map unbound → sealed environment record (`env_digest.py`: interpreter, stdlib, numpy,
+  warp, `uv.lock`) from a controlled host run, recomputed by every ionmc evidence run and the evaluator;
+  `trusted_attestation_keys.json` sealed (plan §D step 3).
 - **Codex REVIEW-88ef9d57a5324a7286c5439282864c1c at 338db616 (changes_required, 3 important).** (1) Seal manifest
   and closure not bound to the reviewed seal SHA → committed seal review record, pin note and blob-level
   verification at the seal SHA of every sealed path (manifest, evaluator, `sealed_launch.py`, `uv.lock`,

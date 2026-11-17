@@ -197,21 +197,35 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
    I3-FU-1 mechanism):** the seal commit also carries a frozen manifest
    (`validation/reference_cases/topas/v13-frozen-manifest.json`) listing every sealed path: the evaluator, every
    analysis module it imports (its transitive closure inside the repository), `sealed_launch.py`, `pyproject.toml`,
-   `uv.lock`, every TOPAS bundle file (`input.txt`, `case.json`), the ionmc sample step definitions and the
-   manifest itself, plus the `src/ionmc` tree hash. **Binding to the reviewed seal SHA:** the seal commit's signed
-   Codex review record (passed, `head_sha` = seal) is committed verbatim at
-   `validation/results/stopping/v3-013/seal-review.json` by the next commit, and the plan carries a one-line dated
-   pin note `seal review <id> at <sha>` in the form of the V3-008 I3-FU-1 pins. The evaluator (a) verifies that
-   record against the trusted-keys file and the pinned seal SHA, (b) for every sealed path compares the on-disk
-   bytes AND the blob at the pinned seal SHA (`git cat-file -p <seal>:<path>`, stdlib subprocess, read-only)
-   with the manifest hash — the manifest, the evaluator's own file and `sealed_launch.py` included — so that
-   evaluator and manifest cannot be changed together after outcomes while keeping the old seal review, (c) verifies
-   the `sealed_launch.py` launch record and records the interpreter and the `numpy`/`warp` versions in the result,
-   (d) for every evidence run (ionmc and TOPAS) requires that the blobs of every sealed path and the `src/ionmc`
-   tree at the run's `code_sha` are identical to the seal's (so sample definitions, scoring, extraction and the
-   validation scripts cannot be changed at the execution SHA and restored later; equality of blobs, not ancestry),
-   and (e) for every TOPAS run compares the executed `input.txt`/`case.json` hashes recorded in the host-run record
-   with the sealed bundle hashes. Any mismatch marks the run invalid (TOPAS) or stops the evaluation (seal files).
+   `uv.lock`, `infrastructure/keys/trusted_attestation_keys.json`, the environment-digest script
+   `validation/scripts/stopping/env_digest.py` and the sealed environment record (below), every TOPAS bundle file
+   (`input.txt`, `case.json`) and the ionmc sample step definitions, plus the `src/ionmc` tree hash. The manifest
+   does not list itself (a file cannot contain its own digest; Codex REVIEW-0e4576e7 finding 1): it is bound by its
+   blob at the signed seal SHA, and its sha256 is additionally written into the pin note below. **Binding to the
+   reviewed seal SHA:** the seal commit's signed Codex review record (passed, `head_sha` = seal) is committed
+   verbatim at `validation/results/stopping/v3-013/seal-review.json` by the next commit, and the plan carries a
+   one-line dated pin note `seal review <id> at <sha>; manifest sha256 <digest>` in the form of the V3-008 I3-FU-1
+   pins (that commit is itself reviewed and signed). **Sealed environment (finding 2):** `env_digest.py` (stdlib only)
+   computes one digest per component — the interpreter executable, the stdlib tree (`sysconfig` `stdlib` and
+   `platstdlib`, extension modules included), the installed `numpy` and `warp` package trees (every regular file,
+   `.so` extensions included) — as the sha256 over the sorted list of (relative path, file sha256), plus the
+   `uv.lock` sha256; the seal file `validation/results/stopping/v3-013/seal-environment.json` holds these digests
+   as recorded by a controlled host-run record (`run_host_validation` of `env_digest.py` on the execution
+   environment, made before the seal commit and cited by id). The evaluator (a) verifies the seal review record
+   against the sealed trusted-keys file (blob at the seal SHA) and the pinned seal SHA, (b) for every sealed path
+   compares the on-disk bytes AND the blob at the pinned seal SHA (`git cat-file -p <seal>:<path>`, stdlib
+   subprocess, read-only) with the manifest hash, and the on-disk manifest with its blob at the seal SHA and with
+   the pin-note digest — the evaluator's own file and `sealed_launch.py` included — so that evaluator and
+   manifest cannot be changed together after outcomes while keeping the old seal review, (c) verifies the
+   `sealed_launch.py` launch record and recomputes the environment digests with the sealed `env_digest.py`,
+   stopping on any difference from `seal-environment.json`; every ionmc evidence run computes the same digests at
+   its start (the sample runner imports `env_digest.py`) and writes them into its run record, and the evaluator
+   marks the run invalid on any difference, (d) for every evidence run (ionmc and TOPAS) requires that the blobs
+   of every sealed path and the `src/ionmc` tree at the run's `code_sha` are identical to the seal's (so sample
+   definitions, scoring, extraction, the validation scripts and the trust map cannot be changed at the execution
+   SHA and restored later; equality of blobs, not ancestry), and (e) for every TOPAS run compares the executed
+   `input.txt`/`case.json` hashes recorded in the host-run record with the sealed bundle hashes. Any mismatch marks
+   the run invalid (TOPAS, ionmc) or stops the evaluation (seal files, environment, trust map).
    A change to any sealed file after the seal is a new seal (dated amendment, reviewed before any further run;
    seen samples consumed).
 4. **ionmc samples first** (scientific review B1; the step-0 rule of r2-topas-target.md §6): the V-C2-D runs and the
@@ -264,6 +278,12 @@ over the common window, aggregates only (max, RMS; decision 0038 already reporte
 
 ## H. Pre-freeze review log (2026-11-17)
 
+Codex REVIEW-0e4576e72e644515a7fffa05e9b21efd at 61ab457e: changes_required, two important findings, applied:
+(1) the manifest could not list its own digest → the manifest is bound by its blob at the signed seal SHA and by
+its sha256 in the reviewed pin note; (2) runtime and trust map not bound → sealed environment record
+(`env_digest.py`: interpreter, stdlib, numpy and warp trees, `uv.lock`) recorded by a controlled host run before
+the seal, recomputed by every ionmc evidence run and by the evaluator; the trusted-keys file is a sealed path
+(§D step 3).
 Codex REVIEW-88ef9d57a5324a7286c5439282864c1c at 338db616: changes_required, three important findings, applied:
 (1) the manifest and closure were not bound to the reviewed seal SHA → committed seal review record, pin note,
 blob-level verification at the seal SHA of every sealed path including the manifest, the evaluator and
