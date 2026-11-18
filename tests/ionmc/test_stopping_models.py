@@ -180,7 +180,8 @@ def test_spec_of_round_trip_for_every_registered_model() -> None:
 
 def test_id_user_modified_sources_are_unregistered_with_complete_options() -> None:
     assert spec_of(BetheStoppingSource())[0] == "bethe-ionmc-v1"
-    assert spec_of(BetheStoppingSource(e_min_per_u=1))[0] == "bethe-ionmc-v1"  # 1 == 1.0
+    # settings must be of exact primitive type: an int where a float is expected is not registered
+    assert spec_of(BetheStoppingSource(e_min_per_u=1))[0] == "unregistered"  # type: ignore[arg-type]
     cases = {
         "e_min": (BetheStoppingSource(e_min_per_u=1.5), None),
         "e_max": (BetheStoppingSource(e_max_per_u=20), None),

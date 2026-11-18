@@ -482,3 +482,92 @@ def test_untouched_nist_model_identity_is_stable_and_tables_carry_the_consumed_d
     t = model.table(WATER, PROTON)
     assert t.consumed_content_sha256 == STOPPING_MODELS[MID].options["content_sha256"]["proton"]
     assert "consumed_content_sha256" not in t.metadata
+
+
+# ---- exact primitive settings and the rebuilt-table closure (REVIEW-dd6310ee) ----
+
+
+def _in_frame(*names: str) -> bool:
+    import sys
+
+    return sys._getframe(2).f_code.co_name in names
+
+
+class _CondBool:
+    """Truthy on inspection, falsy inside the physics kernel."""
+
+    def __bool__(self) -> bool:
+        return not _in_frame("bethe_mass_stopping")
+
+
+class _CondInt:
+    """An int-like setting that is 200 everywhere except inside ``log_grid`` (100 there)."""
+
+    def __int__(self) -> int:
+        return 200
+
+    def __index__(self) -> int:
+        return 200
+
+    def __float__(self) -> float:
+        return 200.0
+
+    def __eq__(self, other: object) -> bool:
+        return other == 200
+
+    __hash__ = None  # type: ignore[assignment]
+
+    def __mul__(self, other: float) -> float:
+        return other * (100.0 if _in_frame("log_grid") else 200.0)
+
+    __rmul__ = __mul__
+
+
+def test_conditional_bethe_setting_is_unregistered_and_fails_on_the_rebuilt_tables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ionmc.physics.stopping import BetheOptions, BetheStoppingSource
+
+    src = BetheStoppingSource(options=BetheOptions(shell=_CondBool()))  # type: ignore[arg-type]
+    assert spec_of(src)[0] == "unregistered"  # exact-type rule: shell is not a bool
+    cfg = _cfg(stopping=src, stopping_model=None)
+    assert cfg.physics.selection.requested_id == "unregistered"
+    monkeypatch.setattr(stopping_models, "_bethe_exact", lambda s: True)
+    cfg = _cfg(stopping=src, stopping_model=None)
+    assert cfg.physics.selection.requested_id == "bethe-ionmc-v1"
+    with pytest.raises(UnsupportedCombinationError, match="identity changed"):
+        validate(cfg)
+
+
+def test_stateful_grid_setting_is_unregistered_and_fails_on_the_rebuilt_tables(
+    cdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+
+    def wrap(src: NistStarStoppingSource) -> NistStarStoppingSource:
+        return NistStarStoppingSource(
+            src.star_table,
+            src.e_min_per_u,
+            src.e_max_per_u,
+            _CondInt(),  # type: ignore[arg-type]
+        )
+
+    fake = NistStarCombinedSource(wrap(model.pstar), wrap(model.astar))
+    assert spec_of(fake)[0] == "unregistered"
+    monkeypatch.setattr(stopping_models, "_exact_types", lambda *a: True)
+    assert spec_of(fake)[0] == MID
+    cfg = _cfg(stopping=fake, stopping_model=None)
+    with pytest.raises(UnsupportedCombinationError, match="identity changed"):
+        validate(cfg)
+
+
+@pytest.mark.parametrize("model_id", ["bethe-ionmc-v1", MID])
+def test_untouched_registered_models_validate_with_identical_rebuilt_tables(
+    cdir: Path, model_id: str
+) -> None:
+    cfg = _cfg(stopping_model=model_id)
+    assert cfg.physics.selection.observed[0] == model_id
+    validate(cfg)
+    cfg_obj = _cfg(stopping=resolve(model_id, cache_dir=str(cdir)), stopping_model=None)
+    assert cfg_obj.physics.selection.observed[0] == model_id
+    validate(cfg_obj)

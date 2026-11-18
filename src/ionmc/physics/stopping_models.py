@@ -487,13 +487,53 @@ def _structure(spec: StoppingModelSpec) -> tuple[Any, ...]:
     )
 
 
+def _exact_types(obj: Any, spec: Mapping[str, type]) -> bool:
+    """Every named attribute of ``obj`` has exactly the given primitive type (``bool`` is not an
+    ``int``, no numpy scalar, no subclass); checked before any value is normalised."""
+    return all(type(getattr(obj, name)) is tp for name, tp in spec.items())
+
+
+_SETTINGS = {"e_min_per_u": float, "e_max_per_u": float, "points_per_decade": int, "name": str}
+_BETHE_FIELDS = {
+    "shell": bool,
+    "barkas": bool,
+    "bloch": bool,
+    "mott": bool,
+    "effective_charge": bool,
+    "ls": str,
+}
+
+
+def _bethe_exact(source: Any) -> bool:
+    return (
+        type(source.options) is BetheOptions
+        and _exact_types(source.options, _BETHE_FIELDS)
+        and _exact_types(source, _SETTINGS)
+    )
+
+
+def _tabulated_exact(inner: Any) -> bool:
+    meta = inner.metadata
+    return (
+        _exact_types(inner, {**_SETTINGS, "start_range_id": str, "material_rule": str})
+        and type(meta) is dict
+        and all(type(meta.get(k)) is str for k in ("model_id", "version"))
+        and all(type(meta.get(k, "")) is str for k in ("dataset_id", "dataset_sha256", "decision"))
+    )
+
+
 def _nist_provider_exact(table: Any) -> bool:
     """The table provider of a NIST program is exactly a ``StarTable`` (frozen, slotted) holding
     exact read-only float64 arrays; any look-alike (stateful or not) is not trusted."""
     from ionmc.data.nist_star import StarTable  # noqa: PLC0415
 
-    return type(table) is StarTable and _exact_ro(
-        table.energy_mev, table.s_electronic, table.csda_range
+    return (
+        type(table) is StarTable
+        and _exact_ro(table.energy_mev, table.s_electronic, table.csda_range)
+        and all(
+            type(getattr(table, k)) in (str, type(None))
+            for k in ("program", "dataset_id", "sha256")
+        )
     )
 
 
@@ -547,6 +587,9 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             and _pristine(source.proton.start_range, icru._IcruStartRange, icru._START_SNAP)
             and _pristine(source.alpha.start_range, icru._IcruStartRange, icru._START_SNAP)
             and _icru_arrays_trusted(source)
+            and type(source.name) is str
+            and _tabulated_exact(source.proton)
+            and _tabulated_exact(source.alpha)
         )
         if trusted and _structure(STOPPING_MODELS[ICRU_MODEL_ID]) == _structure(candidate):
             return ICRU_MODEL_ID, STOPPING_MODELS[ICRU_MODEL_ID]
@@ -566,6 +609,9 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             and _pristine(source.astar, NistStarStoppingSource, _NISTSTAR_SNAP)
             and _nist_provider_exact(source.pstar.star_table)
             and _nist_provider_exact(source.astar.star_table)
+            and type(source.name) is str
+            and _exact_types(source.pstar, _SETTINGS)
+            and _exact_types(source.astar, _SETTINGS)
         )
         if trusted and _structure(STOPPING_MODELS[NIST_MODEL_ID]) == _structure(candidate):
             return NIST_MODEL_ID, STOPPING_MODELS[NIST_MODEL_ID]
@@ -579,9 +625,9 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
     if isinstance(source, TabulatedStoppingSource):  # structural match, content digest included
         candidate = source.instance_spec()
         for model_id, spec in STOPPING_MODELS.items():
-            if _pristine(source, TabulatedStoppingSource, _TAB_SNAP) and _structure(
-                spec
-            ) == _structure(candidate):
+            if (
+                _pristine(source, TabulatedStoppingSource, _TAB_SNAP) and _tabulated_exact(source)
+            ) and _structure(spec) == _structure(candidate):
                 return model_id, spec
         return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
     if type(source) is not BetheStoppingSource:
@@ -605,7 +651,7 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             f"{type(source).__module__}.{type(source).__qualname__}"
         )
     candidate = _bethe_spec(UNREGISTERED_ID, "1", source, "user")
-    if _pristine(source, BetheStoppingSource, _BETHE_SNAP):
+    if _pristine(source, BetheStoppingSource, _BETHE_SNAP) and _bethe_exact(source):
         for model_id, spec in STOPPING_MODELS.items():
             if _structure(spec) == _structure(candidate):
                 return model_id, spec

@@ -968,6 +968,7 @@ def _nuclear_tables(
     tables: TransportTables,
     nuc_table: Any,
     nuc_rows: tuple[Any, ...],
+    built: list[StoppingTable] | None = None,
 ) -> tuple[TransportTables, NuclearSetup]:
     """Deuteron transport tables (``tables.deuteron``), the energy-bound and cutoff rules and the
     capacity inputs of a nuclear run; fail closed if the stopping source has no deuteron table
@@ -975,6 +976,8 @@ def _nuclear_tables(
     ph = config.physics
     d_stop = _stopping_tables(ph.stopping_source, geometry.materials, DEUTERON)
     d_water = _water_table(config, DEUTERON)
+    if built is not None:
+        built.extend([*d_stop, *([d_water] if d_water is not None else [])])
     d_tables = TransportTables.from_stopping_tables(
         d_stop, water=d_water, projectile=DEUTERON, energy_axis="total_kinetic_mev"
     )
@@ -1214,18 +1217,16 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         stopping_tables, water=water_table, projectile=src.projectile
     )
     nuclear: NuclearSetup | None = None
+    deuteron_built: list[StoppingTable] = []
     if nuc_table is not None:
-        tables, nuclear = _nuclear_tables(config, geometry, tables, nuc_table, nuc_rows)
+        tables, nuclear = _nuclear_tables(
+            config, geometry, tables, nuc_table, nuc_rows, deuteron_built
+        )
     check_species_and_materials(
         sel, run_species, (*geometry.materials, *((WATER,) if config.tallies else ()))
     )
     _check_stopping_domain(sel, config, geometry, stopping_tables, water_table, nuclear, e_cut)
     _assert_single_model(sel, src.projectile, tables, nuclear)
-    assert_identity_stable(  # after every table of the run is built (decision 0044 section 2)
-        sel,
-        [*stopping_tables, *([water_table] if water_table is not None else [])],
-        run_species,
-    )
     e_lo = float(tables.e_min_mev.max())
     e_hi_table = float(tables.e_max_mev.min())
     if e_lo > 0.5 * e_cut:
@@ -1292,6 +1293,12 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         ion_mapping = _ion_mapping_data(
             tables, geometry, config, max(e0 - 6.0 * src.energy_sigma_mev, e_cut), e_hi
         )
+
+    assert_identity_stable(  # after every table of the run is built (decision 0044 section 2)
+        sel,
+        [*stopping_tables, *([water_table] if water_table is not None else []), *deuteron_built],
+        run_species,
+    )
 
     max_steps_origin = "user" if run.max_steps is not None else "computed"
     max_steps = (

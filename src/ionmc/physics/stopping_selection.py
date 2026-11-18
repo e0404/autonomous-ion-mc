@@ -27,6 +27,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+
 from ionmc._validate import fail
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.materials import Material
@@ -153,6 +155,33 @@ def _observed(source: StoppingSource) -> tuple[str, str] | None:
     return mid, spec_sha256(spec)
 
 
+def _rebuild_check(sel: StoppingSelection, tables: Sequence[Any], msg: str) -> None:
+    """For a registered selection, rebuild every table of the run from a fresh ``resolve`` of the
+    registered id (a trusted construction, the registry as it is now) and require bit-for-bit
+    equal grids, stopping powers, ranges and equal metadata. The registered identity is thereby a
+    statement about the tables actually consumed, whatever the objects of the source do."""
+    if sel.observed is None or sel.observed[0] == UNREGISTERED_ID:
+        return
+    try:
+        fresh = _models.resolve(sel.observed[0])
+    except Exception as exc:  # noqa: BLE001
+        raise fail(f"{msg}: cannot rebuild {sel.observed[0]!r}: {exc}") from exc
+    for t in tables:
+        try:
+            ref = fresh.table(t.material, t.projectile)
+        except Exception as exc:  # noqa: BLE001
+            raise fail(f"{msg}: rebuild failed: {exc}") from exc
+        same = ref.metadata == t.metadata and all(
+            np.array_equal(getattr(ref, n), getattr(t, n))
+            for n in ("energy_per_u", "s_el_mass", "s_el_linear", "csda_range_g_cm2", "range_mm")
+        )
+        if not same:
+            raise fail(
+                f"{msg} (the table of {t.projectile.name} in {t.material.name} differs from the "
+                f"registered construction of {sel.observed[0]!r})"
+            )
+
+
 def assert_identity_stable(
     sel: StoppingSelection, tables: Sequence[Any], projectiles: Sequence[Projectile]
 ) -> None:
@@ -168,6 +197,7 @@ def assert_identity_stable(
             raise fail(f"{msg}: {exc}") from exc
         if now != sel.observed:
             raise fail(f"{msg} (selected {sel.observed}, now {now})")
+    _rebuild_check(sel, tables, msg)
     digest_for = getattr(sel.source, "content_sha256_for", None)
     registered = sel.observed is not None and sel.observed[0] in _CONSUMED_IDS
     if not callable(digest_for):
