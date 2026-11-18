@@ -474,3 +474,11 @@ OPEN. Not a clinical claim."
   record committed and verified): values, gating and spec hashes unchanged; `bethe-ionmc-v1` pins now carry
   `cache_dir: null`; script sha256 → 9bf72756…; `src/ionmc` tree pin → 54d226da…. Frozen manifest regenerated
   (82 sealed paths, sha256 3bc6abe9…). This commit is the seal candidate; no evidence run before its Codex review.
+- 2026-11-18 (orchestrator, SEAL — §D step 3 pin note): seal review REVIEW-0e6ca486200b47e2a958376470ad50f5 at ad73d94eff7ce25dbb1db04b00f1136603627e03; manifest sha256 3bc6abe916eabfa2ba7ced9adfbf8926eeb32e0b910214aef754f2f67a1c3b39
+  (signed codex-worker record, verdict pass, no findings, finished 2026-11-18T19:44:23Z; committed verbatim as
+  `validation/results/stopping/v3-013/seal-review.json` and verified against the committed trust file). The sealed
+  closure is the 82 paths of the frozen manifest plus the `src/ionmc` tree 54d226da… at the seal SHA; every evidence
+  run must carry identical blobs and that tree. Next, in order (§D steps 4–6): this pin commit's own Codex review;
+  the 18 ionmc samples (one controlled host run at a time, each started after this review finished); the samples
+  commit and its review (second pin note `samples review <id> at <sha>`); the three TOPAS smokes; the evidence parts
+  0–3 of the three cases; the sealed evaluator. No evidence run has been started. Not a clinical claim.

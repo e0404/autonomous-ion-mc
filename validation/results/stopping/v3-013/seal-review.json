@@ -1,0 +1,31 @@
+{
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "b53b2800f81a4e64",
+    "payload_sha256": "2a678100b8743df46715c6b6718b6e5914f568edbc582a6869518cdadf861151",
+    "public_key": "2fa323ebc164551322a8268176a463563f8036a2a91cf6de02d7a1ebfe407bfe",
+    "schema": "ionmc-attestation-1",
+    "signature": "58215a51b2502567b5dfba050481d45e796d272a90bc7a181eca0ceb76a4aeda1c8dca805065bf3de0050673dc557c3a42b7edd9b2abb44344fe48a2722f150b",
+    "signed_at_utc": "2026-11-18T19:44:23.304348+00:00",
+    "signer": "codex-worker"
+  },
+  "base_sha": "8ca9d4fcceb729c234af5349cd9ccebe3edb7dfe",
+  "experiment_id": "experiment-v3",
+  "finished_at": "2026-11-18T19:44:23.301142+00:00",
+  "head_sha": "ad73d94eff7ce25dbb1db04b00f1136603627e03",
+  "model": "gpt-5.6-sol",
+  "provider": "openai",
+  "report": {
+    "findings": [],
+    "head_sha": "ad73d94eff7ce25dbb1db04b00f1136603627e03",
+    "summary": "Both prior important findings are resolved with targeted regression coverage. The regenerated prediction, host-record, source-tree, and 82-path frozen-manifest pins are internally consistent. No blocking or important unresolved findings remain in the complete diff.",
+    "verdict": "pass"
+  },
+  "report_sha256": "7d50010278e50d9e9d9a02412b9e0df0ac4ca9515235578feb835025f518c068",
+  "review_id": "REVIEW-0e6ca486200b47e2a958376470ad50f5",
+  "schema_version": 1,
+  "started_at": "2026-11-18T19:39:41.087692+00:00",
+  "status": "passed",
+  "task_id": "V3-013",
+  "tool": "codex exec"
+}
