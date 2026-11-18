@@ -295,3 +295,72 @@ def test_per3_block_is_json_round_trippable_and_outside_the_table_hash(cdir: Pat
             [_old_way(cdir, PSTAR_ID).table(WATER, PROTON)], projectile=PROTON
         ).sha256
     )
+
+
+# ---- identity from the live arrays (review finding 1) ----
+
+
+def _combined_with(
+    src: NistStarCombinedSource, program: str, **arrays: Any
+) -> NistStarCombinedSource:
+    """A new combined source whose ``program`` table has other arrays (the metadata unchanged)."""
+    base = {"PSTAR": src.pstar, "ASTAR": src.astar}
+    st = base[program].star_table
+    new = NistStarStoppingSource(replace(st, **arrays))
+    if program == "PSTAR":
+        return NistStarCombinedSource(new, src.astar)
+    return NistStarCombinedSource(src.pstar, new)
+
+
+def test_loaded_arrays_are_read_only(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    for src in (model.pstar, model.astar):
+        for name in ("energy_mev", "s_electronic", "s_nuclear", "csda_range", "detour"):
+            arr = getattr(src.star_table, name)
+            assert not arr.flags.writeable
+            with pytest.raises(ValueError, match="read-only"):
+                arr[0] = 1.0
+
+
+def test_registered_digests_match_the_loaded_content_and_the_spec(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    digests = STOPPING_MODELS[MID].options["content_sha256"]
+    assert digests == {
+        "proton": model.content_sha256_for(PROTON),
+        "alpha": model.content_sha256_for(ALPHA),
+    }
+    assert spec_of(model)[0] == MID
+
+
+@pytest.mark.parametrize("program", ["PSTAR", "ASTAR"])
+@pytest.mark.parametrize("array", ["s_electronic", "csda_range", "energy_mev"])
+def test_modified_content_with_the_pinned_metadata_is_unregistered(
+    cdir: Path, program: str, array: str
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    st = (model.pstar if program == "PSTAR" else model.astar).star_table
+    changed = getattr(st, array).copy()  # a writable copy; the loaded array cannot be written
+    changed[3] *= 1.001
+    other = _combined_with(model, program, **{array: changed})
+    assert other.pstar.star_table.dataset_id == PSTAR_ID  # the pinned metadata are intact
+    mid, spec = spec_of(other)
+    assert mid == "unregistered" and spec.decision == "user"
+    modified = PSTAR_ID if program == "PSTAR" else ASTAR_ID
+    # no registered pin is claimed for the modified program (the unmodified one keeps its own)
+    assert modified not in {pin.dataset_id for pin in spec.data}
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE  # the registered evidence is not attached
+
+
+def test_constructed_object_claiming_the_pinned_metadata_is_unregistered(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+
+    def fake(st: Any) -> NistStarStoppingSource:
+        return NistStarStoppingSource(
+            replace(st, s_electronic=st.s_electronic * 2.0, csda_range=st.csda_range * 2.0)
+        )
+
+    other = NistStarCombinedSource(fake(model.pstar.star_table), fake(model.astar.star_table))
+    assert other.pstar.star_table.sha256 == model.pstar.star_table.sha256
+    mid, spec = spec_of(other)
+    assert mid == "unregistered" and spec_sha256(spec) not in STOPPING_EVIDENCE
+    assert spec_of(model)[0] == MID and spec_sha256(spec_of(model)[1]) in STOPPING_EVIDENCE

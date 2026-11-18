@@ -51,8 +51,20 @@ _BETHE_INTERPOLATION = "analytic on a log grid; range exact-loglog-quadrature-v1
 _BETHE_RANGE_START = "constant-S approximation a*E_min/S(E_min)"
 
 
+def _deep_freeze(value: Any) -> Any:
+    """Recursively immutable copy: mappings to ``MappingProxyType`` over copies, lists to tuples,
+    sets to frozensets (a nested mutation of a spec raises ``TypeError``)."""
+    if isinstance(value, Mapping):
+        return MappingProxyType({k: _deep_freeze(v) for k, v in value.items()})
+    if isinstance(value, list | tuple):
+        return tuple(_deep_freeze(v) for v in value)
+    if isinstance(value, set | frozenset):
+        return frozenset(_deep_freeze(v) for v in value)
+    return value
+
+
 def _freeze(mapping: Mapping[str, Any]) -> Mapping[str, Any]:
-    return MappingProxyType(dict(mapping))
+    return _deep_freeze(mapping)  # type: ignore[no-any-return]
 
 
 @dataclass(frozen=True)
@@ -106,6 +118,7 @@ class StoppingModelSpec:
             raise ValueError(f"StoppingModelSpec.kind must be one of {KINDS}, got {self.kind!r}")
         object.__setattr__(self, "options", _freeze(self.options))
         object.__setattr__(self, "data", tuple(self.data))
+        object.__setattr__(self, "domain", self.domain)  # StoppingDomain freezes itself
 
 
 def _canonical(value: Any) -> Any:
@@ -183,6 +196,13 @@ _LS_IDS = {
 
 NIST_MODEL_ID = "nist-pstar-astar-water-2005"
 PROGRAM_OF = {"proton": "PSTAR", "alpha": "ASTAR"}
+# Expected parsed-content digests (canonical serialisation of stopping_nist.py: per program over
+# energy, electronic S and CSDA range) of the two pinned tables; digests only, no table values.
+# spec_of recomputes them from the live arrays of an instance (decision 0044 section 2).
+NIST_CONTENT_SHA256 = {
+    "proton": "e6cb1332843e86f1dc2fb52b3f45976de9f06353d156d5b85197c0a6acd1e435",
+    "alpha": "0ec8830790f65f9e29442980c1b70c1b79905af0cc67e660a461b49dc9dc2e68",
+}
 DATASET_OF = {"proton": "nist-pstar-water-2005", "alpha": "nist-astar-water-2005"}
 _E_MIN_PER_U = 1.0
 _E_MAX_PER_U_CAP = 500.0  # the NistStarStoppingSource default; the grid ends at the table end below
@@ -207,8 +227,9 @@ def nist_pins() -> tuple[DataPin, ...]:
     )
 
 
-def nist_options(source_name: str, ppd: int) -> dict[str, Any]:
+def nist_options(source_name: str, ppd: int, content_sha256: Mapping[str, str]) -> dict[str, Any]:
     return {
+        "content_sha256": dict(content_sha256),
         "points_per_decade": int(ppd),
         "source_name": source_name,
         "programs": dict(PROGRAM_OF),
@@ -225,7 +246,7 @@ def registered_nist_spec() -> StoppingModelSpec:
         NIST_MODEL_ID,
         "1",
         "tabulated",
-        nist_options("nist-star", _POINTS_PER_DECADE),
+        nist_options("nist-star", _POINTS_PER_DECADE, NIST_CONTENT_SHA256),
         NIST_INTERPOLATION,
         NIST_RANGE_START,
         nist_pins(),
@@ -243,6 +264,9 @@ ICRU_MODEL_ID = "icru90-water-v1"
 ICRU_DATASET_ID = "geant4-icru90-stopping-11.4.2"
 ICRU_SPECIES = ("proton", "alpha")
 ICRU_I_VALUE_EV = 78.0
+# Expected parsed-content digest (canonical serialisation of stopping_icru90.py: both projectiles,
+# energy per nucleon and electronic S); a digest only, no array values.
+ICRU_CONTENT_SHA256 = "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e"
 # per-species upper window ends [MeV per nucleon]: proton 500 MeV, alpha 250 MeV/u (the alpha array
 # ends at 1000 MeV total = 250 MeV/u, decision 0044 Q8; the resolved end is read from the array)
 _ICRU_E_MAX_PER_U = {"proton": 500.0, "alpha": 250.0}
@@ -266,8 +290,9 @@ def icru_pins() -> tuple[DataPin, ...]:
     )
 
 
-def icru_options(source_name: str, ppd: int) -> dict[str, Any]:
+def icru_options(source_name: str, ppd: int, content_sha256: str) -> dict[str, Any]:
     return {
+        "content_sha256": content_sha256,
         "points_per_decade": int(ppd),
         "source_name": source_name,
         "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
@@ -284,7 +309,7 @@ def registered_icru_spec() -> StoppingModelSpec:
         ICRU_MODEL_ID,
         "1",
         "tabulated",
-        icru_options("icru90", _POINTS_PER_DECADE),
+        icru_options("icru90", _POINTS_PER_DECADE, ICRU_CONTENT_SHA256),
         ICRU_INTERPOLATION,
         ICRU_RANGE_START,
         icru_pins(),

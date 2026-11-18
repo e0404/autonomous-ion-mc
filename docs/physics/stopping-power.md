@@ -201,7 +201,7 @@ and the exact-Omega ion rows. It asserts that all table identities name one effe
 Bethe default in a run path. The MCS proton path (the b-matching proton path of the ion
 multiple-scattering model, 1 to 4000 MeV) is fixed at `bethe-ionmc-v1` for every selected model and
 is recorded as `mcs_proton_path_stopping`; for a non-default ion run this is a declared mixed
-construction. `ionmc.capabilities()["stopping_models"]` lists every registered model with domain,
+construction. `ionmc.capabilities()["physics"]["stopping_models"]` lists every registered model with domain,
 data pins, licence role and evidence records.
 
 ### Fail-closed domains

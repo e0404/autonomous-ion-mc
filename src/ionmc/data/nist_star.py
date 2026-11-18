@@ -43,6 +43,23 @@ class StarTable:
     sha256: str | None = None
     retrieved_at: str | None = None
 
+    def __post_init__(self) -> None:
+        # read-only arrays: an in-place write raises; a writable input is copied, never altered
+        for name in (
+            "energy_mev",
+            "s_electronic",
+            "s_nuclear",
+            "s_total",
+            "csda_range",
+            "projected_range",
+            "detour",
+        ):
+            a = getattr(self, name)
+            if a.flags.writeable:
+                a = np.array(a, dtype=np.float64)
+                a.setflags(write=False)
+                object.__setattr__(self, name, a)
+
     def provenance(self) -> dict[str, str | None]:
         """Dataset provenance: dataset_id, version, pinned sha256, content_sha256, retrieved_at."""
         return {

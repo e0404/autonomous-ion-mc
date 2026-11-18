@@ -559,3 +559,50 @@ def test_single_model_assertion_names_the_model_for_both_species(cdir: Path) -> 
         assert eff.stopping_identity()["model_id_effective"] == MID
         t = eff.summary()["stopping"]
         assert t["kind"] == "tabulated" and t["version"] == "1" and t["decision"] == "0044"
+
+
+# ---- identity from the live arrays (review finding 1) ----
+
+
+def test_loaded_icru_arrays_are_read_only(data: Icru90Water, cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    for arr in (
+        data.proton_energy_mev,
+        data.proton_stopping,
+        data.alpha_energy_mev,
+        data.alpha_stopping,
+        *(a for src in (model.proton, model.alpha) for pair in src._arrays.values() for a in pair),
+    ):
+        assert not arr.flags.writeable
+        with pytest.raises(ValueError, match="read-only"):
+            arr[0] = 1.0
+
+
+def test_registered_icru_digest_matches_the_loaded_content(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert STOPPING_MODELS[MID].options["content_sha256"] == model.content_sha256
+    assert spec_of(model)[0] == MID
+
+
+def test_modified_content_with_the_pinned_metadata_is_unregistered(
+    data: Icru90Water, cdir: Path
+) -> None:
+    changed = data.proton_stopping.copy()  # a writable copy of a read-only array
+    changed[5] *= 1.001
+    other = build_icru90_source(replace(data, proton_stopping=changed))
+    assert other.proton.metadata["dataset_sha256"] == data.sha256  # pinned metadata intact
+    mid, spec = spec_of(other)
+    assert mid == "unregistered" and spec.decision == "user" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+def test_constructed_object_claiming_the_pinned_metadata_is_unregistered() -> None:
+    syn = _synthetic()
+    claimed = replace(
+        syn,
+        dataset_id=ICRU_ID,
+        sha256=stopping_models.DATASETS[ICRU_ID].sha256,
+    )
+    mid, spec = spec_of(build_icru90_source(claimed))
+    assert mid == "unregistered" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE

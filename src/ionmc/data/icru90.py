@@ -43,6 +43,15 @@ class Icru90Water:
     sha256: str | None = None
     retrieved_at: str | None = None
 
+    def __post_init__(self) -> None:
+        # read-only arrays: an in-place write raises; a writable input is copied, never altered
+        for name in ("proton_energy_mev", "proton_stopping", "alpha_energy_mev", "alpha_stopping"):
+            a = getattr(self, name)
+            if a.flags.writeable:
+                a = np.array(a, dtype=np.float64)
+                a.setflags(write=False)
+                object.__setattr__(self, name, a)
+
 
 def _array(source: str, name: str) -> NDArray[np.float64]:
     """Return the numbers of the C++ array ``name[...] = { ... };`` as float64."""

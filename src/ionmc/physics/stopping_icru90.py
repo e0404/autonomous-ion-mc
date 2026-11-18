@@ -53,6 +53,7 @@ from ionmc.physics.stopping import (
     exact_loglog_range_increments,
 )
 from ionmc.physics.stopping_models import (
+    ICRU_CONTENT_SHA256,
     ICRU_DATASET_ID,
     ICRU_I_VALUE_EV,
     ICRU_INTERPOLATION,
@@ -183,9 +184,11 @@ class Icru90WaterSource:
         """The spec built from the fields of this instance, for the structural match of
         ``spec_of``: the registered pin only for arrays loaded from the verified cache."""
         meta = self.proton.metadata
+        live = self.content_sha256  # recomputed from the live arrays, never from the metadata
         pins = (
             icru_pins()
-            if meta.get("dataset_id") == ICRU_DATASET_ID
+            if live == ICRU_CONTENT_SHA256
+            and meta.get("dataset_id") == ICRU_DATASET_ID
             and meta.get("dataset_sha256") == DATASETS[ICRU_DATASET_ID].sha256
             and self.alpha.metadata.get("dataset_sha256") == meta.get("dataset_sha256")
             else ()
@@ -194,7 +197,7 @@ class Icru90WaterSource:
         lo = {"proton": float(self.proton.e_min_per_u), "alpha": float(self.alpha.e_min_per_u)}
         hi = {"proton": float(self.proton.e_max_per_u), "alpha": float(self.alpha.e_max_per_u)}
         ppd = self.proton.points_per_decade
-        options = icru_options(str(self.name), ppd)
+        options = icru_options(str(self.name), ppd, live)
         if self.alpha.points_per_decade != ppd:
             options["points_per_decade_alpha"] = int(self.alpha.points_per_decade)
         return StoppingModelSpec(
@@ -236,8 +239,10 @@ def build_icru90_source(
         ("alpha", data.alpha_energy_mev, data.alpha_stopping),
     ):
         a = _PROJECTILE_A[sp]
-        e_u = np.asarray(e_tot, dtype=np.float64) / a
-        s_arr = np.asarray(s, dtype=np.float64)
+        e_u = np.asarray(e_tot, dtype=np.float64) / a  # a new array
+        s_arr = np.array(s, dtype=np.float64)  # a copy: the start-range closure keeps these two
+        e_u.setflags(write=False)
+        s_arr.setflags(write=False)
         lo = spec.domain.e_min_per_u[sp]
         hi = min(spec.domain.e_max_per_u[sp], float(e_u[-1]))
 

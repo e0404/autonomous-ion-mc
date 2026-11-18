@@ -39,6 +39,7 @@ from ionmc.physics.stopping import NistStarStoppingSource, StoppingTable
 from ionmc.physics.stopping_models import (
     DATASET_OF,
     MATERIAL_RULE_WATER,
+    NIST_CONTENT_SHA256,
     NIST_INTERPOLATION,
     NIST_MODEL_ID,
     NIST_RANGE_START,
@@ -113,15 +114,23 @@ class NistStarCombinedSource:
         """The spec built from the fields of this instance, for the structural match of
         ``spec_of``: registered pins only for tables loaded from the verified cache."""
         pins = []
+        live = {  # recomputed from the live arrays: the identity never trusts the metadata alone
+            "proton": _arrays_digest([self.pstar.star_table]),
+            "alpha": _arrays_digest([self.astar.star_table]),
+        }
         for sp, src in (("proton", self.pstar), ("alpha", self.astar)):
             ds = src.star_table.dataset_id
-            if ds == DATASET_OF[sp] and src.star_table.sha256 == DATASETS[ds].sha256:
+            if (
+                ds == DATASET_OF[sp]
+                and src.star_table.sha256 == DATASETS[ds].sha256
+                and live[sp] == NIST_CONTENT_SHA256[sp]
+            ):
                 pins.append(nist_pins()[0 if sp == "proton" else 1])
         species = frozenset(PROGRAM_OF)
         lo = {"proton": float(self.pstar.e_min_per_u), "alpha": float(self.astar.e_min_per_u)}
         hi = {"proton": float(self.pstar.e_max_per_u), "alpha": float(self.astar.e_max_per_u)}
         ppd = self.pstar.points_per_decade
-        options = nist_options(str(self.name), ppd)
+        options = nist_options(str(self.name), ppd, live)
         if self.astar.points_per_decade != ppd:
             options["points_per_decade_astar"] = int(self.astar.points_per_decade)
         return StoppingModelSpec(

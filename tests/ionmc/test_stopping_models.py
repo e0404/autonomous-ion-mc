@@ -294,3 +294,35 @@ def test_cc_hash_z1_ls_variants_share_the_default_metadata_by_design() -> None:
             assert z["ls_bare_mixed"]["options"]["ls"] == "bare_mixed"
             assert "ls" not in z["default"]["options"]
             assert z["ls_eff"] != z["default"] != z["ls_bare_mixed"]
+
+
+# ---- recursive immutability of the registered specs (review finding 2) ----
+
+
+def test_registered_specs_are_deeply_immutable_and_the_hashes_unchanged() -> None:
+    before = {mid: spec_sha256(s) for mid, s in STOPPING_MODELS.items()}
+    nist = STOPPING_MODELS["nist-pstar-astar-water-2005"]
+    assert isinstance(nist.options["programs"], MappingProxyType)
+    assert isinstance(nist.options["content_sha256"], MappingProxyType)
+    for target in (nist.options["programs"], nist.options["content_sha256"], nist.options):
+        with pytest.raises(TypeError):
+            target["proton"] = "X"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        nist.domain.e_min_per_u["proton"] = 0.5  # type: ignore[index]
+    with pytest.raises(TypeError):
+        STOPPING_MODELS["x"] = nist  # type: ignore[index]
+    assert {mid: spec_sha256(s) for mid, s in STOPPING_MODELS.items()} == before
+    assert before[DEFAULT_STOPPING_MODEL_ID] == PINNED_DEFAULT_SPEC_SHA256
+
+
+def test_spec_freezing_is_recursive_for_lists_sets_and_copies_the_input() -> None:
+    nested = {"a": {"b": [1, {"c": [2]}], "s": {3}}}
+    spec = replace(STOPPING_MODELS[DEFAULT_STOPPING_MODEL_ID], model_id="test-x", options=nested)
+    nested["a"]["b"].append(9)  # type: ignore[attr-defined]
+    nested["a"]["s"].add(4)  # type: ignore[attr-defined]
+    a = spec.options["a"]
+    assert a["b"] == (1, MappingProxyType({"c": (2,)})) and a["s"] == frozenset({3})
+    with pytest.raises(TypeError):
+        a["b"][1]["c"] = 1
+    with pytest.raises(AttributeError):
+        a["b"].append(1)
