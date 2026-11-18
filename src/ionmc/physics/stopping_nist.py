@@ -62,6 +62,8 @@ class NistStarCombinedSource:
     pstar: NistStarStoppingSource
     astar: NistStarStoppingSource
     name: str = "nist-star"
+    # the cache directory the tables were loaded from (run provenance, not part of the model spec)
+    cache_dir: str | None = None
 
     def __post_init__(self) -> None:
         for src, prog in ((self.pstar, "PSTAR"), (self.astar, "ASTAR")):
@@ -169,7 +171,9 @@ def load_nist_model(cache_dir: str | None = None) -> NistStarCombinedSource:
             raise ValueError(f"{dataset_id}: program {table.program!r}, expected {PROGRAM_OF[sp]}")
         tables[sp] = table
     return NistStarCombinedSource(
-        NistStarStoppingSource(tables["proton"]), NistStarStoppingSource(tables["alpha"])
+        NistStarStoppingSource(tables["proton"]),
+        NistStarStoppingSource(tables["alpha"]),
+        cache_dir=str(cdir),
     )
 
 

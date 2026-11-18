@@ -68,6 +68,7 @@ BLOCK_KEYS = (
     "circular_rows",
     "selected_by",
     "species_transported",
+    "cache_dir",
 )
 _BETHE_FLAGS = ("shell", "barkas", "bloch", "mott", "effective_charge")
 _REL = 1.0e-12
@@ -88,6 +89,7 @@ class StoppingSelection:
     spec: StoppingModelSpec
     source_class: str
     observed: tuple[str, str] | None = None  # (spec_of id, spec_sha256) at selection time
+    cache_dir: str | None = None  # the cache directory of a tabulated source (run provenance)
 
     def effective_id(self, projectile: Projectile) -> str:
         return effective_model_id(self.requested_id, projectile)
@@ -132,6 +134,7 @@ def select(stopping: StoppingSource | None, stopping_model: str | None) -> Stopp
             _models.STOPPING_MODELS[stopping_model],
             type(source).__name__,
             _observed(source),
+            _cache_dir_of(source),
         )
     assert stopping is not None
     cls = type(stopping).__qualname__
@@ -140,11 +143,32 @@ def select(stopping: StoppingSource | None, stopping_model: str | None) -> Stopp
     except (TypeError, ValueError) as exc:  # DOM-7: an unsupported source type fails closed
         raise fail(f"unsupported stopping object {type(stopping).__qualname__}: {exc}") from exc
     return StoppingSelection(
-        model_id, "stopping-object", stopping, spec, cls, (model_id, spec_sha256(spec))
+        model_id,
+        "stopping-object",
+        stopping,
+        spec,
+        cls,
+        (model_id, spec_sha256(spec)),
+        _cache_dir_of(stopping),
     )
 
 
 _CONSUMED_IDS = (_models.NIST_MODEL_ID, _models.ICRU_MODEL_ID)
+
+
+def _cache_dir_of(source: Any) -> str | None:
+    value = getattr(source, "cache_dir", None)
+    return value if type(value) is str else None
+
+
+# Cache-local provenance keys of a table's metadata, excluded from the comparison of the tables of
+# a run with their rebuild (the manifest timestamp differs between equivalent caches); every other
+# key (dataset id, version, sha256, content digests, grid and option fields) is compared.
+CACHE_LOCAL_METADATA_KEYS = ("retrieved_at",)
+
+
+def _comparable(meta: Mapping[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in meta.items() if k not in CACHE_LOCAL_METADATA_KEYS}
 
 
 def _observed(source: StoppingSource) -> tuple[str, str] | None:
@@ -163,7 +187,7 @@ def _rebuild_check(sel: StoppingSelection, tables: Sequence[Any], msg: str) -> N
     if sel.observed is None or sel.observed[0] == UNREGISTERED_ID:
         return
     try:
-        fresh = _models.resolve(sel.observed[0])
+        fresh = _models.resolve(sel.observed[0], cache_dir=sel.cache_dir)
     except Exception as exc:  # noqa: BLE001
         raise fail(f"{msg}: cannot rebuild {sel.observed[0]!r}: {exc}") from exc
     for t in tables:
@@ -171,7 +195,7 @@ def _rebuild_check(sel: StoppingSelection, tables: Sequence[Any], msg: str) -> N
             ref = fresh.table(t.material, t.projectile)
         except Exception as exc:  # noqa: BLE001
             raise fail(f"{msg}: rebuild failed: {exc}") from exc
-        same = ref.metadata == t.metadata and all(
+        same = _comparable(ref.metadata) == _comparable(t.metadata) and all(
             np.array_equal(getattr(ref, n), getattr(t, n))
             for n in ("energy_per_u", "s_el_mass", "s_el_linear", "csda_range_g_cm2", "range_mm")
         )
@@ -484,6 +508,7 @@ def identity_block(
                 "pin": _canon(p),
                 "role_in_this_run": "construction",
                 "table": [projectile.name, m.name],
+                "cache_dir": sel.cache_dir,
             }
             for p in spec.data
             if p.dataset_id in used_ids(projectile)
@@ -519,6 +544,7 @@ def identity_block(
         "circular_rows": list(STOPPING_CIRCULAR_ROWS.get(digest, ())),
         "selected_by": sel.selected_by,
         "species_transported": list(species_transported),
+        "cache_dir": sel.cache_dir,
     }
     window = getattr(source, "window_per_u", None)
     if callable(window):

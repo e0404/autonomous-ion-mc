@@ -261,8 +261,14 @@ def test_per3_data_used_lists_only_the_pin_read_for_the_transported_projectile(
     validate_identity_block(blk)
     assert blk["data_declared"] == [pins[PSTAR_ID], pins[ASTAR_ID]]
     assert blk["data_used"] == [
-        {"pin": pins[used], "role_in_this_run": "construction", "table": [name, "water"]}
+        {
+            "pin": pins[used],
+            "role_in_this_run": "construction",
+            "table": [name, "water"],
+            "cache_dir": str(cdir),
+        }
     ]
+    assert blk["cache_dir"] == str(cdir)
     assert blk["circular_rows"] == [PSTAR_ID, ASTAR_ID]
     assert [r["status"] for r in blk["evidence_at_run"]] == ["consistency-only"]
     # content digest: of the parsed arrays of the program read, differs between the programs
@@ -449,7 +455,7 @@ def _lookalike_model(cdir: Path) -> NistStarCombinedSource:
             src.points_per_decade,
         )
 
-    return NistStarCombinedSource(wrap(model.pstar), wrap(model.astar))
+    return NistStarCombinedSource(wrap(model.pstar), wrap(model.astar), cache_dir=model.cache_dir)
 
 
 def test_stateful_provider_is_unregistered_and_the_consumed_digest_fails_validate(
@@ -552,7 +558,7 @@ def test_stateful_grid_setting_is_unregistered_and_fails_on_the_rebuilt_tables(
             _CondInt(),  # type: ignore[arg-type]
         )
 
-    fake = NistStarCombinedSource(wrap(model.pstar), wrap(model.astar))
+    fake = NistStarCombinedSource(wrap(model.pstar), wrap(model.astar), cache_dir=model.cache_dir)
     assert spec_of(fake)[0] == "unregistered"
     monkeypatch.setattr(stopping_models, "_exact_types", lambda *a: True)
     assert spec_of(fake)[0] == MID

@@ -143,6 +143,8 @@ class Icru90WaterSource:
     proton: TabulatedStoppingSource
     alpha: TabulatedStoppingSource
     name: str = "icru90"
+    # the cache directory the arrays were loaded from (run provenance, not part of the model spec)
+    cache_dir: str | None = None
 
     def __post_init__(self) -> None:
         for sp, src in (("proton", self.proton), ("alpha", self.alpha)):
@@ -287,7 +289,11 @@ _START_SNAP = snapshot(_IcruStartRange)
 
 
 def build_icru90_source(
-    data: Icru90Water, *, name: str = "icru90", points_per_decade: int = 200
+    data: Icru90Water,
+    *,
+    name: str = "icru90",
+    points_per_decade: int = 200,
+    cache_dir: str | None = None,
 ) -> Icru90WaterSource:
     """The model source from parsed ICRU 90 arrays (energies in total MeV, converted to MeV/u).
 
@@ -331,7 +337,7 @@ def build_icru90_source(
             MATERIAL_RULE_WATER,
             points_per_decade,
         )
-    return Icru90WaterSource(sources["proton"], sources["alpha"], name)
+    return Icru90WaterSource(sources["proton"], sources["alpha"], name, cache_dir)
 
 
 def load_icru90_model(cache_dir: str | None = None) -> Icru90WaterSource:
@@ -346,7 +352,7 @@ def load_icru90_model(cache_dir: str | None = None) -> Icru90WaterSource:
     data = load_icru90_water(path)  # re-hashes the bytes against the registry pin
     if data.dataset_id != ICRU_DATASET_ID or data.sha256 != DATASETS[ICRU_DATASET_ID].sha256:
         raise _cache.IntegrityError(f"{ICRU_DATASET_ID}: loaded object is not the pinned dataset")
-    return build_icru90_source(data)
+    return build_icru90_source(data, cache_dir=str(cdir))
 
 
 __all__ = [

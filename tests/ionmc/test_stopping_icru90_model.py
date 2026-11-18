@@ -531,8 +531,14 @@ def test_per3_data_used_lists_the_single_icru_pin_with_the_projectile_table(
     assert blk["model_id_requested"] == blk["model_id_effective"] == MID
     assert blk["data_declared"] == [pin]
     assert blk["data_used"] == [
-        {"pin": pin, "role_in_this_run": "construction", "table": [proj.name, "water"]}
+        {
+            "pin": pin,
+            "role_in_this_run": "construction",
+            "table": [proj.name, "water"],
+            "cache_dir": str(cdir),
+        }
     ]
+    assert blk["cache_dir"] == str(cdir)
     assert [r["status"] for r in blk["evidence_at_run"]] == ["consistency-only"]
     # PER-2: circular rows, and the MCS proton path of an ion run
     assert blk["circular_rows"] == [
@@ -808,3 +814,96 @@ def test_validate_fails_closed_when_the_identity_changes_after_selection(
         s[:] = old
         s.setflags(write=False)
     validate(cfg)
+
+
+# ---- the selected cache is part of the selection (REVIEW-6483e470) ----
+
+
+def _copy_cache(src: Path, dst: Path, ids: tuple[str, ...]) -> Path:
+    (dst / "objects").mkdir(parents=True)
+    (dst / "manifests").mkdir()
+    for ds in ids:
+        shutil.copy(cache.manifest_path(ds, src), cache.manifest_path(ds, dst))
+        sha = stopping_models.DATASETS[ds].sha256
+        obj = cache.object_path(sha, dst)
+        shutil.copy(cache.object_path(sha, src), obj)
+        os.chmod(obj, 0o644)
+    return dst
+
+
+def _select_from(cache_dir: Path, model_id: str) -> Any:
+    from ionmc.physics.stopping_selection import select
+
+    return select(resolve(model_id, cache_dir=str(cache_dir)), None)
+
+
+@pytest.mark.parametrize("model_id", [MID, "nist-pstar-astar-water-2005"])
+def test_alternate_cache_validates_and_keeps_the_registered_id(
+    cdir_all: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model_id: str
+) -> None:
+    alt = _copy_cache(cdir_all, tmp_path / "alt", (ICRU_ID, PSTAR_ID, ASTAR_ID))
+    base = _cfg()  # built while the default cache is still available
+    empty, home = tmp_path / "empty", tmp_path / "home"
+    empty.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("IONMC_CACHE_DIR", str(empty))  # the default cache is unavailable
+    monkeypatch.setenv("HOME", str(home))
+    src = resolve(model_id, cache_dir=str(alt))
+    assert src.cache_dir == str(alt)
+    water = water_i78() if model_id == MID else WATER
+    cfg = SimulationConfig(
+        source=base.source,
+        geometry=BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), water),
+        scoring=base.scoring,
+        physics=PhysicsOptions(nuclear=False, stopping=src),
+        run=base.run,
+    )
+    sel = cfg.physics.selection
+    assert sel.requested_id == model_id and sel.cache_dir == str(alt)
+    blk = validate(cfg).summary()["stopping"]
+    assert blk["cache_dir"] == str(alt)
+    assert all(u["cache_dir"] == str(alt) for u in blk["data_used"])
+    assert cfg.physics.stopping_source is src
+
+
+def water_i78() -> Material:
+    return WATER if WATER.mean_excitation_eV == 78.0 else water(78.0)
+
+
+def test_alternate_cache_with_other_retrieved_at_validates_and_changed_bytes_fail(
+    cdir_all: Path, tmp_path: Path
+) -> None:
+    ids = (ICRU_ID, PSTAR_ID, ASTAR_ID)
+    alt = _copy_cache(cdir_all, tmp_path / "alt", ids)
+    for ds in ids:  # alter the manifest timestamp: provenance, ignored by the comparison
+        mp = cache.manifest_path(ds, alt)
+        m = json.loads(mp.read_text())
+        m["retrieved_at"] = "2001-01-01T00:00:00+00:00"
+        mp.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n")
+    for model_id in (MID, "nist-pstar-astar-water-2005"):
+        src = resolve(model_id, cache_dir=str(alt))
+        sel = _select_from(alt, model_id)
+        assert sel.requested_id == model_id
+        from ionmc.physics.stopping_selection import assert_identity_stable
+
+        tables = [
+            src.table(water_i78() if model_id == MID else WATER, PROTON),
+        ]
+        assert tables[0].metadata["retrieved_at"] == "2001-01-01T00:00:00+00:00"
+        assert_identity_stable(sel, tables, (PROTON,))  # the rebuild from the same cache passes
+    # a byte change of an object fails closed (hash check of the loader)
+    sha = stopping_models.DATASETS[ICRU_ID].sha256
+    obj = cache.object_path(sha, alt)
+    obj.write_bytes(obj.read_bytes() + b"x")
+    with pytest.raises(cache.IntegrityError):
+        resolve(MID, cache_dir=str(alt))
+
+
+def test_comparison_ignores_only_the_cache_local_provenance_keys() -> None:
+    from ionmc.physics.stopping_selection import CACHE_LOCAL_METADATA_KEYS, _comparable
+
+    a = {"retrieved_at": "x", "dataset_sha256": "s", "content_sha256": "c", "grid": 200}
+    b = {**a, "retrieved_at": "y"}
+    assert CACHE_LOCAL_METADATA_KEYS == ("retrieved_at",)
+    assert _comparable(a) == _comparable(b)
+    assert _comparable({**a, "dataset_sha256": "t"}) != _comparable(a)

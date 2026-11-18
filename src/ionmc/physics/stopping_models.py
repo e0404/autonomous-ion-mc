@@ -588,6 +588,7 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             and _pristine(source.alpha.start_range, icru._IcruStartRange, icru._START_SNAP)
             and _icru_arrays_trusted(source)
             and type(source.name) is str
+            and type(source.cache_dir) is str
             and _tabulated_exact(source.proton)
             and _tabulated_exact(source.alpha)
         )
@@ -610,6 +611,7 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             and _nist_provider_exact(source.pstar.star_table)
             and _nist_provider_exact(source.astar.star_table)
             and type(source.name) is str
+            and type(source.cache_dir) is str
             and _exact_types(source.pstar, _SETTINGS)
             and _exact_types(source.astar, _SETTINGS)
         )
