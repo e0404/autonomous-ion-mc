@@ -415,3 +415,10 @@ OPEN. Not a clinical claim."
   re-derived on the host at 9aba6381 (RUN-20261118T163350Z-73072441, record committed and verified): every value and
   gating entry unchanged; pins changed (`icru90-water-v1` spec_sha256 7b6cd304… → 4bc54369…, `src/ionmc` tree →
   5b129987…). Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.
+- 2026-11-18 (orchestrator, seal candidate 7): Codex REVIEW-58783c86 at 8d1d150e (changes_required: an overridable trust
+  predicate and a conditional start-range callable could keep the registered identity) fixed at eaaf6cea (trust decided
+  inside `spec_of` by exact types of the composite and inner objects; the ICRU start rule is a dedicated class installed
+  only by `build_icru90_source` and bound by object identity). Spec hashes unchanged; `cc-int.json`/`v-c3.json`
+  regenerated (one input-hash line, numerics unchanged). `vc-predictions.json` re-derived on the host at eaaf6cea
+  (RUN-20261118T164500Z-24846584, record committed and verified): only the `src/ionmc` tree pin changed (→ 7b753045…).
+  Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.
