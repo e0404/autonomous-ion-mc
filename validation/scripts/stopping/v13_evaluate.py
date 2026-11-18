@@ -662,6 +662,25 @@ def step_expectation(row: str, case: int, backend: str) -> dict[str, Any]:
     }  # fmt: skip
 
 
+CACHE_DIR_PLACEHOLDER = "<run-cache-dir>"  # as written by steps_v13.normalise_cache_dir
+
+
+def _normalise_cache_dir(block: Mapping[str, Any]) -> dict[str, Any]:
+    """The run's identity block with its run-provenance ``cache_dir`` fields replaced by the
+    placeholder the sealed pins carry (the directory a run read the model from is provenance of
+    the run, recorded in the step document, not part of the model identity)."""
+    out = dict(block)
+    if "cache_dir" in out:
+        out["cache_dir"] = CACHE_DIR_PLACEHOLDER
+    used = out.get("data_used")
+    if isinstance(used, list):
+        out["data_used"] = [
+            {**u, "cache_dir": CACHE_DIR_PLACEHOLDER} if isinstance(u, dict) and "cache_dir" in u else u
+            for u in used
+        ]
+    return out
+
+
 def identity_problems(
     doc: Mapping[str, Any], pred: Mapping[str, Any], model: str, case: int
 ) -> list[str]:
@@ -676,8 +695,10 @@ def identity_problems(
         pins = pred["models"][model]
     except KeyError:
         return [f"vc-predictions.json has no pins for {model} case {case}"]
-    if stop != want:
+    if _normalise_cache_dir(stop) != want:
         out.append("the identity block differs from the sealed identity block")
+    if "cache_dir" in want and not (isinstance(stop.get("cache_dir"), str) and stop["cache_dir"]):
+        out.append("the identity block records no cache directory")
     if doc.get("stopping_identity") != stop:
         out.append("stopping_identity differs from effective_config.stopping")
     for key in ("model_id_effective", "version", "spec_sha256", "content_sha256"):

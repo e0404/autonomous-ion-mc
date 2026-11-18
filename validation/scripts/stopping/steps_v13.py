@@ -42,6 +42,7 @@ hash and the sha256 of this file.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 import dataclasses
 import hashlib
 import importlib.util
@@ -405,6 +406,26 @@ def _git(*args: str) -> str:
     return subprocess.run(["git", "-C", str(REPO), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
+CACHE_DIR_PLACEHOLDER = "<run-cache-dir>"
+
+
+def normalise_cache_dir(block: Mapping[str, Any]) -> dict[str, Any]:
+    """The identity block with its run-provenance ``cache_dir`` fields (top level and in every
+    ``data_used`` entry) replaced by :data:`CACHE_DIR_PLACEHOLDER`: the sealed pins describe the
+    model, not the directory a particular run read it from (the evaluator applies the same
+    normalisation to a run's block and separately requires a real path there)."""
+    out = dict(block)
+    if "cache_dir" in out:
+        out["cache_dir"] = CACHE_DIR_PLACEHOLDER
+    used = out.get("data_used")
+    if isinstance(used, list):
+        out["data_used"] = [
+            {**u, "cache_dir": CACHE_DIR_PLACEHOLDER} if isinstance(u, dict) and "cache_dir" in u else u
+            for u in used
+        ]
+    return out
+
+
 def compute_predictions(cache_dir: str | None = None) -> dict[str, Any]:
     """The content of ``vc-predictions.json`` (no file is written). Needs the ICRU 90 cache object."""
     from ionmc.config import validate
@@ -475,7 +496,7 @@ def compute_predictions(cache_dir: str | None = None) -> dict[str, Any]:
             "tables_sha256": {str(c): s["tables"]["sha256"] for c, s in per_case.items()},
             "tables_materials": {str(c): s["tables"]["materials"] for c, s in per_case.items()},
         }
-        blocks[m] = {str(c): s["stopping"] for c, s in per_case.items()}
+        blocks[m] = {str(c): normalise_cache_dir(s["stopping"]) for c, s in per_case.items()}
     tree = _git("rev-parse", "HEAD:src/ionmc")
     dirty = _git("status", "--porcelain", "--", "src/ionmc")
     if dirty:

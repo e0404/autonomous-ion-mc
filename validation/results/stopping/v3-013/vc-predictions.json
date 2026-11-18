@@ -88,6 +88,7 @@
   "identity_blocks": {
     "bethe-ionmc-v1": {
       "1": {
+        "cache_dir": null,
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -156,6 +157,7 @@
         "version": "1"
       },
       "2": {
+        "cache_dir": null,
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -224,6 +226,7 @@
         "version": "1"
       },
       "3": {
+        "cache_dir": null,
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -294,6 +297,7 @@
     },
     "icru90-water-v1": {
       "1": {
+        "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
         "circular_rows": [
           "geant4-icru90-stopping-11.4.2",
           "I2 (ICRU 90 part)",
@@ -313,6 +317,7 @@
         ],
         "data_used": [
           {
+            "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
             "pin": {
               "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
               "dataset_id": "geant4-icru90-stopping-11.4.2",
@@ -387,6 +392,7 @@
         "version": "1"
       },
       "2": {
+        "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
         "circular_rows": [
           "geant4-icru90-stopping-11.4.2",
           "I2 (ICRU 90 part)",
@@ -406,6 +412,7 @@
         ],
         "data_used": [
           {
+            "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
             "pin": {
               "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
               "dataset_id": "geant4-icru90-stopping-11.4.2",
@@ -480,6 +487,7 @@
         "version": "1"
       },
       "3": {
+        "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
         "circular_rows": [
           "geant4-icru90-stopping-11.4.2",
           "I2 (ICRU 90 part)",
@@ -499,6 +507,7 @@
         ],
         "data_used": [
           {
+            "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
             "pin": {
               "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
               "dataset_id": "geant4-icru90-stopping-11.4.2",
@@ -849,5 +858,5 @@
     "path": "validation/scripts/stopping/steps_v13.py",
     "sha256": "8938f99f90f4d9f02378ee164069de760d37bdb867926de0956d128e0303d91f"
   },
-  "src_ionmc_tree": "5cbd23a244e20b5a986cf69a971c69e3324ebf8a"
+  "src_ionmc_tree": "740e60bb3c2c77ac0dc8717c4c228f41ebf182d6"
 }
