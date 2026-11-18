@@ -482,3 +482,14 @@ OPEN. Not a clinical claim."
   the 18 ionmc samples (one controlled host run at a time, each started after this review finished); the samples
   commit and its review (second pin note `samples review <id> at <sha>`); the three TOPAS smokes; the evidence parts
   0–3 of the three cases; the sealed evaluator. No evidence run has been started. Not a clinical claim.
+- 2026-11-18 (orchestrator, timing smokes after the seal; contrary evidence to §E): three `vc-sample` smokes at the
+  non-evidence seed k = 99 (seeds 20612103 / 20612303), after the pin review REVIEW-7db57441 finished (19:59:31 UTC):
+  case 1 `icru90-water-v1` 10 000 histories 52.0 s (RUN-20261118T200117Z-173deba7); case 3 `bethe-ionmc-v1` 10 000
+  histories 93.2 s (RUN-20261118T200243Z-7502b1a2) and 50 000 histories 437 s (RUN-20261118T200438Z-5cb9e01e);
+  all exit 0, `pass` true, every counter zero, identity blocks equal to the sealed pins, environment digests equal
+  to `seal-environment.json`, identical `warp_modules`. Rate ≈ 4.5 ms/history (75 MeV/u) and ≈ 8.6 ms/history
+  (200 MeV/u) on warp-cpu float64 with two threads, so one frozen 1e6-history sample needs ≈ 75 / ≈ 110 / ≈ 143 min
+  for cases 1/2/3 — the §E estimate (1.5–3 h for all six) was ≈ 5× too low, and cases 2–3 exceed the controlled
+  host runner's cap of 7200 s per run. No evidence seed (k = 0) has been used. Execution is paused pending the
+  operator's decision IR-20261118-201459-7CFC95 (raise the runner cap, or a prospective amendment to chunked
+  samples with a new seal). Not a clinical claim.

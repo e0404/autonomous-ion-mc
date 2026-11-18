@@ -1,0 +1,53 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys\nos.environ.update({'PYTHONPATH': '/workspace/src', 'IONMC_CACHE_DIR': '/workspace/.ionmc-cache/ionmc-data', 'IONMC_REQUIRE_DATA': '1', 'IONMC_SINGLE_PROCESS': '1', 'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2', 'MKL_NUM_THREADS': '2', 'NUMEXPR_NUM_THREADS': '2', 'PYTHONUNBUFFERED': '1', 'PYTHONFAULTHANDLER': '1', 'IONMC_RUN_SHA': 'fd30ee82f1ccff4c13a54db3898ab1ead7aa18bb'})\nos.makedirs('/workspace/validation/generated/vc-sample-case1-icru90-water-v1-k99-scale0.01', exist_ok=True)\ncmd = [sys.executable, 'validation/scripts/stopping/steps_v13.py', 'vc-sample', '--case', '1', '--model', 'icru90-water-v1', '--k', '99', '--cache-dir', '/workspace/.ionmc-cache/ionmc-data', '--out-dir', '/workspace/validation/generated/vc-sample-case1-icru90-water-v1-k99-scale0.01', '--scale', '0.01']\nwith open('/workspace/validation/generated/vc-sample-case1-icru90-water-v1-k99-scale0.01/step-stdout.txt', 'w') as f:\n    p = subprocess.run(cmd, text=True, stdout=f, stderr=subprocess.PIPE)\nprint('exit', p.returncode); print(p.stderr[-4000:], file=sys.stderr)\nsys.exit(p.returncode)\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "0bcf337e82427a95967b47b8d5dca3ad5541e397afe36d2093ee4f9fa3753413",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "8da0643f59a44b96dcfe84e9901cfd4f1331d863195a9db30c052607f582bbf6864c0097c1b514d0c190e0f8758caea4e4db1900d5f4c3da25a232cea34dec04",
+    "signed_at_utc": "2026-11-18T20:02:12.103847+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-013-explicit-selection-of-stopping-power-models-and-tabulated-so",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 53.69060190599703,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T200117Z-173deba7/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-18T20:02:12.084966+00:00",
+  "input_manifest": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T200117Z-173deba7/input-manifest.json",
+  "input_manifest_sha256": "1408405bea1cdc3dbcd667872b58b58f78fff17743b7b76e87fa16c0820fd539",
+  "output_manifest_sha256": "559e746f73995cb1b6f40cc34a6cfdc90b56a77f59d0abdca275935605e50535",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-013/validation/generated/RUN-20261118T200117Z-173deba7",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-013/benchmarks/generated/RUN-20261118T200117Z-173deba7"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T200117Z-173deba7",
+  "run_id": "RUN-20261118T200117Z-173deba7",
+  "schema_version": 1,
+  "sha": "fd30ee82f1ccff4c13a54db3898ab1ead7aa18bb",
+  "sha_after": "fd30ee82f1ccff4c13a54db3898ab1ead7aa18bb",
+  "started_at": "2026-11-18T20:01:18.394344+00:00",
+  "stderr": "\n",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T200117Z-173deba7/stderr.txt",
+  "stderr_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+  "stderr_total_chars": 1,
+  "stderr_truncated": false,
+  "stdout": "exit 0\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T200117Z-173deba7/stdout.txt",
+  "stdout_sha256": "28d3b9e880a77975493dc7e359144c0295a4f694cfe0af4f928c22307bc5c320",
+  "stdout_total_chars": 7,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-013",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-013"
+}
