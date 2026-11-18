@@ -422,3 +422,10 @@ OPEN. Not a clinical claim."
   regenerated (one input-hash line, numerics unchanged). `vc-predictions.json` re-derived on the host at eaaf6cea
   (RUN-20261118T164500Z-24846584, record committed and verified): only the `src/ionmc` tree pin changed (→ 7b753045…).
   Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.
+- 2026-11-18 (orchestrator, seal candidate 8): Codex REVIEW-77a533e9 at 19b0323a (changes_required: per-instance method
+  shadowing on the non-slotted frozen dataclasses) fixed at b17b5be1 (every trusted source class slotted; `spec_of`
+  rejects instances with a `__dict__` and classes whose behaviour-defining attributes differ from the import-time
+  snapshot). Spec hashes unchanged; the digest-pinned aggregates (D-3, `cc-int.json`, `v-c3.json`) regenerated with
+  unchanged numerics. `vc-predictions.json` re-derived on the host at b17b5be1 (RUN-20261118T165917Z-bbc33f71, record
+  committed and verified): only the `src/ionmc` tree pin changed (→ b65e6861…). Frozen manifest regenerated (82 sealed
+  paths). This commit is the seal candidate.
