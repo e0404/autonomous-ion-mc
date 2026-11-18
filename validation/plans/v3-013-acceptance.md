@@ -373,3 +373,11 @@ OPEN. Not a clinical claim."
   (VAL-20261118-120527-2228BE), seal candidate f1dfa55d (VAL-20261118-121113-9DDF7E). Codex reviews of 8a3791bc and
   later are pending the codex-worker service (IR-20261117-151541-ED9CA9); the same-host sha256 part of row ID-DEF
   and the full R1-ion repeatability are local-validation items still to be run on the host runner before integration.
+- 2026-11-18 (orchestrator, re-seal): the S6 documentation commit 368cad59 edited `src/ionmc/THIRD_PARTY_NOTICES.md`,
+  which lies inside the pinned `src/ionmc` tree (68db1d3b… → 5be8b2b8…), so the f1dfa55d seal candidate's pins went
+  stale before any review (found by the host test run RUN-20261118T121617Z-a9e14c06 and by `gen_v13_manifest.py
+  --check`). `vc-predictions.json` re-derived on the host at 29eacc1b (RUN-20261118T122425Z-6065f566; every value,
+  identity and table sha256 unchanged; only the tree pin changed) and the frozen manifest regenerated. This commit is
+  the seal candidate; the seal is the signed Codex review of its exact SHA (pending IR-20261117-151541-ED9CA9). Rule
+  adopted: nothing under `src/ionmc` (notices included) changes after the seal material is generated; a change means a
+  new seal. No evidence run exists.
