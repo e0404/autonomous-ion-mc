@@ -330,3 +330,29 @@ def test_predictions_reproduce_from_the_committed_inputs():
             f"ICRU 90 object not cached in {cdir}: the committed predictions are not recomputed"
         )
     _close(_doc(), S13.compute_predictions())
+
+
+def test_normalise_cache_dir_keeps_null_and_replaces_only_strings() -> None:
+    """Codex REVIEW-f5d6f67e finding 1: an analytic model records a null cache directory and
+    the sealed pin must keep it null; a data-backed model's directory string (top level and in
+    every data_used entry) becomes the placeholder; nothing else changes."""
+    analytic = {"model_id_effective": "bethe-ionmc-v1", "cache_dir": None, "data_used": []}
+    out = S13.normalise_cache_dir(analytic)
+    assert out["cache_dir"] is None and out["data_used"] == []
+    assert out == analytic and out is not analytic
+    backed = {
+        "model_id_effective": "icru90-water-v1",
+        "cache_dir": "/abs/cache/ionmc-data",
+        "data_used": [
+            {"key": "icru90", "cache_dir": "/abs/cache/ionmc-data"},
+            {"key": "x", "cache_dir": None},
+        ],
+    }
+    out = S13.normalise_cache_dir(backed)
+    assert out["cache_dir"] == S13.CACHE_DIR_PLACEHOLDER
+    assert out["data_used"] == [
+        {"key": "icru90", "cache_dir": S13.CACHE_DIR_PLACEHOLDER},
+        {"key": "x", "cache_dir": None},
+    ]
+    assert backed["cache_dir"] == "/abs/cache/ionmc-data"  # the input is not modified
+    assert "cache_dir" not in S13.normalise_cache_dir({"model_id_effective": "m"})

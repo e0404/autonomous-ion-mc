@@ -411,16 +411,20 @@ CACHE_DIR_PLACEHOLDER = "<run-cache-dir>"
 
 def normalise_cache_dir(block: Mapping[str, Any]) -> dict[str, Any]:
     """The identity block with its run-provenance ``cache_dir`` fields (top level and in every
-    ``data_used`` entry) replaced by :data:`CACHE_DIR_PLACEHOLDER`: the sealed pins describe the
-    model, not the directory a particular run read it from (the evaluator applies the same
-    normalisation to a run's block and separately requires a real path there)."""
+    ``data_used`` entry) replaced by :data:`CACHE_DIR_PLACEHOLDER` wherever a run recorded a
+    directory (a string): the sealed pins describe the model, not the directory a particular run
+    read it from. A null ``cache_dir`` (an analytic model that read no data) is kept as null, so
+    the pins distinguish data-backed from analytic models and the evaluator can require a real
+    directory exactly where the pin carries the placeholder (Codex REVIEW-f5d6f67e finding 1)."""
     out = dict(block)
-    if "cache_dir" in out:
+    if isinstance(out.get("cache_dir"), str):
         out["cache_dir"] = CACHE_DIR_PLACEHOLDER
     used = out.get("data_used")
     if isinstance(used, list):
         out["data_used"] = [
-            {**u, "cache_dir": CACHE_DIR_PLACEHOLDER} if isinstance(u, dict) and "cache_dir" in u else u
+            {**u, "cache_dir": CACHE_DIR_PLACEHOLDER}
+            if isinstance(u, dict) and isinstance(u.get("cache_dir"), str)
+            else u
             for u in used
         ]
     return out

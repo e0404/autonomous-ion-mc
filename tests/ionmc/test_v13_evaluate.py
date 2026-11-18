@@ -757,3 +757,84 @@ def test_the_real_closure_contains_the_decision_code() -> None:
                 "validation/scripts/ion_em/r2_statistics.py", "validation/scripts/ion_em/r2_evaluate.py",
                 "infrastructure/validation/review_records.py", "infrastructure/validation/host_run_records.py"):  # fmt: skip
         assert rel in closure
+
+
+def _cache_dir_pred(blocks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    models = {
+        m: {"model_id_effective": m, "version": 1, "spec_sha256": "s" + m, "content_sha256": "c" + m,
+            "tables_sha256": {"1": "t"}, "tables_materials": {"1": [{"I_eV_effective": 78.0}]}}
+        for m in blocks
+    }  # fmt: skip
+    return {"models": models, "identity_blocks": {m: {"1": b} for m, b in blocks.items()}}
+
+
+def _cache_dir_doc(model: str, block: dict[str, Any]) -> dict[str, Any]:
+    stop = {"model_id_effective": model, "version": 1, "spec_sha256": "s" + model,
+            "content_sha256": "c" + model, **block}  # fmt: skip
+    return {"effective_config": {"stopping": stop, "tables": {"sha256": "t", "materials": [{"I_eV_effective": 78.0}]}},
+            "stopping_identity": stop}  # fmt: skip
+
+
+def test_identity_cache_dir_rules_follow_the_sealed_pin() -> None:
+    """Codex REVIEW-f5d6f67e finding 1 (operator-authorised fix, IR-20261118-182151-FD0238): the
+    analytic default records null and must stay null; a data-backed model must record a real
+    directory at the top level and in every data_used entry; the placeholder itself, an empty
+    string or null are refused there."""
+    ph = ev.CACHE_DIR_PLACEHOLDER
+    base = {"model_id_effective": None, "version": 1}
+    pred = _cache_dir_pred({
+        MODEL_DEF: {**base, "model_id_effective": MODEL_DEF, "spec_sha256": "s" + MODEL_DEF,
+                    "content_sha256": "c" + MODEL_DEF, "cache_dir": None, "data_used": []},
+        MODEL_ICRU: {**base, "model_id_effective": MODEL_ICRU, "spec_sha256": "s" + MODEL_ICRU,
+                     "content_sha256": "c" + MODEL_ICRU, "cache_dir": ph,
+                     "data_used": [{"key": "icru90", "cache_dir": ph}]},
+    })  # fmt: skip
+    real = "/abs/run/cache/ionmc-data"
+
+    def problems(model: str, block: dict[str, Any]) -> list[str]:
+        return ev.identity_problems(_cache_dir_doc(model, block), pred, model, 1)
+
+    # analytic default: null passes, any directory fails
+    assert problems(MODEL_DEF, {"cache_dir": None, "data_used": []}) == []
+    bad = problems(MODEL_DEF, {"cache_dir": real, "data_used": []})
+    assert any("analytic model" in p for p in bad) and any("differs" in p for p in bad)
+    # data-backed model: a real directory everywhere passes
+    assert (
+        problems(
+            MODEL_ICRU, {"cache_dir": real, "data_used": [{"key": "icru90", "cache_dir": real}]}
+        )
+        == []
+    )
+    # ... null, the empty string or the placeholder itself fail at the top level ...
+    for v in (None, "", ph):
+        bad = problems(
+            MODEL_ICRU, {"cache_dir": v, "data_used": [{"key": "icru90", "cache_dir": real}]}
+        )
+        assert any("the identity block records no cache directory" in p for p in bad), (v, bad)
+    # ... and in a nested data_used entry
+    for v in (None, "", ph):
+        bad = problems(
+            MODEL_ICRU, {"cache_dir": real, "data_used": [{"key": "icru90", "cache_dir": v}]}
+        )
+        assert any("data_used[0] records no cache directory" in p for p in bad), (v, bad)
+    # a missing data_used entry is a mismatch, not silently accepted
+    bad = problems(MODEL_ICRU, {"cache_dir": real, "data_used": []})
+    assert any("differ in number" in p for p in bad)
+
+
+def test_evaluator_normaliser_matches_the_steps_normaliser_on_null_and_strings() -> None:
+    import importlib.util as _iu
+
+    spec = _iu.spec_from_file_location("_steps_v13_for_eval_test", ev.REPO_ROOT / ev.STEPS_REL)
+    assert spec is not None and spec.loader is not None
+    steps = _iu.module_from_spec(spec)
+    spec.loader.exec_module(steps)
+    for block in (
+        {"cache_dir": None, "data_used": []},
+        {
+            "cache_dir": "/a/b",
+            "data_used": [{"k": 1, "cache_dir": "/a/b"}, {"k": 2, "cache_dir": None}],
+        },
+        {"model_id_effective": "m"},
+    ):
+        assert ev._normalise_cache_dir(block) == steps.normalise_cache_dir(block)

@@ -667,17 +667,48 @@ CACHE_DIR_PLACEHOLDER = "<run-cache-dir>"  # as written by steps_v13.normalise_c
 
 def _normalise_cache_dir(block: Mapping[str, Any]) -> dict[str, Any]:
     """The run's identity block with its run-provenance ``cache_dir`` fields replaced by the
-    placeholder the sealed pins carry (the directory a run read the model from is provenance of
-    the run, recorded in the step document, not part of the model identity)."""
+    placeholder the sealed pins carry wherever the run recorded a directory (a string): the
+    directory a run read the model from is provenance of the run, recorded in the step document,
+    not part of the model identity. A null ``cache_dir`` (an analytic model that read no data) is
+    kept as null, exactly as ``steps_v13.normalise_cache_dir`` keeps it in the pins."""
     out = dict(block)
-    if "cache_dir" in out:
+    if isinstance(out.get("cache_dir"), str):
         out["cache_dir"] = CACHE_DIR_PLACEHOLDER
     used = out.get("data_used")
     if isinstance(used, list):
         out["data_used"] = [
-            {**u, "cache_dir": CACHE_DIR_PLACEHOLDER} if isinstance(u, dict) and "cache_dir" in u else u
+            {**u, "cache_dir": CACHE_DIR_PLACEHOLDER}
+            if isinstance(u, dict) and isinstance(u.get("cache_dir"), str)
+            else u
             for u in used
         ]
+    return out
+
+
+def _cache_dir_problems(stop: Mapping[str, Any], want: Mapping[str, Any]) -> list[str]:
+    """Where the sealed pin carries the placeholder (a data-backed model) the run must record a
+    non-empty directory string; where the pin is null (an analytic model) the run must record
+    null. Applied at the top level and to every ``data_used`` entry, position by position."""
+    out = []
+
+    def check(where: str, pinned: Any, got: Any) -> None:
+        if pinned == CACHE_DIR_PLACEHOLDER and not (
+            isinstance(got, str) and got and got != CACHE_DIR_PLACEHOLDER
+        ):
+            out.append(f"{where} records no cache directory for a data-backed model")
+        elif pinned is None and got is not None:
+            out.append(f"{where} records a cache directory for an analytic model")
+
+    if "cache_dir" in want:
+        check("the identity block", want["cache_dir"], stop.get("cache_dir"))
+    pinned_used, used = want.get("data_used"), stop.get("data_used")
+    if isinstance(pinned_used, list):
+        if not isinstance(used, list) or len(used) != len(pinned_used):
+            out.append("the identity block's data_used entries differ in number from the sealed pins")
+        else:
+            for i, (pu, u) in enumerate(zip(pinned_used, used, strict=True)):
+                if isinstance(pu, dict) and "cache_dir" in pu:
+                    check(f"data_used[{i}]", pu["cache_dir"], u.get("cache_dir") if isinstance(u, dict) else None)
     return out
 
 
@@ -697,8 +728,7 @@ def identity_problems(
         return [f"vc-predictions.json has no pins for {model} case {case}"]
     if _normalise_cache_dir(stop) != want:
         out.append("the identity block differs from the sealed identity block")
-    if "cache_dir" in want and not (isinstance(stop.get("cache_dir"), str) and stop["cache_dir"]):
-        out.append("the identity block records no cache directory")
+    out.extend(_cache_dir_problems(stop, want))
     if doc.get("stopping_identity") != stop:
         out.append("stopping_identity differs from effective_config.stopping")
     for key in ("model_id_effective", "version", "spec_sha256", "content_sha256"):
