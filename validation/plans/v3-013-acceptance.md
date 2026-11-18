@@ -364,3 +364,12 @@ OPEN. Not a clinical claim."
   pinned script sha256 changed (the `--cache-dir` option). Frozen manifest `v13-frozen-manifest.json` written
   (80 sealed paths, `src/ionmc` tree 68db1d3b…). This commit is the seal candidate; the seal is the signed Codex
   review of its exact SHA (pending the codex-worker service, IR-20261117-151541-ED9CA9). No evidence run exists.
+- 2026-11-18 (orchestrator, gate records of the implementation steps; rows A.1–A.5 run by the lightweight test suite in
+  CI and in the logged local runs): S1 3a23f6f3 → 8a3791bc (VAL-20261117-120611-2F373F, VAL-20261117-151354-0F8D19; CI
+  run 44112144023 green at 8a3791bc after the D-3 digest regeneration; Codex REVIEW-2a71314b pass at 3a23f6f3), S2a
+  dd8929dd (VAL-20261117-154631-2B79E5), S2b afe42b30 (VAL-20261117-155710-EFCF01; CI run 44120214581 green), S3
+  983eb1dd (VAL-20261117-161952-D1A9AE; CI run 44124558686 green), S4 f524fe90 (VAL-20261117-163333-730832; CI run
+  44127163573 green), S5a 5248730e (VAL-20261117-164538-0703D8; CI run 44129446092 green), S5b 4130d569
+  (VAL-20261118-120527-2228BE), seal candidate f1dfa55d (VAL-20261118-121113-9DDF7E). Codex reviews of 8a3791bc and
+  later are pending the codex-worker service (IR-20261117-151541-ED9CA9); the same-host sha256 part of row ID-DEF
+  and the full R1-ion repeatability are local-validation items still to be run on the host runner before integration.

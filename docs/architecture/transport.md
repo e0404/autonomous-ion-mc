@@ -217,7 +217,7 @@ residual energy `E <= E_cut` of a history:
   it to V3-003B and the frozen T12 requires it.
 * The inverse-range table has 800 points per decade (400 gave a round trip of 9.1e-6, too close to
   the 1e-5 limit of test U2).
-* `RunOptions.memory_budget_bytes` bounds the accumulators; `PhysicsOptions.stopping` has no default.
+* `RunOptions.memory_budget_bytes` bounds the accumulators; `PhysicsOptions.stopping` has no default (exactly one of `stopping` and `stopping_model` is required, see "Stopping-model selection").
 * The energy loss uses the state energy (step 6 above); the cutoff energy is scored (see Results).
 
 * The range table `R(E)` is the exact integral of the log-log interpolated `S` (V3-003D,
@@ -437,6 +437,22 @@ position, direction and energy of every escaping particle; `trace_histories = K`
 the first K histories (`ionmc.transport.reference.TRACE_COLUMNS`: voxel index, step reason, blocks drawn,
 straggling attempts, position, direction, energy, deposit, step length). The trace is the reference
 for trajectory-level parity with the Warp backends.
+
+## Stopping-model selection (decision 0044)
+
+`PhysicsOptions` takes exactly one of `stopping_model` (a registered id of
+`ionmc.physics.stopping_models`) and `stopping` (a source object, identified by `spec_of`; any
+unrecognised source is recorded as `unregistered`). `validate` resolves this one source once
+(`ionmc.physics.stopping_selection`) and derives from it every stopping-dependent object: the
+material tables (range, inverse range, step loss, the `continuous_residual_v1` residual range,
+`max_steps`, table bounds), the LET water row, the deuteron tables of nuclear runs and the exact-Omega
+ion rows (`ExactOmegaMapping.build` and `fdm_domain_status` fail closed on a missing ion table;
+there is no Bethe default in a run path). It asserts that all table identities name one effective
+model, and fails closed on the model's species, material and energy window (no extrapolation, no
+fallback). The MCS proton path is the exception: it stays `bethe-ionmc-v1` for every selected model
+and is recorded as `mcs_proton_path_stopping`. The identity block is
+`EffectiveConfig.summary()["stopping"]`; the registry, the domains, the block keys and the evidence
+statuses are described in [stopping power](../physics/stopping-power.md).
 
 ## Ion sources (decision 0043)
 
