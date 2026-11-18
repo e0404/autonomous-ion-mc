@@ -88,7 +88,7 @@
   "identity_blocks": {
     "bethe-ionmc-v1": {
       "1": {
-        "cache_dir": "<run-cache-dir>",
+        "cache_dir": null,
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -157,7 +157,7 @@
         "version": "1"
       },
       "2": {
-        "cache_dir": "<run-cache-dir>",
+        "cache_dir": null,
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -226,7 +226,7 @@
         "version": "1"
       },
       "3": {
-        "cache_dir": "<run-cache-dir>",
+        "cache_dir": null,
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -856,7 +856,7 @@
   "schema": "ionmc-v13-vc-predictions-1",
   "script": {
     "path": "validation/scripts/stopping/steps_v13.py",
-    "sha256": "690f67182e70c9fc1642c6386629d5593dd76c717f57293a6f4c37835a7c2bb3"
+    "sha256": "9bf727568654e974d2b3db923ffa0d3b9e74939635926a2df8fa317ed15136ff"
   },
-  "src_ionmc_tree": "740e60bb3c2c77ac0dc8717c4c228f41ebf182d6"
+  "src_ionmc_tree": "54d226daeaa812d84bbdf430761bcb284ce364c5"
 }

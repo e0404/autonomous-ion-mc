@@ -72,7 +72,7 @@
   "validation/reference_cases/topas/he-water-75mevu-v13-idd-em-part7/input.txt": "823c476cf916cbe00f5b946963af3d38f92854b137f291ba7adb7cb01bf9a55f",
   "validation/reference_cases/topas/v13-bundles-manifest.json": "6647fbaf51bd0a8bced1f95d4b57a1207927b9710e4ddaf4394a5967d9e3de96",
   "validation/results/stopping/v3-013/seal-environment.json": "0ea29fc225779fb659cf57476771b8be101086e4a6fc1cf2a64d6cae0bc7a9e1",
-  "validation/results/stopping/v3-013/vc-predictions.json": "b1759b553c6a8518e1f60ea60626848f8b23f9ca326f6e3efb82d8d02935765f",
+  "validation/results/stopping/v3-013/vc-predictions.json": "d0826360b3e8c1b8946f0fbbca4b3420eab5ebfc19434d2a3c2c27e2dad47af3",
   "validation/scripts/ion_em/r2_evaluate.py": "cfd89e2a06e7f33876274d9f4b30ddfaf9587ee7120663dab406cec15258a750",
   "validation/scripts/ion_em/r2_io.py": "459ed6742610201e3bee261f3b5688b7495ccfe812c4546cf89c971506637b0a",
   "validation/scripts/ion_em/r2_statistics.py": "fa1bb5c5b372df72fc9d3e9f4daa06d0943db5adb89bd173c53edad1b58bc9c1",
@@ -81,11 +81,11 @@
   "validation/scripts/stopping/env_digest.py": "c49f3106ea994e25df01b6cee215e2e0436fbd4d3a82d9f6c83e43984df2bc10",
   "validation/scripts/stopping/env_seal.py": "2e046f11c67606c7c3d4422cb8763d7c01251a868cb91d052c59d4f7f039e37b",
   "validation/scripts/stopping/sealed_launch.py": "9ffea96b2d582ed46fceb3044f022df8fcef3bf5f4cf0d1398ff212bc8fcf0e1",
-  "validation/scripts/stopping/steps_v13.py": "690f67182e70c9fc1642c6386629d5593dd76c717f57293a6f4c37835a7c2bb3",
-  "validation/scripts/stopping/v13_evaluate.py": "c0862a9d8c90a699a0752204593a627088699153f4e21331d2941713ef2e3a05"
+  "validation/scripts/stopping/steps_v13.py": "9bf727568654e974d2b3db923ffa0d3b9e74939635926a2df8fa317ed15136ff",
+  "validation/scripts/stopping/v13_evaluate.py": "3d187ec4cf8096aacb8ca9a43812ac96512f745520295d977d47c0ca96dff02f"
  },
  "note": "the manifest does not list itself; it is bound by its blob at the signed seal SHA and by its sha256 in the plan pin note",
  "plan": "validation/plans/v3-013-acceptance.md section D step 3",
  "schema": "ionmc-v13-frozen-manifest-1",
- "src_ionmc_tree": "740e60bb3c2c77ac0dc8717c4c228f41ebf182d6"
+ "src_ionmc_tree": "54d226daeaa812d84bbdf430761bcb284ce364c5"
 }

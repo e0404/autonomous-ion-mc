@@ -461,3 +461,16 @@ OPEN. Not a clinical claim."
   RUN-20261118T180655Z-f7fed0c8 at 5e0f29be produced the un-normalised file that 01f40fa8 carried transitionally;
   both records committed and verified): values, gating and spec hashes unchanged; `src/ionmc` tree pin → 740e60bb….
   Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.
+- 2026-11-18 (orchestrator, seal candidate 13): Codex REVIEW-f5d6f67e at aed1f072 (changes_required). Finding 2
+  (the selected cache directory must be an absolute resolved path) fixed at d7b149b6 (`cc-int.json`/`v-c3.json`
+  regenerated, numerics unchanged). Finding 1 (the normaliser turned the analytic default's null `cache_dir` into
+  the placeholder and the evaluator then required a directory for every block, which would have invalidated every
+  default-model evidence run) was fixed at 9a99846a by the orchestrator under the operator's explicit authorization
+  (IR-20261118-182151-FD0238, option A) after the implementation worker's edit of the two sealed scripts had been
+  denied by the permission classifier: both normalisers replace only string directories by `<run-cache-dir>` and
+  keep null as null; the evaluator requires a real directory (non-empty, not the placeholder) exactly where the pin
+  carries the placeholder and null where the pin is null, at the top level and per `data_used` entry; regression
+  tests for every case. `vc-predictions.json` re-derived on the host at 9a99846a (RUN-20261118T193652Z-e14c09b0,
+  record committed and verified): values, gating and spec hashes unchanged; `bethe-ionmc-v1` pins now carry
+  `cache_dir: null`; script sha256 → 9bf72756…; `src/ionmc` tree pin → 54d226da…. Frozen manifest regenerated
+  (82 sealed paths, sha256 3bc6abe9…). This commit is the seal candidate; no evidence run before its Codex review.
