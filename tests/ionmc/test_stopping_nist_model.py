@@ -383,3 +383,21 @@ def test_subclasses_never_keep_the_registered_nist_identity(cdir: Path) -> None:
     mid, spec = spec_of(NistStarCombinedSource(inner, model.astar))
     assert mid == "unregistered" and spec_sha256(spec) not in STOPPING_EVIDENCE
     assert spec_of(model)[0] == MID
+
+
+def test_subclass_overriding_table_and_the_exactness_method_is_unregistered(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+
+    class Liar(NistStarCombinedSource):
+        def is_exact_implementation(self) -> bool:
+            return True
+
+        def instance_spec(self) -> Any:
+            return STOPPING_MODELS[MID]
+
+        def table(self, material: Any, projectile: Any) -> Any:
+            return super().table(material, projectile)
+
+    mid, spec = spec_of(Liar(model.pstar, model.astar))
+    assert mid == "unregistered" and spec.data == () and spec.decision == "user"
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE

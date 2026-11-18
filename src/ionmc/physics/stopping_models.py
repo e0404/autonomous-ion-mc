@@ -474,20 +474,42 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
     from ionmc.physics.stopping_nist import NistStarCombinedSource  # noqa: PLC0415
     from ionmc.physics.stopping_tabulated import TabulatedStoppingSource  # noqa: PLC0415
 
-    if isinstance(source, Icru90WaterSource):  # structural match incl. the verified pin
-        candidate = source.instance_spec()
-        if source.is_exact_implementation() and _structure(
-            STOPPING_MODELS[ICRU_MODEL_ID]
-        ) == _structure(candidate):
+    # Trust is decided here, from exact types read as plain attributes; no method of the source is
+    # consulted (a subclass can override any of them).
+    if isinstance(source, Icru90WaterSource):
+        from ionmc.physics.stopping_icru90 import _IcruStartRange  # noqa: PLC0415
+
+        candidate = Icru90WaterSource.instance_spec(source)
+        trusted = (
+            type(source) is Icru90WaterSource
+            and type(source.proton) is TabulatedStoppingSource
+            and type(source.alpha) is TabulatedStoppingSource
+            and type(source.proton.start_range) is _IcruStartRange
+            and type(source.alpha.start_range) is _IcruStartRange
+        )
+        if trusted and _structure(STOPPING_MODELS[ICRU_MODEL_ID]) == _structure(candidate):
             return ICRU_MODEL_ID, STOPPING_MODELS[ICRU_MODEL_ID]
-        return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
-    if isinstance(source, NistStarCombinedSource):  # structural match incl. the verified pins
-        candidate = source.instance_spec()
-        if source.is_exact_implementation() and _structure(
-            STOPPING_MODELS[NIST_MODEL_ID]
-        ) == _structure(candidate):
+        return UNREGISTERED_ID, replace(
+            candidate,
+            model_id=UNREGISTERED_ID,
+            decision="user",
+            data=() if not trusted else candidate.data,
+        )
+    if isinstance(source, NistStarCombinedSource):
+        candidate = NistStarCombinedSource.instance_spec(source)
+        trusted = (
+            type(source) is NistStarCombinedSource
+            and type(source.pstar) is NistStarStoppingSource
+            and type(source.astar) is NistStarStoppingSource
+        )
+        if trusted and _structure(STOPPING_MODELS[NIST_MODEL_ID]) == _structure(candidate):
             return NIST_MODEL_ID, STOPPING_MODELS[NIST_MODEL_ID]
-        return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
+        return UNREGISTERED_ID, replace(
+            candidate,
+            model_id=UNREGISTERED_ID,
+            decision="user",
+            data=() if not trusted else candidate.data,
+        )
 
     if isinstance(source, TabulatedStoppingSource):  # structural match, content digest included
         candidate = source.instance_spec()

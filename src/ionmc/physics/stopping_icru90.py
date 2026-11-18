@@ -105,6 +105,28 @@ def icru90_start_range(
     return r_below + float(np.sum(exact_loglog_range_increments(ln_e, ln_s, a)))
 
 
+class _IcruStartRange:
+    """The start-range rule ``icru90-integrated-from-lowest-node-v1`` of a projectile: a callable
+    of the array's own nodes, independent of the material and the grid. Only
+    :func:`build_icru90_source` installs it; ``spec_of`` recognises a registered source only if
+    every inner ``start_range`` is exactly an instance of this class (``type(...) is``), so a
+    replaced callable fails regardless of its behaviour."""
+
+    __slots__ = ("_a", "_e_u", "_s")
+
+    def __init__(self, e_u: NDArray[np.float64], s: NDArray[np.float64], a: float) -> None:
+        self._e_u, self._s, self._a = e_u, s, a
+
+    def __call__(
+        self,
+        _p: Projectile,
+        _m: Material,
+        _e: NDArray[np.float64],
+        _s: NDArray[np.float64],
+    ) -> float:
+        return icru90_start_range(self._e_u, self._s, self._a)
+
+
 @dataclass(frozen=True, eq=False)
 class Icru90WaterSource:
     """ICRU 90 liquid-water tables of protons and alpha particles as one stopping model."""
@@ -221,6 +243,8 @@ class Icru90WaterSource:
         pins = (
             icru_pins()
             if live == ICRU_CONTENT_SHA256
+            and type(self.proton.start_range) is _IcruStartRange
+            and type(self.alpha.start_range) is _IcruStartRange
             and start_digest == ICRU_START_RANGE_SHA256
             and self.proton.start_range_id == ICRU_RANGE_START
             and self.alpha.start_range_id == ICRU_RANGE_START
@@ -282,17 +306,7 @@ def build_icru90_source(
         lo = spec.domain.e_min_per_u[sp]
         hi = min(spec.domain.e_max_per_u[sp], float(e_u[-1]))
 
-        def start(
-            _p: Projectile,
-            _m: Material,
-            _e: NDArray[np.float64],
-            _s: NDArray[np.float64],
-            _e_u: NDArray[np.float64] = e_u,
-            _s_arr: NDArray[np.float64] = s_arr,
-            _a: float = a,
-        ) -> float:
-            return icru90_start_range(_e_u, _s_arr, _a)
-
+        start = _IcruStartRange(e_u, s_arr, a)
         sources[sp] = TabulatedStoppingSource(
             name,
             meta,

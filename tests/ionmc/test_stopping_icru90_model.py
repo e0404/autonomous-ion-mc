@@ -658,3 +658,50 @@ def test_subclasses_never_keep_the_registered_identity(cdir: Path) -> None:
     assert spec_of(mixed)[0] == "unregistered"
     assert spec_of(sub_inner)[0] == "unregistered"
     assert spec_of(model)[0] == MID
+
+
+# ---- trust decided by spec_of from exact types and the installed start rule (REVIEW-58783c86) ----
+
+
+def test_subclass_overriding_table_and_the_exactness_method_is_unregistered(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+
+    class Liar(Icru90WaterSource):
+        def is_exact_implementation(self) -> bool:
+            return True
+
+        def instance_spec(self) -> Any:
+            return STOPPING_MODELS[MID]
+
+        def table(self, material: Any, projectile: Any) -> Any:
+            return super().table(material, projectile)
+
+    mid, spec = spec_of(Liar(model.proton, model.alpha, model.name))
+    assert mid == "unregistered" and spec.data == () and spec.decision == "user"
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+def test_conditional_start_callable_is_unregistered_and_water_variant_is_identical(
+    cdir: Path,
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert spec_of(model)[0] == MID
+    # identity sanity: a structurally equivalent water() gives the same table bit for bit
+    t1, t2 = model.table(WATER, ALPHA), model.table(water(), ALPHA)
+    for name in ("energy_per_u", "s_mass", "range"):
+        if hasattr(t1, name):
+            assert np.array_equal(getattr(t1, name), getattr(t2, name))
+    assert t1.sha256 == t2.sha256 if hasattr(t1, "sha256") else True
+
+    other = build_icru90_source(load_icru90_water(cache.verify(ICRU_ID, cdir)))
+    original = other.proton.start_range
+
+    def conditional(p: Any, m: Any, e: Any, s: Any) -> float:
+        r = original(p, m, e, s)
+        return r if m is WATER else r * 1.01
+
+    object.__setattr__(other.proton, "start_range", conditional)
+    mid, spec = spec_of(other)
+    assert mid == "unregistered" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+    assert spec_of(model)[0] == MID
