@@ -1,0 +1,53 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys\nos.environ.update({'PYTHONPATH': '/workspace/src', 'IONMC_CACHE_DIR': '/workspace/.ionmc-cache/ionmc-data', 'IONMC_REQUIRE_DATA': '1', 'IONMC_SINGLE_PROCESS': '1', 'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2', 'MKL_NUM_THREADS': '2', 'NUMEXPR_NUM_THREADS': '2', 'PYTHONUNBUFFERED': '1', 'PYTHONFAULTHANDLER': '1'})\ncmd = [sys.executable, 'validation/scripts/stopping/steps_v13.py', 'predict', '--cache-dir', '/workspace/.ionmc-cache/ionmc-data', '--out', '/workspace/validation/generated/vc-predictions-host.json']\np = subprocess.run(cmd, text=True, capture_output=True)\nprint(p.stdout); print(p.stderr[-3000:], file=sys.stderr)\nsys.exit(p.returncode)\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "fb2de457e8c068feb3ef87ab5012b40af0cbee0775391cc14dd20d61ba41c59c",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "945e59bbab22f9955466cf4cda29e35deeea878818132c5ab2adc51a1a1218a05d4d562c17a2f95fe2ed43f125df47de054eb748bb28efdc5016baa8a6358406",
+    "signed_at_utc": "2026-11-18T12:24:28.049891+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-013-explicit-selection-of-stopping-power-models-and-tabulated-so",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 1.6397202740045032,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T122425Z-6065f566/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-18T12:24:28.037034+00:00",
+  "input_manifest": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T122425Z-6065f566/input-manifest.json",
+  "input_manifest_sha256": "982f6e3850496fc43cf6dbad412cd86ec591e278e223b261ea99d37c412176c4",
+  "output_manifest_sha256": "af9bf19b00de98a7ca6ced182120405e2b4e9e74b2f44c4f55a37268f6db0ad2",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-013/validation/generated/RUN-20261118T122425Z-6065f566",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-013/benchmarks/generated/RUN-20261118T122425Z-6065f566"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T122425Z-6065f566",
+  "run_id": "RUN-20261118T122425Z-6065f566",
+  "schema_version": 1,
+  "sha": "29eacc1b836cc63310a7e4fbe0e61a28c053a704",
+  "sha_after": "29eacc1b836cc63310a7e4fbe0e61a28c053a704",
+  "started_at": "2026-11-18T12:24:26.397294+00:00",
+  "stderr": "\n",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T122425Z-6065f566/stderr.txt",
+  "stderr_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+  "stderr_total_chars": 1,
+  "stderr_truncated": false,
+  "stdout": "Warp 1.17.0 initialized:\n   CUDA Toolkit 12.9, Driver 13.5\n   Devices:\n     \"cpu\"      : \"x86_64\"\n     \"cuda:0\"   : \"NVIDIA RTX A6000\" (48 GiB, sm_86, mempool enabled)\n   Kernel cache:\n     /cache/warp/1.17.0\nModule _table_node_kernel__locals__nodes_160cf81d 930f1d7 load on device 'cpu' took 1.07 ms  (cached)\nwrote /workspace/validation/generated/vc-predictions-host.json sha256 87553dfdac4a82a320d1e80e80477c9a41d8c42265c24662fbd4332393d48a7d\ncase 1 He 75 MeV/u: R_def 46.6896 mm, dR_pred,D +0.00612 mm, V-C2 non-informative (gate for this energy is V-C2-D alone), V-C2-D substitute: CC-T (both backends) + CC-ID + PER-1 for icru90-water-v1\ncase 2 He 125 MeV/u: R_def 115.7041 mm, dR_pred,D +0.05854 mm, V-C2 gating, V-C2-D gating\ncase 3 He 200 MeV/u: R_def 261.9258 mm, dR_pred,D +0.16257 mm, V-C2 gating, V-C2-D gating\n\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T122425Z-6065f566/stdout.txt",
+  "stdout_sha256": "5adc01f207b4e4b4daed49cd05b9f5f352845942f2320b9de61daa1eeb9037e0",
+  "stdout_total_chars": 825,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-013",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-013"
+}

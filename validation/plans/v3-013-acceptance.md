@@ -388,3 +388,15 @@ OPEN. Not a clinical claim."
   drop inherited `GIT_*` variables; PER-1's clean-process reader injects the package path explicitly (`python -I`
   ignores PYTHONPATH and the host venv has no site-packages install). Two sealed files changed → manifest regenerated.
   This commit is the seal candidate; the seal is the signed Codex review of its exact SHA (pending the service).
+- 2026-11-18 (orchestrator, seal candidate 4 after the integration-base merge): the operator fast-forwarded the branch to
+  the prepared merge commit 795de2a1 (parents 2d9e90e1 and `v3/develop` 8ca9d4fc = PR #93; IR-20261118-134659-22DDF8,
+  resolved), as the review service's ancestry check requires. The sealed infrastructure closure changed with PR #93
+  (`host_inputs.py`, `storage_guard.py` new; `host_snapshot.py`, `host_runner.py` changed), so the frozen manifest is
+  regenerated; `src/ionmc` tree 5be8b2b8… and `vc-predictions.json` unchanged. **Row R1-ion (LV) PASS** at 2d9e90e1 on
+  both backends (same `src/ionmc` tree as this commit): python 100 histories RUN-20261118T130803Z-6d0338d9 and
+  warp-cpu 10 000 histories RUN-20261118T131049Z-5051c1b1 — A1/A2 (`stopping_model`) and B1/B2 (`stopping` object)
+  bit-identical in every tally, end state, counter, energy balance, table block and identity block (`selected_by`
+  differs as declared); results committed under `validation/results/stopping/v3-013/lv13-r1ion/`, the six signed
+  host-run records of the seal and LV runs under `host-records/` (all verified against the trust file). Host test run
+  RUN-20261118T124118Z-1e5bc05b at 2d9e90e1: the eleven V3-013 test files, 165 passed (host-marked ID-DEF sha256
+  included). This commit is the seal candidate; the seal is the signed Codex review of its exact SHA.
