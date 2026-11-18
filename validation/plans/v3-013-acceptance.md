@@ -407,3 +407,11 @@ OPEN. Not a clinical claim."
   Because `src/ionmc` and the `icru90-water-v1` spec hash changed, `vc-predictions.json` was re-derived on the host at
   4426833e (RUN-20261118T162043Z-84864809): every range, prediction and gating entry unchanged; the pins (spec_sha256
   of `icru90-water-v1`, `src/ionmc` tree) changed. Frozen manifest regenerated. This commit is the seal candidate.
+- 2026-11-18 (orchestrator, seal candidate 6): Codex REVIEW-c8c734b6 at 68f5b178 (changes_required, one important
+  finding: a replaced start-range callable or a subclass overriding `table()` kept the registered identity) fixed at
+  9aba6381 (registered recognition only for the exact composite and inner classes; the ICRU start-range values bound
+  into the spec as `options["start_range_sha256"]`; NIST's start range is inside the digested `csda_range`).
+  `cc-int.json`/`v-c3.json` regenerated (one input-hash line each, numerics unchanged). `vc-predictions.json`
+  re-derived on the host at 9aba6381 (RUN-20261118T163350Z-73072441, record committed and verified): every value and
+  gating entry unchanged; pins changed (`icru90-water-v1` spec_sha256 7b6cd304… → 4bc54369…, `src/ionmc` tree →
+  5b129987…). Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.

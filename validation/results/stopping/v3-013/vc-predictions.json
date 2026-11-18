@@ -356,7 +356,7 @@
             "graded_at_sha": null,
             "plan": "validation/plans/v3-013-acceptance.md",
             "row": null,
-            "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
             "status": "consistency-only"
           }
         ],
@@ -374,12 +374,13 @@
           "ls_effective": "off",
           "ls_requested": "off",
           "points_per_decade": 200,
-          "source_name": "icru90"
+          "source_name": "icru90",
+          "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
         },
         "range_construction": "exact-loglog-quadrature-v1",
         "range_start": "icru90-integrated-from-lowest-node-v1",
         "selected_by": "stopping_model",
-        "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
+        "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
         "species_transported": [
           "alpha"
         ],
@@ -448,7 +449,7 @@
             "graded_at_sha": null,
             "plan": "validation/plans/v3-013-acceptance.md",
             "row": null,
-            "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
             "status": "consistency-only"
           }
         ],
@@ -466,12 +467,13 @@
           "ls_effective": "off",
           "ls_requested": "off",
           "points_per_decade": 200,
-          "source_name": "icru90"
+          "source_name": "icru90",
+          "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
         },
         "range_construction": "exact-loglog-quadrature-v1",
         "range_start": "icru90-integrated-from-lowest-node-v1",
         "selected_by": "stopping_model",
-        "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
+        "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
         "species_transported": [
           "alpha"
         ],
@@ -540,7 +542,7 @@
             "graded_at_sha": null,
             "plan": "validation/plans/v3-013-acceptance.md",
             "row": null,
-            "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
             "status": "consistency-only"
           }
         ],
@@ -558,12 +560,13 @@
           "ls_effective": "off",
           "ls_requested": "off",
           "points_per_decade": 200,
-          "source_name": "icru90"
+          "source_name": "icru90",
+          "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
         },
         "range_construction": "exact-loglog-quadrature-v1",
         "range_start": "icru90-integrated-from-lowest-node-v1",
         "selected_by": "stopping_model",
-        "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
+        "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
         "species_transported": [
           "alpha"
         ],
@@ -702,7 +705,7 @@
     "icru90-water-v1": {
       "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
       "model_id_effective": "icru90-water-v1",
-      "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
+      "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
       "tables_materials": {
         "1": [
           {
@@ -846,5 +849,5 @@
     "path": "validation/scripts/stopping/steps_v13.py",
     "sha256": "8938f99f90f4d9f02378ee164069de760d37bdb867926de0956d128e0303d91f"
   },
-  "src_ionmc_tree": "d73f8a345c0242e699e5d120950194c016cdc374"
+  "src_ionmc_tree": "5b12998701c396e33751d328369443548572cdca"
 }
