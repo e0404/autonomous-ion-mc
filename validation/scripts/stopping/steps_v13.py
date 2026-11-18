@@ -505,7 +505,7 @@ def compute_predictions(cache_dir: str | None = None) -> dict[str, Any]:
 
 
 def step_predict(a: argparse.Namespace) -> int:
-    doc = compute_predictions()
+    doc = compute_predictions(a.cache_dir)
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
@@ -532,7 +532,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-dir", default="samples")
     ap.add_argument("--out", default=str(DEFAULT_PREDICTIONS), help="predict: output file")
     ap.add_argument("--timeout", type=float, default=None, help="accepted for run_suite uniformity")
+    ap.add_argument(
+        "--cache-dir",
+        default=None,
+        help="provenance cache (ionmc-data) holding the registered objects; sets IONMC_CACHE_DIR for "
+        "every step (the controlled host runner passes no environment, so the path is part of the argv)",
+    )
     a = ap.parse_args(argv)
+    if a.cache_dir is not None:
+        os.environ["IONMC_CACHE_DIR"] = a.cache_dir
     if a.step != "predict":
         if a.case not in CASES:
             raise SystemExit("--case must be 1, 2 or 3")
