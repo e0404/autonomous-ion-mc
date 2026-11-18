@@ -400,3 +400,10 @@ OPEN. Not a clinical claim."
   host-run records of the seal and LV runs under `host-records/` (all verified against the trust file). Host test run
   RUN-20261118T124118Z-1e5bc05b at 2d9e90e1: the eleven V3-013 test files, 165 passed (host-marked ID-DEF sha256
   included). This commit is the seal candidate; the seal is the signed Codex review of its exact SHA.
+- 2026-11-18 (orchestrator, seal candidate 5): Codex REVIEW-388775b2 at 9c12855d (changes_required) — registered
+  tabulated identities were not bound to the live array content and the spec freeze was shallow — fixed at 4426833e
+  (content digests in the specs, read-only arrays, `spec_of` recomputes from the live arrays; recursive freeze; docs
+  path). The digest-pinned aggregate files (D-3, `cc-int.json`, `v-c3.json`) were regenerated with unchanged numerics.
+  Because `src/ionmc` and the `icru90-water-v1` spec hash changed, `vc-predictions.json` was re-derived on the host at
+  4426833e (RUN-20261118T162043Z-84864809): every range, prediction and gating entry unchanged; the pins (spec_sha256
+  of `icru90-water-v1`, `src/ionmc` tree) changed. Frozen manifest regenerated. This commit is the seal candidate.

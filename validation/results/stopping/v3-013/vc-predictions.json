@@ -356,7 +356,7 @@
             "graded_at_sha": null,
             "plan": "validation/plans/v3-013-acceptance.md",
             "row": null,
-            "spec_sha256": "ba8e098019981951ae50be5c54f47f3d5a711e3d1ccc578d3ed29309b25d6b40",
+            "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
             "status": "consistency-only"
           }
         ],
@@ -368,6 +368,7 @@
         "options": {
           "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
           "class": "Icru90WaterSource",
+          "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
           "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
           "i_value": "78 eV required: any other requested water I fails closed",
           "ls_effective": "off",
@@ -378,7 +379,7 @@
         "range_construction": "exact-loglog-quadrature-v1",
         "range_start": "icru90-integrated-from-lowest-node-v1",
         "selected_by": "stopping_model",
-        "spec_sha256": "ba8e098019981951ae50be5c54f47f3d5a711e3d1ccc578d3ed29309b25d6b40",
+        "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
         "species_transported": [
           "alpha"
         ],
@@ -447,7 +448,7 @@
             "graded_at_sha": null,
             "plan": "validation/plans/v3-013-acceptance.md",
             "row": null,
-            "spec_sha256": "ba8e098019981951ae50be5c54f47f3d5a711e3d1ccc578d3ed29309b25d6b40",
+            "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
             "status": "consistency-only"
           }
         ],
@@ -459,6 +460,7 @@
         "options": {
           "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
           "class": "Icru90WaterSource",
+          "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
           "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
           "i_value": "78 eV required: any other requested water I fails closed",
           "ls_effective": "off",
@@ -469,7 +471,7 @@
         "range_construction": "exact-loglog-quadrature-v1",
         "range_start": "icru90-integrated-from-lowest-node-v1",
         "selected_by": "stopping_model",
-        "spec_sha256": "ba8e098019981951ae50be5c54f47f3d5a711e3d1ccc578d3ed29309b25d6b40",
+        "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
         "species_transported": [
           "alpha"
         ],
@@ -538,7 +540,7 @@
             "graded_at_sha": null,
             "plan": "validation/plans/v3-013-acceptance.md",
             "row": null,
-            "spec_sha256": "ba8e098019981951ae50be5c54f47f3d5a711e3d1ccc578d3ed29309b25d6b40",
+            "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
             "status": "consistency-only"
           }
         ],
@@ -550,6 +552,7 @@
         "options": {
           "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
           "class": "Icru90WaterSource",
+          "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
           "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
           "i_value": "78 eV required: any other requested water I fails closed",
           "ls_effective": "off",
@@ -560,7 +563,7 @@
         "range_construction": "exact-loglog-quadrature-v1",
         "range_start": "icru90-integrated-from-lowest-node-v1",
         "selected_by": "stopping_model",
-        "spec_sha256": "ba8e098019981951ae50be5c54f47f3d5a711e3d1ccc578d3ed29309b25d6b40",
+        "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
         "species_transported": [
           "alpha"
         ],
@@ -699,7 +702,7 @@
     "icru90-water-v1": {
       "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
       "model_id_effective": "icru90-water-v1",
-      "spec_sha256": "ba8e098019981951ae50be5c54f47f3d5a711e3d1ccc578d3ed29309b25d6b40",
+      "spec_sha256": "7b6cd304b242af82c4049d567fe33f7e88bd670436fab4ba0a88707bac07eafd",
       "tables_materials": {
         "1": [
           {
@@ -843,5 +846,5 @@
     "path": "validation/scripts/stopping/steps_v13.py",
     "sha256": "8938f99f90f4d9f02378ee164069de760d37bdb867926de0956d128e0303d91f"
   },
-  "src_ionmc_tree": "5be8b2b8d1a256e9704ce3290a9b895023d085f0"
+  "src_ionmc_tree": "d73f8a345c0242e699e5d120950194c016cdc374"
 }
