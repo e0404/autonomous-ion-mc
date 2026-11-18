@@ -51,6 +51,7 @@ from ionmc.physics.scattering import scattering_length_g_cm2
 from ionmc.physics.stopping import StoppingSource, StoppingTable
 from ionmc.physics.stopping_selection import (
     StoppingSelection,
+    assert_identity_stable,
     assert_single_model,
     check_species_and_materials,
     check_window,
@@ -1220,6 +1221,11 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     )
     _check_stopping_domain(sel, config, geometry, stopping_tables, water_table, nuclear, e_cut)
     _assert_single_model(sel, src.projectile, tables, nuclear)
+    assert_identity_stable(  # after every table of the run is built (decision 0044 section 2)
+        sel,
+        [*stopping_tables, *([water_table] if water_table is not None else [])],
+        run_species,
+    )
     e_lo = float(tables.e_min_mev.max())
     e_hi_table = float(tables.e_max_mev.min())
     if e_lo > 0.5 * e_cut:

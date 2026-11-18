@@ -137,6 +137,16 @@ def _pristine(obj: object, cls: type, snap: Mapping[str, Any]) -> bool:
     )
 
 
+def _exact_ro(*arrays: Any) -> bool:
+    """Every array is an exact read-only float64 ``np.ndarray`` (no subclass, no other array-like:
+    a stateful or memoryview-backed object cannot be digested and consumed consistently)."""
+    import numpy as np  # noqa: PLC0415
+
+    return all(
+        type(a) is np.ndarray and not a.flags.writeable and a.dtype == np.float64 for a in arrays
+    )
+
+
 def _canonical(value: Any) -> Any:
     """JSON-ready structure: dataclasses and mappings to dicts, sets to sorted lists."""
     if is_dataclass(value) and not isinstance(value, type):
@@ -477,6 +487,21 @@ def _structure(spec: StoppingModelSpec) -> tuple[Any, ...]:
     )
 
 
+def _icru_arrays_trusted(source: Any) -> bool:
+    """The consumed arrays of both inner sources and of their start rules are exact read-only
+    ndarrays, and each start rule holds the same values as its inner source's arrays."""
+    for name, inner in (("proton", source.proton), ("alpha", source.alpha)):
+        if set(inner._arrays) != {name}:
+            return False
+        e, s = inner._arrays[name]
+        st = inner.start_range
+        if not _exact_ro(e, s, st._e_u, st._s):
+            return False
+        if st._e_u.tobytes() != e.tobytes() or st._s.tobytes() != s.tobytes():
+            return False
+    return True
+
+
 def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
     """Identify ``source`` from its instance fields (decision 0044 section 2).
 
@@ -508,6 +533,7 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             and _pristine(source.alpha, TabulatedStoppingSource, _TAB_SNAP)
             and _pristine(source.proton.start_range, icru._IcruStartRange, icru._START_SNAP)
             and _pristine(source.alpha.start_range, icru._IcruStartRange, icru._START_SNAP)
+            and _icru_arrays_trusted(source)
         )
         if trusted and _structure(STOPPING_MODELS[ICRU_MODEL_ID]) == _structure(candidate):
             return ICRU_MODEL_ID, STOPPING_MODELS[ICRU_MODEL_ID]
@@ -525,6 +551,10 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             _pristine(source, NistStarCombinedSource, nist._SNAP)
             and _pristine(source.pstar, NistStarStoppingSource, _NISTSTAR_SNAP)
             and _pristine(source.astar, NistStarStoppingSource, _NISTSTAR_SNAP)
+            and all(
+                _exact_ro(t.energy_mev, t.s_electronic, t.csda_range)
+                for t in (source.pstar.star_table, source.astar.star_table)
+            )
         )
         if trusted and _structure(STOPPING_MODELS[NIST_MODEL_ID]) == _structure(candidate):
             return NIST_MODEL_ID, STOPPING_MODELS[NIST_MODEL_ID]

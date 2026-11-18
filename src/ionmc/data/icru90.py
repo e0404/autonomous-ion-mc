@@ -47,7 +47,7 @@ class Icru90Water:
         # read-only arrays: an in-place write raises; a writable input is copied, never altered
         for name in ("proton_energy_mev", "proton_stopping", "alpha_energy_mev", "alpha_stopping"):
             a = getattr(self, name)
-            if a.flags.writeable:
+            if type(a) is not np.ndarray or a.flags.writeable or a.dtype != np.float64:
                 a = np.array(a, dtype=np.float64)
                 a.setflags(write=False)
                 object.__setattr__(self, name, a)

@@ -55,7 +55,7 @@ class StarTable:
             "detour",
         ):
             a = getattr(self, name)
-            if a.flags.writeable:
+            if type(a) is not np.ndarray or a.flags.writeable or a.dtype != np.float64:
                 a = np.array(a, dtype=np.float64)
                 a.setflags(write=False)
                 object.__setattr__(self, name, a)

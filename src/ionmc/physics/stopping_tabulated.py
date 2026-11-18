@@ -203,7 +203,14 @@ class TabulatedStoppingSource:
                     f"source {self.name!r} describes liquid water only (composition and density); "
                     f"material {material.name!r} does not match"
                 ) from exc
-        e_a, s_a = self._arrays[projectile.name]
+        # the digest is taken from the very copies consumed below, inside this call (no cached
+        # digest): the recorded content identity is that of the data the table is built from
+        consumed = {
+            n: (np.array(ea, dtype=np.float64), np.array(sa, dtype=np.float64))
+            for n, (ea, sa) in self._arrays.items()
+        }
+        content = _digest(consumed)
+        e_a, s_a = consumed[projectile.name]
         e = log_grid(self.e_min_per_u, self.e_max_per_u, self.points_per_decade)
         s = np.exp(np.interp(np.log(e), np.log(e_a), np.log(s_a)))
         r0 = self._start(projectile, material, e, s)
@@ -218,7 +225,7 @@ class TabulatedStoppingSource:
             "material_mass_fractions": dict(material.mass_fractions),
             "projectile": projectile.name,
             "I_eV": material.mean_excitation_eV,
-            "content_sha256": self.content_sha256,
+            "content_sha256": content,
             "start_range": self.start_range_id,
             **self.metadata,
         }

@@ -106,17 +106,25 @@ def icru90_start_range(
     return r_below + float(np.sum(exact_loglog_range_increments(ln_e, ln_s, a)))
 
 
+@dataclass(frozen=True, slots=True, eq=False)
 class _IcruStartRange:
     """The start-range rule ``icru90-integrated-from-lowest-node-v1`` of a projectile: a callable
-    of the array's own nodes, independent of the material and the grid. Only
-    :func:`build_icru90_source` installs it; ``spec_of`` recognises a registered source only if
-    every inner ``start_range`` is exactly an instance of this class (``type(...) is``), so a
-    replaced callable fails regardless of its behaviour."""
+    of the array's own nodes, independent of the material and the grid. Frozen and slotted, its
+    arrays are exact read-only ``np.ndarray`` objects. Only :func:`build_icru90_source` installs
+    it; ``spec_of`` recognises a registered source only if every inner ``start_range`` is exactly
+    an instance of this class whose arrays equal the consumed arrays of the inner source."""
 
-    __slots__ = ("_a", "_e_u", "_s")
+    _e_u: NDArray[np.float64]
+    _s: NDArray[np.float64]
+    _a: float
 
-    def __init__(self, e_u: NDArray[np.float64], s: NDArray[np.float64], a: float) -> None:
-        self._e_u, self._s, self._a = e_u, s, a
+    def __post_init__(self) -> None:
+        for name in ("_e_u", "_s"):
+            arr = getattr(self, name)
+            if type(arr) is not np.ndarray or arr.flags.writeable or arr.dtype != np.float64:
+                arr = np.array(arr, dtype=np.float64)
+                arr.setflags(write=False)
+                object.__setattr__(self, name, arr)
 
     def __call__(
         self,

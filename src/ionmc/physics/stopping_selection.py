@@ -85,6 +85,7 @@ class StoppingSelection:
     source: StoppingSource
     spec: StoppingModelSpec
     source_class: str
+    observed: tuple[str, str] | None = None  # (spec_of id, spec_sha256) at selection time
 
     def effective_id(self, projectile: Projectile) -> str:
         return effective_model_id(self.requested_id, projectile)
@@ -128,6 +129,7 @@ def select(stopping: StoppingSource | None, stopping_model: str | None) -> Stopp
             source,
             _models.STOPPING_MODELS[stopping_model],
             type(source).__name__,
+            _observed(source),
         )
     assert stopping is not None
     cls = type(stopping).__qualname__
@@ -135,7 +137,44 @@ def select(stopping: StoppingSource | None, stopping_model: str | None) -> Stopp
         model_id, spec = spec_of(stopping)
     except (TypeError, ValueError) as exc:  # DOM-7: an unsupported source type fails closed
         raise fail(f"unsupported stopping object {type(stopping).__qualname__}: {exc}") from exc
-    return StoppingSelection(model_id, "stopping-object", stopping, spec, cls)
+    return StoppingSelection(
+        model_id, "stopping-object", stopping, spec, cls, (model_id, spec_sha256(spec))
+    )
+
+
+def _observed(source: StoppingSource) -> tuple[str, str] | None:
+    try:
+        mid, spec = spec_of(source)
+    except (TypeError, ValueError):
+        return None
+    return mid, spec_sha256(spec)
+
+
+def assert_identity_stable(
+    sel: StoppingSelection, tables: Sequence[Any], projectiles: Sequence[Projectile]
+) -> None:
+    """After every table of a run is built: the identity of the source recomputed now from its live
+    arrays equals the one recorded at selection time, and the content digest recorded in every
+    tabulated table (taken from the arrays that table consumed) equals the digest of the live
+    arrays of the source. Any mismatch fails closed; nothing is downgraded silently."""
+    msg = "stopping model identity changed between selection and table construction"
+    if sel.observed is not None:
+        try:
+            now = _observed(sel.source)
+        except Exception as exc:  # noqa: BLE001
+            raise fail(f"{msg}: {exc}") from exc
+        if now != sel.observed:
+            raise fail(f"{msg} (selected {sel.observed}, now {now})")
+    digest_for = getattr(sel.source, "content_sha256_for", None)
+    if not callable(digest_for):
+        return
+    by_name = {p.name: p for p in projectiles}
+    for t in tables:
+        meta = t.metadata
+        if meta.get("source") != "tabulated" or meta.get("projectile") not in by_name:
+            continue
+        if meta.get("content_sha256") != digest_for(by_name[meta["projectile"]]):
+            raise fail(f"{msg} (table of {meta['projectile']} in {meta.get('material')})")
 
 
 # ---- fail-closed domain (decision 0044 section 3) ----

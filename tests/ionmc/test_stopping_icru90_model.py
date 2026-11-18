@@ -751,3 +751,60 @@ def test_non_slotted_lookalikes_and_class_patches_are_unregistered(
     mid, spec = spec_of(icru)
     assert mid == "unregistered" and spec.data == ()
     assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+# ---- frozen start rule and selection-to-table identity (REVIEW-b01b9fa4) ----
+
+
+def test_start_rule_state_is_frozen_and_read_only(cdir: Path) -> None:
+    from dataclasses import FrozenInstanceError
+
+    st = resolve(MID, cache_dir=str(cdir)).proton.start_range
+    with pytest.raises(FrozenInstanceError):
+        st._s = st._s.copy()  # type: ignore[misc]
+    with pytest.raises(ValueError, match="read-only"):
+        st._s[0] = 1.0
+
+
+class _Sub(np.ndarray):
+    """Not an exact ndarray: spec_of requires ``type(arr) is np.ndarray``."""
+
+
+def test_non_exact_array_likes_are_rejected_by_spec_of(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    st = model.proton.start_range
+    for bad in (st._s.view(_Sub), memoryview(st._s.copy())):
+        other = build_icru90_source(load_icru90_water(cache.verify(ICRU_ID, cdir)))
+        object.__setattr__(other.proton.start_range, "_s", bad)  # bypass frozen on purpose
+        mid, spec = spec_of(other)
+        assert mid == "unregistered" and spec.data == ()
+    # an equal-valued but different start array is also not the inner source's array
+    other = build_icru90_source(load_icru90_water(cache.verify(ICRU_ID, cdir)))
+    changed = st._s.copy()
+    changed[0] *= 1.001
+    changed.setflags(write=False)
+    object.__setattr__(other.proton.start_range, "_s", changed)
+    assert spec_of(other)[0] == "unregistered"
+
+
+def test_validate_fails_closed_when_the_identity_changes_after_selection(
+    cdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _cfg()
+    sel = cfg.physics.selection
+    assert sel.observed == (MID, spec_sha256(STOPPING_MODELS[MID]))
+    validate(cfg)  # untouched: selection id == post-build id
+    # a source whose live arrays change after PhysicsOptions time (write flag re-enabled on its
+    # own copy): the table is built from the changed data and the recheck refuses the run
+    src = sel.source
+    e, s = src.proton._arrays["proton"]
+    s.setflags(write=True)
+    old = s.copy()
+    try:
+        s[10] *= 1.01
+        with pytest.raises(UnsupportedCombinationError, match="identity changed"):
+            validate(cfg)
+    finally:
+        s[:] = old
+        s.setflags(write=False)
+    validate(cfg)
