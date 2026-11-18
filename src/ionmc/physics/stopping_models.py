@@ -487,13 +487,26 @@ def _structure(spec: StoppingModelSpec) -> tuple[Any, ...]:
     )
 
 
+def _nist_provider_exact(table: Any) -> bool:
+    """The table provider of a NIST program is exactly a ``StarTable`` (frozen, slotted) holding
+    exact read-only float64 arrays; any look-alike (stateful or not) is not trusted."""
+    from ionmc.data.nist_star import StarTable  # noqa: PLC0415
+
+    return type(table) is StarTable and _exact_ro(
+        table.energy_mev, table.s_electronic, table.csda_range
+    )
+
+
 def _icru_arrays_trusted(source: Any) -> bool:
     """The consumed arrays of both inner sources and of their start rules are exact read-only
     ndarrays, and each start rule holds the same values as its inner source's arrays."""
     for name, inner in (("proton", source.proton), ("alpha", source.alpha)):
-        if set(inner._arrays) != {name}:
+        if type(inner._arrays) is not dict or set(inner._arrays) != {name}:
             return False
-        e, s = inner._arrays[name]
+        pair = inner._arrays[name]
+        if type(pair) is not tuple or len(pair) != 2:
+            return False
+        e, s = pair
         st = inner.start_range
         if not _exact_ro(e, s, st._e_u, st._s):
             return False
@@ -551,10 +564,8 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             _pristine(source, NistStarCombinedSource, nist._SNAP)
             and _pristine(source.pstar, NistStarStoppingSource, _NISTSTAR_SNAP)
             and _pristine(source.astar, NistStarStoppingSource, _NISTSTAR_SNAP)
-            and all(
-                _exact_ro(t.energy_mev, t.s_electronic, t.csda_range)
-                for t in (source.pstar.star_table, source.astar.star_table)
-            )
+            and _nist_provider_exact(source.pstar.star_table)
+            and _nist_provider_exact(source.astar.star_table)
         )
         if trusted and _structure(STOPPING_MODELS[NIST_MODEL_ID]) == _structure(candidate):
             return NIST_MODEL_ID, STOPPING_MODELS[NIST_MODEL_ID]

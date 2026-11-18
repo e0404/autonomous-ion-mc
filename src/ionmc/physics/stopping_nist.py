@@ -24,10 +24,7 @@ whole source the programs in the order PSTAR, ASTAR.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
-
-import numpy as np
 
 from ionmc.data import cache as _cache
 from ionmc.data.nist_star import StarTable, load_star_table
@@ -35,7 +32,7 @@ from ionmc.data.registry import DATASETS
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.materials import Material
 from ionmc.physics.projectiles import Projectile
-from ionmc.physics.stopping import NistStarStoppingSource, StoppingTable
+from ionmc.physics.stopping import NistStarStoppingSource, StoppingTable, star_arrays_digest
 from ionmc.physics.stopping_models import (
     DATASET_OF,
     MATERIAL_RULE_WATER,
@@ -53,12 +50,9 @@ from ionmc.physics.stopping_models import (
 
 
 def _arrays_digest(tables: list[StarTable]) -> str:
-    h = hashlib.sha256()
-    for t in tables:
-        h.update(t.program.encode("ascii") + b"\0")
-        for a in (t.energy_mev, t.s_electronic, t.csda_range):
-            h.update(np.ascontiguousarray(a, dtype="<f8").tobytes())
-    return h.hexdigest()
+    return star_arrays_digest(
+        [(t.program, t.energy_mev, t.s_electronic, t.csda_range) for t in tables]
+    )
 
 
 @dataclass(frozen=True, slots=True, eq=False)

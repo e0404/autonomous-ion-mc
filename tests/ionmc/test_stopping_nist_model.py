@@ -401,3 +401,84 @@ def test_subclass_overriding_table_and_the_exactness_method_is_unregistered(cdir
     mid, spec = spec_of(Liar(model.pstar, model.astar))
     assert mid == "unregistered" and spec.data == () and spec.decision == "user"
     assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+# ---- provider type and consumed-content binding (REVIEW-bcd2acbc) ----
+
+
+class _StatefulStarTable:
+    """A look-alike of a StarTable: pinned arrays everywhere except inside ``table()``."""
+
+    def __init__(self, real: Any) -> None:
+        object.__setattr__(self, "_real", real)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._real, name)
+
+    def _arr(self, name: str, factor: float) -> Any:
+        import sys
+
+        a = getattr(self._real, name)
+        if sys._getframe(2).f_code.co_name == "table":
+            b = a * factor
+            b.setflags(write=False)
+            return b
+        return a
+
+    @property
+    def energy_mev(self) -> Any:
+        return self._arr("energy_mev", 1.0)
+
+    @property
+    def s_electronic(self) -> Any:
+        return self._arr("s_electronic", 1.02)
+
+    @property
+    def csda_range(self) -> Any:
+        return self._arr("csda_range", 1.0)
+
+
+def _lookalike_model(cdir: Path) -> NistStarCombinedSource:
+    model = resolve(MID, cache_dir=str(cdir))
+
+    def wrap(src: NistStarStoppingSource) -> NistStarStoppingSource:
+        return NistStarStoppingSource(
+            _StatefulStarTable(src.star_table),  # type: ignore[arg-type]
+            src.e_min_per_u,
+            src.e_max_per_u,
+            src.points_per_decade,
+        )
+
+    return NistStarCombinedSource(wrap(model.pstar), wrap(model.astar))
+
+
+def test_stateful_provider_is_unregistered_and_the_consumed_digest_fails_validate(
+    cdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = _lookalike_model(cdir)
+    assert spec_of(fake)[0] == "unregistered"  # the provider is not an exact StarTable
+    # bypass only the provider type check: the per-table consumed digest still fails the run
+    monkeypatch.setattr(stopping_models, "_nist_provider_exact", lambda t: True)
+    assert spec_of(fake)[0] == MID  # pinned on every read outside table()
+    cfg = SimulationConfig(
+        source=_cfg().source,
+        geometry=_cfg().geometry,
+        scoring=_cfg().scoring,
+        physics=PhysicsOptions(nuclear=False, stopping=fake),
+        run=_cfg().run,
+    )
+    assert cfg.physics.selection.observed[0] == MID
+    with pytest.raises(UnsupportedCombinationError, match="identity changed"):
+        validate(cfg)
+
+
+def test_untouched_nist_model_identity_is_stable_and_tables_carry_the_consumed_digest(
+    cdir: Path,
+) -> None:
+    cfg = _cfg()
+    assert cfg.physics.selection.observed[0] == MID
+    validate(cfg)
+    model = cfg.physics.stopping_source
+    t = model.table(WATER, PROTON)
+    assert t.consumed_content_sha256 == STOPPING_MODELS[MID].options["content_sha256"]["proton"]
+    assert "consumed_content_sha256" not in t.metadata

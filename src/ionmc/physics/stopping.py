@@ -40,7 +40,9 @@ All arithmetic is float64.
 
 from __future__ import annotations
 
+import hashlib
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -290,6 +292,20 @@ def bethe_mass_stopping(
     return out
 
 
+def star_arrays_digest(
+    tables: Sequence[tuple[str, NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]],
+) -> str:
+    """Canonical digest of parsed STAR arrays: per table the program name (ASCII, zero byte), then
+    energy, electronic S and CSDA range as C-contiguous little-endian float64 (documented in
+    :mod:`ionmc.physics.stopping_nist`)."""
+    h = hashlib.sha256()
+    for program, e, s, r in tables:
+        h.update(program.encode("ascii") + b"\0")
+        for a in (e, s, r):
+            h.update(np.ascontiguousarray(a, dtype="<f8").tobytes())
+    return h.hexdigest()
+
+
 @dataclass(eq=False)
 class StoppingTable:
     """Electronic stopping power and CSDA range of one projectile in one material.
@@ -315,6 +331,10 @@ class StoppingTable:
     csda_range_g_cm2: NDArray[np.float64]
     range_mm: NDArray[np.float64]
     metadata: dict[str, Any] = field(default_factory=dict)
+    # digest of the source arrays this table was built from, taken inside the ``table()`` call
+    # (``None`` when the source does not report it); a side channel outside the metadata, the
+    # table identity and every hash
+    consumed_content_sha256: str | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         rho = self.material.density_g_cm3
@@ -600,18 +620,22 @@ class NistStarStoppingSource:
     def table(self, material: Material, projectile: Projectile) -> StoppingTable:
         """Build the table for ``projectile`` in liquid water from the STAR data."""
         st = self.star_table
+        # the arrays consumed below are these copies; their digest is attached to the table
+        energy = np.array(st.energy_mev, dtype=np.float64)
+        s_el = np.array(st.s_electronic, dtype=np.float64)
+        csda = np.array(st.csda_range, dtype=np.float64)
         expected = {"PSTAR": "proton", "ASTAR": "alpha"}.get(st.program)
         if expected != projectile.name:
             raise ValueError(f"{st.program} table cannot describe projectile {projectile.name}")
         _require_water_table(st, projectile)
         _require_nist_water(material)
-        e_u = st.energy_mev / projectile.a
+        e_u = energy / projectile.a
         e_max = min(self.e_max_per_u, float(e_u[-1]))
         if self.e_min_per_u < e_u[0]:
             raise ValueError("requested e_min below the table")
         e = log_grid(self.e_min_per_u, e_max, self.points_per_decade)
-        s = np.exp(np.interp(np.log(e), np.log(e_u), np.log(st.s_electronic)))
-        r0 = float(np.exp(np.interp(math.log(e[0]), np.log(e_u), np.log(st.csda_range))))
+        s = np.exp(np.interp(np.log(e), np.log(e_u), np.log(s_el)))
+        r0 = float(np.exp(np.interp(math.log(e[0]), np.log(e_u), np.log(csda))))
         meta = {
             "source": "nist-star",
             "I_eV": 75.0,
@@ -632,7 +656,9 @@ class NistStarStoppingSource:
             },
             "start_range": "NIST CSDA range at e_min (log-log interpolation)",
         }
-        return build_table(projectile, material, e, s, r0, meta)
+        table = build_table(projectile, material, e, s, r0, meta)
+        table.consumed_content_sha256 = star_arrays_digest([(st.program, energy, s_el, csda)])
+        return table
 
 
 def default_source() -> StoppingSource:

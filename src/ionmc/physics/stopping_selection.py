@@ -142,6 +142,9 @@ def select(stopping: StoppingSource | None, stopping_model: str | None) -> Stopp
     )
 
 
+_CONSUMED_IDS = (_models.NIST_MODEL_ID, _models.ICRU_MODEL_ID)
+
+
 def _observed(source: StoppingSource) -> tuple[str, str] | None:
     try:
         mid, spec = spec_of(source)
@@ -166,15 +169,27 @@ def assert_identity_stable(
         if now != sel.observed:
             raise fail(f"{msg} (selected {sel.observed}, now {now})")
     digest_for = getattr(sel.source, "content_sha256_for", None)
+    registered = sel.observed is not None and sel.observed[0] in _CONSUMED_IDS
     if not callable(digest_for):
         return
     by_name = {p.name: p for p in projectiles}
     for t in tables:
         meta = t.metadata
-        if meta.get("source") != "tabulated" or meta.get("projectile") not in by_name:
+        proj = by_name.get(meta.get("projectile"))
+        consumed = getattr(t, "consumed_content_sha256", None)
+        if consumed is None and meta.get("source") == "tabulated":
+            consumed = meta.get("content_sha256")
+        if consumed is None:
+            if registered:  # no table of a registered tabulated model is skipped
+                raise fail(f"{msg} (no consumed-content digest on a table of the model)")
             continue
-        if meta.get("content_sha256") != digest_for(by_name[meta["projectile"]]):
-            raise fail(f"{msg} (table of {meta['projectile']} in {meta.get('material')})")
+        if proj is None:
+            raise fail(f"{msg} (table of an unknown projectile {meta.get('projectile')!r})")
+        if consumed != digest_for(proj):
+            raise fail(f"{msg} (table of {proj.name} in {meta.get('material')})")
+        if sel.observed is not None and sel.observed[0] == _models.NIST_MODEL_ID:
+            if consumed != _models.NIST_CONTENT_SHA256[proj.name]:
+                raise fail(f"{msg} (table of {proj.name}: not the registered content)")
 
 
 # ---- fail-closed domain (decision 0044 section 3) ----
