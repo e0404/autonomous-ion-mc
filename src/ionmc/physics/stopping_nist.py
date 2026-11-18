@@ -48,6 +48,7 @@ from ionmc.physics.stopping_models import (
     StoppingModelSpec,
     nist_options,
     nist_pins,
+    snapshot,
 )
 
 
@@ -60,7 +61,7 @@ def _arrays_digest(tables: list[StarTable]) -> str:
     return h.hexdigest()
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, slots=True, eq=False)
 class NistStarCombinedSource:
     """PSTAR (proton) and ASTAR (alpha) liquid-water tables as one stopping model."""
 
@@ -176,3 +177,6 @@ def load_nist_model(cache_dir: str | None = None) -> NistStarCombinedSource:
     return NistStarCombinedSource(
         NistStarStoppingSource(tables["proton"]), NistStarStoppingSource(tables["alpha"])
     )
+
+
+_SNAP = snapshot(NistStarCombinedSource)

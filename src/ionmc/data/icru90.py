@@ -25,7 +25,7 @@ WATER_INDEX = 1
 _MATERIAL_ORDER = ("G4_AIR", "G4_WATER", "G4_GRAPHITE")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Icru90Water:
     """ICRU 90 liquid-water electronic stopping power arrays (float64).
 

@@ -121,6 +121,22 @@ class StoppingModelSpec:
         object.__setattr__(self, "domain", self.domain)  # StoppingDomain freezes itself
 
 
+def snapshot(cls: type) -> dict[str, Any]:
+    """The functions and properties defined on ``cls`` now (taken at the end of the module that
+    defines a trusted class); :func:`_pristine` compares the live class with it."""
+    return {k: v for k, v in vars(cls).items() if callable(v) or isinstance(v, property)}
+
+
+def _pristine(obj: object, cls: type, snap: Mapping[str, Any]) -> bool:
+    """``obj`` is exactly a ``cls`` with no instance ``__dict__`` (no per-instance shadowing of a
+    method) and ``cls`` still holds the implementations of ``snap`` (no class-level patch)."""
+    return (
+        type(obj) is cls
+        and not hasattr(obj, "__dict__")
+        and all(vars(cls).get(k) is v for k, v in snap.items())
+    )
+
+
 def _canonical(value: Any) -> Any:
     """JSON-ready structure: dataclasses and mappings to dicts, sets to sorted lists."""
     if is_dataclass(value) and not isinstance(value, type):
@@ -329,6 +345,9 @@ def registered_icru_spec() -> StoppingModelSpec:
     )
 
 
+_BETHE_SNAP = snapshot(BetheStoppingSource)
+_NISTSTAR_SNAP = snapshot(NistStarStoppingSource)
+
 _REGISTRY: dict[str, StoppingModelSpec] = {
     **{mid: _bethe_spec(mid, "1", _registered_bethe(ls), "0044") for mid, ls in _LS_IDS.items()},
     NIST_MODEL_ID: registered_nist_spec(),
@@ -472,20 +491,23 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
         return UNREGISTERED_ID, _nist_star_instance_spec(source)
     from ionmc.physics.stopping_icru90 import Icru90WaterSource  # noqa: PLC0415
     from ionmc.physics.stopping_nist import NistStarCombinedSource  # noqa: PLC0415
+    from ionmc.physics.stopping_tabulated import (  # noqa: PLC0415
+        _SNAP as _TAB_SNAP,
+    )
     from ionmc.physics.stopping_tabulated import TabulatedStoppingSource  # noqa: PLC0415
 
     # Trust is decided here, from exact types read as plain attributes; no method of the source is
     # consulted (a subclass can override any of them).
     if isinstance(source, Icru90WaterSource):
-        from ionmc.physics.stopping_icru90 import _IcruStartRange  # noqa: PLC0415
+        from ionmc.physics import stopping_icru90 as icru  # noqa: PLC0415
 
         candidate = Icru90WaterSource.instance_spec(source)
         trusted = (
-            type(source) is Icru90WaterSource
-            and type(source.proton) is TabulatedStoppingSource
-            and type(source.alpha) is TabulatedStoppingSource
-            and type(source.proton.start_range) is _IcruStartRange
-            and type(source.alpha.start_range) is _IcruStartRange
+            _pristine(source, Icru90WaterSource, icru._SNAP)
+            and _pristine(source.proton, TabulatedStoppingSource, _TAB_SNAP)
+            and _pristine(source.alpha, TabulatedStoppingSource, _TAB_SNAP)
+            and _pristine(source.proton.start_range, icru._IcruStartRange, icru._START_SNAP)
+            and _pristine(source.alpha.start_range, icru._IcruStartRange, icru._START_SNAP)
         )
         if trusted and _structure(STOPPING_MODELS[ICRU_MODEL_ID]) == _structure(candidate):
             return ICRU_MODEL_ID, STOPPING_MODELS[ICRU_MODEL_ID]
@@ -497,10 +519,12 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
         )
     if isinstance(source, NistStarCombinedSource):
         candidate = NistStarCombinedSource.instance_spec(source)
+        from ionmc.physics import stopping_nist as nist  # noqa: PLC0415
+
         trusted = (
-            type(source) is NistStarCombinedSource
-            and type(source.pstar) is NistStarStoppingSource
-            and type(source.astar) is NistStarStoppingSource
+            _pristine(source, NistStarCombinedSource, nist._SNAP)
+            and _pristine(source.pstar, NistStarStoppingSource, _NISTSTAR_SNAP)
+            and _pristine(source.astar, NistStarStoppingSource, _NISTSTAR_SNAP)
         )
         if trusted and _structure(STOPPING_MODELS[NIST_MODEL_ID]) == _structure(candidate):
             return NIST_MODEL_ID, STOPPING_MODELS[NIST_MODEL_ID]
@@ -514,9 +538,9 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
     if isinstance(source, TabulatedStoppingSource):  # structural match, content digest included
         candidate = source.instance_spec()
         for model_id, spec in STOPPING_MODELS.items():
-            if type(source) is TabulatedStoppingSource and _structure(spec) == _structure(
-                candidate
-            ):
+            if _pristine(source, TabulatedStoppingSource, _TAB_SNAP) and _structure(
+                spec
+            ) == _structure(candidate):
                 return model_id, spec
         return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
     if type(source) is not BetheStoppingSource:
@@ -540,7 +564,8 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
             f"{type(source).__module__}.{type(source).__qualname__}"
         )
     candidate = _bethe_spec(UNREGISTERED_ID, "1", source, "user")
-    for model_id, spec in STOPPING_MODELS.items():
-        if _structure(spec) == _structure(candidate):
-            return model_id, spec
+    if _pristine(source, BetheStoppingSource, _BETHE_SNAP):
+        for model_id, spec in STOPPING_MODELS.items():
+            if _structure(spec) == _structure(candidate):
+                return model_id, spec
     return UNREGISTERED_ID, candidate

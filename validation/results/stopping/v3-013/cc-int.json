@@ -4,9 +4,9 @@
     "geant4-icru90-stopping-11.4.2 (cache object)": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
     "nist-astar-water-2005 (cache object)": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
     "nist-pstar-water-2005 (cache object)": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
-    "src/ionmc/data/icru90.py": "8363a8546de9a0cb98f36b79b206bde2f86c46f27dc50daaeaea3f784e28af44",
-    "src/ionmc/physics/stopping_icru90.py": "ea8131fc7976a1adb178685af91c19712ab0cf64ab524d83476211b475df3203",
-    "src/ionmc/physics/stopping_tabulated.py": "6f97d14da2e4523630c30dcfece09bc6ff0213ec4851eccfad99ba98a2721bd8"
+    "src/ionmc/data/icru90.py": "622adeb94c68dc012b86fc11c6627737f516b8f6dfef23bf58993774138fd7d3",
+    "src/ionmc/physics/stopping_icru90.py": "337bdc1bbbb429220f3744bab5945cdc8967d841f90272851f7d9edf4a57be2d",
+    "src/ionmc/physics/stopping_tabulated.py": "6dd5f131d46db481da43156d374e7873b276112d86db0d202d416f0ffd3f5c26"
   },
   "model_id": "icru90-water-v1",
   "note": "Aggregates only: no ICRU 90, PSTAR or ASTAR table value, per-node value or per-energy ratio is written. Consistency results for implementation correctness, not evidence of physical accuracy.",

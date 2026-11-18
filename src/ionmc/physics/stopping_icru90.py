@@ -69,6 +69,7 @@ from ionmc.physics.stopping_models import (
     StoppingModelSpec,
     icru_options,
     icru_pins,
+    snapshot,
 )
 from ionmc.physics.stopping_tabulated import TabulatedStoppingSource, _digest
 
@@ -127,7 +128,7 @@ class _IcruStartRange:
         return icru90_start_range(self._e_u, self._s, self._a)
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, slots=True, eq=False)
 class Icru90WaterSource:
     """ICRU 90 liquid-water tables of protons and alpha particles as one stopping model."""
 
@@ -271,6 +272,10 @@ class Icru90WaterSource:
             StoppingDomain(species, MATERIAL_RULE_WATER_I78, lo, hi),
             "0044",
         )
+
+
+_SNAP = snapshot(Icru90WaterSource)
+_START_SNAP = snapshot(_IcruStartRange)
 
 
 def build_icru90_source(

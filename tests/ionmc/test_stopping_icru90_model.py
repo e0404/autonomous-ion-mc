@@ -705,3 +705,49 @@ def test_conditional_start_callable_is_unregistered_and_water_variant_is_identic
     assert mid == "unregistered" and spec.data == ()
     assert spec_sha256(spec) not in STOPPING_EVIDENCE
     assert spec_of(model)[0] == MID
+
+
+# ---- slotted trusted classes: no per-instance shadowing (REVIEW-77a533e9) ----
+
+
+def test_trusted_instances_have_no_dict_and_reject_method_shadowing(cdir: Path) -> None:
+    from ionmc.physics.stopping_nist import NistStarCombinedSource
+
+    icru = resolve(MID, cache_dir=str(cdir))
+    nist = resolve("nist-pstar-astar-water-2005", cache_dir=str(cdir))
+    bethe = resolve("bethe-ionmc-v1")
+    for obj, attr in (
+        (icru, "table"),
+        (icru.proton, "table"),
+        (icru.proton, "_start"),
+        (icru.proton.start_range, "__call__"),
+        (nist, "table"),
+        (nist.pstar, "table"),
+        (bethe, "table"),
+    ):
+        assert not hasattr(obj, "__dict__")
+        with pytest.raises(AttributeError):
+            object.__setattr__(obj, attr, lambda *a: 0.0)
+    assert isinstance(nist, NistStarCombinedSource)
+    for m in ("icru90-water-v1", "nist-pstar-astar-water-2005", "bethe-ionmc-v1"):
+        assert spec_of(resolve(m, cache_dir=str(cdir)))[0] == m
+
+
+def test_non_slotted_lookalikes_and_class_patches_are_unregistered(
+    cdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ionmc.physics.stopping_tabulated import TabulatedStoppingSource
+
+    icru = resolve(MID, cache_dir=str(cdir))
+
+    class Dummy(Icru90WaterSource):  # a subclass without __slots__ has an instance __dict__
+        pass
+
+    d = Dummy(icru.proton, icru.alpha, icru.name)
+    assert hasattr(d, "__dict__")
+    assert spec_of(d)[0] == "unregistered"
+    # a class-level patch of the trusted implementation is detected
+    monkeypatch.setattr(TabulatedStoppingSource, "table", lambda self, m, p: None)
+    mid, spec = spec_of(icru)
+    assert mid == "unregistered" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE

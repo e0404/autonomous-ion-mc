@@ -98,7 +98,7 @@ def _barkas_b(z_el: int) -> float:
 LS_MODES = ("off", "eff", "bare_mixed")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BetheOptions:
     """Switches of the analytic model (all on by default); recorded in table metadata.
 
@@ -468,7 +468,7 @@ class StoppingSource(Protocol):
         ...
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BetheStoppingSource:
     """Analytic Bethe-Bloch source (construction data: none; see module docstring).
 
@@ -581,7 +581,7 @@ def _require_water_table(star: StarTable, projectile: Projectile) -> None:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class NistStarStoppingSource:
     """Tabulated source from a NIST PSTAR (protons) or ASTAR (alpha) liquid-water table.
 

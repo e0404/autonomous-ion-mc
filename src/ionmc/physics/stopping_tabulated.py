@@ -47,6 +47,7 @@ from ionmc.physics.stopping_models import (
     MATERIAL_RULE_WATER,
     StoppingDomain,
     StoppingModelSpec,
+    snapshot,
 )
 
 # start-range rule: (projectile, material, energy grid [MeV/u], S on the grid) -> range [g/cm2]
@@ -68,7 +69,7 @@ def _digest(arrays: Mapping[str, tuple[NDArray[np.float64], NDArray[np.float64]]
     return h.hexdigest()
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, slots=True, eq=False)
 class TabulatedStoppingSource:
     """Stopping source from per-projectile arrays (see the module docstring).
 
@@ -222,3 +223,6 @@ class TabulatedStoppingSource:
             **self.metadata,
         }
         return build_table(projectile, material, e, s, r0, meta)
+
+
+_SNAP = snapshot(TabulatedStoppingSource)

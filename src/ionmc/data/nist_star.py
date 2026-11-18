@@ -19,7 +19,7 @@ from ionmc.data.cache import provenance_of, sha256_bytes
 N_COLUMNS = 7
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StarTable:
     """A NIST STAR table; all arrays are float64 with one entry per energy row.
 
