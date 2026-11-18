@@ -160,7 +160,7 @@ def load_nist_model(cache_dir: str | None = None) -> NistStarCombinedSource:
     from the manifest or the registry pin) or ``ValueError`` (parse failure, wrong program); never
     downloads and never falls back to anything else.
     """
-    cdir = _cache.resolve_cache_dir(cache_dir)
+    cdir = _cache.resolve_cache_dir(cache_dir).resolve()  # absolute: the run records this path
     tables: dict[str, StarTable] = {}
     for sp, dataset_id in DATASET_OF.items():
         path = _cache.verify(dataset_id, cdir)

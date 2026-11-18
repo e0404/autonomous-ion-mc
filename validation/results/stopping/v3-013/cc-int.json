@@ -5,7 +5,7 @@
     "nist-astar-water-2005 (cache object)": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
     "nist-pstar-water-2005 (cache object)": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
     "src/ionmc/data/icru90.py": "3e95b2ce353f74d34360f0cbbd0132221b9d383c27e695fb9468873edede23c0",
-    "src/ionmc/physics/stopping_icru90.py": "7d10b8c7b639a044f2c63c341a88cac42ebb3f94f1a6849cbbe2b08c1288dad5",
+    "src/ionmc/physics/stopping_icru90.py": "107cff5c4cf0125d785760bf09859d3436b41a7cc3daba20b66873b106cfaefc",
     "src/ionmc/physics/stopping_tabulated.py": "43edd924b9c0092447d57b2f2078721949f03e10aba4a12cf5aa5fd4611a8921"
   },
   "model_id": "icru90-water-v1",

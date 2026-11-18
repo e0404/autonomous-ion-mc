@@ -907,3 +907,41 @@ def test_comparison_ignores_only_the_cache_local_provenance_keys() -> None:
     assert CACHE_LOCAL_METADATA_KEYS == ("retrieved_at",)
     assert _comparable(a) == _comparable(b)
     assert _comparable({**a, "dataset_sha256": "t"}) != _comparable(a)
+
+
+@pytest.mark.parametrize("via_env", [False, True])
+def test_relative_cache_path_is_recorded_absolute_and_survives_a_chdir(
+    cdir_all: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, via_env: bool
+) -> None:
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    _copy_cache(cdir_all, parent / "relcache", (ICRU_ID, PSTAR_ID, ASTAR_ID))
+    base = _cfg()  # built while the default cache is still available
+    monkeypatch.chdir(parent)
+    if via_env:
+        monkeypatch.setenv("IONMC_CACHE_DIR", "relcache")
+    kw: dict[str, Any] = {} if via_env else {"cache_dir": "relcache"}
+    for model_id in (MID, "nist-pstar-astar-water-2005"):
+        src = resolve(model_id, **kw)
+        absolute = str((parent / "relcache").resolve())
+        assert src.cache_dir == absolute
+        monkeypatch.chdir(tmp_path)  # the working directory changes before validate()
+        if via_env:
+            monkeypatch.setenv("IONMC_CACHE_DIR", str(tmp_path / "nowhere"))
+        cfg = SimulationConfig(
+            source=base.source,
+            geometry=BoxPhantom(
+                (-10.0, -10.0, 0.0),
+                (20.0, 20.0, 40.0),
+                water_i78() if model_id == MID else WATER,
+            ),
+            scoring=base.scoring,
+            physics=PhysicsOptions(nuclear=False, stopping=src),
+            run=base.run,
+        )
+        blk = validate(cfg).summary()["stopping"]
+        assert blk["cache_dir"] == absolute
+        assert all(u["cache_dir"] == absolute for u in blk["data_used"])
+        monkeypatch.chdir(parent)
+        if via_env:
+            monkeypatch.setenv("IONMC_CACHE_DIR", "relcache")

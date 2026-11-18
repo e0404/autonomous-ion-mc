@@ -347,7 +347,7 @@ def load_icru90_model(cache_dir: str | None = None) -> Icru90WaterSource:
     from the manifest or the registry pin) or ``ValueError`` (parse failure); never downloads and
     never falls back to anything else.
     """
-    cdir = _cache.resolve_cache_dir(cache_dir)
+    cdir = _cache.resolve_cache_dir(cache_dir).resolve()  # absolute: the run records this path
     path = _cache.verify(ICRU_DATASET_ID, cdir)
     data = load_icru90_water(path)  # re-hashes the bytes against the registry pin
     if data.dataset_id != ICRU_DATASET_ID or data.sha256 != DATASETS[ICRU_DATASET_ID].sha256:
