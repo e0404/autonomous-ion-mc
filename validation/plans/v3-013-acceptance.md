@@ -436,3 +436,11 @@ OPEN. Not a clinical claim."
   unchanged; D-3, `cc-int.json`, `v-c3.json` regenerated with unchanged numerics. `vc-predictions.json` re-derived on
   the host at 26da5997 (RUN-20261118T171417Z-226fd2bd, record committed and verified): only the `src/ionmc` tree pin
   changed (→ a6378d86…). Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.
+- 2026-11-18 (orchestrator, seal candidate 10): Codex REVIEW-bcd2acbc at 3926190f (changes_required: the NIST table
+  provider was not required to be the exact `StarTable` and NIST tables escaped the post-build content comparison)
+  fixed at e8e01808 (exact nested providers for NIST and ICRU; every NIST table carries the digest of the arrays
+  consumed inside `table()` outside its metadata; `validate()` compares every table of a registered tabulated model
+  with the live and registered digests and fails closed). Spec hashes unchanged; D-3 regenerated (numerics
+  unchanged). `vc-predictions.json` re-derived on the host at e8e01808 (RUN-20261118T172835Z-ca2c1648, record
+  committed and verified): only the `src/ionmc` tree pin changed (→ 6ac381de…). Frozen manifest regenerated (82
+  sealed paths). This commit is the seal candidate.
