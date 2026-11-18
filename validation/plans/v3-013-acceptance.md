@@ -429,3 +429,10 @@ OPEN. Not a clinical claim."
   unchanged numerics. `vc-predictions.json` re-derived on the host at b17b5be1 (RUN-20261118T165917Z-bbc33f71, record
   committed and verified): only the `src/ionmc` tree pin changed (→ b65e6861…). Frozen manifest regenerated (82 sealed
   paths). This commit is the seal candidate.
+- 2026-11-18 (orchestrator, seal candidate 9): Codex REVIEW-b01b9fa4 at 4fd38abb (changes_required: mutable start-rule
+  slot state and a time-of-check/time-of-use gap between selection and table construction) fixed at 26da5997 (frozen,
+  slotted start rule with read-only exact arrays; table digests computed from the arrays consumed inside `table()`;
+  `validate()` recomputes the identity after every table is built and fails closed on any change). Spec hashes
+  unchanged; D-3, `cc-int.json`, `v-c3.json` regenerated with unchanged numerics. `vc-predictions.json` re-derived on
+  the host at 26da5997 (RUN-20261118T171417Z-226fd2bd, record committed and verified): only the `src/ionmc` tree pin
+  changed (→ a6378d86…). Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.
