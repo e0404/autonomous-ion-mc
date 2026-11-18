@@ -451,3 +451,13 @@ OPEN. Not a clinical claim."
   validation). Spec hashes and the digest-pinned aggregates unchanged. `vc-predictions.json` re-derived on the host
   at a3c30226 (RUN-20261118T175042Z-852732ab, record committed and verified): only the `src/ionmc` tree pin changed
   (→ 5cbd23a2…). Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.
+- 2026-11-18 (orchestrator, seal candidate 12): Codex REVIEW-6483e470 at 8df08b18 (changes_required: the rebuild check
+  ignored the selected cache directory and compared cache-local provenance) fixed at 5e0f29be (the cache directory is
+  carried on the resolved source, the selection, the identity block and every `data_used` entry; the rebuild reads the
+  same cache; `retrieved_at` is excluded from the metadata comparison). Because that directory is run provenance, the
+  sealed identity pins carry it as the placeholder `<run-cache-dir>` and the evaluator normalises a run's block the
+  same way while requiring a real path (01f40fa8). `cc-int.json`/`v-c3.json` regenerated (numerics unchanged).
+  `vc-predictions.json` re-derived on the host at 01f40fa8 (RUN-20261118T180956Z-e7f93e4c; the intermediate host run
+  RUN-20261118T180655Z-f7fed0c8 at 5e0f29be produced the un-normalised file that 01f40fa8 carried transitionally;
+  both records committed and verified): values, gating and spec hashes unchanged; `src/ionmc` tree pin → 740e60bb….
+  Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.

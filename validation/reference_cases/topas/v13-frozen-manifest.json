@@ -72,7 +72,7 @@
   "validation/reference_cases/topas/he-water-75mevu-v13-idd-em-part7/input.txt": "823c476cf916cbe00f5b946963af3d38f92854b137f291ba7adb7cb01bf9a55f",
   "validation/reference_cases/topas/v13-bundles-manifest.json": "6647fbaf51bd0a8bced1f95d4b57a1207927b9710e4ddaf4394a5967d9e3de96",
   "validation/results/stopping/v3-013/seal-environment.json": "0ea29fc225779fb659cf57476771b8be101086e4a6fc1cf2a64d6cae0bc7a9e1",
-  "validation/results/stopping/v3-013/vc-predictions.json": "e4839b924a4094cc40bf2c2210078b9ec6cd7077f78acbcbcd27825765442adf",
+  "validation/results/stopping/v3-013/vc-predictions.json": "b1759b553c6a8518e1f60ea60626848f8b23f9ca326f6e3efb82d8d02935765f",
   "validation/scripts/ion_em/r2_evaluate.py": "cfd89e2a06e7f33876274d9f4b30ddfaf9587ee7120663dab406cec15258a750",
   "validation/scripts/ion_em/r2_io.py": "459ed6742610201e3bee261f3b5688b7495ccfe812c4546cf89c971506637b0a",
   "validation/scripts/ion_em/r2_statistics.py": "fa1bb5c5b372df72fc9d3e9f4daa06d0943db5adb89bd173c53edad1b58bc9c1",
@@ -81,8 +81,8 @@
   "validation/scripts/stopping/env_digest.py": "c49f3106ea994e25df01b6cee215e2e0436fbd4d3a82d9f6c83e43984df2bc10",
   "validation/scripts/stopping/env_seal.py": "2e046f11c67606c7c3d4422cb8763d7c01251a868cb91d052c59d4f7f039e37b",
   "validation/scripts/stopping/sealed_launch.py": "9ffea96b2d582ed46fceb3044f022df8fcef3bf5f4cf0d1398ff212bc8fcf0e1",
-  "validation/scripts/stopping/steps_v13.py": "8938f99f90f4d9f02378ee164069de760d37bdb867926de0956d128e0303d91f",
-  "validation/scripts/stopping/v13_evaluate.py": "ee0b49ae20a092c7ef6e5715511f5b2512a558d71adf8da917043f90219c95fb"
+  "validation/scripts/stopping/steps_v13.py": "690f67182e70c9fc1642c6386629d5593dd76c717f57293a6f4c37835a7c2bb3",
+  "validation/scripts/stopping/v13_evaluate.py": "c0862a9d8c90a699a0752204593a627088699153f4e21331d2941713ef2e3a05"
  },
  "note": "the manifest does not list itself; it is bound by its blob at the signed seal SHA and by its sha256 in the plan pin note",
  "plan": "validation/plans/v3-013-acceptance.md section D step 3",

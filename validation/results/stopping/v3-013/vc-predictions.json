@@ -88,7 +88,7 @@
   "identity_blocks": {
     "bethe-ionmc-v1": {
       "1": {
-        "cache_dir": null,
+        "cache_dir": "<run-cache-dir>",
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -157,7 +157,7 @@
         "version": "1"
       },
       "2": {
-        "cache_dir": null,
+        "cache_dir": "<run-cache-dir>",
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -226,7 +226,7 @@
         "version": "1"
       },
       "3": {
-        "cache_dir": null,
+        "cache_dir": "<run-cache-dir>",
         "circular_rows": [],
         "content_sha256": null,
         "data_declared": [],
@@ -297,7 +297,7 @@
     },
     "icru90-water-v1": {
       "1": {
-        "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+        "cache_dir": "<run-cache-dir>",
         "circular_rows": [
           "geant4-icru90-stopping-11.4.2",
           "I2 (ICRU 90 part)",
@@ -317,7 +317,7 @@
         ],
         "data_used": [
           {
-            "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+            "cache_dir": "<run-cache-dir>",
             "pin": {
               "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
               "dataset_id": "geant4-icru90-stopping-11.4.2",
@@ -392,7 +392,7 @@
         "version": "1"
       },
       "2": {
-        "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+        "cache_dir": "<run-cache-dir>",
         "circular_rows": [
           "geant4-icru90-stopping-11.4.2",
           "I2 (ICRU 90 part)",
@@ -412,7 +412,7 @@
         ],
         "data_used": [
           {
-            "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+            "cache_dir": "<run-cache-dir>",
             "pin": {
               "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
               "dataset_id": "geant4-icru90-stopping-11.4.2",
@@ -487,7 +487,7 @@
         "version": "1"
       },
       "3": {
-        "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+        "cache_dir": "<run-cache-dir>",
         "circular_rows": [
           "geant4-icru90-stopping-11.4.2",
           "I2 (ICRU 90 part)",
@@ -507,7 +507,7 @@
         ],
         "data_used": [
           {
-            "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+            "cache_dir": "<run-cache-dir>",
             "pin": {
               "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
               "dataset_id": "geant4-icru90-stopping-11.4.2",
@@ -856,7 +856,7 @@
   "schema": "ionmc-v13-vc-predictions-1",
   "script": {
     "path": "validation/scripts/stopping/steps_v13.py",
-    "sha256": "8938f99f90f4d9f02378ee164069de760d37bdb867926de0956d128e0303d91f"
+    "sha256": "690f67182e70c9fc1642c6386629d5593dd76c717f57293a6f4c37835a7c2bb3"
   },
   "src_ionmc_tree": "740e60bb3c2c77ac0dc8717c4c228f41ebf182d6"
 }
