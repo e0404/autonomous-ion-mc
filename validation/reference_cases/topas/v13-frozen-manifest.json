@@ -72,7 +72,7 @@
   "validation/reference_cases/topas/he-water-75mevu-v13-idd-em-part7/input.txt": "823c476cf916cbe00f5b946963af3d38f92854b137f291ba7adb7cb01bf9a55f",
   "validation/reference_cases/topas/v13-bundles-manifest.json": "6647fbaf51bd0a8bced1f95d4b57a1207927b9710e4ddaf4394a5967d9e3de96",
   "validation/results/stopping/v3-013/seal-environment.json": "0ea29fc225779fb659cf57476771b8be101086e4a6fc1cf2a64d6cae0bc7a9e1",
-  "validation/results/stopping/v3-013/vc-predictions.json": "1acc2d97c312db8cfe1719a7d0695043abe583feca2f1e38a9163cabf5dc8c56",
+  "validation/results/stopping/v3-013/vc-predictions.json": "4596055b65a522f8dc429edb3e608cc98e28c4dfbd0e7b2daaeb951c7feaafc9",
   "validation/scripts/ion_em/r2_evaluate.py": "cfd89e2a06e7f33876274d9f4b30ddfaf9587ee7120663dab406cec15258a750",
   "validation/scripts/ion_em/r2_io.py": "459ed6742610201e3bee261f3b5688b7495ccfe812c4546cf89c971506637b0a",
   "validation/scripts/ion_em/r2_statistics.py": "fa1bb5c5b372df72fc9d3e9f4daa06d0943db5adb89bd173c53edad1b58bc9c1",
@@ -87,5 +87,5 @@
  "note": "the manifest does not list itself; it is bound by its blob at the signed seal SHA and by its sha256 in the plan pin note",
  "plan": "validation/plans/v3-013-acceptance.md section D step 3",
  "schema": "ionmc-v13-frozen-manifest-1",
- "src_ionmc_tree": "6ac381de391148f95dab04677a1d37ea8de9e72d"
+ "src_ionmc_tree": "5cbd23a244e20b5a986cf69a971c69e3324ebf8a"
 }

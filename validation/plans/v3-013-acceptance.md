@@ -444,3 +444,10 @@ OPEN. Not a clinical claim."
   unchanged). `vc-predictions.json` re-derived on the host at e8e01808 (RUN-20261118T172835Z-ca2c1648, record
   committed and verified): only the `src/ionmc` tree pin changed (→ 6ac381de…). Frozen manifest regenerated (82
   sealed paths). This commit is the seal candidate.
+- 2026-11-18 (orchestrator, seal candidate 11): Codex REVIEW-dd6310ee at 80c24847 (changes_required: lossy normalisation
+  of stateful construction fields and no consumed-output binding for analytic tables) fixed at a3c30226 (exact
+  primitive types for every trusted field; `validate()` rebuilds every table of a registered selection from a fresh
+  `resolve()` and requires bit-for-bit equality — the general closure of this finding class, about 6 ms per
+  validation). Spec hashes and the digest-pinned aggregates unchanged. `vc-predictions.json` re-derived on the host
+  at a3c30226 (RUN-20261118T175042Z-852732ab, record committed and verified): only the `src/ionmc` tree pin changed
+  (→ 5cbd23a2…). Frozen manifest regenerated (82 sealed paths). This commit is the seal candidate.
