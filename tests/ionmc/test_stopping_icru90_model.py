@@ -502,6 +502,7 @@ def test_dom6_missing_object_hash_mismatch_and_parse_failure_raise(
     shutil.copy(cache.manifest_path(ICRU_ID, cdir), cache.manifest_path(ICRU_ID, bad))
     obj = cache.object_path(sha, bad)
     shutil.copy(cache.object_path(sha, cdir), obj)
+    os.chmod(obj, 0o644)  # cache objects may be read-only (host runner: hard-linked store)
     obj.write_bytes(obj.read_bytes() + b"x")
     with pytest.raises(cache.IntegrityError):
         resolve(MID, cache_dir=str(bad))

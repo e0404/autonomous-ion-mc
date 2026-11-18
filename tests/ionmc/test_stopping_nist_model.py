@@ -212,6 +212,7 @@ def test_dom6_missing_object_hash_mismatch_and_parse_failure_raise(
     bad = tmp_path / "bad"
     shutil.copytree(cdir, bad, ignore=shutil.ignore_patterns("*icru*"))
     obj = bad / "objects" / stopping_models.DATASETS[ASTAR_ID].sha256
+    os.chmod(obj, 0o644)  # cache objects may be read-only (host runner: hard-linked store)
     obj.write_bytes(obj.read_bytes() + b"x")
     with pytest.raises(cache.IntegrityError):
         resolve(MID, cache_dir=str(bad))
