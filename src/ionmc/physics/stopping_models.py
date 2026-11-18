@@ -267,6 +267,9 @@ ICRU_I_VALUE_EV = 78.0
 # Expected parsed-content digest (canonical serialisation of stopping_icru90.py: both projectiles,
 # energy per nucleon and electronic S); a digest only, no array values.
 ICRU_CONTENT_SHA256 = "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e"
+# Digest of the start ranges the instance uses (Icru90WaterSource.start_range_sha256); a digest of
+# computed numbers only.
+ICRU_START_RANGE_SHA256 = "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
 # per-species upper window ends [MeV per nucleon]: proton 500 MeV, alpha 250 MeV/u (the alpha array
 # ends at 1000 MeV total = 250 MeV/u, decision 0044 Q8; the resolved end is read from the array)
 _ICRU_E_MAX_PER_U = {"proton": 500.0, "alpha": 250.0}
@@ -290,9 +293,12 @@ def icru_pins() -> tuple[DataPin, ...]:
     )
 
 
-def icru_options(source_name: str, ppd: int, content_sha256: str) -> dict[str, Any]:
+def icru_options(
+    source_name: str, ppd: int, content_sha256: str, start_range_sha256: str
+) -> dict[str, Any]:
     return {
         "content_sha256": content_sha256,
+        "start_range_sha256": start_range_sha256,
         "points_per_decade": int(ppd),
         "source_name": source_name,
         "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
@@ -309,7 +315,7 @@ def registered_icru_spec() -> StoppingModelSpec:
         ICRU_MODEL_ID,
         "1",
         "tabulated",
-        icru_options("icru90", _POINTS_PER_DECADE, ICRU_CONTENT_SHA256),
+        icru_options("icru90", _POINTS_PER_DECADE, ICRU_CONTENT_SHA256, ICRU_START_RANGE_SHA256),
         ICRU_INTERPOLATION,
         ICRU_RANGE_START,
         icru_pins(),
@@ -470,19 +476,25 @@ def spec_of(source: StoppingSource) -> tuple[str, StoppingModelSpec]:
 
     if isinstance(source, Icru90WaterSource):  # structural match incl. the verified pin
         candidate = source.instance_spec()
-        if _structure(STOPPING_MODELS[ICRU_MODEL_ID]) == _structure(candidate):
+        if source.is_exact_implementation() and _structure(
+            STOPPING_MODELS[ICRU_MODEL_ID]
+        ) == _structure(candidate):
             return ICRU_MODEL_ID, STOPPING_MODELS[ICRU_MODEL_ID]
         return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
     if isinstance(source, NistStarCombinedSource):  # structural match incl. the verified pins
         candidate = source.instance_spec()
-        if _structure(STOPPING_MODELS[NIST_MODEL_ID]) == _structure(candidate):
+        if source.is_exact_implementation() and _structure(
+            STOPPING_MODELS[NIST_MODEL_ID]
+        ) == _structure(candidate):
             return NIST_MODEL_ID, STOPPING_MODELS[NIST_MODEL_ID]
         return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
 
     if isinstance(source, TabulatedStoppingSource):  # structural match, content digest included
         candidate = source.instance_spec()
         for model_id, spec in STOPPING_MODELS.items():
-            if _structure(spec) == _structure(candidate):
+            if type(source) is TabulatedStoppingSource and _structure(spec) == _structure(
+                candidate
+            ):
                 return model_id, spec
         return UNREGISTERED_ID, replace(candidate, model_id=UNREGISTERED_ID, decision="user")
     if type(source) is not BetheStoppingSource:

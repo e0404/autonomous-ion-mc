@@ -34,6 +34,7 @@ is downloaded. No array value is stored in Git.
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass
 from typing import Any
@@ -45,7 +46,7 @@ from ionmc.data import cache as _cache
 from ionmc.data.icru90 import Icru90Water, load_icru90_water
 from ionmc.data.registry import DATASETS
 from ionmc.errors import UnsupportedCombinationError
-from ionmc.materials import Material
+from ionmc.materials import WATER, Material
 from ionmc.physics.projectiles import Projectile
 from ionmc.physics.stopping import (
     StoppingTable,
@@ -60,6 +61,7 @@ from ionmc.physics.stopping_models import (
     ICRU_MODEL_ID,
     ICRU_RANGE_START,
     ICRU_SPECIES,
+    ICRU_START_RANGE_SHA256,
     MATERIAL_RULE_WATER,
     MATERIAL_RULE_WATER_I78,
     STOPPING_MODELS,
@@ -180,14 +182,48 @@ class Icru90WaterSource:
         src = self._source(projectile)
         return float(src.e_min_per_u), float(src.e_max_per_u)
 
+    def is_exact_implementation(self) -> bool:
+        """True only for the exact classes of this module and of the generic tabulated source (a
+        subclass may override ``table`` and is never a registered identity)."""
+        return (
+            type(self) is Icru90WaterSource
+            and type(self.proton) is TabulatedStoppingSource
+            and type(self.alpha) is TabulatedStoppingSource
+        )
+
+    def start_range_sha256(self) -> str:
+        """Digest of the start ranges the instance actually uses: the instance's own
+        ``start_range`` evaluated per projectile (alpha, proton) at its ``e_min`` exactly as
+        ``table`` does (liquid water, the model grid), as little-endian float64. A replaced
+        callable that gives other values changes this digest; failure to evaluate gives a
+        digest of the error text (never the registered one)."""
+        from ionmc.physics.projectiles import ALPHA, PROTON  # noqa: PLC0415
+        from ionmc.physics.stopping import log_grid  # noqa: PLC0415
+
+        h = hashlib.sha256()
+        for proj, src in ((ALPHA, self.alpha), (PROTON, self.proton)):
+            try:
+                e_a, s_a = src._arrays[proj.name]
+                e = log_grid(src.e_min_per_u, src.e_max_per_u, src.points_per_decade)
+                s = np.exp(np.interp(np.log(e), np.log(e_a), np.log(s_a)))
+                r0 = np.float64(src._start(proj, WATER, e, s))
+                h.update(proj.name.encode("ascii") + b"\0" + r0.astype("<f8").tobytes())
+            except Exception as exc:  # noqa: BLE001 - any failure is a non-registered identity
+                h.update(b"error:" + repr(exc).encode("utf-8", "replace"))
+        return h.hexdigest()
+
     def instance_spec(self) -> StoppingModelSpec:
         """The spec built from the fields of this instance, for the structural match of
         ``spec_of``: the registered pin only for arrays loaded from the verified cache."""
         meta = self.proton.metadata
+        start_digest = self.start_range_sha256()
         live = self.content_sha256  # recomputed from the live arrays, never from the metadata
         pins = (
             icru_pins()
             if live == ICRU_CONTENT_SHA256
+            and start_digest == ICRU_START_RANGE_SHA256
+            and self.proton.start_range_id == ICRU_RANGE_START
+            and self.alpha.start_range_id == ICRU_RANGE_START
             and meta.get("dataset_id") == ICRU_DATASET_ID
             and meta.get("dataset_sha256") == DATASETS[ICRU_DATASET_ID].sha256
             and self.alpha.metadata.get("dataset_sha256") == meta.get("dataset_sha256")
@@ -197,7 +233,7 @@ class Icru90WaterSource:
         lo = {"proton": float(self.proton.e_min_per_u), "alpha": float(self.alpha.e_min_per_u)}
         hi = {"proton": float(self.proton.e_max_per_u), "alpha": float(self.alpha.e_max_per_u)}
         ppd = self.proton.points_per_decade
-        options = icru_options(str(self.name), ppd, live)
+        options = icru_options(str(self.name), ppd, live, start_digest)
         if self.alpha.points_per_decade != ppd:
             options["points_per_decade_alpha"] = int(self.alpha.points_per_decade)
         return StoppingModelSpec(

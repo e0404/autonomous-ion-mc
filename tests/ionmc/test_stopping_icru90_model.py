@@ -606,3 +606,55 @@ def test_constructed_object_claiming_the_pinned_metadata_is_unregistered() -> No
     mid, spec = spec_of(build_icru90_source(claimed))
     assert mid == "unregistered" and spec.data == ()
     assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+# ---- exact implementations and the effective start range (review REVIEW-c8c734b6) ----
+
+
+def test_replaced_start_range_callable_is_unregistered_without_pins_or_evidence(
+    cdir: Path,
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert spec_of(model)[0] == MID and model.is_exact_implementation()
+    inner = model.proton
+    other = build_icru90_source(load_icru90_water(cache.verify(ICRU_ID, cdir)))
+    object.__setattr__(other.proton, "start_range", lambda *_a: 1.0)  # same id, arrays, metadata
+    assert other.proton.start_range_id == inner.start_range_id
+    mid, spec = spec_of(other)
+    assert mid == "unregistered" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+    assert spec_of(model)[0] == MID  # the untouched resolved source is still registered
+
+
+def test_subclasses_never_keep_the_registered_identity(cdir: Path) -> None:
+    from ionmc.physics.stopping_tabulated import TabulatedStoppingSource
+
+    model = resolve(MID, cache_dir=str(cdir))
+
+    class SubComposite(Icru90WaterSource):
+        def table(self, material: Any, projectile: Any) -> Any:
+            return super().table(material, projectile)
+
+    class SubInner(TabulatedStoppingSource):
+        pass
+
+    sub = SubComposite(model.proton, model.alpha, model.name)
+    assert spec_of(sub)[0] == "unregistered"
+    inner = model.proton
+    sub_inner = SubInner(
+        inner.name,
+        inner.metadata,
+        {"proton": inner._arrays["proton"]},
+        inner.e_min_per_u,
+        inner.e_max_per_u,
+        inner.start_range_id,
+        inner.start_range,
+        inner.material_rule,
+        inner.points_per_decade,
+    )
+    mixed = Icru90WaterSource.__new__(Icru90WaterSource)
+    for k, v in (("proton", sub_inner), ("alpha", model.alpha), ("name", model.name)):
+        object.__setattr__(mixed, k, v)
+    assert spec_of(mixed)[0] == "unregistered"
+    assert spec_of(sub_inner)[0] == "unregistered"
+    assert spec_of(model)[0] == MID

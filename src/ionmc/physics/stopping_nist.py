@@ -110,6 +110,16 @@ class NistStarCombinedSource:
         end = float(src.star_table.energy_mev[-1]) / projectile.a
         return float(src.e_min_per_u), min(float(src.e_max_per_u), end)
 
+    def is_exact_implementation(self) -> bool:
+        """True only for the exact classes (a subclass may override ``table``). The start range of
+        this model is read from the table's ``csda_range``, which is part of the content digest,
+        so no separate start-range digest is needed."""
+        return (
+            type(self) is NistStarCombinedSource
+            and type(self.pstar) is NistStarStoppingSource
+            and type(self.astar) is NistStarStoppingSource
+        )
+
     def instance_spec(self) -> StoppingModelSpec:
         """The spec built from the fields of this instance, for the structural match of
         ``spec_of``: registered pins only for tables loaded from the verified cache."""

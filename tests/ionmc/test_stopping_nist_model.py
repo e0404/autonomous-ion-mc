@@ -364,3 +364,22 @@ def test_constructed_object_claiming_the_pinned_metadata_is_unregistered(cdir: P
     mid, spec = spec_of(other)
     assert mid == "unregistered" and spec_sha256(spec) not in STOPPING_EVIDENCE
     assert spec_of(model)[0] == MID and spec_sha256(spec_of(model)[1]) in STOPPING_EVIDENCE
+
+
+def test_subclasses_never_keep_the_registered_nist_identity(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert model.is_exact_implementation() and spec_of(model)[0] == MID
+
+    class SubComposite(NistStarCombinedSource):
+        def table(self, material: Any, projectile: Any) -> Any:
+            return super().table(material, projectile)
+
+    class SubStar(NistStarStoppingSource):
+        pass
+
+    assert spec_of(SubComposite(model.pstar, model.astar))[0] == "unregistered"
+    star = model.pstar
+    inner = SubStar(star.star_table, star.e_min_per_u, star.e_max_per_u, star.points_per_decade)
+    mid, spec = spec_of(NistStarCombinedSource(inner, model.astar))
+    assert mid == "unregistered" and spec_sha256(spec) not in STOPPING_EVIDENCE
+    assert spec_of(model)[0] == MID
