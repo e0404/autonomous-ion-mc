@@ -452,6 +452,8 @@ def test_block_validator_rejects_a_pin_of_a_projectile_that_was_not_transported(
 
 # ---- PER-1: clean-process round trip ----
 
+_SRC_DIR = str(Path(__file__).resolve().parents[2] / "src")
+_SRC_PRELUDE = f"import sys; sys.path.insert(0, {_SRC_DIR!r})\n"
 _READER = r"""
 import json, sys
 from ionmc import materials
@@ -496,7 +498,9 @@ def test_per1_round_trip_in_a_clean_process(proj: Any, model: str, tmp_path: Pat
     doc_path = tmp_path / "step.json"
     _write_like_steps_v8(summary, doc_path)
     out = subprocess.run(  # noqa: S603
-        [sys.executable, "-I", "-c", _READER, str(doc_path)],
+        # -I ignores PYTHONPATH (clean process); the package path is injected explicitly so that
+        # the row also runs where ionmc is not installed into site-packages (host runner)
+        [sys.executable, "-I", "-c", _SRC_PRELUDE + _READER, str(doc_path)],
         capture_output=True,
         text=True,
         cwd=tmp_path,

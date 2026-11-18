@@ -80,7 +80,7 @@
   "validation/scripts/stopping/env_seal.py": "2e046f11c67606c7c3d4422cb8763d7c01251a868cb91d052c59d4f7f039e37b",
   "validation/scripts/stopping/sealed_launch.py": "9ffea96b2d582ed46fceb3044f022df8fcef3bf5f4cf0d1398ff212bc8fcf0e1",
   "validation/scripts/stopping/steps_v13.py": "8938f99f90f4d9f02378ee164069de760d37bdb867926de0956d128e0303d91f",
-  "validation/scripts/stopping/v13_evaluate.py": "77dba18a3d902260aa557a399587c6d36ee07286434b6745f0401eebb38917a3"
+  "validation/scripts/stopping/v13_evaluate.py": "ee0b49ae20a092c7ef6e5715511f5b2512a558d71adf8da917043f90219c95fb"
  },
  "note": "the manifest does not list itself; it is bound by its blob at the signed seal SHA and by its sha256 in the plan pin note",
  "plan": "validation/plans/v3-013-acceptance.md section D step 3",

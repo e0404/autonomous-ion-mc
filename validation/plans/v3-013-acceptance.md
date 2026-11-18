@@ -381,3 +381,10 @@ OPEN. Not a clinical claim."
   the seal candidate; the seal is the signed Codex review of its exact SHA (pending IR-20261117-151541-ED9CA9). Rule
   adopted: nothing under `src/ionmc` (notices included) changes after the seal material is generated; a change means a
   new seal. No evidence run exists.
+- 2026-11-18 (orchestrator, seal candidate 3): the host runner exports `GIT_WORK_TREE=/workspace` (diagnostic
+  RUN-20261118T123758Z-3ee984a3), which redirected the `git -C <repo>` calls of the manifest generator and the
+  evaluator when run on another repository (the synthetic-repo tests failed on the host, RUN-20261118T122616Z-a4ccfae3
+  and RUN-20261118T123658Z-f24e84de; the real workspace checks were correct: tree 5be8b2b8…, clean). Both helpers now
+  drop inherited `GIT_*` variables; PER-1's clean-process reader injects the package path explicitly (`python -I`
+  ignores PYTHONPATH and the host venv has no site-packages install). Two sealed files changed → manifest regenerated.
+  This commit is the seal candidate; the seal is the signed Codex review of its exact SHA (pending the service).

@@ -30,6 +30,7 @@ import argparse
 import ast
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -62,8 +63,11 @@ def sha256_file(path: Path) -> str:
 
 
 def _git(repo: Path, *args: str) -> str:
+    # inherited GIT_* variables (the host runner exports GIT_WORK_TREE=/workspace) would redirect
+    # "git -C" to another work tree: drop them so the explicit repository is the only one used
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False, env=env
     )
     if proc.returncode != 0:
         raise SystemExit(f"git {' '.join(args)} failed: {proc.stderr.strip()}")

@@ -54,6 +54,7 @@ import importlib
 import importlib.util
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -152,9 +153,16 @@ EVIDENCE_FAIL = "failed:V-C1"
 # ---------------------------------------------------------------------------------------------
 
 
+def _git_env() -> dict[str, str]:
+    """The environment for git calls on an explicit repository: inherited ``GIT_*`` variables
+    (the controlled host runner exports ``GIT_WORK_TREE=/workspace``) would redirect ``git -C``
+    to another work tree, so they are dropped."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def git(repo: Path | str, *args: str) -> bytes:
     proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        ["git", "-C", str(repo), *args], capture_output=True, check=False
+        ["git", "-C", str(repo), *args], capture_output=True, check=False, env=_git_env()
     )
     if proc.returncode != 0:
         raise RecordError(f"git {' '.join(args)} failed: {proc.stderr.decode().strip()}")
