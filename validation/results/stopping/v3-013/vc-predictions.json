@@ -841,7 +841,7 @@
   "schema": "ionmc-v13-vc-predictions-1",
   "script": {
     "path": "validation/scripts/stopping/steps_v13.py",
-    "sha256": "8910dc4104c91cd0988483b7d325069f52b3f78074d61c8fc34fe3ec2320feda"
+    "sha256": "8938f99f90f4d9f02378ee164069de760d37bdb867926de0956d128e0303d91f"
   },
   "src_ionmc_tree": "68db1d3b6864313dd4b38a83290149793cf919f3"
 }

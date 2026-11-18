@@ -355,3 +355,12 @@ OPEN. Not a clinical claim."
 - 2026-11-17 (orchestrator): **frozen at 7c139ca1** (Codex REVIEW-65665aa0ec074fa285c5e65da13646be, pass, signed; scientific review two passes applied); S1 starts from this commit.
 - 2026-11-17 (orchestrator, S5a): seal material part 1 committed (bundles manifest digest aa2f24e436f5cfb22b6bc0920367bfe7d2677bb00ea05cd9a05d407cd1466b83, predictions file sha256 f30ac1f7265ace91cbf341d337a98e5103da68b9adda558d032d79042f733663); no run yet.
 - 2026-11-18 (orchestrator, S5b): seal material part 2 committed (evaluator sha256 77dba18a3d902260aa557a399587c6d36ee07286434b6745f0401eebb38917a3, env_digest sha256 c49f3106ea994e25df01b6cee215e2e0436fbd4d3a82d9f6c83e43984df2bc10); seal-environment.json pending the controlled host run.
+- 2026-11-18 (orchestrator, seal candidate): `seal-environment.json` from the controlled host run RUN-20261118T120550Z-168e03a6
+  (`env_digest.py --write` through `sealed_launch.py` at 4130d569); the host numpy digest (269e58d9…) differs from the
+  sandbox's (f98a87d5…) while interpreter, stdlib, warp and uv.lock agree, so the seal pins are host-produced:
+  `vc-predictions.json` replaced by the output of RUN-20261118T120833Z-627be664 (`steps_v13.py predict --cache-dir`
+  at 6abda9eb; two earlier attempts RUN-20261118T120658Z-7ce8d7c7 and RUN-20261118T120706Z-13e646d1 failed at
+  import, before any computation) — every value, table identity and table sha256 equals the sandbox file; only the
+  pinned script sha256 changed (the `--cache-dir` option). Frozen manifest `v13-frozen-manifest.json` written
+  (80 sealed paths, `src/ionmc` tree 68db1d3b…). This commit is the seal candidate; the seal is the signed Codex
+  review of its exact SHA (pending the codex-worker service, IR-20261117-151541-ED9CA9). No evidence run exists.
