@@ -168,8 +168,10 @@ def stdlib_dir() -> Path:
     return Path(sysconfig.get_paths()["stdlib"]).resolve()
 
 
-def _stdlib_walk() -> list[Path]:
-    base = stdlib_dir()
+def _stdlib_walk(base: Path | None = None) -> list[Path]:
+    """Every file below ``base`` (default: the stdlib directory) outside :data:`STDLIB_EXCLUDED`
+    and ``__pycache__``, in sorted walk order."""
+    base = stdlib_dir() if base is None else base
     out = []
     for root, dirs, files in os.walk(base):
         rel_root = Path(root).relative_to(base)
@@ -504,3 +506,65 @@ def check_launch(launch: Mapping[str, Any], target_file: Path | None = None) -> 
         "launcher_record": summary,
         "launch_ok": True,
     }
+
+
+# ---------------------------------------------------------------------------------------------
+# Complete-distribution digests (V3-013 step S5b; used by ``env_digest.py``)
+# ---------------------------------------------------------------------------------------------
+
+
+def platstdlib_dir() -> Path:
+    """The platform-specific stdlib directory of the running interpreter (``sysconfig``)."""
+    return Path(sysconfig.get_paths()["platstdlib"]).resolve()
+
+
+def tree_digest(entries: Mapping[str, str]) -> str:
+    """sha256 over the sorted list of (relative path, file sha256): one line
+    ``<path>\\0<sha256>\\n`` per entry, sorted by path."""
+    h = hashlib.sha256()
+    for rel in sorted(entries):
+        h.update(f"{rel}\0{entries[rel]}\n".encode())
+    return h.hexdigest()
+
+
+def directory_files(base: Path) -> dict[str, str]:
+    """{path relative to ``base``: sha256} of every file below ``base`` outside the stdlib
+    exclusions (:data:`STDLIB_EXCLUDED` at the top level, ``__pycache__`` anywhere), compiled
+    extensions and data files included."""
+    return {p.relative_to(base).as_posix(): _sha256_file(p) for p in _stdlib_walk(base)}
+
+
+def distribution_files(name: str) -> dict[str, str]:
+    """{path relative to site-packages: sha256} of the COMPLETE installed distribution ``name``:
+    every file listed in its ``RECORD`` (``importlib.metadata``; the ``RECORD`` file itself
+    included; ``__pycache__`` / ``.pyc`` rows excluded because bytecode is never read under the
+    sealed launcher) plus every file of every ``*.libs`` directory next to the package (the
+    vendored native libraries, e.g. ``numpy.libs``). A listed file that is missing, a
+    distribution without ``RECORD`` or a missing distribution fails closed."""
+    try:
+        dist = importlib.metadata.distribution(name)
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise EnvironmentSealError(f"distribution {name} is not installed") from exc
+    files = dist.files
+    if files is None:
+        raise EnvironmentSealError(f"distribution {name} has no RECORD")
+    site = Path(str(dist.locate_file(""))).resolve()
+    out: dict[str, str] = {}
+    for f in files:
+        rel = f.as_posix()
+        if "__pycache__" in f.parts or rel.endswith(".pyc"):
+            continue
+        path = site / rel
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise EnvironmentSealError(f"RECORD of {name} lists {rel}, which is missing")
+        out[rel] = _sha256_file(path)
+    if not out:
+        raise EnvironmentSealError(f"RECORD of {name} lists no file")
+    for libs in sorted(site.glob("*.libs")):
+        if libs.is_dir():
+            for p in sorted(libs.rglob("*")):
+                if p.is_file():
+                    out[p.relative_to(site).as_posix()] = _sha256_file(p)
+    return out
