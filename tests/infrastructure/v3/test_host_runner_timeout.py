@@ -5,6 +5,14 @@ IR-20261118-201459-7CFC95 (option A) so that one frozen V3-013 ionmc sample
 (1e6 He histories, warp-cpu float64, measured at up to ~8600 s) completes in a
 single controlled run. The bound is still enforced fail-closed before any
 run directory is created or any process is launched.
+
+Provenance committed with this change: the operator's request and response
+(``reference_requests/interventions/IR-20261118-201459-7CFC95/``) and the three
+signed host-run records of the timing smokes
+(``validation/results/stopping/v3-013/host-records/RUN-20261118T200117Z-173deba7.json``,
+``RUN-20261118T200243Z-7502b1a2.json``, ``RUN-20261118T200438Z-5cb9e01e.json``;
+byte-identical to the V3-013 branch copies, verifiable against
+``infrastructure/keys/trusted_attestation_keys.json``).
 """
 
 from __future__ import annotations

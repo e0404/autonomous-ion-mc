@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "IR-20261118-201459-7CFC95",
+  "resolved_at_utc": "2026-11-19T08:05:26.338086+00:00",
+  "task_id": "V3-013",
+  "response": "A: prepare the PR for IR-20261118-201459-7CFC95.\n\nI authorize increasing the host-runner maximum timeout from 7200 to\n14400 seconds through the reviewed infrastructure workflow. Preserve\nthe single-heavy-job rule, existing thread limits, storage checks,\nsample definitions and scientific acceptance criteria. Request the\nappropriate timeout explicitly for these runs.\n\nThe maintainer found that host_runner.py is included in the V3-013\nfrozen manifest. Therefore, do not assume the existing seal survives\nthis change. Incorporate the infrastructure update, regenerate affected\nmanifest records, and obtain the required exact-SHA reviews and seal\nbefore collecting evidence. Preserve the previous records.\n\nRecord this response and continue the autonomous experiment loop.\nCompletion of this infrastructure task or intervention is a checkpoint:\nproceed to the pending validation and subsequent justified work without\nwaiting for another instruction. Continue under all existing gates and\nstop only under the previously specified stopping conditions.",
+  "operator_note": "Operator message received in the orchestrator session on 2026-11-19; option A: the orchestrator prepares V3-INFRA-008 (MAX_TIMEOUT_SECONDS 7200 → 14400) through the reviewed workflow; host_runner.py is sealed in the V3-013 manifest, so the change is merged into V3-013 and a new seal with exact-SHA reviews precedes any evidence run; previous records preserved."
+}

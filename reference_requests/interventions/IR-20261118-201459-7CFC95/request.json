@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "git_sha": "8ca9d4fcceb729c234af5349cd9ccebe3edb7dfe",
+  "request_id": "IR-20261118-201459-7CFC95",
+  "created_at_utc": "2026-11-18T20:14:59.553932+00:00",
+  "task_id": "V3-013",
+  "category": "authorization",
+  "summary": "The frozen V3-013 ionmc samples (1e6 He histories per case and model, warp-cpu float64, one run each) cannot complete inside the controlled host runner's hard cap of 7200 s: three timing smokes at a non-evidence seed (k=99) measured 4.5 ms/history at 75 MeV/u and 8.6 ms/history at 200 MeV/u (10 000 → 93 s, 50 000 → 437 s), i.e. ≈ 75 min, ≈ 110 min and ≈ 143 min for the three cases. The seal (REVIEW-0e6ca486 at ad73d94e, pin fd30ee82 reviewed by REVIEW-7db57441) is in place and no evidence run has started. I need one authorization: (A, recommended) raise MAX_TIMEOUT_SECONDS in infrastructure/host_runner/host_runner.py (line 34, currently 7200) to 14400, which keeps the frozen plan, the seal and the single-process rule unchanged; or (B) authorize me to amend the plan and the sealed evaluator so that each 1e6 sample is produced as four chunked host runs (--scale 0.25, k = 0..3, 40 batches each, 160 paired batches in total), which requires a new seal and its two reviews.",
+  "investigation": {
+    "blocked_claim": "The V3-013 ionmc evidence samples (plan A.6 / D step 4) cannot be executed as frozen because a single 1e6-history warp-cpu run exceeds the host runner's 7200 s cap for the 125 and 200 MeV/u cases.",
+    "finding": "infrastructure/host_runner/host_runner.py:34 MAX_TIMEOUT_SECONDS = 7200; measured 8.6 ms/history at 200 MeV/u (RUN-20261118T200243Z-7502b1a2: 10 000 histories 93.2 s; RUN-20261118T200438Z-5cb9e01e: 50 000 histories 437 s) and 4.5 ms/history at 75 MeV/u (RUN-20261118T200117Z-173deba7: 10 000 histories 52.0 s) => 1e6 histories ~ 4500 / ~6500 (interpolated) / ~8600 s for cases 1/2/3",
+    "attempts": [
+      {
+        "approach": "timing smokes at the non-evidence seed k=99 before any evidence run",
+        "outcome": "cap exceeded for the longest case; all smokes exit 0, pass, counters zero, identity blocks equal the sealed pins, environment digests equal the seal, warp_modules identical",
+        "artifact": "the three host-run records (materialized in .ionmc-cache/host-run-records)"
+      }
+    ],
+    "alternatives": [
+      {
+        "option": "--scale < 1 (reduced sample)",
+        "rejected": "the sealed evaluator requires histories == 1e6 and reduced == False as frozen in the plan"
+      },
+      {
+        "option": "more threads",
+        "rejected": "the operator's two-thread rule stands and the Warp CPU backend executes kernels single-threaded"
+      },
+      {
+        "option": "raise the cap myself",
+        "rejected": "it is an operator execution limit (directive: preserve all execution limits)"
+      },
+      {
+        "option": "A: raise the cap to 14400 (recommended)",
+        "status": "needs authorization; keeps the frozen plan and the seal"
+      },
+      {
+        "option": "B: chunked samples (4 x 250k, k 0..3)",
+        "status": "needs authorization to edit a sealed script; new seal + two reviews"
+      }
+    ],
+    "state": {
+      "seal": "REVIEW-0e6ca486200b47e2a958376470ad50f5 at ad73d94e; pin fd30ee82 reviewed by REVIEW-7db5744112504c6aa16aa91da258b6d8",
+      "evidence_runs_started": 0,
+      "evidence_seeds_used": "none (k=0 untouched; smokes used k=99)"
+    },
+    "budget": "Operator: one decision. A: one-line change (+ optional INFRA PR by me, ~30 min). B: ~1-2 h of re-seal overhead by me. Six samples ~10 h compute either way, one at a time.",
+    "no_clinical_claim": true
+  },
+  "reason_autonomous_resolution_not_possible": "Category 4 (authorization): the runner cap is an execution limit set in the experiment's infrastructure that I must preserve (\"Preserve all … execution limits\"), so I will not change it on my own; and option B edits a sealed validation script, which your earlier authorization (IR-20261118-182151-FD0238) covered only for the specific cache_dir fix. Option A details: the MCP server invokes the runner script from the main clone at every call (infrastructure/mcp/host_runner_mcp.py uses REPO_ROOT), so a merged one-line change takes effect without a restart; I can prepare it as task V3-INFRA-008 through the controlled workflow (commit, Codex review, validation, PR, merge) if you say so, or you can apply it directly. Each sample run stays a single process with two threads; the six samples total ≈ 10 h of compute, run strictly one at a time. Option B is scientifically equivalent (same seed family ion13, same histories per case, common random numbers kept per chunk, delete-one-batch jackknife over 160 instead of 40 paired batches) but changes the frozen sample definition after the seal and costs ≈ 1–2 h of re-seal overhead; if chosen, the amendment would be prospective and dated, and the k=0..3 seeds have not been seen (only k=99 was used for the smokes). Measurements: RUN-20261118T200117Z-173deba7 (case 1, icru90, 10 000 histories, 52.0 s wall), RUN-20261118T200243Z-7502b1a2 (case 3, bethe, 10 000, 93.2 s), RUN-20261118T200438Z-5cb9e01e (case 3, bethe, 50 000, 437 s); all exit 0, pass, counters zero, identity blocks equal the sealed pins, environment digests equal the seal, Warp kernel attestations identical. Not a clinical claim.",
+  "requested_input": "Reply \"A: prepare the PR\" (I create V3-INFRA-008 raising MAX_TIMEOUT_SECONDS to 14400 through the controlled workflow and merge it after review/CI), or \"A: applied\" (you changed it in the main clone on v3/develop), or \"B: amend\" (authorizing the described edit of validation/plans/v3-013-acceptance.md and validation/scripts/stopping/v13_evaluate.py plus tests, followed by a new seal and reviews). No scientific tolerance, acceptance criterion or review gate changes are requested under either option.",
+  "decisions_or_tasks_blocked": null,
+  "status": "resolved",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  },
+  "resolved_at_utc": "2026-11-19T08:05:26.338086+00:00",
+  "response_file": "response.json"
+}
