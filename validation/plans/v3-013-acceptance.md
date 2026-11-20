@@ -493,3 +493,15 @@ OPEN. Not a clinical claim."
   host runner's cap of 7200 s per run. No evidence seed (k = 0) has been used. Execution is paused pending the
   operator's decision IR-20261118-201459-7CFC95 (raise the runner cap, or a prospective amendment to chunked
   samples with a new seal). Not a clinical claim.
+- 2026-11-20 (orchestrator, seal candidate 14 — re-seal after V3-INFRA-008): the operator chose option A of
+  IR-20261118-201459-7CFC95 (raise the controlled host runner's timeout ceiling from 7200 s to 14400 s through the
+  reviewed infrastructure workflow; V3-INFRA-008, PR #94, develop 9926cc0, Codex REVIEW-8393f38b pass, CI green)
+  and noted that `infrastructure/host_runner/host_runner.py` is part of the frozen manifest, so the previous seal
+  (REVIEW-0e6ca486 at ad73d94e, pin fd30ee82) does not survive the change. develop merged into V3-013 at e0e0707e
+  (operator fast-forward, IR-20261119-083449-21B26A; the worktree git directory is read-only in the sandbox). Frozen
+  manifest regenerated at this commit: 82 sealed paths, only the `host_runner.py` hash changed; `src/ionmc` tree
+  54d226da… and `vc-predictions.json` (script sha256 9bf72756…) unchanged, so no host re-derivation was needed.
+  Sample definitions, tolerances, seeds and acceptance criteria are unchanged; the three timing-smoke records remain
+  committed; no evidence seed has been used. This commit is the seal candidate; its signed Codex review becomes the
+  new seal, recorded by the next pin commit (which replaces `seal-review.json` and the one seal pin note, keeping the
+  superseded pin in prose). Sample runs will request `timeout_seconds` 14400 explicitly. Not a clinical claim.

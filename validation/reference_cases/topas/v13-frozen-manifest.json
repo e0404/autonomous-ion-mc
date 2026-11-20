@@ -10,7 +10,7 @@
   "infrastructure/experiment_v3/sandbox_runtime.py": "8166c2dfba5658291f30e33566cb0dfb0516260db0a31f98f71af9b2af06ff46",
   "infrastructure/experiment_v3/storage_guard.py": "a273c711baf826cdb00ed9349191d8b820fee9c89d170c4367fa82c88f29e111",
   "infrastructure/experiment_v3/worker_boundary.py": "0d6281ae928ed2779aa3d281c3696be941dd626061b881cfcdaeebd30bb3372d",
-  "infrastructure/host_runner/host_runner.py": "757bd6dcff8fb4170f054946a0986a10172b271bef22479a5b15e89c58601fdf",
+  "infrastructure/host_runner/host_runner.py": "25546826dccdc82b56577f4fe263b44025c67612b39578deaea10707789111d7",
   "infrastructure/keys/trusted_attestation_keys.json": "6eb14657048b12e2e23fa1df87af2f0a2ec0c3adde2b993dba9d5454045c29f4",
   "infrastructure/validation/host_run_records.py": "3ed480c22f0e3eea0f228569f8b19102fb168cba07b62d43a86d74ea6f5ea66c",
   "infrastructure/validation/review_records.py": "7cd7b02f87db666fa870e37238be0a639ff20494b8d1d4a8489006d5b6af28fd",
