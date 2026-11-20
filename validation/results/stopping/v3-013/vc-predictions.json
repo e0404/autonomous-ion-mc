@@ -1,0 +1,862 @@
+{
+  "constants": {
+    "n_budget": 100000.0,
+    "n_histories": 1000000,
+    "se_r80_1e5_mm": 0.01,
+    "sigma_exp_mm": 0.00447213595499958,
+    "tost_z": 1.645,
+    "vc2_precondition_mm": 0.05471332729194862,
+    "vc2_tolerance_floor_mm": 0.02,
+    "vc2_tolerance_fraction": 0.1,
+    "vc2d_informative_fraction": 0.0005,
+    "vc2d_round_trip": 0.0001
+  },
+  "energies": [
+    {
+      "box_length_mm": 100.0,
+      "case": 1,
+      "delta_r_pred_d_mm": 0.006124332542206901,
+      "delta_r_pred_mm": 0.00612433254221223,
+      "e0_total_mev": 300.0,
+      "e_mev_per_u": 75.0,
+      "idd_bin_mm": 0.05,
+      "r_csda_default_mm": 46.68961763497285,
+      "r_csda_icru90_mm": 46.695741967515055,
+      "r_plan_mm": 46.7,
+      "sigma_e_mev": 0.0,
+      "vc2_gate": "non-informative (gate for this energy is V-C2-D alone)",
+      "vc2_precondition_holds": false,
+      "vc2_tolerance_mm": 0.02,
+      "vc2d_difference_tolerance_mm": 0.004668961763497285,
+      "vc2d_gate": "substitute: CC-T (both backends) + CC-ID + PER-1 for icru90-water-v1",
+      "vc2d_informative": false,
+      "vc2d_round_trip_tolerance_mm": {
+        "bethe-ionmc-v1": 0.004668961763497285,
+        "icru90-water-v1": 0.004669574196751506
+      },
+      "vc2d_threshold_mm": 0.023344808817486424
+    },
+    {
+      "box_length_mm": 200.0,
+      "case": 2,
+      "delta_r_pred_d_mm": 0.05854056476459846,
+      "delta_r_pred_mm": 0.05854056476460201,
+      "e0_total_mev": 500.0,
+      "e_mev_per_u": 125.0,
+      "idd_bin_mm": 0.05,
+      "r_csda_default_mm": 115.70412205138857,
+      "r_csda_icru90_mm": 115.76266261615316,
+      "r_plan_mm": 115.7,
+      "sigma_e_mev": 0.0,
+      "vc2_gate": "gating",
+      "vc2_precondition_holds": true,
+      "vc2_tolerance_mm": 0.02,
+      "vc2d_difference_tolerance_mm": 0.011570412205138858,
+      "vc2d_gate": "gating",
+      "vc2d_informative": true,
+      "vc2d_round_trip_tolerance_mm": {
+        "bethe-ionmc-v1": 0.011570412205138858,
+        "icru90-water-v1": 0.011576266261615316
+      },
+      "vc2d_threshold_mm": 0.05785206102569428
+    },
+    {
+      "box_length_mm": 350.0,
+      "case": 3,
+      "delta_r_pred_d_mm": 0.16256972754092658,
+      "delta_r_pred_mm": 0.16256972754089105,
+      "e0_total_mev": 800.0,
+      "e_mev_per_u": 200.0,
+      "idd_bin_mm": 0.1,
+      "r_csda_default_mm": 261.9258204078876,
+      "r_csda_icru90_mm": 262.08839013542854,
+      "r_plan_mm": 261.9,
+      "sigma_e_mev": 0.0,
+      "vc2_gate": "gating",
+      "vc2_precondition_holds": true,
+      "vc2_tolerance_mm": 0.02,
+      "vc2d_difference_tolerance_mm": 0.026192582040788764,
+      "vc2d_gate": "gating",
+      "vc2d_informative": true,
+      "vc2d_round_trip_tolerance_mm": {
+        "bethe-ionmc-v1": 0.026192582040788764,
+        "icru90-water-v1": 0.026208839013542855
+      },
+      "vc2d_threshold_mm": 0.13096291020394382
+    }
+  ],
+  "identity_blocks": {
+    "bethe-ionmc-v1": {
+      "1": {
+        "cache_dir": null,
+        "circular_rows": [],
+        "content_sha256": null,
+        "data_declared": [],
+        "data_used": [],
+        "decision": "0044",
+        "domain": {
+          "e_max_per_u": {
+            "alpha": 500.0,
+            "carbon12": 500.0,
+            "deuteron": 500.0,
+            "oxygen16": 500.0,
+            "proton": 500.0
+          },
+          "e_min_per_u": {
+            "alpha": 1.0,
+            "carbon12": 1.0,
+            "deuteron": 1.0,
+            "oxygen16": 1.0,
+            "proton": 1.0
+          },
+          "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+          "species": [
+            "alpha",
+            "carbon12",
+            "deuteron",
+            "oxygen16",
+            "proton"
+          ]
+        },
+        "evidence_at_run": [
+          {
+            "graded_at_sha": null,
+            "plan": "validation/plans/v3-008-acceptance.md",
+            "row": null,
+            "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+            "status": "as-graded:0043"
+          }
+        ],
+        "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+        "kind": "analytic",
+        "mcs_proton_path_stopping": "bethe-ionmc-v1",
+        "model_id_effective": "bethe-ionmc-v1",
+        "model_id_requested": "bethe-ionmc-v1",
+        "options": {
+          "barkas": true,
+          "bloch": true,
+          "class": "BetheStoppingSource",
+          "effective_charge": true,
+          "effective_charge_model": "barkas-125",
+          "i_value": "material",
+          "ls": "off",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "mott": true,
+          "points_per_decade": 200,
+          "shell": true,
+          "source_name": "bethe"
+        },
+        "range_construction": "exact-loglog-quadrature-v1",
+        "range_start": "constant-S approximation a*E_min/S(E_min)",
+        "selected_by": "stopping_model",
+        "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+        "species_transported": [
+          "alpha"
+        ],
+        "version": "1"
+      },
+      "2": {
+        "cache_dir": null,
+        "circular_rows": [],
+        "content_sha256": null,
+        "data_declared": [],
+        "data_used": [],
+        "decision": "0044",
+        "domain": {
+          "e_max_per_u": {
+            "alpha": 500.0,
+            "carbon12": 500.0,
+            "deuteron": 500.0,
+            "oxygen16": 500.0,
+            "proton": 500.0
+          },
+          "e_min_per_u": {
+            "alpha": 1.0,
+            "carbon12": 1.0,
+            "deuteron": 1.0,
+            "oxygen16": 1.0,
+            "proton": 1.0
+          },
+          "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+          "species": [
+            "alpha",
+            "carbon12",
+            "deuteron",
+            "oxygen16",
+            "proton"
+          ]
+        },
+        "evidence_at_run": [
+          {
+            "graded_at_sha": null,
+            "plan": "validation/plans/v3-008-acceptance.md",
+            "row": null,
+            "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+            "status": "as-graded:0043"
+          }
+        ],
+        "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+        "kind": "analytic",
+        "mcs_proton_path_stopping": "bethe-ionmc-v1",
+        "model_id_effective": "bethe-ionmc-v1",
+        "model_id_requested": "bethe-ionmc-v1",
+        "options": {
+          "barkas": true,
+          "bloch": true,
+          "class": "BetheStoppingSource",
+          "effective_charge": true,
+          "effective_charge_model": "barkas-125",
+          "i_value": "material",
+          "ls": "off",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "mott": true,
+          "points_per_decade": 200,
+          "shell": true,
+          "source_name": "bethe"
+        },
+        "range_construction": "exact-loglog-quadrature-v1",
+        "range_start": "constant-S approximation a*E_min/S(E_min)",
+        "selected_by": "stopping_model",
+        "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+        "species_transported": [
+          "alpha"
+        ],
+        "version": "1"
+      },
+      "3": {
+        "cache_dir": null,
+        "circular_rows": [],
+        "content_sha256": null,
+        "data_declared": [],
+        "data_used": [],
+        "decision": "0044",
+        "domain": {
+          "e_max_per_u": {
+            "alpha": 500.0,
+            "carbon12": 500.0,
+            "deuteron": 500.0,
+            "oxygen16": 500.0,
+            "proton": 500.0
+          },
+          "e_min_per_u": {
+            "alpha": 1.0,
+            "carbon12": 1.0,
+            "deuteron": 1.0,
+            "oxygen16": 1.0,
+            "proton": 1.0
+          },
+          "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+          "species": [
+            "alpha",
+            "carbon12",
+            "deuteron",
+            "oxygen16",
+            "proton"
+          ]
+        },
+        "evidence_at_run": [
+          {
+            "graded_at_sha": null,
+            "plan": "validation/plans/v3-008-acceptance.md",
+            "row": null,
+            "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+            "status": "as-graded:0043"
+          }
+        ],
+        "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+        "kind": "analytic",
+        "mcs_proton_path_stopping": "bethe-ionmc-v1",
+        "model_id_effective": "bethe-ionmc-v1",
+        "model_id_requested": "bethe-ionmc-v1",
+        "options": {
+          "barkas": true,
+          "bloch": true,
+          "class": "BetheStoppingSource",
+          "effective_charge": true,
+          "effective_charge_model": "barkas-125",
+          "i_value": "material",
+          "ls": "off",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "mott": true,
+          "points_per_decade": 200,
+          "shell": true,
+          "source_name": "bethe"
+        },
+        "range_construction": "exact-loglog-quadrature-v1",
+        "range_start": "constant-S approximation a*E_min/S(E_min)",
+        "selected_by": "stopping_model",
+        "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+        "species_transported": [
+          "alpha"
+        ],
+        "version": "1"
+      }
+    },
+    "icru90-water-v1": {
+      "1": {
+        "cache_dir": "<run-cache-dir>",
+        "circular_rows": [
+          "geant4-icru90-stopping-11.4.2",
+          "I2 (ICRU 90 part)",
+          "decision-0038 ICRU 90 comparisons"
+        ],
+        "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+        "data_declared": [
+          {
+            "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+            "dataset_id": "geant4-icru90-stopping-11.4.2",
+            "licence": "Geant4 Software License",
+            "member": null,
+            "member_sha256": null,
+            "parser": "icru90",
+            "use_role": "construction-permitted"
+          }
+        ],
+        "data_used": [
+          {
+            "cache_dir": "<run-cache-dir>",
+            "pin": {
+              "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "dataset_id": "geant4-icru90-stopping-11.4.2",
+              "licence": "Geant4 Software License",
+              "member": null,
+              "member_sha256": null,
+              "parser": "icru90",
+              "use_role": "construction-permitted"
+            },
+            "role_in_this_run": "construction",
+            "table": [
+              "alpha",
+              "water"
+            ]
+          }
+        ],
+        "decision": "0044",
+        "domain": {
+          "e_max_per_u": {
+            "alpha": 250.0,
+            "proton": 500.0
+          },
+          "e_min_per_u": {
+            "alpha": 1.0,
+            "proton": 1.0
+          },
+          "material_rule": "structural liquid water (composition and density, not the name) and requested I = 78 eV (any other requested I fails closed)",
+          "species": [
+            "alpha",
+            "proton"
+          ]
+        },
+        "domain_resolved": {
+          "alpha": {
+            "e_max_per_u": 250.0,
+            "e_min_per_u": 1.0
+          }
+        },
+        "evidence_at_run": [
+          {
+            "graded_at_sha": null,
+            "plan": "validation/plans/v3-013-acceptance.md",
+            "row": null,
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+            "status": "consistency-only"
+          }
+        ],
+        "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
+        "kind": "tabulated",
+        "mcs_proton_path_stopping": "bethe-ionmc-v1",
+        "model_id_effective": "icru90-water-v1",
+        "model_id_requested": "icru90-water-v1",
+        "options": {
+          "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
+          "class": "Icru90WaterSource",
+          "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
+          "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
+          "i_value": "78 eV required: any other requested water I fails closed",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "points_per_decade": 200,
+          "source_name": "icru90",
+          "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
+        },
+        "range_construction": "exact-loglog-quadrature-v1",
+        "range_start": "icru90-integrated-from-lowest-node-v1",
+        "selected_by": "stopping_model",
+        "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+        "species_transported": [
+          "alpha"
+        ],
+        "version": "1"
+      },
+      "2": {
+        "cache_dir": "<run-cache-dir>",
+        "circular_rows": [
+          "geant4-icru90-stopping-11.4.2",
+          "I2 (ICRU 90 part)",
+          "decision-0038 ICRU 90 comparisons"
+        ],
+        "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+        "data_declared": [
+          {
+            "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+            "dataset_id": "geant4-icru90-stopping-11.4.2",
+            "licence": "Geant4 Software License",
+            "member": null,
+            "member_sha256": null,
+            "parser": "icru90",
+            "use_role": "construction-permitted"
+          }
+        ],
+        "data_used": [
+          {
+            "cache_dir": "<run-cache-dir>",
+            "pin": {
+              "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "dataset_id": "geant4-icru90-stopping-11.4.2",
+              "licence": "Geant4 Software License",
+              "member": null,
+              "member_sha256": null,
+              "parser": "icru90",
+              "use_role": "construction-permitted"
+            },
+            "role_in_this_run": "construction",
+            "table": [
+              "alpha",
+              "water"
+            ]
+          }
+        ],
+        "decision": "0044",
+        "domain": {
+          "e_max_per_u": {
+            "alpha": 250.0,
+            "proton": 500.0
+          },
+          "e_min_per_u": {
+            "alpha": 1.0,
+            "proton": 1.0
+          },
+          "material_rule": "structural liquid water (composition and density, not the name) and requested I = 78 eV (any other requested I fails closed)",
+          "species": [
+            "alpha",
+            "proton"
+          ]
+        },
+        "domain_resolved": {
+          "alpha": {
+            "e_max_per_u": 250.0,
+            "e_min_per_u": 1.0
+          }
+        },
+        "evidence_at_run": [
+          {
+            "graded_at_sha": null,
+            "plan": "validation/plans/v3-013-acceptance.md",
+            "row": null,
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+            "status": "consistency-only"
+          }
+        ],
+        "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
+        "kind": "tabulated",
+        "mcs_proton_path_stopping": "bethe-ionmc-v1",
+        "model_id_effective": "icru90-water-v1",
+        "model_id_requested": "icru90-water-v1",
+        "options": {
+          "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
+          "class": "Icru90WaterSource",
+          "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
+          "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
+          "i_value": "78 eV required: any other requested water I fails closed",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "points_per_decade": 200,
+          "source_name": "icru90",
+          "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
+        },
+        "range_construction": "exact-loglog-quadrature-v1",
+        "range_start": "icru90-integrated-from-lowest-node-v1",
+        "selected_by": "stopping_model",
+        "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+        "species_transported": [
+          "alpha"
+        ],
+        "version": "1"
+      },
+      "3": {
+        "cache_dir": "<run-cache-dir>",
+        "circular_rows": [
+          "geant4-icru90-stopping-11.4.2",
+          "I2 (ICRU 90 part)",
+          "decision-0038 ICRU 90 comparisons"
+        ],
+        "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+        "data_declared": [
+          {
+            "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+            "dataset_id": "geant4-icru90-stopping-11.4.2",
+            "licence": "Geant4 Software License",
+            "member": null,
+            "member_sha256": null,
+            "parser": "icru90",
+            "use_role": "construction-permitted"
+          }
+        ],
+        "data_used": [
+          {
+            "cache_dir": "<run-cache-dir>",
+            "pin": {
+              "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "dataset_id": "geant4-icru90-stopping-11.4.2",
+              "licence": "Geant4 Software License",
+              "member": null,
+              "member_sha256": null,
+              "parser": "icru90",
+              "use_role": "construction-permitted"
+            },
+            "role_in_this_run": "construction",
+            "table": [
+              "alpha",
+              "water"
+            ]
+          }
+        ],
+        "decision": "0044",
+        "domain": {
+          "e_max_per_u": {
+            "alpha": 250.0,
+            "proton": 500.0
+          },
+          "e_min_per_u": {
+            "alpha": 1.0,
+            "proton": 1.0
+          },
+          "material_rule": "structural liquid water (composition and density, not the name) and requested I = 78 eV (any other requested I fails closed)",
+          "species": [
+            "alpha",
+            "proton"
+          ]
+        },
+        "domain_resolved": {
+          "alpha": {
+            "e_max_per_u": 250.0,
+            "e_min_per_u": 1.0
+          }
+        },
+        "evidence_at_run": [
+          {
+            "graded_at_sha": null,
+            "plan": "validation/plans/v3-013-acceptance.md",
+            "row": null,
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+            "status": "consistency-only"
+          }
+        ],
+        "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
+        "kind": "tabulated",
+        "mcs_proton_path_stopping": "bethe-ionmc-v1",
+        "model_id_effective": "icru90-water-v1",
+        "model_id_requested": "icru90-water-v1",
+        "options": {
+          "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
+          "class": "Icru90WaterSource",
+          "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
+          "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
+          "i_value": "78 eV required: any other requested water I fails closed",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "points_per_decade": 200,
+          "source_name": "icru90",
+          "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
+        },
+        "range_construction": "exact-loglog-quadrature-v1",
+        "range_start": "icru90-integrated-from-lowest-node-v1",
+        "selected_by": "stopping_model",
+        "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+        "species_transported": [
+          "alpha"
+        ],
+        "version": "1"
+      }
+    }
+  },
+  "models": {
+    "bethe-ionmc-v1": {
+      "content_sha256": null,
+      "model_id_effective": "bethe-ionmc-v1",
+      "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+      "tables_materials": {
+        "1": [
+          {
+            "I_eV_effective": 78.0,
+            "I_eV_requested": 78.0,
+            "content_sha256": null,
+            "dataset_id": null,
+            "e_max_mev": 2000.0,
+            "e_min_mev": 4.0,
+            "energy_axis": "total_kinetic_mev",
+            "material": "water",
+            "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+            "metadata": {
+              "I_eV": 78.0,
+              "material": "water",
+              "material_density_g_cm3": 1.0,
+              "material_mass_fractions": {
+                "H": 0.11189834407236524,
+                "O": 0.8881016559276347
+              },
+              "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+              "options": {
+                "barkas": true,
+                "bloch": true,
+                "effective_charge": true,
+                "mott": true,
+                "shell": true
+              },
+              "projectile": "alpha",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "start_range": "constant-S approximation a*E_min/S(E_min)"
+            },
+            "projectile": "alpha",
+            "range_construction": "exact-loglog-quadrature-v1",
+            "source": "bethe",
+            "source_sha256": null
+          }
+        ],
+        "2": [
+          {
+            "I_eV_effective": 78.0,
+            "I_eV_requested": 78.0,
+            "content_sha256": null,
+            "dataset_id": null,
+            "e_max_mev": 2000.0,
+            "e_min_mev": 4.0,
+            "energy_axis": "total_kinetic_mev",
+            "material": "water",
+            "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+            "metadata": {
+              "I_eV": 78.0,
+              "material": "water",
+              "material_density_g_cm3": 1.0,
+              "material_mass_fractions": {
+                "H": 0.11189834407236524,
+                "O": 0.8881016559276347
+              },
+              "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+              "options": {
+                "barkas": true,
+                "bloch": true,
+                "effective_charge": true,
+                "mott": true,
+                "shell": true
+              },
+              "projectile": "alpha",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "start_range": "constant-S approximation a*E_min/S(E_min)"
+            },
+            "projectile": "alpha",
+            "range_construction": "exact-loglog-quadrature-v1",
+            "source": "bethe",
+            "source_sha256": null
+          }
+        ],
+        "3": [
+          {
+            "I_eV_effective": 78.0,
+            "I_eV_requested": 78.0,
+            "content_sha256": null,
+            "dataset_id": null,
+            "e_max_mev": 2000.0,
+            "e_min_mev": 4.0,
+            "energy_axis": "total_kinetic_mev",
+            "material": "water",
+            "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+            "metadata": {
+              "I_eV": 78.0,
+              "material": "water",
+              "material_density_g_cm3": 1.0,
+              "material_mass_fractions": {
+                "H": 0.11189834407236524,
+                "O": 0.8881016559276347
+              },
+              "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+              "options": {
+                "barkas": true,
+                "bloch": true,
+                "effective_charge": true,
+                "mott": true,
+                "shell": true
+              },
+              "projectile": "alpha",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "start_range": "constant-S approximation a*E_min/S(E_min)"
+            },
+            "projectile": "alpha",
+            "range_construction": "exact-loglog-quadrature-v1",
+            "source": "bethe",
+            "source_sha256": null
+          }
+        ]
+      },
+      "tables_sha256": {
+        "1": "2dd989046233764790c151b92be90804e2f9d39a5a27a8f60322ba8698885112",
+        "2": "2dd989046233764790c151b92be90804e2f9d39a5a27a8f60322ba8698885112",
+        "3": "2dd989046233764790c151b92be90804e2f9d39a5a27a8f60322ba8698885112"
+      },
+      "version": "1"
+    },
+    "icru90-water-v1": {
+      "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+      "model_id_effective": "icru90-water-v1",
+      "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+      "tables_materials": {
+        "1": [
+          {
+            "I_eV_effective": 78.0,
+            "I_eV_requested": 78.0,
+            "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+            "dataset_id": "geant4-icru90-stopping-11.4.2",
+            "e_max_mev": 1000.0,
+            "e_min_mev": 4.0,
+            "energy_axis": "total_kinetic_mev",
+            "material": "water",
+            "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+            "metadata": {
+              "I_eV": 78.0,
+              "I_eV_model": 78.0,
+              "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+              "dataset_id": "geant4-icru90-stopping-11.4.2",
+              "dataset_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "dataset_version": "Geant4 v11.4.2 G4ICRU90StoppingData.cc",
+              "decision": "0044",
+              "file_content_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "material": "water",
+              "material_density_g_cm3": 1.0,
+              "material_mass_fractions": {
+                "H": 0.11189834407236524,
+                "O": 0.8881016559276347
+              },
+              "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+              "model_id": "icru90-water-v1",
+              "projectile": "alpha",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "retrieved_at": "2026-10-03T18:29:05+00:00",
+              "source": "tabulated",
+              "source_name": "icru90",
+              "start_range": "icru90-integrated-from-lowest-node-v1",
+              "version": "1"
+            },
+            "projectile": "alpha",
+            "range_construction": "exact-loglog-quadrature-v1",
+            "source": "tabulated",
+            "source_sha256": null
+          }
+        ],
+        "2": [
+          {
+            "I_eV_effective": 78.0,
+            "I_eV_requested": 78.0,
+            "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+            "dataset_id": "geant4-icru90-stopping-11.4.2",
+            "e_max_mev": 1000.0,
+            "e_min_mev": 4.0,
+            "energy_axis": "total_kinetic_mev",
+            "material": "water",
+            "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+            "metadata": {
+              "I_eV": 78.0,
+              "I_eV_model": 78.0,
+              "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+              "dataset_id": "geant4-icru90-stopping-11.4.2",
+              "dataset_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "dataset_version": "Geant4 v11.4.2 G4ICRU90StoppingData.cc",
+              "decision": "0044",
+              "file_content_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "material": "water",
+              "material_density_g_cm3": 1.0,
+              "material_mass_fractions": {
+                "H": 0.11189834407236524,
+                "O": 0.8881016559276347
+              },
+              "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+              "model_id": "icru90-water-v1",
+              "projectile": "alpha",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "retrieved_at": "2026-10-03T18:29:05+00:00",
+              "source": "tabulated",
+              "source_name": "icru90",
+              "start_range": "icru90-integrated-from-lowest-node-v1",
+              "version": "1"
+            },
+            "projectile": "alpha",
+            "range_construction": "exact-loglog-quadrature-v1",
+            "source": "tabulated",
+            "source_sha256": null
+          }
+        ],
+        "3": [
+          {
+            "I_eV_effective": 78.0,
+            "I_eV_requested": 78.0,
+            "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+            "dataset_id": "geant4-icru90-stopping-11.4.2",
+            "e_max_mev": 1000.0,
+            "e_min_mev": 4.0,
+            "energy_axis": "total_kinetic_mev",
+            "material": "water",
+            "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+            "metadata": {
+              "I_eV": 78.0,
+              "I_eV_model": 78.0,
+              "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+              "dataset_id": "geant4-icru90-stopping-11.4.2",
+              "dataset_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "dataset_version": "Geant4 v11.4.2 G4ICRU90StoppingData.cc",
+              "decision": "0044",
+              "file_content_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "material": "water",
+              "material_density_g_cm3": 1.0,
+              "material_mass_fractions": {
+                "H": 0.11189834407236524,
+                "O": 0.8881016559276347
+              },
+              "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+              "model_id": "icru90-water-v1",
+              "projectile": "alpha",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "retrieved_at": "2026-10-03T18:29:05+00:00",
+              "source": "tabulated",
+              "source_name": "icru90",
+              "start_range": "icru90-integrated-from-lowest-node-v1",
+              "version": "1"
+            },
+            "projectile": "alpha",
+            "range_construction": "exact-loglog-quadrature-v1",
+            "source": "tabulated",
+            "source_sha256": null
+          }
+        ]
+      },
+      "tables_sha256": {
+        "1": "39ac44e005771bc5c17c69ee6987a9ed26351ab318d6aaffb6bfbefb68d29c49",
+        "2": "39ac44e005771bc5c17c69ee6987a9ed26351ab318d6aaffb6bfbefb68d29c49",
+        "3": "39ac44e005771bc5c17c69ee6987a9ed26351ab318d6aaffb6bfbefb68d29c49"
+      },
+      "version": "1"
+    }
+  },
+  "note": "model-only quantities (ranges and differences in mm of water); no TOPAS data, no stopping array",
+  "plan": "validation/plans/v3-013-acceptance.md section A.6 (V-C2, V-C2-D)",
+  "schema": "ionmc-v13-vc-predictions-1",
+  "script": {
+    "path": "validation/scripts/stopping/steps_v13.py",
+    "sha256": "9bf727568654e974d2b3db923ffa0d3b9e74939635926a2df8fa317ed15136ff"
+  },
+  "src_ionmc_tree": "54d226daeaa812d84bbdf430761bcb284ce364c5"
+}

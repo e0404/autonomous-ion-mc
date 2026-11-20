@@ -44,7 +44,7 @@ _MAPS: dict[tuple[str, str], XO.ExactOmegaMapping] = {}
 def mapping(proj: Any, mat: Any) -> XO.ExactOmegaMapping:
     key = (proj.name, mat.name)
     if key not in _MAPS:
-        _MAPS[key] = XO.ExactOmegaMapping.build(proj, mat)
+        _MAPS[key] = XO.ExactOmegaMapping.build(proj, mat, BetheStoppingSource().table(mat, proj))
     return _MAPS[key]
 
 
@@ -130,20 +130,30 @@ def test_packing_equals_transport_tables_row_and_default_hash_untouched() -> Non
     )
 
 
+def _bethe_tables(proj: Any) -> dict[str, Any]:
+    """The explicit Bethe ion table of water (no Bethe default in run paths, ROLE-2)."""
+    from ionmc.transport.tables import material_fingerprint
+
+    return {material_fingerprint(WATER): BetheStoppingSource().table(WATER, proj)}
+
+
 def test_fail_closed_table_edge() -> None:
     with pytest.raises(UnsupportedCombinationError):
         XO.check_proton_table_edge(3001.0, 3000.0)
     XO.check_proton_table_edge(2999.0, 3000.0)
     with pytest.raises(UnsupportedCombinationError):  # C 430 MeV/u needs ~2.5 GeV in water
-        XO.fdm_domain_status(CARBON12, [WATER], 430.0 * 12, 0.0, proton_edge_mev=1500.0)
+        XO.fdm_domain_status(
+            CARBON12, [WATER], 430.0 * 12, 0.0, _bethe_tables(CARBON12), proton_edge_mev=1500.0
+        )
     # the E0 + 6 sigma_E bound alone trips the check (nominal fits, upper does not)
-    ok = XO.fdm_domain_status(OXYGEN16, [WATER], 300.0 * 16, 0.0)
+    ok = XO.fdm_domain_status(OXYGEN16, [WATER], 300.0 * 16, 0.0, _bethe_tables(OXYGEN16))
     with pytest.raises(UnsupportedCombinationError):
         XO.fdm_domain_status(
             OXYGEN16,
             [WATER],
             300.0 * 16,
             20.0,
+            _bethe_tables(OXYGEN16),
             proton_edge_mev=ok.p1v1_eq_kinetic_energy_mev * 1.001,
         )
 
@@ -160,7 +170,7 @@ def test_fail_closed_table_edge() -> None:
     ],
 )
 def test_fdm_extrapolated_flag(proj: Any, e_u: float, approx_mev: float) -> None:
-    st = XO.fdm_domain_status(proj, [WATER], e_u * proj.a)
+    st = XO.fdm_domain_status(proj, [WATER], e_u * proj.a, 0.0, _bethe_tables(proj))
     assert st.fdm_extrapolated is True
     assert st.p1v1_eq_kinetic_energy_mev == pytest.approx(approx_mev, rel=0.02)  # P11b values
     assert st.p1v1_eq_kinetic_energy_mev <= st.p1v1_eq_kinetic_energy_hi_mev <= 4000.0

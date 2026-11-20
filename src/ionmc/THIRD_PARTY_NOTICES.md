@@ -133,3 +133,15 @@ Ionizing-Radiation Dosimetry: Measurement Standards and Applications, Journal of
 14(1) (2014, published 2016). The report is copyrighted and is not redistributed here. The
 proton and alpha stopping-power values used for evaluation are those embedded in the Geant4
 source file named above.
+
+### Construction use of the ICRU 90 arrays (V3-013, decision 0044)
+
+The registered model `icru90-water-v1` constructs its stopping tables from the ICRU 90 proton and
+alpha arrays embedded in the Geant4 source file `G4ICRU90StoppingData.cc` (Geant4 v11.4.2), which is
+distributed under the Geant4 Software License reproduced above ("permits use and modification with
+attribution"; the project's assessment, not legal advice). Besides the evaluation use described
+above, the arrays are therefore construction data in runs that select that model. They are read at
+run time from the user's verified provenance cache (SHA-256 pinned), never committed to this
+repository and never redistributed with the package; the ICRU report is cited, not reproduced; no
+value derived node by node from the arrays is committed. In every other run the arrays remain an
+evaluation reference.

@@ -1,0 +1,32 @@
+{
+ "digests": {
+  "interpreter": "56bfd38b490ae57cd942ad6a7573cef9ad6c43d1c903bdfba92fa88512953c36",
+  "numpy": "269e58d934e3bf12cfb9297db7fa4ecd70ddd8c06973b20276014a791072b497",
+  "stdlib": "1e6d8a0c0e8de46b5af59de92b7c564ec3fed5992bf0a8ce1f5e9080e8f5e89c",
+  "uv_lock": "0d7e79d3b88fd95f7b59d717efa27d6bfb9b78a435fb2ccc5b991e4347d37299",
+  "warp": "3a29fce101667eef02800a559ad9f82ea6694a8026ee7f922070db020caea02a"
+ },
+ "file_counts": {
+  "interpreter": 1,
+  "numpy": 930,
+  "stdlib": 887,
+  "uv_lock": 1,
+  "warp": 598
+ },
+ "launch": {
+  "head_sha": "4130d569d635c9085950ef49a387a188581339d2",
+  "launcher_sha256": "9ffea96b2d582ed46fceb3044f022df8fcef3bf5f4cf0d1398ff212bc8fcf0e1",
+  "origin": "validation/scripts/stopping/sealed_launch.py",
+  "target": "validation/scripts/stopping/env_digest.py",
+  "target_committed": true,
+  "target_sha256": "c49f3106ea994e25df01b6cee215e2e0436fbd4d3a82d9f6c83e43984df2bc10"
+ },
+ "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+ "schema": "ionmc-v13-environment-digests-1",
+ "sys_version": "3.12.0 (main, Oct 18 2023, 16:27:16) [GCC 11.4.0]",
+ "versions": {
+  "numpy": "2.5.3",
+  "python": "3.12.0",
+  "warp": "1.17.0"
+ }
+}

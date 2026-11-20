@@ -30,6 +30,19 @@ roles, hashes; no cross-section values).
 A downloaded payload whose SHA-256 or size differs from the registry is an integrity
 failure (`IntegrityError`): nothing is stored.
 
+## Stopping-model registry and data roles (decision 0044)
+
+The tabulated stopping models draw their construction data from this registry through the verified
+cache: `nist-pstar-astar-water-2005` (`nist-pstar-water-2005`, `nist-astar-water-2005`) and
+`icru90-water-v1` (`geant4-icru90-stopping-11.4.2`). The model registry
+(`ionmc.physics.stopping_models`) pins each dataset by id and sha256 in a `DataPin` that carries
+the licence and a per-use role (`construction-permitted`, `evaluation-only`, `lineage-only`); the
+dataset's own `role` is unchanged (the ICRU 90 arrays stay `evaluation`, their construction use in
+`icru90-water-v1` is the per-use role). A model is resolved only from `construction-permitted`
+pins, reads the cache only (no download at run time) and raises on a missing object, a hash
+mismatch or a parse failure. The persisted block `EffectiveConfig.summary()["stopping"]` records
+`data_declared` and `data_used`. See [stopping power](../physics/stopping-power.md).
+
 ## Cache
 
 Directory precedence: explicit argument (`--cache-dir`), environment variable

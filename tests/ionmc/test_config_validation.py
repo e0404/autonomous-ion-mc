@@ -31,6 +31,7 @@ from ionmc.scoring import (
 )
 from ionmc.simulation import Simulation
 from ionmc.sources import PencilBeamSource
+from tests.ionmc._user_sources import UserSpecMixin
 
 MakeConfig = Callable[..., SimulationConfig]
 
@@ -43,7 +44,7 @@ def _rejects(cfg_or_callable: Any, exc: type[Exception] = UnsupportedCombination
             validate(cfg_or_callable)
 
 
-class _NoTableSource:
+class _NoTableSource(UserSpecMixin):
     """A stopping source that has no table for any material."""
 
     name = "no-tables"
@@ -390,7 +391,7 @@ def test_forged_proton_like_projectiles_are_rejected(make_config: MakeConfig) ->
     _rejects(lambda: Simulation(replace(cfg, source=replace(cfg.source, projectile=DEUTERON))))
 
 
-class _WrongTableSource:
+class _WrongTableSource(UserSpecMixin):
     """Returns a valid table, but not for the requested material or projectile."""
 
     def __init__(self, material: Any = AIR, projectile: Any = PROTON) -> None:
@@ -416,7 +417,7 @@ def test_stopping_source_results_are_checked_against_the_request(make_config: Ma
     )
 
 
-class _NotATableSource:
+class _NotATableSource(UserSpecMixin):
     name = "not-a-table"
 
     def table(self, material: Any, projectile: Any) -> Any:

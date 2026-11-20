@@ -1,0 +1,53 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys\nos.environ.update({'PYTHONPATH': '/workspace/src', 'IONMC_CACHE_DIR': '/workspace/.ionmc-cache/ionmc-data', 'IONMC_REQUIRE_DATA': '1', 'IONMC_SINGLE_PROCESS': '1', 'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2', 'MKL_NUM_THREADS': '2', 'NUMEXPR_NUM_THREADS': '2', 'PYTHONUNBUFFERED': '1', 'PYTHONFAULTHANDLER': '1', 'IONMC_RUN_SHA': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), 'IONMC_RUN_SUITE': 'lv13'})\ncmd = [sys.executable, 'validation/scripts/stopping/lv13_r1ion.py', '--backend', 'warp-cpu', '--cache-dir', '/workspace/.ionmc-cache/ionmc-data', '--out-dir', '/workspace/validation/generated/lv13-r1ion']\np = subprocess.run(cmd, text=True, capture_output=True)\nout = p.stdout\nhead = out[:1500]; tail = out[-2500:]\nprint(head); print('...'); print(tail); print(p.stderr[-2000:], file=sys.stderr)\nsys.exit(p.returncode)\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "bfbaf81f664ad9c68071a264df0d9e085015a2ee6d071692193ed5f739b3554a",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "c47516fccb4e8630e4d6518ea02fd4c7a357151e00377dd968ba44b4e813cb71ce699f04dfbfb57ffb3e9cdf2d982c37e97671818a268605fcdefcc03e6f4106",
+    "signed_at_utc": "2026-11-18T13:15:27.763049+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-013-explicit-selection-of-stopping-power-models-and-tabulated-so",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 277.97582321100344,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T131049Z-5051c1b1/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-18T13:15:27.749556+00:00",
+  "input_manifest": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T131049Z-5051c1b1/input-manifest.json",
+  "input_manifest_sha256": "f94d8c8ed83bd166b5c0729932ccfbf4068332de875446e369829af7253be2ec",
+  "output_manifest_sha256": "5e8e43c5d65adb8afcefca3178f8b4788f69f5bc936d6a1702b8033cef570fa5",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-013/validation/generated/RUN-20261118T131049Z-5051c1b1",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-013/benchmarks/generated/RUN-20261118T131049Z-5051c1b1"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T131049Z-5051c1b1",
+  "run_id": "RUN-20261118T131049Z-5051c1b1",
+  "schema_version": 1,
+  "sha": "2d9e90e1ca33a63af7a7234454c199970dd4c549",
+  "sha_after": "2d9e90e1ca33a63af7a7234454c199970dd4c549",
+  "started_at": "2026-11-18T13:10:49.773709+00:00",
+  "stderr": "\n",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T131049Z-5051c1b1/stderr.txt",
+  "stderr_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+  "stderr_total_chars": 1,
+  "stderr_truncated": false,
+  "stdout": "Warp 1.17.0 initialized:\n   CUDA Toolkit 12.9, Driver 13.5\n   Devices:\n     \"cpu\"      : \"x86_64\"\n     \"cuda:0\"   : \"NVIDIA RTX A6000\" (48 GiB, sm_86, mempool enabled)\n   Kernel cache:\n     /cache/warp/1.17.0\nModule _table_node_kernel__locals__nodes_160cf81d 930f1d7 load on device 'cpu' took 0.99 ms  (cached)\nModule transport_float64_diag_c2d7d440 c2d7d44 load on device 'cpu' took 0.30 ms  (cached)\nModule transport_float64_diag_c2d7d440 e83164e load on device 'cpu' took 0.30 ms  (cached)\n#JSON-BEGIN\n{\n \"backend\": \"warp-cpu\",\n \"comparisons\": {\n  \"A1-vs-A2\": {\n   \"compare_runs_bitwise\": {\n    \"first_difference\": null,\n    \"identical\": true\n   },\n   \"differences\": [],\n   \"identical\": true\n  },\n  \"A1-vs-B1\": {\n   \"compare_runs_bitwise\": {\n    \"first_difference\": null,\n    \"identical\": true\n   },\n   \"differences\": [],\n   \"identical\": true\n  },\n  \"A2-vs-B2\": {\n   \"compare_runs_bitwise\": {\n    \"first_difference\": null,\n    \"identical\": true\n   },\n   \"differences\": [],\n   \"identical\": true\n  },\n  \"B1-vs-B2\": {\n   \"compare_runs_bitwise\": {\n    \"first_difference\": null,\n    \"identical\": true\n   },\n   \"differences\": [],\n   \"identical\": true\n  }\n },\n \"default_histories\": 10000,\n \"git_sha\": \"2d9e90e1ca33a63af7a7234454c199970dd4c549\",\n \"histories\": 10000,\n \"identity\": {\n  \"A1\": {\n   \"model_id_effective\": \"bethe-ionmc-v1\",\n   \"model_id_requested\": \"bethe-ionmc-v1\",\n   \"selected_by\": \"stopping_model\",\n   \"spec_sha256\": \"3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26\"\n  },\n \n...\n82d459685455d486de49f13b7733bed1ee0f93f675b6b80751052\",\n   \"grid.dose.defined_mask\": \"8a54a1765144ba018eb53b62d51621d006157aae2836235c568e7acf4af71566\",\n   \"grid.dose.dose_gy\": \"a125617bbb5ec758deb6f76ac9d449338a584064e48206184f224e2f229251a6\",\n   \"grid.dose.dose_std_gy\": \"b5d3bd3c31938e86b14e0c206f7ca0f7a5254b5946bc257304ffc57bfdfcc5d2\",\n   \"grid.dose.energy_mev\": \"f59f1704e6eb51a471bbcafee30cd7dd5a65a00961d5024d22bb1d81d767a4a1\",\n   \"grid.dose.energy_std_mev\": \"bc0af48588a6f63a711e6df67ffcc80a538cd3bc77e9fba0d6ba280beed21798\",\n   \"grid.dose.mass_g\": \"eb7b27201749d43f555339cd2b5952e166e5bcfcffa9a6e95f84adefac632f89\",\n   \"grid.dose.n_nonzero_batches\": \"8819303d89e8a08a0e2604d5e97f1688dcf8499ce4ce58d2d560f78be29e2852\",\n   \"grid.dose.relative_uncertainty\": \"cfabb52b9d8b8f63b6e846fd11e2f45a2cc96c6d9d6ac7cf7dae2f552f03170f\",\n   \"grid.dose.sparse_mask\": \"46d0ebe81b38d8401b4f708f9c179f44c9e0cd5038e02d6d9f7e512223ce8e45\"\n  },\n  \"B2\": {\n   \"end_state.end_code\": \"95b532cc4381affdff0d956e12520a04129ed49d37e154228368fe5621f0b9a2\",\n   \"end_state.end_direction\": \"572d67aa7209844bbbd29ece952c033d4029a0074a0855106039fc6d7a5ebfdd\",\n   \"end_state.end_energy_mev\": \"c4f8484757bc8f086cae40f16c8cd1b6337695006f4d2350bc49f26af4a6b484\",\n   \"end_state.end_position_mm\": \"0d8f03445e00c0a66d72cfd5c09433fef337df8480102d9559862aaaf70d40ea\",\n   \"grid.dose.batch_energy_mev\": \"bcd194e36e782d459685455d486de49f13b7733bed1ee0f93f675b6b80751052\",\n   \"grid.dose.defined_mask\": \"8a54a1765144ba018eb53b62d51621d006157aae2836235c568e7acf4af71566\",\n   \"grid.dose.dose_gy\": \"a125617bbb5ec758deb6f76ac9d449338a584064e48206184f224e2f229251a6\",\n   \"grid.dose.dose_std_gy\": \"b5d3bd3c31938e86b14e0c206f7ca0f7a5254b5946bc257304ffc57bfdfcc5d2\",\n   \"grid.dose.energy_mev\": \"f59f1704e6eb51a471bbcafee30cd7dd5a65a00961d5024d22bb1d81d767a4a1\",\n   \"grid.dose.energy_std_mev\": \"bc0af48588a6f63a711e6df67ffcc80a538cd3bc77e9fba0d6ba280beed21798\",\n   \"grid.dose.mass_g\": \"eb7b27201749d43f555339cd2b5952e166e5bcfcffa9a6e95f84adefac632f89\",\n   \"grid.dose.n_nonzero_batches\": \"8819303d89e8a08a0e2604d5e97f1688dcf8499ce4ce58d2d560f78be29e2852\",\n   \"grid.dose.relative_uncertainty\": \"cfabb52b9d8b8f63b6e846fd11e2f45a2cc96c6d9d6ac7cf7dae2f552f03170f\",\n   \"grid.dose.sparse_mask\": \"46d0ebe81b38d8401b4f708f9c179f44c9e0cd5038e02d6d9f7e512223ce8e45\"\n  }\n },\n \"total_wall_s\": 277.781787778993,\n \"valid\": true,\n \"wall_s\": {\n  \"A1\": 69.63903236300393,\n  \"A2\": 69.78107347199693,\n  \"B1\": 69.09454091699445,\n  \"B2\": 68.91771397300181\n }\n}\n#JSON-END\n\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T131049Z-5051c1b1/stdout.txt",
+  "stdout_sha256": "4b4506e253513dc0b3c0b555270c369ac544e70272b3f06713c37df11bfa0060",
+  "stdout_total_chars": 4006,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-013",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-013"
+}

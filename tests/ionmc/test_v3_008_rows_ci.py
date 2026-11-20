@@ -472,7 +472,7 @@ def test_i1_mapped_mcs_step_twin_equals_warp_cpu(proj: Projectile, precision: st
     real = wp.float64 if precision == "float64" else wp.float32
     dt = np.float64 if precision == "float64" else np.float32
     rtol, atol = (1e-12, 1e-14) if precision == "float64" else (5e-4, 1e-12)
-    mp = XO.ExactOmegaMapping.build(proj, WATER)
+    mp = XO.ExactOmegaMapping.build(proj, WATER, BetheStoppingSource().table(WATER, proj))
     st = _ion_states(mp)
     n = len(st)
     cols = [np.array([s[j] for s in st], dtype=dt) for j in range(3)]
@@ -520,7 +520,7 @@ def test_i1_mapped_mcs_step_twin_equals_warp_cpu(proj: Projectile, precision: st
 def test_i1_thin_slab_guard_and_z1_flag() -> None:
     """A state at the initial momentum (pv = p1v1) is mapped at p1v1 / (1 + THIN_SLAB_R) instead of
     failing; the host flag ``ion_is_proton`` of ``exact_omega`` keeps the identity for z = 1."""
-    mp = XO.ExactOmegaMapping.build(CARBON12, WATER)
+    mp = XO.ExactOmegaMapping.build(CARBON12, WATER, BetheStoppingSource().table(WATER, CARBON12))
     pv, p1 = mp.state_at_depth(150.0 * 12, 0.5)
     tw = python_twin(make_ion_mcs)
     args = (
