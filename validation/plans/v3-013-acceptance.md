@@ -474,7 +474,7 @@ OPEN. Not a clinical claim."
   record committed and verified): values, gating and spec hashes unchanged; `bethe-ionmc-v1` pins now carry
   `cache_dir: null`; script sha256 → 9bf72756…; `src/ionmc` tree pin → 54d226da…. Frozen manifest regenerated
   (82 sealed paths, sha256 3bc6abe9…). This commit is the seal candidate; no evidence run before its Codex review.
-- 2026-11-18 (orchestrator, SEAL — §D step 3 pin note): seal review REVIEW-0e6ca486200b47e2a958376470ad50f5 at ad73d94eff7ce25dbb1db04b00f1136603627e03; manifest sha256 3bc6abe916eabfa2ba7ced9adfbf8926eeb32e0b910214aef754f2f67a1c3b39
+- 2026-11-18 (orchestrator, SEAL — §D step 3 pin note): seal review (superseded 2026-11-20 by seal 14, see below) REVIEW-0e6ca486200b47e2a958376470ad50f5 at ad73d94eff7ce25dbb1db04b00f1136603627e03; manifest sha256 3bc6abe916eabfa2ba7ced9adfbf8926eeb32e0b910214aef754f2f67a1c3b39
   (signed codex-worker record, verdict pass, no findings, finished 2026-11-18T19:44:23Z; committed verbatim as
   `validation/results/stopping/v3-013/seal-review.json` and verified against the committed trust file). The sealed
   closure is the 82 paths of the frozen manifest plus the `src/ionmc` tree 54d226da… at the seal SHA; every evidence
@@ -505,3 +505,13 @@ OPEN. Not a clinical claim."
   committed; no evidence seed has been used. This commit is the seal candidate; its signed Codex review becomes the
   new seal, recorded by the next pin commit (which replaces `seal-review.json` and the one seal pin note, keeping the
   superseded pin in prose). Sample runs will request `timeout_seconds` 14400 explicitly. Not a clinical claim.
+- 2026-11-20 (orchestrator, SEAL 14 — §D step 3 pin note): seal review REVIEW-827ab1047ed1485db2cd3906ce591731 at b16e60259acfc8fb3f5e6b6a239785635a93416e; manifest sha256 e3de22c5b7e5010ce9641885805a68d57d599e9eb5b2c20d1adb09bcffc91f9f
+  (signed codex-worker record, verdict pass, no findings, finished 2026-11-20T09:35:14Z; committed verbatim as
+  `validation/results/stopping/v3-013/seal-review.json`, replacing the record of the superseded seal REVIEW-0e6ca486
+  at ad73d94e, whose pin note above is marked superseded so that exactly one seal pin note remains; verified against
+  the committed trust file). The sealed closure is the 82 paths of the regenerated frozen manifest plus the
+  `src/ionmc` tree 54d226da… at the seal SHA. Next, in order (§D steps 4–6): this pin commit's own Codex review; the
+  18 ionmc samples (one controlled host run at a time, `timeout_seconds` 14400, each started after this review
+  finished); the samples commit and its review (second pin note `samples review <id> at <sha>`); the three TOPAS
+  smokes; the evidence parts 0–3 of the three cases; the sealed evaluator. No evidence run has been started. Not a
+  clinical claim.
