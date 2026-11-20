@@ -515,3 +515,20 @@ OPEN. Not a clinical claim."
   finished); the samples commit and its review (second pin note `samples review <id> at <sha>`); the three TOPAS
   smokes; the evidence parts 0–3 of the three cases; the sealed evaluator. No evidence run has been started. Not a
   clinical claim.
+- 2026-11-20 (orchestrator, §D step 4 started under seal 14 — STOP, defect in the sealed evaluator): after the pin
+  review REVIEW-060a528a finished (09:41:16 UTC), 13 ionmc samples were produced at c1cfaf9b, one controlled host run
+  at a time with `timeout_seconds` 14400: the 12 `vc2d-sample` runs (3 cases × 2 models × {python, warp-cpu}) and the
+  first `vc-sample` (case 1, `icru90-water-v1`, 1e6 histories, 4411 s; RUN-20261120T095026Z-d86b9057). Every step
+  document: `pass` true, counters zero, identity block equal to the sealed pins, environment digests equal to the
+  seal, expectations met; signed records committed under `host-records/`, step documents and index under
+  `samples-seal14/`. Checking the records against the sealed rule `warp_modules_problems()` revealed a defect of the
+  evaluator, not of the samples: the rule requires identical Warp kernel attestations across ALL runs of a backend,
+  but the deterministic row (MCS and straggling off) compiles the module set `wp_transport_float64_diag_*` (2
+  modules) while the sampled row compiles `wp_transport_float64_plain_*` + the table kernel (3 modules); within each
+  row all runs are identical. As sealed, the evaluator would mark all 7 warp-cpu runs invalid and fail V-C1/V-C2 for
+  a non-physical reason. Per §D step 3 ("a change to any sealed file after the seal is a new seal … seen samples
+  consumed") the runs are halted and a prospective amendment A-2 is requested from the operator
+  (IR-20261120-111407-B2596D): group the attestation rule by (backend, row); evidence chunk k = 1 for all 18 samples
+  (the k = 0 V-C2-D end points were printed while checking; the `vc-sample` npz was not inspected); tests; new seal
+  with its reviews before any further run. The 13 seal-14 runs remain committed as records, not evidence. No TOPAS
+  run has been started. Not a clinical claim.
