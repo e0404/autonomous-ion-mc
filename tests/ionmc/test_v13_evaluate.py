@@ -300,7 +300,7 @@ class World:
             (self.records / "host-records").mkdir(exist_ok=True)
             (self.records / "host-records" / f"{rid}.json").write_text(json.dumps(signed))
             self.ion_index.append({"run_id": rid, "row": row, "case": case, "model": model, "backend": backend,
-                                   "k": 0, "step_stdout": "step.stdout.txt"})  # fmt: skip
+                                   "k": ev.K_EVIDENCE, "step_stdout": "step.stdout.txt"})  # fmt: skip
 
     # -- TOPAS runs --
     def build_topas(self, sha: str, parts: Any, case_list: Any = (1, 2, 3)) -> None:
@@ -609,12 +609,22 @@ def test_ionmc_identity_block_mismatch_invalidates_the_run(tmp_path: Path) -> No
     assert res["integration"]["science_gates"] == "BLOCKED"
 
 
-def test_differing_warp_modules_invalidate_every_run_of_the_backend(tmp_path: Path) -> None:
+def test_differing_warp_modules_invalidate_every_run_of_the_backend_and_row(tmp_path: Path) -> None:
+    """Amendment A-2: a within-row difference marks every warp-cpu run of THAT row invalid; the
+    other row (which legitimately compiles its own module set) and the python runs stay valid."""
     res = World(tmp_path, bad_warp=("vc-sample", 1, MODEL_DEF, "warp-cpu")).run()
-    warp = [r for r in res["runs"]["ionmc"] if r["backend"] == "warp-cpu"]
-    assert warp and all(not r["valid"] for r in warp)
+    warp_vc = [
+        r for r in res["runs"]["ionmc"] if r["backend"] == "warp-cpu" and r["row"] == "vc-sample"
+    ]
+    warp_d = [
+        r for r in res["runs"]["ionmc"] if r["backend"] == "warp-cpu" and r["row"] == "vc2d-sample"
+    ]
+    assert warp_vc and all(not r["valid"] for r in warp_vc)
+    assert warp_d and all(r["valid"] for r in warp_d)
     assert all(r["valid"] for r in res["runs"]["ionmc"] if r["backend"] == "python")
     assert res["evidence_record"] == ev.EVIDENCE_FAIL
+    assert set(res["warp_modules_runs"]) == {"python/vc-sample", "python/vc2d-sample",
+                                             "warp-cpu/vc-sample", "warp-cpu/vc2d-sample"}  # fmt: skip
 
 
 def test_ionmc_run_started_before_the_seal_review_finished_is_invalid(tmp_path: Path) -> None:
@@ -709,18 +719,67 @@ def test_jackknife_recovers_a_known_shift_and_sigma_scales_with_noise() -> None:
 
 
 def test_warp_modules_rule() -> None:
-    same = [{"run_id": "a", "backend": "warp-cpu", "warp_modules": {"x": "1"}},
-            {"run_id": "b", "backend": "warp-cpu", "warp_modules": {"x": "1"}},
-            {"run_id": "c", "backend": "python", "warp_modules": None}]  # fmt: skip
+    row = "vc-sample"
+    same = [{"run_id": "a", "backend": "warp-cpu", "row": row, "warp_modules": {"x": "1"}},
+            {"run_id": "b", "backend": "warp-cpu", "row": row, "warp_modules": {"x": "1"}},
+            {"run_id": "c", "backend": "python", "row": row, "warp_modules": None}]  # fmt: skip
     assert ev.warp_modules_problems(same) == {}
-    diff = [*same[:1], {"run_id": "b", "backend": "warp-cpu", "warp_modules": {"x": "2"}}, same[2]]
+    diff = [
+        *same[:1],
+        {"run_id": "b", "backend": "warp-cpu", "row": row, "warp_modules": {"x": "2"}},
+        same[2],
+    ]
     assert set(ev.warp_modules_problems(diff)) == {"a", "b"}
     assert set(
-        ev.warp_modules_problems([{"run_id": "a", "backend": "warp-cpu", "warp_modules": {}}])
+        ev.warp_modules_problems(
+            [{"run_id": "a", "backend": "warp-cpu", "row": row, "warp_modules": {}}]
+        )
     ) == {"a"}
     assert set(
-        ev.warp_modules_problems([{"run_id": "c", "backend": "python", "warp_modules": {"x": "1"}}])
+        ev.warp_modules_problems(
+            [{"run_id": "c", "backend": "python", "row": row, "warp_modules": {"x": "1"}}]
+        )
     ) == {"c"}
+
+
+def test_warp_modules_rule_is_grouped_by_backend_and_row() -> None:
+    """Amendment A-2 (IR-20261120-111407-B2596D): the rows compile different Warp module sets
+    (``vc2d-sample`` has MCS and straggling off), which is accepted; a difference WITHIN a row
+    marks every warp-cpu run of that row and leaves the other row untouched; python runs must
+    still record no modules in every row."""
+    plain = {
+        "1.17.0/wp_transport_float64_plain_x/a.o": "1" * 64,
+        "1.17.0/wp__table_x/b.o": "2" * 64,
+    }
+    diag = {"1.17.0/wp_transport_float64_diag_x/c.o": "3" * 64}
+    runs = [
+        {"run_id": "s1", "backend": "warp-cpu", "row": "vc-sample", "warp_modules": plain},
+        {"run_id": "s2", "backend": "warp-cpu", "row": "vc-sample", "warp_modules": dict(plain)},
+        {"run_id": "d1", "backend": "warp-cpu", "row": "vc2d-sample", "warp_modules": diag},
+        {"run_id": "d2", "backend": "warp-cpu", "row": "vc2d-sample", "warp_modules": dict(diag)},
+        {"run_id": "p1", "backend": "python", "row": "vc2d-sample", "warp_modules": None},
+    ]
+    assert ev.warp_modules_problems(runs) == {}  # legitimate difference BETWEEN rows
+    bad = [dict(r) for r in runs]
+    bad[3]["warp_modules"] = {**diag, "1.17.0/wp_transport_float64_diag_x/c.o": "4" * 64}
+    out = ev.warp_modules_problems(bad)
+    assert set(out) == {"d1", "d2"} and all("vc2d-sample" in v for v in out.values())
+    bad = [dict(r) for r in runs]
+    bad[0]["warp_modules"] = diag  # a vc-sample run that compiled the other row's set
+    assert set(ev.warp_modules_problems(bad)) == {"s1", "s2"}
+    bad = [dict(r) for r in runs]
+    bad[4]["warp_modules"] = diag  # a python run must record no modules, in any row
+    assert set(ev.warp_modules_problems(bad)) == {"p1"}
+
+
+def test_evidence_chunk_and_seeds_are_k1() -> None:
+    """Amendment A-2: evidence chunk k = 1 (the k = 0 chunk was consumed under seal 14)."""
+    assert ev.K_EVIDENCE == 1
+    for case in (1, 2, 3):
+        e = ev.step_expectation("vc-sample", case, "warp-cpu")
+        assert e["k"] == 1 and e["seed"] == 20612004 + 100 * (case - 1) + 1
+        d = ev.step_expectation("vc2d-sample", case, "python")
+        assert d["k"] == 1 and d["seed"] == 20613505
 
 
 # ------------------------------------------------------------------ manifest generator

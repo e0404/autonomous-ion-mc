@@ -28,7 +28,7 @@ Every evidence run is then checked and marked invalid (never silently dropped) o
     seal an ancestor of ``code_sha``; ionmc runs: signed host-run record, published outputs,
     step document bound to the run, identity block and table identities equal the pins of
     ``vc-predictions.json``, environment digests equal the seal, ``warp_modules`` identical across
-    all runs of one backend, start after the seal review finished; TOPAS runs (signed
+    all runs of one backend and row (amendment A-2), start after the seal review finished; TOPAS runs (signed
     reference-runner records): start after both reviews finished (the seal review and the
     ionmc-samples review), (e) executed ``input.txt`` / ``case.json`` equal the sealed bundle, the
     r2 run-validity checks (stderr, histories, UrbanMsc, frozen physics lines, modules).
@@ -132,6 +132,10 @@ MODEL_DEFAULT = "bethe-ionmc-v1"
 MODELS = (MODEL_ICRU90, MODEL_DEFAULT)
 BACKENDS = ("python", "warp-cpu")
 ION13_BASE = 20612004
+# Amendment A-2 (2026-11-22, IR-20261120-111407-B2596D): the evidence chunk is k = 1 for every ionmc
+# sample (seeds ION13_BASE + 100*r_index + 1); the k = 0 chunk was consumed under seal 14 (its
+# V-C2-D end points were inspected while the sealed Warp-attestation rule was found defective).
+K_EVIDENCE = 1
 TOPAS13_BASE = 20610000
 EVIDENCE_PARTS = (0, 1, 2, 3)
 REPEAT_OFFSET = 4
@@ -606,13 +610,17 @@ def vc2d_verdict(
 
 
 def warp_modules_problems(runs: Sequence[Mapping[str, Any]]) -> dict[str, str]:
-    """{run_id: problem} for every ionmc run of a backend whose ``warp_modules`` are not identical
-    to those of all other runs of that backend (python: all None; warp-cpu: identical non-empty
-    maps). When the runs of a backend disagree every one of them is marked (the reference cannot
-    be known)."""
+    """{run_id: problem} for every ionmc run whose ``warp_modules`` are not identical to those of
+    all other runs of the same backend AND row (python: all None; warp-cpu: identical non-empty
+    maps within the group). When the runs of a group disagree every one of them is marked (the
+    reference cannot be known). Amendment A-2 (IR-20261120-111407-B2596D): the groups are
+    (backend, row) because the two rows legitimately compile different Warp module sets (the
+    deterministic ``vc2d-sample`` row has multiple scattering and straggling off); identical
+    attestations are required only within a row, exactly as before within the group."""
     out: dict[str, str] = {}
-    for backend in sorted({r["backend"] for r in runs}):
-        group = [r for r in runs if r["backend"] == backend]
+    groups = sorted({(r["backend"], r["row"]) for r in runs})
+    for backend, row in groups:
+        group = [r for r in runs if r["backend"] == backend and r["row"] == row]
         mods = [r.get("warp_modules") for r in group]
         if backend == "python":
             bad = [r for r in group if r.get("warp_modules") is not None]
@@ -620,7 +628,7 @@ def warp_modules_problems(runs: Sequence[Mapping[str, Any]]) -> dict[str, str]:
         else:
             same = all(isinstance(m, dict) and m and m == mods[0] for m in mods)
             bad = [] if same else group
-            note = "warp_modules are empty or not identical across the runs of the backend"
+            note = f"warp_modules are empty or not identical across the {backend} runs of row {row}"
         out.update({r["run_id"]: note for r in bad})
     return out
 
@@ -648,16 +656,16 @@ def expected_ionmc_runs() -> list[tuple[str, int, str, str]]:
 
 
 def step_expectation(row: str, case: int, backend: str) -> dict[str, Any]:
-    common = {"case": case, "ion": "he", "k": 0, "backend": backend, "precision": "float64",
+    common = {"case": case, "ion": "he", "k": K_EVIDENCE, "backend": backend, "precision": "float64",
               "valid": True, "pass": True}  # fmt: skip
     if row == "vc-sample":
         return common | {
-            "row": row, "seed": ION13_BASE + 100 * (case - 1), "r_index": case - 1,
+            "row": row, "seed": ION13_BASE + 100 * (case - 1) + K_EVIDENCE, "r_index": case - 1,
             "histories": N_HISTORIES, "frozen_histories": N_HISTORIES, "reduced": False,
             "n_batches": N_BATCHES,
         }  # fmt: skip
     return common | {
-        "row": row, "seed": ION13_BASE + 1500, "r_index": 15, "histories": N_HISTORIES_D,
+        "row": row, "seed": ION13_BASE + 1500 + K_EVIDENCE, "r_index": 15, "histories": N_HISTORIES_D,
         "n_batches": N_BATCHES_D, "end_codes_all_cutoff": True, "e_end_all_at_or_below_cut": True,
     }  # fmt: skip
 
@@ -1007,7 +1015,7 @@ def load_index(
     ion: dict[tuple, dict] = {}
     for e in idx["ionmc"]:
         key = (e.get("row"), e.get("case"), e.get("model"), e.get("backend"))
-        if key in ion or key not in expected_ionmc_runs() or e.get("k") != 0:
+        if key in ion or key not in expected_ionmc_runs() or e.get("k") != K_EVIDENCE:
             raise RecordError(f"unexpected or duplicate ionmc run {key}")
         ion[key] = e
     missing = [k for k in expected_ionmc_runs() if k not in ion]
@@ -1217,7 +1225,8 @@ def evaluate(
         r.problems = list(dict.fromkeys(r.problems))
     mods = warp_modules_problems(
         [
-            {"run_id": r.run_id, "backend": r.backend, "warp_modules": r.doc.get("warp_modules")}
+            {"run_id": r.run_id, "backend": r.backend, "row": r.row,
+             "warp_modules": r.doc.get("warp_modules")}
             for r in ion_runs
         ]
     )
@@ -1242,7 +1251,8 @@ def evaluate(
         },  # fmt: skip
         "runs": {"ionmc": [r.summary() for r in ion_runs],
                  "topas": [t.summary() for c in CASES for _, t in sorted(topas[c].items())]},  # fmt: skip
-        "warp_modules_runs": {b: sorted(r.run_id for r in ion_runs if r.backend == b) for b in BACKENDS},
+        "warp_modules_runs": {f"{b}/{row}": sorted(r.run_id for r in ion_runs if r.backend == b and r.row == row)
+                              for b in BACKENDS for row in ("vc-sample", "vc2d-sample")},
         **sci,
         "vc3": {"note": "report-only; committed aggregates", "source": VC3, "content": vc3},
         "evidence_record": EVIDENCE_PASS if all_pass else EVIDENCE_FAIL,

@@ -532,3 +532,21 @@ OPEN. Not a clinical claim."
   (the k = 0 V-C2-D end points were printed while checking; the `vc-sample` npz was not inspected); tests; new seal
   with its reviews before any further run. The 13 seal-14 runs remain committed as records, not evidence. No TOPAS
   run has been started. Not a clinical claim.
+- 2026-11-22 (orchestrator, **amendment A-2** — prospective, authorized by the operator, IR-20261120-111407-B2596D
+  "A: amend"): (1) the sealed evaluator's Warp kernel-attestation rule compares `warp_modules` within each
+  (backend, row) group instead of across all runs of a backend: identical non-empty maps across all warp-cpu runs
+  of the same row (`vc-sample`; `vc2d-sample`), `None` for every python run in every row; a difference within a
+  group marks every run of that group invalid, exactly as before; legitimate differences between the rows (the
+  deterministic row compiles `wp_transport_float64_diag_*`, the sampled row `wp_transport_float64_plain_*` plus the
+  table kernel) are accepted; the result JSON records the attestation groups per `backend/row`. (2) The evidence
+  chunk is k = 1 for all 18 ionmc samples (`K_EVIDENCE` in the evaluator): `vc-sample` seeds 20612005 / 20612105 /
+  20612205 (cases 1–3, identical for both models), V-C2-D seed 20613505; these seeds lie inside the `ion13`
+  family (§C, k ≤ 99), are disjoint from every other family (seed-guard tests) and have never been used; the
+  k = 0 chunk is consumed (its V-C2-D end points were inspected under seal 14). (3) Regression tests: the rule
+  accepts row-distinct module sets and rejects a within-row difference (only that row's warp-cpu runs), still
+  rejects modules on python runs; the chunk and seed expectations are asserted. (4) The 13 seal-14 runs and the
+  defect finding stay committed (`samples-seal14/`, `host-records/`, the STOP note above) as records, not evidence.
+  Nothing else changes: sample definitions (`steps_v13.py` untouched), bundles, predictions, tolerances, the
+  V-C1/V-C2/V-C2-D/V-C3 criteria and the gate rules. The evaluator is a sealed file, so this commit is seal
+  candidate 15; its signed Codex review and the pin commit's review precede any further sample run. Not a
+  clinical claim.
