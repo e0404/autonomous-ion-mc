@@ -505,7 +505,7 @@ OPEN. Not a clinical claim."
   committed; no evidence seed has been used. This commit is the seal candidate; its signed Codex review becomes the
   new seal, recorded by the next pin commit (which replaces `seal-review.json` and the one seal pin note, keeping the
   superseded pin in prose). Sample runs will request `timeout_seconds` 14400 explicitly. Not a clinical claim.
-- 2026-11-20 (orchestrator, SEAL 14 — §D step 3 pin note): seal review REVIEW-827ab1047ed1485db2cd3906ce591731 at b16e60259acfc8fb3f5e6b6a239785635a93416e; manifest sha256 e3de22c5b7e5010ce9641885805a68d57d599e9eb5b2c20d1adb09bcffc91f9f
+- 2026-11-20 (orchestrator, SEAL 14 — §D step 3 pin note): seal review (superseded 2026-11-22 by seal 15, see below) REVIEW-827ab1047ed1485db2cd3906ce591731 at b16e60259acfc8fb3f5e6b6a239785635a93416e; manifest sha256 e3de22c5b7e5010ce9641885805a68d57d599e9eb5b2c20d1adb09bcffc91f9f
   (signed codex-worker record, verdict pass, no findings, finished 2026-11-20T09:35:14Z; committed verbatim as
   `validation/results/stopping/v3-013/seal-review.json`, replacing the record of the superseded seal REVIEW-0e6ca486
   at ad73d94e, whose pin note above is marked superseded so that exactly one seal pin note remains; verified against
@@ -560,3 +560,16 @@ OPEN. Not a clinical claim."
   object of the fresh Warp kernel cache) and its digest (`warp_modules_sha256`, sha256 of the canonical JSON), with
   `null` for python groups; tests assert the recorded values and the digest recomputation. Frozen manifest
   regenerated: 82 sealed paths, sha256 839635341b92949b055118856079a2a2755bd75ac6ad16c9f706c1e8967a88d6. Seal candidate 15 is this commit. Not a clinical claim.
+- 2026-11-22 (orchestrator, SEAL 15 — §D step 3 pin note): seal review REVIEW-42e8dbb1257340f088da3f6a1cd91240 at 5de58656f5c6f95b9a2f113115929c1d540e8872; manifest sha256 839635341b92949b055118856079a2a2755bd75ac6ad16c9f706c1e8967a88d6
+  (signed codex-worker record, verdict pass, one minor finding on the record of IR-20261119-083449-21B26A, finished
+  2026-11-22T13:39:50Z; committed verbatim as `validation/results/stopping/v3-013/seal-review.json`, replacing the
+  record of the superseded seal REVIEW-827ab104 at b16e6025, whose pin note above is marked superseded so that
+  exactly one seal pin note remains; verified against the committed trust file). The minor finding: the fast-forward
+  of IR-20261119-083449-21B26A was observed (the branch moved to e0e0707e on 2026-11-20 before 09:29 UTC and the
+  worktree was clean) but the operator sent no response text, so the request stays open and no response is
+  fabricated; a dated observation note is added to its README. The sealed closure is the 82 paths of the frozen
+  manifest plus the `src/ionmc` tree 54d226da… at the seal SHA. Next, in order (§D steps 4–6): this pin commit's own
+  Codex review; the 18 ionmc samples at k = 1 (one controlled host run at a time, `timeout_seconds` 14400, each
+  started after this review finished, completion established from the signed record before the next start); the
+  samples commit and its review (second pin note `samples review <id> at <sha>`); the three TOPAS smokes; the
+  evidence parts 0–3; the sealed evaluator. Not a clinical claim.
