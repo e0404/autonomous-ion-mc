@@ -389,6 +389,31 @@ def world(tmp_path: Path) -> World:
 
 
 # ------------------------------------------------------------------ consistent data passes
+def test_result_records_the_warp_module_hashes_per_group(world: World) -> None:
+    """Plan §D step 3: the evaluator records the identical warp_modules hashes in its result,
+    per backend/row group, with a digest that recomputes from the recorded map."""
+    import hashlib
+
+    res = world.run()
+    groups = res["warp_modules_runs"]
+    for key in ("warp-cpu/vc-sample", "warp-cpu/vc2d-sample"):
+        g = groups[key]
+        assert g["identical"] is True and g["warp_modules"] == {"m/k.so": "1" * 64}
+        canon = json.dumps(g["warp_modules"], sort_keys=True, separators=(",", ":")).encode()
+        assert (
+            g["warp_modules_sha256"]
+            == hashlib.sha256(canon).hexdigest()
+            == ev.warp_modules_digest(g["warp_modules"])
+        )
+        assert g["file_count"] == 1 and g["run_ids"] == sorted(g["run_ids"]) and g["run_ids"]
+    for key in ("python/vc-sample", "python/vc2d-sample"):
+        g = groups[key]
+        assert (
+            g["warp_modules"] is None and g["warp_modules_sha256"] is None and g["file_count"] == 0
+        )
+    assert ev.warp_modules_digest(None) is None and ev.warp_modules_digest({}) is None
+
+
 def test_consistent_synthetic_evidence_passes_every_check(world: World) -> None:
     res = world.run()
     assert all(r["valid"] for r in res["runs"]["ionmc"]), [
@@ -623,8 +648,21 @@ def test_differing_warp_modules_invalidate_every_run_of_the_backend_and_row(tmp_
     assert warp_d and all(r["valid"] for r in warp_d)
     assert all(r["valid"] for r in res["runs"]["ionmc"] if r["backend"] == "python")
     assert res["evidence_record"] == ev.EVIDENCE_FAIL
-    assert set(res["warp_modules_runs"]) == {"python/vc-sample", "python/vc2d-sample",
-                                             "warp-cpu/vc-sample", "warp-cpu/vc2d-sample"}  # fmt: skip
+    groups = res["warp_modules_runs"]
+    assert set(groups) == {"python/vc-sample", "python/vc2d-sample",
+                           "warp-cpu/vc-sample", "warp-cpu/vc2d-sample"}  # fmt: skip
+    bad = groups["warp-cpu/vc-sample"]
+    assert (
+        bad["identical"] is False
+        and bad["warp_modules"] is None
+        and bad["warp_modules_sha256"] is None
+    )
+    good = groups["warp-cpu/vc2d-sample"]
+    assert good["identical"] is True and good["warp_modules"] == {"m/k.so": "1" * 64}
+    assert good["warp_modules_sha256"] == ev.warp_modules_digest({"m/k.so": "1" * 64})
+    assert good["file_count"] == 1 and len(good["run_ids"]) == len(warp_d)
+    assert groups["python/vc2d-sample"]["warp_modules"] is None
+    assert groups["python/vc2d-sample"]["warp_modules_sha256"] is None
 
 
 def test_ionmc_run_started_before_the_seal_review_finished_is_invalid(tmp_path: Path) -> None:

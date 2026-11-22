@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "git_sha": "9926cc00c1d889b51fa510b02e2936aef2b7f5f5",
+  "request_id": "IR-20261120-111407-B2596D",
+  "created_at_utc": "2026-11-20T11:14:07.789370+00:00",
+  "task_id": "V3-013",
+  "category": "authorization",
+  "summary": "Seal 14 is complete (REVIEW-827ab104 at b16e6025, pin c1cfaf9b reviewed by REVIEW-060a528a) and the ionmc samples started: 12 deterministic V-C2-D runs and the first 1e6-history sample (4411 s, all 13 pass with identity, environment and expectations equal to the seal). Checking the records against the sealed evaluator revealed a defect in the evaluator itself: warp_modules_problems() requires identical Warp kernel attestations across ALL runs of a backend, but the deterministic row (MCS and straggling off) compiles a different module set (\"wp_transport_float64_diag_*\", 2 modules) than the sampled row (\"wp_transport_float64_plain_*\" + the table kernel, 3 modules); within each row every run is identical. As sealed, the evaluator would mark all seven warp-cpu runs invalid and fail V-C1/V-C2 for a non-physical reason. The plan handles this by a prospective dated amendment with a new seal (seen samples consumed). I request authorization for that narrow amendment of the sealed evaluator; sample runs are halted until it is reviewed and re-sealed.",
+  "investigation": {
+    "blocked_claim": "The sealed evaluator (v13_evaluate.py, seal 14) would mark every warp-cpu ionmc sample invalid because its Warp kernel-attestation rule compares across rows that legitimately compile different kernel sets; a sealed-file change needs authorization and a new seal before any further run.",
+    "finding": "warp_modules_problems() groups by backend only (v13_evaluate.py ~line 608); vc2d-sample warp-cpu runs record modules wp_transport_float64_diag_f805e80a_{a0a96a2,f805e80} (6 files), vc-sample runs record wp__table_node_kernel__locals__nodes_160cf81d_930f1d7 + wp_transport_float64_plain_c272ba79_{2975782,c272ba7} (9 files); applied to the 13 real records it flags 7 of 13 (all warp-cpu); within each row all runs are identical (distinct sets per row = 1).",
+    "runs_made_under_seal_14": {
+      "vc2d_sample": [
+        "RUN-20261120T094304Z-7d3e2ac4",
+        "RUN-20261120T094338Z-832e8809",
+        "RUN-20261120T094406Z-84b47082",
+        "RUN-20261120T094424Z-219c3321",
+        "RUN-20261120T094441Z-743a1061",
+        "RUN-20261120T094457Z-a61f1f64",
+        "RUN-20261120T094516Z-00d622dd",
+        "RUN-20261120T094554Z-faab268e",
+        "RUN-20261120T094630Z-3b20844b",
+        "RUN-20261120T094720Z-7e88b714",
+        "RUN-20261120T094810Z-90ea7ebc",
+        "RUN-20261120T094918Z-300c6d3a"
+      ],
+      "vc_sample": [
+        "RUN-20261120T095026Z-d86b9057 (case 1 icru90, 1e6 histories, 4411 s)"
+      ],
+      "all": "exit 0, pass, counters zero, identity == pins, env == seal, expectations met"
+    },
+    "seen": "V-C2-D telescoped end points and model differences were printed during checking (k=0 seeds consumed); the vc-sample npz content was not inspected",
+    "attempts": [
+      {
+        "approach": "apply the sealed rule warp_modules_problems() to the 13 real step documents in the sandbox",
+        "outcome": "7 of 13 runs flagged (all warp-cpu); defect confirmed; within-row module sets identical",
+        "artifact": "step documents under validation/generated/RUN-*/..../step-stdout.txt in the V3-013 worktree; signed records in .ionmc-cache/host-run-records"
+      }
+    ],
+    "alternatives": [
+      {
+        "option": "keep the rule",
+        "rejected": "false failure of V-C1/V-C2"
+      },
+      {
+        "option": "amend without re-seal",
+        "rejected": "plan §D step 3: any sealed-file change is a new seal"
+      },
+      {
+        "option": "amend + re-seal + rerun with k=1 (requested)",
+        "status": "needs authorization"
+      }
+    ],
+    "budget": "Operator: one decision. Orchestrator: evaluator edit + tests (~1 h incl. two reviews), then ~10 h of sample runs one at a time.",
+    "no_clinical_claim": true
+  },
+  "reason_autonomous_resolution_not_possible": "Category 4 (authorization): the change edits the sealed evaluator after the seal, which your authorizations so far covered only for specific fixes (IR-20261118-182151-FD0238) or offered as an option (IR-20261118-201459-7CFC95, option B). Exact change requested: (a) v13_evaluate.warp_modules_problems groups runs by (backend, row) instead of backend alone, i.e. identical non-empty warp_modules across all warp-cpu runs of the same row (vc-sample; vc2d-sample) and None for every python run; the result JSON records the attestation per (backend, row); (b) because the V-C2-D seeds of k=0 have been seen (I printed the telescoped end points and their model differences while checking the runs), the amendment sets the evidence chunk to k=1 for all 18 samples (plan §C already defines k in 0..99: vc-sample seeds 20612004+100·(case−1)+1, V-C2-D seeds 20613505), i.e. the evaluator's step_expectation uses k=1 and those seeds; the 13 runs made under seal 14 stay committed as records but are not evidence; (c) tests: the rule passes with row-distinct module sets and fails on a within-row difference; seed/k expectations updated; (d) plan: dated amendment A-2 in Status, pin notes for seal 15 after its review. Nothing else changes: tolerances, acceptance criteria, sample definitions (steps_v13.py untouched), bundles, predictions. Cost: one evaluator edit + tests, manifest regeneration, two reviews, then the 18 samples again (≈ 10 h of single-process compute; the lost run is 73 min). Alternatives rejected: leaving the rule as is (false failure); running the samples first and amending afterwards (the plan requires the amendment to be reviewed before any further run, and runs at the old seal are invalid under the new one). Evidence: warp_modules_problems() on the 13 real records flags 7 of 13; per-row distinct module sets = 1 for each row. Operator note: the MCP client aborts waiting for run_host_validation after 1800 s of silence (CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT), but the host run continues and its record appears afterwards; I poll list_host_run_records, so no action is needed unless you prefer a per-server timeout. Not a clinical claim.",
+  "requested_input": "Reply \"A: amend\" to authorize exactly the described evaluator amendment (group the Warp attestation rule by backend and row; evidence chunk k=1; tests; plan amendment A-2; new seal and reviews before any further sample run), or state a different disposition.",
+  "decisions_or_tasks_blocked": null,
+  "status": "resolved",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  },
+  "resolved_at_utc": "2026-11-22T13:26:15.710362+00:00",
+  "response_file": "response.json"
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "git_sha": "9926cc00c1d889b51fa510b02e2936aef2b7f5f5",
+  "request_id": "IR-20261119-083449-21B26A",
+  "created_at_utc": "2026-11-19T08:34:49.241225+00:00",
+  "task_id": "V3-013",
+  "category": "authorization",
+  "summary": "V3-INFRA-008 is merged (PR #94, develop 9926cc0, host-runner cap 14400 s). As you instructed, V3-013 must incorporate it before re-sealing, and the review service's ancestry check requires it. I built the merge commit e0e0707e4b7116ee84735787436de563141cc836 (parents 5b3f3800 = V3-013 head, 9926cc00 = develop; git merge-tree, no conflicts; 5 files: host_runner.py line 34, the IR-7CFC95 record, the timeout test; the three smoke records are byte-identical on both sides). The V3-013 worktree's git directory (.git/worktrees/v3-013) is read-only in my sandbox, exactly as for IR-20261118-134659-22DDF8, so I cannot move the branch and refresh the worktree myself. Please fast-forward the task branch in the worktree to e0e0707e.",
+  "investigation": {
+    "blocked_claim": "V3-013 cannot receive the merged develop head (9926cc0, V3-INFRA-008) from inside the sandbox because .git/worktrees/v3-013 is read-only; without it the review service's ancestry check fails and the seal cannot be regenerated.",
+    "finding": "touch .git/worktrees/v3-013/.write-test -> 'Read-only file system'; .git/refs/heads is writable, but moving the ref without refreshing the worktree index would leave the worktree dirty for every controlled tool.",
+    "attempts": [
+      {
+        "approach": "git merge-tree --write-tree 5b3f3800 9926cc0 + git commit-tree in the main clone",
+        "outcome": "merge commit e0e0707e4b7116ee84735787436de563141cc836 built, no conflicts, tree 6f35a1ff; diff vs 5b3f3800: host_runner.py (1 line), IR-7CFC95 record (3 files), test_host_runner_timeout.py",
+        "artifact": "object in /home/wahln/aiprojects/ion-mc/.git"
+      },
+      {
+        "approach": "merge_task_pull_request for V3-INFRA-008",
+        "outcome": "merged on GitHub as 9926cc0; the local develop sync was refused once (untracked intervention directories) and completed by git merge --ff-only origin/v3/develop in the clean main clone",
+        "artifact": "PR #94"
+      }
+    ],
+    "alternatives": [
+      {
+        "option": "git update-ref from the main clone + commit_task_changes",
+        "rejected": "stale worktree index would stage the pre-merge tree and revert the merge"
+      },
+      {
+        "option": "retire and recreate the V3-013 worktree",
+        "rejected": "create_task_worktree rejects existing remote task IDs"
+      },
+      {
+        "option": "operator fast-forward (precedent IR-20261118-134659-22DDF8)",
+        "status": "requested"
+      }
+    ],
+    "state": {
+      "develop": "9926cc00c1d889b51fa510b02e2936aef2b7f5f5",
+      "v3_013_head": "5b3f3800d94bc95a1cd973bdd6771a51d4870083",
+      "merge_commit": "e0e0707e4b7116ee84735787436de563141cc836",
+      "infra_008": "merged; VAL-20261119-081257-C44423; REVIEW-8393f38bbea344b0b62cb0f7f9bef0bc pass; CI success"
+    },
+    "budget": "Operator: one command. Orchestrator afterwards: manifest regeneration, seal candidate 14, two reviews, then ~10 h of sample runs one at a time.",
+    "no_clinical_claim": true
+  },
+  "reason_autonomous_resolution_not_possible": "Category 4 (authorization / sandbox limit): the sandbox mounts .git/worktrees read-only except for worktrees created in this session; the V3-013 worktree predates it, so git merge/reset/update of its index fail there, and the controlled tools do not offer a branch-sync operation (commit_task_changes with a stale index would stage the old tree and revert the merge; push_task_branch refuses a worktree that looks dirty). Precise action, one command (as for IR-22DDF8): `git -C /home/wahln/aiprojects/ion-mc-worktrees/v3-013 merge --ff-only e0e0707e4b7116ee84735787436de563141cc836` (the object exists in the shared repository; expected result: HEAD e0e0707e, clean status, infrastructure/host_runner/host_runner.py line 34 reads MAX_TIMEOUT_SECONDS = 14400). Optional, to avoid repeating this: make .git/worktrees/v3-013 writable for this session's sandbox. After the fast-forward I regenerate the frozen manifest (host_runner.py is sealed), commit seal candidate 14, record validation, push, request its Codex review and the pin-commit review, and only then start the ionmc samples one at a time with timeout_seconds 14400. No gate waiver requested. Not a clinical claim.",
+  "requested_input": "Reply \"done\" after running `git -C /home/wahln/aiprojects/ion-mc-worktrees/v3-013 merge --ff-only e0e0707e4b7116ee84735787436de563141cc836` (optionally also tell me if the worktree git directory is now writable for the sandbox), or tell me the preferred alternative.",
+  "decisions_or_tasks_blocked": null,
+  "status": "open",
+  "notification": {
+    "status": "sent",
+    "http_status": 200
+  }
+}

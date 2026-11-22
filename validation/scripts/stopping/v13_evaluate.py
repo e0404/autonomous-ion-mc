@@ -633,6 +633,36 @@ def warp_modules_problems(runs: Sequence[Mapping[str, Any]]) -> dict[str, str]:
     return out
 
 
+def warp_modules_digest(mods: Mapping[str, Any] | None) -> str | None:
+    """sha256 over the canonical JSON of a ``warp_modules`` map (None for python runs)."""
+    if not isinstance(mods, dict) or not mods:
+        return None
+    return sha256_bytes(json.dumps(mods, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def warp_modules_groups(ion_runs: Sequence[Any]) -> dict[str, dict[str, Any]]:
+    """The durable attestation record per ``backend/row`` group (plan §D step 3, amendment A-2):
+    the run ids, the canonical ``warp_modules`` map shared by the group (the generated-source and
+    shared-object hashes) and its digest; ``null`` map and digest for python groups; when the
+    group's maps are not identical the map is ``null`` and ``identical`` is false (the runs are
+    then marked invalid by :func:`warp_modules_problems`)."""
+    out: dict[str, dict[str, Any]] = {}
+    for b in BACKENDS:
+        for row in ("vc-sample", "vc2d-sample"):
+            group = sorted((r for r in ion_runs if r.backend == b and r.row == row), key=lambda r: r.run_id)
+            maps = [r.doc.get("warp_modules") if isinstance(r.doc, dict) else None for r in group]
+            identical = bool(group) and all(m == maps[0] for m in maps)
+            shared = maps[0] if identical and isinstance(maps[0], dict) and maps[0] else None
+            out[f"{b}/{row}"] = {
+                "run_ids": [r.run_id for r in group],
+                "identical": identical,
+                "warp_modules": shared,
+                "warp_modules_sha256": warp_modules_digest(shared),
+                "file_count": len(shared) if shared else 0,
+            }
+    return out
+
+
 # ---------------------------------------------------------------------------------------------
 # evidence runs
 # ---------------------------------------------------------------------------------------------
@@ -1251,8 +1281,7 @@ def evaluate(
         },  # fmt: skip
         "runs": {"ionmc": [r.summary() for r in ion_runs],
                  "topas": [t.summary() for c in CASES for _, t in sorted(topas[c].items())]},  # fmt: skip
-        "warp_modules_runs": {f"{b}/{row}": sorted(r.run_id for r in ion_runs if r.backend == b and r.row == row)
-                              for b in BACKENDS for row in ("vc-sample", "vc2d-sample")},
+        "warp_modules_runs": warp_modules_groups(ion_runs),
         **sci,
         "vc3": {"note": "report-only; committed aggregates", "source": VC3, "content": vc3},
         "evidence_record": EVIDENCE_PASS if all_pass else EVIDENCE_FAIL,

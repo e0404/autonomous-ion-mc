@@ -550,3 +550,13 @@ OPEN. Not a clinical claim."
   V-C1/V-C2/V-C2-D/V-C3 criteria and the gate rules. The evaluator is a sealed file, so this commit is seal
   candidate 15; its signed Codex review and the pin commit's review precede any further sample run. Not a
   clinical claim.
+- 2026-11-22 (orchestrator, amendment A-2 completed per Codex REVIEW-176607d4 at e8ef64de, changes_required): (1) the
+  structured intervention records are committed with the amendment: IR-20261120-111407-B2596D (request and the
+  operator's response "A: amend"), and, for completeness of the V3-013 authorization trail, IR-20261118-182151-FD0238
+  (cache_dir fix, "A"), IR-20261117-151541-ED9CA9 and IR-20261118-134659-22DDF8 (ancestry / fast-forward) and
+  IR-20261119-083449-21B26A (fast-forward to e0e0707e, performed by the operator; no response text was recorded).
+  (2) The evaluator's result now records, per `backend/row` group, the run ids, whether the attestations are
+  identical, the canonical `warp_modules` map shared by the group (the sha256 of every generated source and shared
+  object of the fresh Warp kernel cache) and its digest (`warp_modules_sha256`, sha256 of the canonical JSON), with
+  `null` for python groups; tests assert the recorded values and the digest recomputation. Frozen manifest
+  regenerated: 82 sealed paths, sha256 839635341b92949b055118856079a2a2755bd75ac6ad16c9f706c1e8967a88d6. Seal candidate 15 is this commit. Not a clinical claim.
