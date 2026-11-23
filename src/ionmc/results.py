@@ -1525,6 +1525,17 @@ def _check_stopping_pins(doc: dict[str, Any]) -> None:
               >= frozen.REGISTERED_E_MIN_PER_U * (1.0 - 1e-12)
               and top / a_src <= window[proj] * (1.0 + 1e-12),
               "the source energy interval is outside the window of the stopping model")  # fmt: skip
+        if "nuclear" in eff:  # the deuteron cutoff and interval [e_cut_d, transport bound] (config)
+            ec_d, t_bound = eff["nuclear"]["e_cut_deuteron_mev"], eff["nuclear"][
+                "transport_energy_bound_mev"]  # fmt: skip
+            d_a = frozen.PROJECTILES[frozen.DEUTERON_NAME][1]
+            lo_u = frozen.REGISTERED_E_MIN_PER_U
+            _need(ec_d == eff["physics"]["e_cut_deuteron_mev"],
+                  "effective.nuclear.e_cut_deuteron_mev differs from physics")  # fmt: skip
+            _need(ec_d / d_a >= lo_u * (1.0 - 1e-12) and ec_d >= 2.0 * lo_u * d_a
+                  and t_bound / d_a <= window[frozen.DEUTERON_NAME] * (1.0 + 1e-12)
+                  and t_bound <= window[proj] * a_src,
+                  "the deuteron interval is outside the window of the model")  # fmt: skip
         _check_material_rule(doc, mats, frozen.REGISTERED_MATERIAL_RULE[mid])
         resolved = {proj: {"e_min_per_u": frozen.REGISTERED_E_MIN_PER_U,
                            "e_max_per_u": window[proj]}}  # fmt: skip

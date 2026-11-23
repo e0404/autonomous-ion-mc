@@ -843,6 +843,7 @@ def test_unknown_budget_keyword_is_a_type_error(bundle: Path) -> None:
 
 # ---- review REVIEW-9469eb55 regressions -------------------------------------------------------
 
+import copy  # noqa: E402
 import dataclasses  # noqa: E402
 
 from ionmc.configio import sha256_canonical  # noqa: E402
@@ -2229,3 +2230,38 @@ def test_fix10_tabulated_bundle_content_digest_is_registry_bound(tmp_path: Path)
     _mutate(b, content)
     with pytest.raises(ResultFormatError, match="NIST digest"):
         load(b)
+
+
+def test_fix12_nuclear_deuteron_interval_is_bound_to_the_model_window() -> None:
+    from ionmc.physics.stopping_models import STOPPING_MODELS, _canonical, spec_sha256
+
+    mid = "bethe-ionmc-v1"
+    spec = STOPPING_MODELS[mid]
+    d = _pin_doc()
+    st = d["effective"]["stopping"]
+    st.update(
+        model_id_requested=mid, model_id_effective=mid, spec_sha256=spec_sha256(spec),
+        version=spec.version, kind=spec.kind, interpolation=spec.interpolation,
+        range_start=spec.range_start, decision=spec.decision, domain=_canonical(spec.domain),
+        options={**_canonical(spec.options), "class": "BetheStoppingSource",
+                 "ls_requested": "off", "ls_effective": "off"},
+        data_declared=[], data_used=[], content_sha256=None,
+        species_transported=["proton", "deuteron"],
+    )  # fmt: skip
+    del st["domain_resolved"]
+    d["requested"]["physics"] = {"stopping_model": mid}
+    d["effective"]["physics"]["e_cut_deuteron_mev"] = 4.0
+    d["effective"]["nuclear"] = {"e_cut_deuteron_mev": 4.0, "transport_energy_bound_mev": 300.0}
+    d["effective_extra"]["materials"][0]["I_eV_requested"] = None
+    results._check_stopping_pins(d)  # the derivable nuclear run is accepted
+    for _tag, nuc, phys, match in (
+        ("cutoff below the window floor", {"e_cut_deuteron_mev": 3.0}, 3.0, "deuteron"),
+        ("bound above the table coverage", {"transport_energy_bound_mev": 2000.0}, 4.0,
+         "deuteron"),
+        ("cutoff mismatch", {"e_cut_deuteron_mev": 5.0}, 4.0, "e_cut_deuteron"),
+    ):  # fmt: skip
+        bad = copy.deepcopy(d)
+        bad["effective"]["nuclear"].update(nuc)
+        bad["effective"]["physics"]["e_cut_deuteron_mev"] = phys  # coherent except the mismatch
+        with pytest.raises(ResultFormatError, match=match):
+            results._check_stopping_pins(bad)
