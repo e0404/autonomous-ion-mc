@@ -117,7 +117,16 @@ def test_mismatching_input_file_and_unknown_role_are_tier2_failures(
 
 def test_mutated_effective_pointer_is_a_tier2_failure_not_a_tier1_one(tmp_path: Path) -> None:
     b = save(make_result(tally=True), tmp_path / "b")
-    _mutate(b, lambda d: d["effective"].__setitem__("max_steps", d["effective"]["max_steps"] + 1))
+
+    def bump(d: dict[str, Any]) -> None:  # coherently: the N-channel bound is max_steps 2 pieces
+        d["effective"]["max_steps"] += 1
+        for c in d["effective"]["tallies"]["channels"]:
+            if c["kind"] == "N":
+                c["bound_per_history"] = (
+                    float(d["effective"]["max_steps"]) * 2.0 * d["effective"]["scoring_pieces"]
+                )
+
+    _mutate(b, bump)
     # the persisted files are rewritten by _mutate: result.json is not hashed in `files`
     assert load(b).binding_limits  # tier 1 accepts (a declared limit)
     rep = verify_effective(b)

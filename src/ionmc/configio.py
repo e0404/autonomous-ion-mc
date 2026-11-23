@@ -458,10 +458,13 @@ def reader_item_sha256s(
     requested: Mapping[str, Any],
     geometry_arrays: Mapping[str, Any],
     lookup_provenance: list[dict[str, Any]],
+    material_resolver: Callable[[str], dict[str, Any]] | None = None,
 ) -> dict[str, str]:
     """Role -> ``item_sha256`` recomputed from a persisted ``requested`` document, the persisted
     geometry arrays and the persisted lookup provenance records (no file is opened); equals the
-    loader's value for the same configuration (see :func:`_geometry_items`)."""
+    loader's value for the same configuration (see :func:`_geometry_items`). A name-only voxel
+    material is expanded by ``material_resolver(name)`` (the ``_material_dict`` form), by default
+    through the live ``MATERIALS`` registry; a result reader passes its frozen definitions."""
     out: dict[str, str] = {}
     g = requested["geometry"]
     if g["type"] == "voxel":
@@ -469,7 +472,12 @@ def reader_item_sha256s(
         mats = []
         for name in g["materials"]:
             rec = defs[name]
-            mats.append(_material_dict(MATERIALS[name]) if set(rec) == {"name"} else rec)
+            if set(rec) != {"name"}:
+                mats.append(rec)
+            elif material_resolver is not None:
+                mats.append(material_resolver(name))
+            else:
+                mats.append(_material_dict(MATERIALS[name]))
         for role, arr in geometry_arrays.items():
             item: dict[str, Any] = {
                 "role": role,

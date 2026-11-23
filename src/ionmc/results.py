@@ -26,6 +26,7 @@ the authoritative identity of the data.
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import getpass
 import hashlib
@@ -1443,41 +1444,58 @@ def _expected_pin_datasets(model_id: str, projectile: str) -> list[str] | None:
 
 
 def _check_stopping_pins(doc: dict[str, Any]) -> None:
-    """Registry-backed pin check of ``effective.stopping`` (specs are immutable): the declared
-    pins equal the registered spec's, and ``data_used`` holds exactly the pins of the model for
-    each transported projectile (each equal to the registered pin, a table of a geometry
-    material), none for an analytic model. A model that is not registered (a user object) is a
-    declared binding limit."""
-    st = doc["effective"]["stopping"]
+    """Registry-backed check of the COMPLETE derivable identity of ``effective.stopping`` (specs
+    are immutable): version, kind, spec hash, interpolation, range start, decision, domain,
+    declared pins and options (the requested spec's options plus the class and the requested and
+    effective LS mode) equal the registered spec's, and ``data_used`` is exactly the multiset of
+    ``(projectile, material, pin)`` uses of the run: the source projectile x the geometry
+    materials (plus water when tallies need the LET row) x the pins the model reads for that
+    projectile; none for an analytic model. A user stopping object is bound to the requested
+    record's class, model id and spec hash (and nothing else); a model that is not registered
+    keeps its declared binding limit."""
+    eff, rq = doc["effective"], doc["requested"]
+    st = eff["stopping"]
+    rec = rq["physics"].get("stopping")
+    if isinstance(rec, dict):  # a user stopping object: the requested record is all there is
+        obj = rec.get("stopping_object", {})
+        _need(st["model_id_requested"] == obj.get("model_id")
+              and st["options"].get("class") == obj.get("class"),
+              "effective.stopping model id or class differs from the request")  # fmt: skip
+        if st["model_id_effective"] == st["model_id_requested"]:
+            _need(st["spec_sha256"] == obj.get("spec_sha256"),
+                  "effective.stopping.spec_sha256 differs from the request")  # fmt: skip
     spec = STOPPING_MODELS.get(st["model_id_effective"])
-    if spec is None:
+    req_spec = STOPPING_MODELS.get(st["model_id_requested"])
+    if spec is None or req_spec is None:
         return
-    _need(st["spec_sha256"] == spec_sha256(spec),
-          "effective.stopping.spec_sha256 differs from the registered model spec")  # fmt: skip
     declared = [_canonical(p) for p in spec.data]
-    _need(st["data_declared"] == declared, "effective.stopping.data_declared differs from the "
-          "registered model")  # fmt: skip
-    mats = set(doc["effective"]["geometry"]["materials"])
-    want: set[tuple[str, str]] | None = set()
-    for sp in st["species_transported"]:
-        ids = [] if spec.kind == "analytic" else _expected_pin_datasets(spec.model_id, sp)
-        if ids is None:  # a registered model without a known per-projectile rule: pins only
-            want = None
-            break
-        assert want is not None
-        want |= {(sp, i) for i in ids}
-    got: set[tuple[str, str]] = set()
+    ls_req = str(req_spec.options.get("ls", "off"))
+    options = {**_canonical(req_spec.options), "class": st["options"].get("class"),
+               "ls_requested": ls_req,
+               "ls_effective": ls_req if eff["source"]["z"] >= 2 else "off"}  # fmt: skip
+    for key, want in (
+        ("spec_sha256", spec_sha256(spec)), ("version", spec.version), ("kind", spec.kind),
+        ("interpolation", spec.interpolation), ("range_start", spec.range_start),
+        ("decision", spec.decision), ("domain", _canonical(spec.domain)),
+        ("data_declared", declared), ("options", options),
+    ):  # fmt: skip
+        _need(isinstance(st["options"].get("class"), str) and st[key] == want,
+              f"effective.stopping.{key} differs from the registered model")  # fmt: skip
+    mats = list(eff["geometry"]["materials"])
+    if rq.get("tallies") and "water" not in mats:
+        mats.append("water")  # the LET water row is a table of the run
+    proj = eff["source"]["projectile"]
+    ids = [] if spec.kind == "analytic" else _expected_pin_datasets(spec.model_id, proj)
+    got: collections.Counter[tuple[str, str, str]] = collections.Counter()
     for use in st["data_used"]:
-        proj, mat = use["table"][0], use["table"][1]
-        ds = use["pin"]["dataset_id"]
-        reg = [d for d in declared if d["dataset_id"] == ds]
-        _need(len(reg) == 1 and use["pin"] == reg[0] and mat in mats,
-              "effective.stopping.data_used pin differs from the registered pin or names a "
-              "material outside the geometry")  # fmt: skip
-        got.add((proj, ds))
-    if want is not None:
-        _need(got == want, "effective.stopping.data_used differs from the registered pins: "
-              f"{sorted(got)} != {sorted(want)}")  # fmt: skip
+        reg = [d for d in declared if d["dataset_id"] == use["pin"].get("dataset_id")]
+        _need(len(reg) == 1 and use["pin"] == reg[0] and len(use["table"]) == 2,
+              "effective.stopping.data_used pin differs from the registered pin")  # fmt: skip
+        got[(use["table"][0], use["table"][1], use["pin"]["dataset_id"])] += 1
+    if ids is not None:  # a registered model without a known per-projectile rule: pins only
+        want = collections.Counter((proj, m, i) for i in ids for m in mats)
+        _need(got == want, "effective.stopping.data_used differs from the uses of the run: "
+              f"{sorted(got.items())} != {sorted(want.items())}")  # fmt: skip
 
 
 def _check_materials(doc: dict[str, Any]) -> None:
@@ -1694,6 +1712,63 @@ def _derive_channel_plan(
     return channels, quantities, offset, n_res
 
 
+def _check_channel_numerics(doc: dict[str, Any], got: list[dict[str, Any]]) -> None:
+    """Quantum exponent ``k`` and ``bound_per_history`` of EVERY channel, recomputed as
+    ``compile_channels`` does: E channels ``k = 30`` with the common history energy bound
+    ``e_hist`` (``bounds.E_hi_mev`` for a primary-only run, ``bounds.E_bound_mev`` for a nuclear
+    run); N channels ``k = 0`` with ``max_steps 2 scoring_pieces`` (times ``max_particles`` for a
+    nuclear run); L and FL ``B_L``, LS ``B_LS``, LS2 ``B_LS2``, ES ``B_ES`` with
+    ``k = adaptive_exponent(histories_per_batch, bound)`` (FL shares the exponent of L); FE
+    channels are bound by ``lookup_plan`` (``_check_lookup_plan``). The table-derived inputs
+    (``e_hist`` of a primary-only run beyond ``E_hi``, ``S_w_max``, ``B_L``) are declared limits;
+    their algebraic relations (``B_LS = S_w_max B_L``, ``B_LS2 = S_w_max B_LS``,
+    ``B_ES = S_w_max e_hist``) are enforced."""
+    eff, tl = doc["effective"], doc["effective"]["tallies"]
+    b = tl["bounds"]
+    nuclear = "nuclear" in eff
+    try:
+        hpb = doc["run"]["n_histories"] // doc["run"]["n_batches"]
+        ebs = {c["bound_per_history"] for c in got if c["kind"] == "E"}
+        _need(len(ebs) == 1, "the energy channels have no common per-history bound")
+        e_hist = next(iter(ebs))
+        _need(("E_bound_mev" in b) == nuclear and ("max_particles" in b) == nuclear,
+              "effective.tallies.bounds nuclear entries disagree with the nuclear run")  # fmt: skip
+        if nuclear:
+            _need(b["E_bound_mev"] == e_hist and float(b["max_particles"]) >= 1.0
+                  and float(b["max_particles"]) == int(b["max_particles"]),
+                  "effective.tallies.bounds energy bound or particle limit differs")  # fmt: skip
+        else:
+            _need(b["E_hi_mev"] == e_hist,
+                  "the energy-channel bound differs from bounds.E_hi_mev")  # fmt: skip
+        s_max, b_l = b["S_w_max_mev_per_mm"], b["B_L_mm"]
+        _need(b["B_LS_mev"] == s_max * b_l and b["B_LS2"] == s_max * b["B_LS_mev"]
+              and b["B_ES"] == s_max * e_hist,
+              "effective.tallies.bounds B_LS, B_LS2 or B_ES differ from S_w_max B_L")  # fmt: skip
+        n_bound = float(eff["max_steps"]) * 2.0 * eff["scoring_pieces"] * (
+            int(b["max_particles"]) if nuclear else 1)  # fmt: skip
+        bound = {"E": e_hist, "N": n_bound, "L": b_l, "FL": b_l, "LS": b["B_LS_mev"],
+                 "LS2": b["B_LS2"], "ES": b["B_ES"]}  # fmt: skip
+        k_l = frozen.adaptive_exponent(hpb, b_l) if any(
+            c["kind"] in ("L", "FL") for c in got) else 0  # fmt: skip
+        for c in got:
+            kind = c["kind"]
+            if kind == "FE":
+                continue
+            if kind == "E":
+                k = frozen.E_QUANTUM_EXPONENT
+            elif kind == "N":
+                k = 0
+            elif kind in ("L", "FL"):
+                k = k_l
+            else:
+                k = frozen.adaptive_exponent(hpb, bound[kind])
+            _need(c["k"] == k and c["bound_per_history"] == bound[kind],
+                  f"effective.tallies channel of kind {kind}: the quantum exponent or the "
+                  "bound per history differs from the recomputed plan")  # fmt: skip
+    except (KeyError, TypeError, ValueError) as exc:
+        raise _fail(f"effective.tallies numerical plan is inconsistent: {exc}") from exc
+
+
 def _check_channel_plan(doc: dict[str, Any]) -> None:
     """``effective.tallies`` must EQUAL the plan derived from ``requested`` (its channels except
     the numerical quanta and bounds, its quantities, sizes, residual columns, histories per batch
@@ -1713,6 +1788,7 @@ def _check_channel_plan(doc: dict[str, Any]) -> None:
         _need(core == w, "effective.tallies.channels differ from the plan from requested.tallies")
         # k may be negative (a coarse quantum is legal): only the bound is signed
         _need(c["bound_per_history"] >= 0, "channel bound is negative")
+    _check_channel_numerics(doc, got)
     _need(
         tl["quantities"] == quantities,
         "effective.tallies.quantities differ from the plan from requested.tallies",
@@ -2708,6 +2784,23 @@ def _binding_limits(doc: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(out)
 
 
+def _frozen_material_dict(name: str) -> dict[str, Any]:
+    """The ``configio._material_dict`` form of a built-in material from the FROZEN schema-1.0
+    definitions (never the live registry, which may have drifted since the bundle was written)."""
+    if name not in frozen.MATERIALS:
+        raise _fail(f"requested material {name!r} is not a built-in material of schema 1.0")
+    rho, fractions, i_ev, st, source = frozen.MATERIALS[name]
+    return {
+        "name": name,
+        "density_g_cm3": float(rho),
+        "mass_fractions": {k: float(v) for k, v in fractions.items()},
+        "I_eV": None if i_ev is None else float(i_ev),
+        "sternheimer": None if st is None else dict(zip(
+            ("x0", "x1", "cbar", "a", "m"), (float(x) for x in st), strict=True)),
+        "source": source,
+    }  # fmt: skip
+
+
 def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]]) -> None:
     scoring = {g["name"]: tuple(g["shape"]) for g in doc["effective"].get("scoring", [])}
     nb = doc["run"]["n_batches"]
@@ -2788,7 +2881,9 @@ def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any
         for role, base in (("material_index", "material_index"), ("density", "density_g_cm3"))
         if ("geometry", None, None, base) in by
     }
-    items = reader_item_sha256s(doc["requested"], geo, doc["provenance"]["data"]["lookups"])
+    items = reader_item_sha256s(
+        doc["requested"], geo, doc["provenance"]["data"]["lookups"], _frozen_material_dict
+    )
     for f in doc["input_manifest"]["files"]:
         _need(
             items.get(f["role"]) == f["item_sha256"],

@@ -1454,7 +1454,7 @@ def _bump_table_n_e(d: dict[str, Any]) -> None:
     d["effective"]["tables"]["n_e"] += 1
 
 
-@pytest.mark.parametrize("fn", [_bump_max_steps, _bump_scattering, _bump_table_n_e])
+@pytest.mark.parametrize("fn", [_bump_scattering, _bump_table_n_e])
 def test_a2_table_dependent_effective_fields_are_a_declared_tier1_limit(
     bundle: Path, fn: Any, tmp_path: Path, monkeypatch: Any
 ) -> None:
@@ -1464,6 +1464,12 @@ def test_a2_table_dependent_effective_fields_are_a_declared_tier1_limit(
     monkeypatch.setenv("IONMC_CACHE_DIR", str(tmp_path / "empty"))  # tier 1 must not need it
     got = load(bundle)
     assert got.effective_binding == "bundle-local" and "effective.tables.*" in got.binding_limits[0]
+
+
+def test_fix8_max_steps_is_bound_through_the_piece_count_channel_bound(bundle: Path) -> None:
+    _mutate(bundle, _bump_max_steps)  # the N bound is max_steps 2 scoring_pieces
+    with pytest.raises(ResultFormatError, match="recomputed plan"):
+        load(bundle)
 
 
 def _phys(key: str, value: Any) -> Any:
@@ -1527,9 +1533,11 @@ def test_a2_lookup_plan_is_bound_to_the_persisted_f_max(
     bl = lambda d: tl(d)["bounds"].update(B_L_mm=tl(d)["bounds"]["B_L_mm"] * 1.01)  # noqa: E731
     # the quantum exponent of a channel that feeds a quantity is bound through rounding_bound
     # (fix round 7); the table-derived bound of the plan stays a declared limit
-    with pytest.raises(ResultFormatError, match="rounding_bound"):
+    with pytest.raises(ResultFormatError, match="quantum exponent"):
         load(edit("other_k", other_k))
-    assert load(edit("bl", bl)).binding_limits
+    with pytest.raises(ResultFormatError, match="recomputed plan|bounds"):
+        load(edit("bl", bl))  # B_L is bound to the channel bounds and the derived bounds (fix 8)
+    assert load(lookup_bundle).binding_limits
     d["effective_extra"]["lookup_plan"]  # the unchanged bundle loads (done above)
 
 
@@ -1859,15 +1867,28 @@ def _pin_doc(**over: Any) -> dict[str, Any]:
     spec = STOPPING_MODELS[NIST_MODEL_ID]
     pin = next(_canonical(p) for p in spec.data if p.dataset_id == "nist-pstar-water-2005")
     st: dict[str, Any] = {
+        "model_id_requested": NIST_MODEL_ID,
         "model_id_effective": NIST_MODEL_ID,
         "spec_sha256": spec_sha256(spec),
+        "version": spec.version,
+        "kind": spec.kind,
+        "interpolation": spec.interpolation,
+        "range_start": spec.range_start,
+        "decision": spec.decision,
+        "domain": _canonical(spec.domain),
+        "options": {**_canonical(spec.options), "class": "C", "ls_requested": "off",
+                    "ls_effective": "off"},
         "species_transported": ["proton"],
         "data_declared": [_canonical(p) for p in spec.data],
         "data_used": [{"pin": pin, "role_in_this_run": "construction",
                        "table": ["proton", "water"], "cache_dir": None}],
     }  # fmt: skip
     st.update(over)
-    return {"effective": {"stopping": st, "geometry": {"materials": ["water"]}}}
+    return {
+        "effective": {"stopping": st, "geometry": {"materials": ["water"]},
+                      "source": {"projectile": "proton", "z": 1}},
+        "requested": {"physics": {"stopping_model": NIST_MODEL_ID}, "tallies": []},
+    }  # fmt: skip
 
 
 def test_fix7_stopping_pins_are_registry_backed() -> None:
@@ -1881,8 +1902,31 @@ def test_fix7_stopping_pins_are_registry_backed() -> None:
             p["archive_sha256"] = "0" * 64
     with pytest.raises(ResultFormatError, match="data_declared|pin"):
         results._check_stopping_pins(d)
-    d = _pin_doc()  # a pin of a projectile that was not transported
-    d["effective"]["stopping"]["species_transported"] = ["alpha"]
+    d = _pin_doc()  # a different source projectile needs different pins
+    d["effective"]["source"].update(projectile="alpha", z=2)
+    with pytest.raises(ResultFormatError, match="data_used"):
+        results._check_stopping_pins(d)
+
+
+def test_fix8_stopping_identity_is_complete_and_data_used_is_an_exact_multiset() -> None:
+    results._check_stopping_pins(_pin_doc())
+    for key, bad in (("version", "9"), ("kind", "analytic"), ("interpolation", "x"),
+                     ("range_start", "x"), ("decision", "x"), ("domain", {}),
+                     ("options", {"class": "C"})):  # fmt: skip
+        with pytest.raises(ResultFormatError, match=key):
+            results._check_stopping_pins(_pin_doc(**{key: bad}))
+    d = _pin_doc()  # a duplicated use is not the multiset of the run
+    st = d["effective"]["stopping"]
+    st["data_used"] = [st["data_used"][0], dict(st["data_used"][0])]
+    with pytest.raises(ResultFormatError, match="data_used"):
+        results._check_stopping_pins(d)
+    d = _pin_doc()  # a material outside the geometry
+    d["effective"]["stopping"]["data_used"][0]["table"] = ["proton", "bone"]
+    with pytest.raises(ResultFormatError, match="data_used"):
+        results._check_stopping_pins(d)
+    d = _pin_doc()  # tallies add the LET water row: a missing use is detected
+    d["effective"]["geometry"]["materials"] = ["air"]
+    d["requested"]["tallies"] = [{"name": "t"}]
     with pytest.raises(ResultFormatError, match="data_used"):
         results._check_stopping_pins(d)
 
@@ -1937,3 +1981,87 @@ def test_fix7_stopping_spec_sha256_is_registry_backed() -> None:
     results._check_stopping_pins(_pin_doc())
     with pytest.raises(ResultFormatError, match="spec_sha256"):
         results._check_stopping_pins(_pin_doc(spec_sha256="0" * 64))
+
+
+def test_fix8_every_channel_exponent_and_bound_is_recomputed(
+    lookup_bundle: Path, tmp_path: Path
+) -> None:
+    d = _doc(lookup_bundle)
+    chans = d["effective"]["tallies"]["channels"]
+    assert {c["kind"] for c in chans} >= {"E", "N"}
+    e_idx = [i for i, c in enumerate(chans) if c["kind"] == "E"]
+    assert all(chans[i]["k"] == 30 for i in e_idx)
+    # an energy-channel exponent 30 -> 29 with the dependent rounding-bound arrays and hashes
+    # coherently rewritten (rounding half-quantum doubles): only the plan recomputation can object
+    b = _copy(lookup_bundle, tmp_path, "e29")
+    for q in d["effective"]["tallies"]["quantities"]:
+        if q["kind"] == "linear" and chans[q["numerator"]]["kind"] == "E":
+            _alter(
+                b,
+                f"grid__{d['effective']['scoring'][chans[q['numerator']]['grid']]['name']}"
+                f"__q__{q['name']}__rounding_bound",
+                _scale(Ellipsis, 2.0),
+            )
+    _mutate(b, lambda dd: [dd["effective"]["tallies"]["channels"][i].update(k=29) for i in e_idx])
+    with pytest.raises(ResultFormatError, match="quantum exponent"):
+        load(b)
+    # every other kind: the bound per history and the exponent follow the persisted bounds
+    for tag, fn in {
+        "n_bound": lambda dd: [
+            c.update(bound_per_history=c["bound_per_history"] * 2)
+            for c in dd["effective"]["tallies"]["channels"]
+            if c["kind"] == "N"
+        ],
+        "e_bound": lambda dd: [
+            c.update(bound_per_history=c["bound_per_history"] * 2)
+            for c in dd["effective"]["tallies"]["channels"]
+            if c["kind"] == "E"
+        ],
+        "n_k": lambda dd: [
+            c.update(k=1) for c in dd["effective"]["tallies"]["channels"] if c["kind"] == "N"
+        ],
+        "b_es": lambda dd: dd["effective"]["tallies"]["bounds"].update(
+            B_ES=dd["effective"]["tallies"]["bounds"]["B_ES"] * 2
+        ),
+    }.items():
+        bb = _copy(lookup_bundle, tmp_path, tag)
+        _mutate(bb, fn)
+        with pytest.raises(ResultFormatError):
+            load(bb)
+
+
+def test_fix8_voxel_material_digests_ignore_live_registry_drift(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    from ionmc import materials
+
+    b = save(_voxel_result(30.0), tmp_path / "b")
+    assert load(b).doc["requested"]["materials"] == [{"name": "water"}]
+    drifted = dataclasses.replace(materials.MATERIALS["water"], density_g_cm3=1.5)
+    monkeypatch.setitem(materials.MATERIALS, "water", drifted)
+    from ionmc import configio
+
+    monkeypatch.setitem(configio.MATERIALS, "water", drifted)
+    assert load(b).doc["input_manifest"]["files"]  # frozen definitions, not the live registry
+    _mutate(b, lambda d: d["input_manifest"]["files"][0].update(item_sha256="0" * 64))
+    with pytest.raises(ResultFormatError, match="item_sha256"):
+        load(b)
+
+
+def test_fix8_user_stopping_object_is_bound_to_the_requested_record(tmp_path: Path) -> None:
+    from ionmc.physics.stopping import BetheStoppingSource
+
+    cfg = dataclasses.replace(
+        _config(), physics=PhysicsOptions(nuclear=False, stopping=BetheStoppingSource())
+    )
+    b = save(make_result(cfg=cfg), tmp_path / "b")
+    load(b)
+    for tag, fn in {
+        "class": lambda d: d["effective"]["stopping"]["options"].update(**{"class": "Other"}),
+        "id": lambda d: d["effective"]["stopping"].update(model_id_requested="other"),
+        "sha": lambda d: d["effective"]["stopping"].update(spec_sha256="0" * 64),
+    }.items():
+        bb = _copy(b, tmp_path, tag)
+        _mutate(bb, fn)
+        with pytest.raises(ResultFormatError):
+            load(bb)
