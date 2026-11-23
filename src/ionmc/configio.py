@@ -595,7 +595,10 @@ def to_dict(config: SimulationConfig, *, manifest: InputManifest | None = None) 
         "diagnostics": _fields_dict(config.diagnostics, DIAGNOSTICS_FIELDS),
         "tallies": [_fields_dict(t, TALLY_FIELDS) for t in config.tallies],
         "lookups": [
-            _array_record(t.content_sha256, sha256_canonical(t.provenance()), manifest, None)
+            {
+                **_array_record(t.content_sha256, sha256_canonical(t.provenance()), manifest, None),
+                "units": t.units,  # declared units: the reader derives the channel plan from them
+            }
             for t in config.lookups
         ],
     }
@@ -1100,11 +1103,19 @@ def _lookups_from(
     out: list[LookupTable] = []
     for i, item in enumerate(_seq(v, "lookups")):
         kp = f"lookups[{i}]"
+        declared = None
+        if isinstance(item, dict) and "units" in item:  # written by to_dict; checked below
+            declared = item["units"]
+            item = {k: x for k, x in item.items() if k != "units"}
         src = _read_source(item, kp, manifest, base_dir, None)
         try:
             table = LookupTable.from_file(src.path, expected_sha256=src.sha256)
         except (UnsupportedCombinationError, OSError, ValueError, TypeError, KeyError) as exc:
             raise ConfigError(kp, f"{type(exc).__name__}: {exc}") from exc
+        if declared is not None and declared != table.units:
+            raise ConfigError(
+                f"{kp}.units", f"declares {declared!r} but the table has units {table.units!r}"
+            )
         role = f"lookup:{table.name}"
         if src.ref is not None and src.ref["ref"] != role:
             raise ConfigError(
@@ -1305,12 +1316,17 @@ def from_dict(
     return _from_dict(d, manifest, bd)[0]
 
 
-def _check_array_record(v: Any, kp: str, required: bool) -> None:
+def _check_array_record(v: Any, kp: str, required: bool, units: bool = False) -> None:
     """A serialised array position: reference, not-reconstructible record, file form or null;
-    status/reason are strings, ``ref`` a string and every digest 64 lower-case hex digits."""
+    status/reason are strings, ``ref`` a string and every digest 64 lower-case hex digits. A
+    lookup position (``units=True``) may carry the string ``units`` of the table beside the
+    record."""
     if v is None and not required:
         return
     t = _table(v, kp)
+    if units and "units" in t:
+        _str(t["units"], f"{kp}.units")
+        t = {k: x for k, x in t.items() if k != "units"}
     forms = (
         {"ref", "sha256", "content_sha256"},
         {"status", "reason", "content_sha256"},
@@ -1382,7 +1398,7 @@ def validate_dict_structure(d: Any) -> None:
     for i, t in enumerate(_table_list(top.get("tallies", []), "tallies")):
         _read(t, f"tallies[{i}]", TALLY_FIELDS)
     for i, r in enumerate(_seq(top.get("lookups", []), "lookups")):
-        _check_array_record(r, f"lookups[{i}]", True)
+        _check_array_record(r, f"lookups[{i}]", True, units=True)
     if "output" in top:
         _read(_table(top["output"], "output"), "output", OUTPUT_FIELDS)
 

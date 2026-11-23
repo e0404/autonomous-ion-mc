@@ -966,7 +966,7 @@ def test_cfg7_api_created_lookup_table_is_not_reconstructible() -> None:
     c = _inmemory_lookup_config()
     d = to_dict(c)
     rec = d["lookups"][0]
-    assert set(rec) == {"status", "reason", "content_sha256"}
+    assert set(rec) == {"status", "reason", "content_sha256", "units"}
     assert rec["status"] == "not-reconstructible"
     assert rec["content_sha256"] == c.lookups[0].content_sha256
     _refuses(d, "lookups[0]")

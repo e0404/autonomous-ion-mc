@@ -14,8 +14,9 @@ builder). No table values are ever persisted: array names are checked against an
 
 Strictness of ``load``: unknown/missing fields are refused at every level of the blocks this
 module defines; ``requested`` is checked by ``configio.validate_dict_structure``,
-``input_manifest`` by key forms, ``effective`` only at its top level (deeper levels are a verbatim
-copy of ``summary()``); ``provenance.data/models/environment`` are free-form until S3 defines them.
+``input_manifest`` by key forms, ``effective`` and ``provenance`` against the DECLARED schema of
+``ionmc._result_shapes`` (every nested field typed; open engine tables listed there) and bound to
+``requested``, the run block and the arrays (see ``_check_effective_binding``).
 
 Integrity is two-layered: the sha256 of every file (``files``; depends on the zlib level) and the
 ``content_sha256`` of every array (``dtype.str | shape | C-order bytes``; the digest of
@@ -46,7 +47,7 @@ from typing import Any
 
 import numpy as np
 
-from ionmc._result_shapes import SHAPES, jtype
+from ionmc import _result_shapes as shapes
 from ionmc.configio import (
     ConfigError,
     InputManifest,
@@ -58,12 +59,21 @@ from ionmc.configio import (
     validate_dict_structure,
 )
 from ionmc.geometry import VoxelGeometry
+from ionmc.physics.projectiles import PROJECTILES
 from ionmc.simulation import (
     IonTransportCounters,
     NuclearEnergyBalance,
     NuclearTransportCounters,
     Result,
     TransportCounters,
+)
+from ionmc.transport.channels import (
+    CLASS_LOCAL,
+    CLASS_STEP,
+    GEN_MAX,
+    _generation_range,
+    _species_row,
+    _spectrum_spec,
 )
 
 SCHEMA = "ionmc.result"
@@ -133,10 +143,17 @@ DIAGNOSTIC_ARRAYS: dict[str, tuple[str, str]] = {
     "trace_end_code": ("1", "end code of a traced history"),
     "trace_end_energy_mev": ("MeV", "end energy of a traced history"),
 }
-# Union of the top-level keys of EffectiveConfig.summary() over the REG-2 summaries fixture
-# (tests/ionmc/data/v3_006/summaries-95937553.json; pinned equal by a test). Deeper levels of
-# ``effective`` are a verbatim copy of summary() and are not checked key by key.
-EFFECTIVE_TOP_KEYS = tuple(SHAPES)
+EFFECTIVE_TOP_KEYS = shapes.EFFECTIVE_TOP_KEYS
+STAT_TEXT = {
+    "normalisation": "per primary history",
+    "uncertainty": (
+        "batch standard error of the mean over B batches (history h in batch h mod B); "
+        "ratio quantities by the delta method (decision 0040)"
+    ),
+    "defined_mask": "positive mean energy and positive voxel mass",
+    "sparse_mask": "defined voxels with fewer than B/2 nonzero batches",
+}
+LOW_BATCH_COUNT = 10  # GridResult.low_batch_count is n_batches < 10 (simulation.py)
 _ALLOWED_DTYPES = frozenset({"<f8", "<f4", "<i4", "<i8", "<u4", "|b1", "|u1", "|i1"})
 _NAME_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
 _MEMBER_RE = re.compile(r"^[a-z0-9_-]{1,64}\.npy$")
@@ -602,13 +619,7 @@ def build_document(
             "cache_dir_source": cache_source,
         },
         "statistics": {
-            "normalisation": "per primary history",
-            "uncertainty": (
-                "batch standard error of the mean over B batches (history h in batch h mod B); "
-                "ratio quantities by the delta method (decision 0040)"
-            ),
-            "defined_mask": "positive mean energy and positive voxel mass",
-            "sparse_mask": "defined voxels with fewer than B/2 nonzero batches",
+            **STAT_TEXT,
             "batch_arrays": (
                 {"status": "persisted"}
                 if persist_batches
@@ -1070,111 +1081,330 @@ def _check_extra(x: dict[str, Any]) -> None:
     _need(isinstance(x["resolutions_status"], str), "effective_extra.resolutions_status: type")
 
 
-# ``mcs_mapping`` varies with the MCS mode and the projectile (keys of the unused/off variants are
-# not in the REG-2 fixture); only its JSON type is checked.
-_OPEN_BLOCKS = frozenset({"mcs_mapping"})
-
-
-def _types_ok(v: Any, types: list[str]) -> bool:
-    return jtype(v) in types
+def _schema(value: Any, spec: Any, path: str) -> None:
+    try:
+        shapes.check(value, spec, path)
+    except shapes.SchemaError as exc:
+        raise _fail(str(exc)) from exc
 
 
 def _check_effective(eff: dict[str, Any]) -> None:
-    """``effective`` against the shapes of ``EffectiveConfig.summary()`` (keys and JSON types of
-    every top-level value and of its dict children; deeper levels are a verbatim copy)."""
-    unknown = sorted(set(eff) - set(SHAPES))
-    if unknown:
-        raise _fail(f"effective: unknown field(s) {unknown}")
-    for k, spec in SHAPES.items():
-        if k not in eff:
-            _need(not spec["required"], f"effective: missing required field {k!r}")
-            continue
-        v = eff[k]
-        _need(_types_ok(v, spec["types"]), f"effective.{k}: expected {spec['types']}")
-        if isinstance(v, dict) and "keys" in spec and k not in _OPEN_BLOCKS:
-            ks = spec["keys"]
-            _need(set(v) <= set(ks), f"effective.{k}: unknown field(s) {sorted(set(v) - set(ks))}")
-            for c, cs in ks.items():
-                if c not in v:
-                    _need(not cs["required"], f"effective.{k}: missing required field {c!r}")
-                else:
-                    _need(_types_ok(v[c], cs["types"]), f"effective.{k}.{c}: wrong type")
-
-
-def _is_none_or_container(v: Any) -> bool:
-    return v is None or isinstance(v, dict | list)
-
-
-def _opt_str(v: Any) -> bool:
-    return v is None or isinstance(v, str)
+    """``effective`` against the declared schema of ``EffectiveConfig.summary()`` (every nested
+    field typed; exact integers, finite numbers, list lengths)."""
+    try:
+        shapes.check_effective(eff)
+    except shapes.SchemaError as exc:
+        raise _fail(str(exc)) from exc
 
 
 def _check_provenance(p: dict[str, Any]) -> None:
-    code, env, data, models = p["code"], p["environment"], p["data"], p["models"]
-    _keys(code, "ionmc_version git_commit git_dirty package_tree_oid source status reason".split(),
-          "provenance.code")  # fmt: skip
-    _need(
-        _opt_str(code["ionmc_version"]) and _opt_str(code["git_commit"])
-        and _opt_str(code["package_tree_oid"]) and (code["git_dirty"] is None
-        or isinstance(code["git_dirty"], bool))
-        and code["source"] in ("stamp", "git", "unavailable")
-        and isinstance(code["status"], str) and isinstance(code["reason"], str),
-        "provenance.code: malformed record",
-    )  # fmt: skip
-    _keys(env, "python_version platform numpy_version warp_version warp_devices warp_error".split(),
-          "provenance.environment")  # fmt: skip
-    _need(
-        all(_opt_str(env[k]) for k in ("python_version", "platform", "numpy_version"))
-        and _opt_str(env["warp_version"]) and _opt_str(env["warp_error"])
-        and isinstance(env["warp_devices"], list),
-        "provenance.environment: malformed record",
-    )  # fmt: skip
-    _keys(data, "stopping_data_used stopping_content_sha256 table_sha256 table_stopping_source "
-          "table_materials nuclear lookups".split(), "provenance.data")  # fmt: skip
-    _need(
-        isinstance(data["stopping_data_used"], list) and _opt_str(data["stopping_content_sha256"])
-        and isinstance(data["table_sha256"], str) and isinstance(data["table_stopping_source"], str)
-        and isinstance(data["table_materials"], dict | list)
-        and (data["nuclear"] is None or isinstance(data["nuclear"], dict))
-        and isinstance(data["lookups"], list)
-        and all(isinstance(x, dict) and isinstance(x.get("name"), str) for x in data["lookups"]),
-        "provenance.data: malformed record",
-    )  # fmt: skip
-    _keys(models, "stopping_model_id_effective stopping_version stopping_spec_sha256 "
-          "evidence_at_run straggling_model mcs_model end_of_range_model delta_electrons "
-          "nuclear_table_id".split(), "provenance.models")  # fmt: skip
-    _need(
-        all(_opt_str(models[k]) for k in ("stopping_model_id_effective", "stopping_version",
-            "stopping_spec_sha256", "straggling_model", "mcs_model", "end_of_range_model",
-            "delta_electrons", "nuclear_table_id"))
-        and _is_none_or_container(models["evidence_at_run"]),
-        "provenance.models: malformed record",
-    )  # fmt: skip
+    for blk, spec in (
+        ("code", shapes.PROVENANCE_CODE),
+        ("environment", shapes.PROVENANCE_ENVIRONMENT),
+        ("data", shapes.PROVENANCE_DATA),
+        ("models", shapes.PROVENANCE_MODELS),
+    ):
+        _schema(p[blk], spec, f"provenance.{blk}")
+    _need(p["code"]["source"] in ("stamp", "git", "unavailable"), "provenance.code.source")
+
+
+def _bind(cond: bool, what: str) -> None:
+    _need(cond, f"{what} disagrees with requested")
 
 
 def _check_run_binding(doc: dict[str, Any]) -> None:
-    """Bind run, provenance and statistics scalars to ``effective`` (and ``requested``)."""
-    eff, run = doc["effective"], doc["run"]
-    for k in ("backend", "precision", "production", "n_histories", "n_batches", "cpu_workers",
+    """Bind run, provenance and statistics scalars to ``requested`` (the configuration) and to
+    ``effective``: a field of ``run`` or ``effective`` that is changed without ``requested`` is
+    refused."""
+    eff, run, rq = doc["effective"], doc["run"], doc["requested"]
+    rrun = rq["run"]
+    for k in ("backend", "precision", "seed", "n_histories", "n_batches", "cpu_workers",
               "chunk_histories"):  # fmt: skip
-        _need(run[k] == eff[k], f"run.{k} disagrees with effective.{k}")
-    _need(run["seed"] == eff["seed"], "run.seed disagrees with effective.seed")
+        _bind(run[k] == rrun[k], f"run.{k}")
+        _bind(eff[k] == rrun[k], f"effective.{k}")
+    _need(run["production"] == eff["production"], "run.production disagrees with effective")
     _need(run["rng"] == eff["rng"], "run.rng disagrees with effective.rng")
+    _need(run["n_histories"] >= 1, "run.n_histories must be positive")
     _need(run["n_histories"] % run["n_batches"] == 0, "n_histories is not a multiple of n_batches")
     _need(run["histories_per_batch"] == run["n_histories"] // run["n_batches"],
           "run.histories_per_batch disagrees with n_histories / n_batches")  # fmt: skip
-    _need(run["seed"] == doc["requested"]["run"]["seed"], "run.seed disagrees with requested")
-    st = eff.get("stopping") or {}
+    dev = run["device"].lower()
+    _need(
+        ("cuda" in dev) == (run["backend"] == "warp-cuda") or run["backend"] == "python",
+        "run.device disagrees with the requested backend",
+    )
+    ms = rrun["max_steps"]
+    _bind(eff["max_steps_origin"] == ("user" if ms is not None else "computed"),
+          "effective.max_steps_origin")  # fmt: skip
+    if ms is not None:
+        _bind(eff["max_steps"] == ms, "effective.max_steps")
+    _need(eff["max_steps"] >= 1 and eff["scoring_pieces"] >= 1, "effective step bounds")
+    cd = run["cache_dir"]
+    _need(cd == (eff["stopping"] or {}).get("cache_dir"), "run.cache_dir disagrees with effective")
+    _need((cd is None) == (run["cache_dir_source"] == "not-used"), "run.cache_dir_source")
     p = doc["provenance"]
-    _need(p["models"]["stopping_model_id_effective"] == st.get("model_id_effective"),
-          "provenance.models disagrees with effective.stopping")  # fmt: skip
-    _need(p["data"]["table_sha256"] == eff["tables"]["sha256"],
-          "provenance.data.table_sha256 disagrees with effective.tables")  # fmt: skip
-    _need(len(p["data"]["lookups"]) == len(doc["requested"].get("lookups", [])),
+    st, nuc = eff["stopping"], eff.get("nuclear")
+    ph = eff["physics"]
+    m = p["models"]
+    want_models = {
+        "stopping_model_id_effective": st["model_id_effective"],
+        "stopping_version": st["version"],
+        "stopping_spec_sha256": st["spec_sha256"],
+        "evidence_at_run": st["evidence_at_run"],
+        "straggling_model": ph["straggling_model"] if ph["straggling"] else None,
+        "mcs_model": ph["mcs_model"] if ph["multiple_scattering"] else None,
+        "end_of_range_model": ph["end_of_range_model_effective"],
+        "delta_electrons": ph["delta_electrons"],
+        "nuclear_table_id": None if nuc is None else nuc["table_id"],
+    }
+    _need(m == want_models, "provenance.models disagrees with effective")
+    d = p["data"]
+    want_data = {
+        "stopping_data_used": _strip(st["data_used"], frozenset({"cache_dir"})),
+        "stopping_content_sha256": st["content_sha256"],
+        "table_sha256": eff["tables"]["sha256"],
+        "table_stopping_source": eff["tables"]["stopping_source"],
+        "table_materials": eff["tables"]["materials"],
+        "nuclear": None if nuc is None else _strip(nuc, frozenset({"cache_dir"})),
+    }
+    _need({k: d[k] for k in want_data} == want_data, "provenance.data disagrees with effective")
+    _need(len(d["lookups"]) == len(rq.get("lookups", [])),
           "provenance.data.lookups disagrees with requested.lookups")  # fmt: skip
+    for pl, rl in zip(d["lookups"], rq.get("lookups", []), strict=True):
+        _need(pl["units"] == rl.get("units") and pl["content_sha256"] == rl["content_sha256"],
+              "provenance.data.lookups disagrees with requested.lookups")  # fmt: skip
     _need(doc["effective_extra"]["profile_axis"] == _profile_axis(eff["unit_direction"]),
           "effective_extra.profile_axis disagrees with the source direction")  # fmt: skip
     _need(doc["accounting"]["valid"] == doc["valid"], "accounting.valid disagrees with valid")
+
+
+_PHYSICS_BOUND = (
+    "nuclear straggling straggling_model multiple_scattering mcs_model delta_electrons e_cut_mev "
+    "max_step_mm max_energy_loss_fraction range_alpha range_rho_f_mm short_step_fraction "
+    "truncated_hinge_diagnostic e_cut_ion_mev_per_u end_of_range_model"
+).split()
+
+
+def _check_effective_binding(doc: dict[str, Any]) -> None:
+    """Bind the nested ``effective`` block to ``requested`` and check value semantics (positive
+    bounds, finite geometry): physics options, source, geometry, materials, scoring grids and
+    the compiled channel plan."""
+    eff, rq = doc["effective"], doc["requested"]
+    ph, rph = eff["physics"], rq["physics"]
+    for k in _PHYSICS_BOUND:
+        _bind(ph[k] == rph[k], f"effective.physics.{k}")
+    _bind(("nuclear" in eff) == bool(rph["nuclear"]), "effective.nuclear presence")
+    if "nuclear" in eff:
+        _bind(ph["e_cut_deuteron_mev"] == rph["e_cut_deuteron_mev"], "physics.e_cut_deuteron_mev")
+        _need(ph["e_cut_deuteron_mev"] > 0, "effective.physics.e_cut_deuteron_mev must be positive")
+    smid = rph["stopping_model"]
+    if isinstance(smid, str):
+        _bind(eff["stopping"]["model_id_requested"] == smid, "effective.stopping model id")
+    for k in ("e_cut_mev", "e_cut_ion_mev_per_u", "e_cut_effective_mev", "max_step_mm",
+              "range_alpha", "range_rho_f_mm", "short_step_fraction"):  # fmt: skip
+        _need(ph[k] > 0, f"effective.physics.{k} must be positive")
+    _need(0 < ph["max_energy_loss_fraction"] <= 1, "max_energy_loss_fraction must be in (0, 1]")
+    # source
+    src, rs = eff["source"], rq["source"]
+    rp = rs["projectile"]
+    if isinstance(rp, str):
+        reg = PROJECTILES[rp]
+        want = {"projectile": rp, "z": reg.z, "a": reg.a, "mass_mev": reg.mass_mev}
+    else:
+        want = {
+            k: rp[{"projectile": "name"}.get(k, k)] for k in ("projectile", "z", "a", "mass_mev")
+        }
+    for k, v in want.items():
+        _bind(src[k] == v, f"effective.source.{k}")
+    for k in ("position_mm", "kinetic_energy_mev", "energy_sigma_mev", "lateral_sigma_mm"):
+        _bind(src[k] == rs[k], f"effective.source.{k}")
+    _need(src["kinetic_energy_mev"] > 0 and src["energy_sigma_mev"] >= 0, "source energies")
+    _need(src["lateral_sigma_mm"] >= 0 and src["z"] >= 1 and src["a"] >= 1, "source values")
+    d, rd = eff["unit_direction"], rs["direction"]
+    nrm = math.sqrt(sum(float(c) ** 2 for c in rd))
+    _need(nrm > 0, "requested.source.direction is zero")
+    _need(all(abs(a - float(b) / nrm) <= 1e-9 for a, b in zip(d, rd, strict=True)),
+          "effective.unit_direction is not the normalised requested direction")  # fmt: skip
+    # geometry and materials
+    geo, rg = eff["geometry"], rq["geometry"]
+    if rg["type"] == "voxel":
+        want_g = {k: rg[k] for k in ("origin_mm", "spacing_mm", "shape", "materials", "z_exit_mm")}
+    else:
+        want_g = {"origin_mm": rg["lower_mm"], "spacing_mm": rg["size_mm"], "shape": [1, 1, 1],
+                  "materials": [rg["material"]], "z_exit_mm": None}  # fmt: skip
+    _bind(geo == want_g, "effective.geometry")
+    names = {m["name"] for m in rq.get("materials", [])}
+    _need(set(geo["materials"]) <= names and bool(geo["materials"]),
+          "effective.geometry.materials are not defined in requested.materials")  # fmt: skip
+    _need(all(x > 0 for x in geo["spacing_mm"]) and all(n >= 1 for n in geo["shape"]),
+          "effective.geometry: spacing and shape must be positive")  # fmt: skip
+    _need([m["name"] for m in doc["effective_extra"]["materials"]] == geo["materials"],
+          "effective_extra.materials disagrees with effective.geometry.materials")  # fmt: skip
+    for g in eff["scoring"]:
+        _need(all(x > 0 for x in g["spacing_mm"]) and all(n >= 1 for n in g["shape"]),
+              "effective.scoring: spacing and shape must be positive")  # fmt: skip
+    _check_channel_plan(doc)
+    # statistics definitions and units
+    st = doc["statistics"]
+    for k, v in STAT_TEXT.items():
+        _need(st[k] == v, f"statistics.{k} differs from the engine definition")
+    nb = doc["run"]["n_batches"]
+    for g in st["grids"]:
+        _need(g["valid"] == doc["valid"], "statistics.grids.valid disagrees with valid")
+        _need(g["low_batch_count"] == (nb < LOW_BATCH_COUNT), "statistics low_batch_count")
+        for k, u in (("energy_total_mev", "MeV"), ("dose_max_gy", "Gy"),
+                     ("relative_uncertainty_max", "1")):  # fmt: skip
+            _need(g[k]["units"] == u, f"statistics.grids.{k}: units must be {u!r}")
+    _check_energy_structure(doc)
+
+
+def _check_energy_structure(doc: dict[str, Any]) -> None:
+    eb, n = doc["accounting"]["energy_balance"], len(doc["effective"]["scoring"])
+    for k in ("in_grid_mev", "outside_mev"):
+        _need(len(eb[k]) == n, f"accounting.energy_balance.{k}: one entry per scoring grid")
+    _need(len(eb["quantization_mev"]) in (0, n), "energy_balance.quantization_mev length")
+    if "nuclear_mev" not in eb:
+        total = sum(eb[k] for k in ("step_deposit_mev", "cutoff_mev", "escaped_mev",
+                                    "truncated_mev", "unaccounted_mev"))  # fmt: skip
+        tol = 1e-9 * max(1.0, abs(eb["initial_mev"]))
+        resid = eb["initial_mev"] - total - eb["closure_residual_mev"]
+        _need(abs(resid) <= tol, "energy_balance: closure_residual_mev disagrees with identity")
+
+
+# ---- the channel plan derived from the REQUESTED tallies (no value of effective.tallies is used)
+
+_QRULES = {  # quantity -> (numerator kind, class, denominator, units, definition)
+    "fluence": ("L", CLASS_STEP, None, "mm", "sum of path lengths"),
+    "let_t": ("LS", CLASS_STEP, ("L", CLASS_STEP), "MeV/mm",
+              "sum(l S)/sum(l), S = unrestricted electronic stopping power in water"),
+    "let_d": ("LS2", CLASS_STEP, ("LS", CLASS_STEP), "MeV/mm", "sum(l S^2)/sum(l S), S in water"),
+    "let_d_eps": ("ES", CLASS_STEP, ("E", CLASS_STEP), "MeV/mm",
+                  "sum(eps S)/sum(eps) over step deposits, S in water"),
+}  # fmt: skip
+
+
+def _derive_channel_plan(
+    doc: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, int]:
+    """``(channels, quantities, total_size, n_residual_columns)`` that ``compile_channels`` builds
+    from the requested tallies, grids and lookup units: the channel specs, their deduplication
+    and order, the automatic channels of every used grid, the sizes, offsets and the quantity
+    definitions. The numerical quanta and bounds (``k``, ``bound_per_history``) are not derived."""
+    rq = doc["requested"]
+    grids = rq["scoring"]
+    gi_of = {g["name"]: i for i, g in enumerate(grids)}
+    lnames = [x["name"] for x in doc["provenance"]["data"]["lookups"]]
+    lunits = [r["units"] for r in rq.get("lookups", [])]
+    specs: dict[tuple[Any, ...], dict[str, Any]] = {}
+
+    def get(kind: str, gi: int, cls: int, species: Any, gen: tuple[int, int], li: int = -1,
+            sp: Any = None, pseudo: bool = False) -> tuple[Any, ...]:  # fmt: skip
+        row = _species_row(None if species is None else tuple(species), include_pseudo=pseudo)
+        key = (kind, gi, cls, row, gen, li, None if sp is None else (sp.edges, sp.log))
+        specs.setdefault(key, {"kind": kind, "grid": gi, "class_mask": cls, "row": row,
+                               "gen": gen, "li": li, "sp": sp})  # fmt: skip
+        return key
+
+    qdefs: list[tuple[dict[str, Any], str, tuple[Any, ...], Any, str, str]] = []
+    used: set[int] = set()
+    both = CLASS_STEP | CLASS_LOCAL
+    for t in rq.get("tallies", []):
+        gi = gi_of[t["grid"]]
+        used.add(gi)
+        gen, q, sps = _generation_range(t["generation"]), t["quantity"], t["species"]
+        li, lu, sp = -1, "", None
+        if t["lookup"] is not None:
+            li = lnames.index(t["lookup"])
+            lu = lunits[li]
+        if t["energy_edges_mev_per_u"] is not None:
+            sp = _spectrum_spec(t["name"], tuple(t["energy_edges_mev_per_u"]))
+
+        def spec(kind: str, cls: int, li: int = -1, sp: Any = None, _g: int = gi,
+                 _gen: tuple[int, int] = gen, _s: Any = sps) -> tuple[Any, ...]:  # fmt: skip
+            pseudo = kind == "E" and bool(cls & CLASS_LOCAL) and _s is None
+            return get(kind, _g, cls, _s, _gen, li, sp, pseudo=pseudo)
+
+        if q in ("edep", "dose"):
+            qdefs.append((t, "linear", spec("E", both), None, "MeV", f"sum of deposits ({q})"))
+        elif q in _QRULES:
+            nk, nc, den, units, defn = _QRULES[q]
+            qdefs.append((t, "ratio" if den else "linear", spec(nk, nc),
+                          None if den is None else spec(*den), units, defn))  # fmt: skip
+        elif q == "lookup_sum":
+            qdefs.append((t, "linear", spec("FE", CLASS_STEP, li=li), None, f"MeV*[{lu}]",
+                          "sum(eps f)"))  # fmt: skip
+        elif q == "lookup_dose_avg":
+            qdefs.append((t, "ratio", spec("FE", CLASS_STEP, li=li), spec("E", CLASS_STEP), lu,
+                          "sum(eps f)/sum(eps) over step deposits"))  # fmt: skip
+        elif q == "fluence_spectrum":
+            qdefs.append((t, "linear", spec("FL", CLASS_STEP, sp=sp), None, "mm",
+                          "sum of path lengths per energy bin per nucleon (under/overflow "
+                          "included)"))  # fmt: skip
+        else:
+            raise _fail(f"requested tally {t['name']!r}: unknown quantity {q!r}")
+    for gi in sorted(used):
+        get("N", gi, CLASS_STEP, None, (0, GEN_MAX))
+        get("N", gi, CLASS_LOCAL, None, (0, GEN_MAX), pseudo=True)
+        get("E", gi, CLASS_LOCAL, None, (0, GEN_MAX), pseudo=True)
+    ordered = sorted(specs.items(), key=lambda kv: kv[1]["grid"])
+    channels: list[dict[str, Any]] = []
+    index: dict[tuple[Any, ...], int] = {}
+    offset = n_res = 0
+    for key, s in ordered:
+        shp = grids[s["grid"]]["shape"]
+        nvox = int(shp[0]) * int(shp[1]) * int(shp[2])
+        sp = s["sp"]
+        size = nvox * (sp.n_bins + 2 if sp is not None else 1)
+        index[key] = len(channels)
+        channels.append({
+            "kind": s["kind"], "grid": s["grid"], "class_mask": s["class_mask"],
+            "species": [i for i, v in enumerate(s["row"]) if v], "generation": list(s["gen"]),
+            "lookup": s["li"],
+            "spectrum": None if sp is None else {"edges": list(sp.edges), "log": sp.log},
+            "size": size, "offset": offset,
+        })  # fmt: skip
+        offset += size
+        n_res += s["kind"] != "N"
+    quantities = [
+        {"name": t["name"], "kind": kind, "numerator": index[num],
+         "denominator": None if den is None else index[den], "units": units, "definition": defn}
+        for t, kind, num, den, units, defn in qdefs
+    ]  # fmt: skip
+    return channels, quantities, offset, n_res
+
+
+def _check_channel_plan(doc: dict[str, Any]) -> None:
+    """``effective.tallies`` must EQUAL the plan derived from ``requested`` (its channels except
+    the numerical quanta and bounds, its quantities, sizes, residual columns, histories per batch
+    and memory); without requested tallies it must be null."""
+    eff, rq = doc["effective"], doc["requested"]
+    tl = eff["tallies"]
+    if not rq.get("tallies"):
+        _need(tl is None, "effective.tallies must be null without requested tallies")
+        return
+    _need(tl is not None, "effective.tallies is null although tallies were requested")
+    assert tl is not None
+    channels, quantities, total, n_res = _derive_channel_plan(doc)
+    got = tl["channels"]
+    _need(len(got) == len(channels), "effective.tallies.channels differ from the requested plan")
+    for c, w in zip(got, channels, strict=True):
+        core = {k: v for k, v in c.items() if k not in ("k", "bound_per_history")}
+        _need(core == w, "effective.tallies.channels differ from the plan from requested.tallies")
+        _need(c["k"] >= 0 and c["bound_per_history"] >= 0, "channel quantum or bound is negative")
+    _need(
+        tl["quantities"] == quantities,
+        "effective.tallies.quantities differ from the plan from requested.tallies",
+    )
+    run = doc["run"]
+    nvox = sum(int(g["shape"][0]) * int(g["shape"][1]) * int(g["shape"][2]) for g in rq["scoring"])
+    want = {
+        "n_channels": len(channels), "total_size": total, "n_residual_columns": n_res,
+        "histories_per_batch": run["n_histories"] // run["n_batches"],
+        "memory_bytes": run["n_batches"] * (nvox + total) * 8 * run["cpu_workers"],
+    }  # fmt: skip
+    _need({k: tl[k] for k in want} == want, "effective.tallies sizes differ from the plan")
+    _need(tl["lookups"] == doc["provenance"]["data"]["lookups"],
+          "effective.tallies.lookups differ from provenance.data.lookups")  # fmt: skip
 
 
 def _check_structure(doc: Any) -> None:
@@ -1208,8 +1438,7 @@ def _check_structure(doc: Any) -> None:
     _check_effective(doc["effective"])
     _check_provenance(doc["provenance"])
     _check_run_binding(doc)
-    src = doc["effective"].get("source")
-    _need(isinstance(src, dict) and _is_int(src.get("z")), "effective.source.z: expected integer")
+    _check_effective_binding(doc)
     _check_accounting(doc)
     _check_manifest(_keys(doc["input_manifest"], _MANIFEST, "input_manifest"))
     if not isinstance(doc["arrays"], list):
@@ -1431,7 +1660,6 @@ _PIECE_DEFINITIONS = {
     "scoring_pieces": "scoring pieces of class step per primary",
     "scoring_pieces_local": "scoring pieces of class local (point deposits) per primary",
 }
-_CLASS_LOCAL = 2  # transport.channels.CLASS_LOCAL
 
 
 _F8, _B1, _I4 = {"<f8"}, {"|b1"}, {"<i4", "<i8"}
@@ -1457,33 +1685,26 @@ _QPlan = tuple[str, str, str, list[int], str]  # name, quantity, units, shape, d
 
 
 def _quantity_plan(
-    eff: Mapping[str, Any], req: Mapping[str, Any], gi: int, shape: list[int]
+    plan_q: Mapping[str, Mapping[str, Any]], req: Mapping[str, Any], gi: int, shape: list[int]
 ) -> list[_QPlan]:
-    """Ordered quantities of grid ``gi`` the run must have, from the compiled channel plan
-    (``effective.tallies``): the requested tallies, the excluded-energy channel when the plan has
-    a local-class energy channel on the grid, then the two piece counts."""
-    plan = eff.get("tallies") or {}
+    """Ordered quantities of grid ``gi`` the run must have: the requested tallies (units and
+    definitions from the plan derived from ``requested``, never from ``effective.tallies``), the
+    excluded-energy channel and the two piece counts that every grid with tallies has."""
     grid = req["scoring"][gi]["name"]
-    qd = {q["name"]: q for q in plan.get("quantities", [])}
     out: list[_QPlan] = []
     for t in req.get("tallies", []):
         if t["grid"] != grid:
             continue
-        if t["name"] not in qd:
-            raise _fail(f"requested tally {t['name']!r} has no quantity in effective.tallies")
         q = t["quantity"]
         shp = list(shape)
         if q == "fluence_spectrum":
             shp.append(len(t["energy_edges_mev_per_u"]) + 1)
-        defn = qd[t["name"]]["definition"] + (" per volume" if q in _PER_VOLUME else "")
-        out.append((t["name"], q, _UNIT_OVERRIDE.get(q, qd[t["name"]]["units"]), shp, defn))
+        pq = plan_q[t["name"]]
+        defn = pq["definition"] + (" per volume" if q in _PER_VOLUME else "")
+        out.append((t["name"], q, _UNIT_OVERRIDE.get(q, pq["units"]), shp, defn))
     if not out:
         return out
-    if any(
-        c["kind"] == "E" and c["grid"] == gi and c["class_mask"] == _CLASS_LOCAL
-        for c in plan.get("channels", [])
-    ):
-        out.append(("edep_excluded_from_let", "edep", "MeV", list(shape), _EXCLUDED_DEFINITION))
+    out.append(("edep_excluded_from_let", "edep", "MeV", list(shape), _EXCLUDED_DEFINITION))
     for n, d in _PIECE_DEFINITIONS.items():
         out.append((n, "count", "1", list(shape), d))
     return out
@@ -1494,6 +1715,7 @@ def _expected_catalogue(doc: dict[str, Any], gs: dict[str, str]) -> dict[tuple[A
     req, eff = doc["requested"], doc["effective"]
     nb = doc["run"]["n_batches"]
     persisted = doc["statistics"]["batch_arrays"]["status"] == "persisted"
+    plan_q = {q["name"]: q for q in _derive_channel_plan(doc)[1]}
     exp: dict[tuple[Any, ...], _Expect] = {}
     for gi, g in enumerate(eff["scoring"]):
         n, shape = g["name"], list(g["shape"])
@@ -1508,7 +1730,7 @@ def _expected_catalogue(doc: dict[str, Any], gs: dict[str, str]) -> dict[tuple[A
                 (["batch"] if batch else []) + list(_SPATIAL),
                 units,
             )
-        plan = _quantity_plan(eff, req, gi, shape)
+        plan = _quantity_plan(plan_q, req, gi, shape)
         used: set[str] = set()
         for qi, (qn, q, qunits, shp, qdef) in enumerate(plan):
             qs = safe_name(qn, used)
@@ -1698,6 +1920,15 @@ def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any
         _need(
             st["n_sparse_voxels"] == int(sp.sum()),
             f"statistics.grids[{n!r}].n_sparse_voxels differs",
+        )
+    eb = doc["accounting"]["energy_balance"]
+    for i, g in enumerate(doc["effective"]["scoring"]):
+        en = arrays[by[("grid", g["name"], None, "energy_mev")]]
+        dep = float(np.sum(en)) * doc["run"]["n_histories"]
+        _need(
+            abs(eb["in_grid_mev"][i] - dep) <= 1e-9 * max(1.0, abs(dep)),
+            f"accounting.energy_balance.in_grid_mev[{i}] disagrees with the energy array of "
+            f"grid {g['name']!r}",
         )
     geo = {
         role: arrays[by[("geometry", None, None, base)]]

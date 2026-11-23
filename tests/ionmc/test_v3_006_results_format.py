@@ -59,7 +59,7 @@ def _grid(name: str, shape: tuple[int, ...] = SHAPE, seed: int = 0) -> GridResul
     mask = (en > 0) & (mass > 0)
     return GridResult(
         name, en, std, dose, dstd, rel, mask, mass,
-        np.full(shape, 3, dtype=np.int32), mask & False, False,
+        np.full(shape, 3, dtype=np.int32), mask & False, NB < 10,
         rng.uniform(0.5, 2.0, (NB, *shape)), True,
     )  # fmt: skip
 
@@ -108,9 +108,8 @@ def make_result(
             g = GridResult(*[getattr(g, f) for f in g.__dataclass_fields__ if f != "quantities"],
                            quantities={"let": _quantity(), **_pieces()})  # fmt: skip
         grids.append(g)
-    bal = EnergyBalance(
-        8.0, 7.0, 0.5, 0.25, 0.0, 0.0, tuple(1.0 for _ in names), (6.0,) * len(names)
-    )
+    in_grid = tuple(float(np.sum(g.energy_mev)) * 8 for g in grids)  # bound to the arrays
+    bal = EnergyBalance(8.0, 7.0, 0.5, 0.25, 0.0, 0.0, in_grid, (6.0,) * len(names))
     return Result(
         True, cfg, eff, "python", "cpu", "float64", 11, dict(eff.rng), 8, NB,
         tuple(grids), bal, TransportCounters(), {"total": 0.1},
@@ -319,9 +318,12 @@ def test_out7_undefined_is_nan_and_scalars_carry_status(tmp_path: Path) -> None:
     d0 = np.where(g.mass_g > 0, 0.0, np.nan)
     none = GridResult(
         g.name, z, z, d0, d0, np.full(SHAPE, np.nan), mask & False, g.mass_g, g.n_nonzero_batches,
-        g.sparse_mask, False, g.batch_energy_mev, True,
+        g.sparse_mask, NB < 10, g.batch_energy_mev, True,
     )  # fmt: skip
-    doc = load(save(Result(**{**r.__dict__, "grids": (none,)}), tmp_path / "c")).doc
+    eb = EnergyBalance(8.0, 7.0, 0.5, 0.25, 0.0, 0.0, (0.0,), (6.0,))  # no energy in the grid
+    doc = load(
+        save(Result(**{**r.__dict__, "grids": (none,), "energy_balance": eb}), tmp_path / "c")
+    ).doc
     rec = doc["statistics"]["grids"][0]["dose_max_gy"]
     assert rec["value"] is None and rec["status"] == "undefined" and rec["reason"]
     _mutate(
@@ -636,12 +638,20 @@ def test_effective_top_keys_equal_the_summaries_fixture() -> None:
 # ---- review REVIEW-741411bd regressions -------------------------------------------------------
 
 
+def _invalid(r: Result, **kw: Any) -> Result:
+    """``r`` as an invalid result: the engine marks every grid invalid with the run."""
+    import dataclasses
+
+    grids = tuple(dataclasses.replace(g, valid=False) for g in r.grids)
+    return Result(**{**r.__dict__, "valid": False, "grids": grids, **kw})
+
+
 def _with_channels(lookup: int, path: int) -> Result:
     from ionmc.transport.tally import ChannelRaw
 
     r = make_result()
     raw = ChannelRaw(np.zeros((NB, 1), dtype=np.int64), [], lookup, path)
-    return Result(**{**r.__dict__, "valid": False, "channel_raw": raw})
+    return _invalid(r, channel_raw=raw)
 
 
 @pytest.mark.parametrize("which", ["lookup_out_of_domain", "path_bound_exceeded"])
@@ -874,9 +884,7 @@ def test_item1_bracket_miss_is_diagnostic_only(tmp_path: Path) -> None:
     doc = load(save(r, tmp_path / "b")).doc
     assert doc["valid"] is True and doc["accounting"]["reasons"] == []
     assert doc["accounting"]["counters"]["mcs_table_bracket_miss"] == 5
-    bad = Result(
-        **{**r.__dict__, "valid": False, "counters": IonTransportCounters(mcs_mapping_failure=2)}
-    )
+    bad = _invalid(r, counters=IonTransportCounters(mcs_mapping_failure=2))
     d2 = load(save(bad, tmp_path / "c")).doc
     assert d2["accounting"]["reasons"] == ["mcs_mapping_failure"]
     # the base counter schema is refused for an ion run
@@ -1200,10 +1208,199 @@ def test_item3_role_and_item_digest_mutations(lookup_bundle: Path, tmp_path: Pat
             load(b)
 
 
-def test_result_shapes_match_the_summaries_fixture() -> None:
-    from ionmc._result_shapes import SHAPES, derive
+def test_fixture_summaries_conform_to_the_declared_schema() -> None:
+    """The schema is declared by hand from config.py; every observed summary must conform (the
+    schema is not derived from the fixture)."""
+    from ionmc._result_shapes import check_effective
 
     fx = json.loads(
         (Path(__file__).parent / "data/v3_006/summaries-95937553.json").read_text(encoding="utf-8")
     )
-    assert derive([c["summary"] for c in fx["cases"].values()]) == SHAPES
+    for name, c in fx["cases"].items():
+        check_effective(c["summary"])
+        assert name
+
+
+def test_declared_schema_accepts_a_numeric_z_exit_and_rejects_a_string() -> None:
+    from ionmc._result_shapes import SchemaError, check
+
+    spec = {"z": ("or", "num", "null")}
+    geo = ("rec", spec, frozenset())
+    check({"z": 30.0}, geo)
+    check({"z": None}, geo)
+    check({"z": 30}, geo)
+    with pytest.raises(SchemaError):
+        check({"z": "30"}, geo)
+    with pytest.raises(SchemaError):
+        check({"z": True}, geo)
+
+
+# ---- review REVIEW-b79a1dc7 regressions (fix round 4) -----------------------------------------
+
+
+def _voxel_result(z_exit: float | None) -> Result:
+    from ionmc.geometry import VoxelGeometry as VG
+
+    geo = VG(
+        (-3.0, -2.0, 0.0), (2.0, 2.0, 10.0), SHAPE, (WATER,), np.zeros(SHAPE, dtype=np.int32),
+        z_exit_mm=z_exit,
+    )  # fmt: skip
+    cfg = SimulationConfig(
+        PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 20.0),
+        geo,
+        (ScoringGrid((-3.0, -2.0, 0.0), (2.0, 2.0, 2.0), SHAPE, "dose"),),
+        PhysicsOptions(nuclear=False, stopping_model="bethe-ionmc-v1"),
+        RunOptions("python", "float64", 11, 8, n_batches=NB),
+    )
+    return make_result(cfg=cfg)
+
+
+def test_numeric_z_exit_round_trip_and_binding(tmp_path: Path) -> None:
+    b = save(_voxel_result(30.0), tmp_path / "b")
+    got = load(b)
+    assert got.doc["effective"]["geometry"]["z_exit_mm"] == 30.0
+    assert got.doc["requested"]["geometry"]["z_exit_mm"] == 30.0
+    for bad in (31.0, None, "30"):
+        _mutate(b, lambda d, v=bad: d["effective"]["geometry"].update(z_exit_mm=v))
+        with pytest.raises(ResultFormatError):
+            load(b)
+        _mutate(b, lambda d: d["effective"]["geometry"].update(z_exit_mm=30.0))
+    load(b)
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("backend", "warp-cpu"), ("precision", "float32"), ("seed", 12), ("n_histories", 16),
+     ("n_batches", 2), ("cpu_workers", 2), ("chunk_histories", 7)],
+)  # fmt: skip
+def test_run_and_effective_changed_together_but_not_requested(
+    bundle: Path, key: str, value: Any
+) -> None:
+    def fn(d: dict[str, Any]) -> None:
+        d["run"][key] = value
+        d["effective"][key] = value
+        if key in ("n_histories", "n_batches"):
+            d["run"]["histories_per_batch"] = d["run"]["n_histories"] // d["run"]["n_batches"]
+
+    _mutate(bundle, fn)
+    with pytest.raises(ResultFormatError, match="requested|multiple|Not|histories"):
+        load(bundle)
+
+
+@pytest.mark.parametrize(
+    "fn",
+    [
+        lambda e: e["physics"].update(max_step_mm=5.0),  # differs from requested
+        lambda e: e["physics"].update(max_step_mm=-1.0),
+        lambda e: e["physics"].update(max_step_mm="1"),
+        lambda e: e["physics"].update(max_rejection_attempts=3.5),
+        lambda e: e["physics"].update(nuclear=True),
+        lambda e: e["geometry"].update(origin_mm=[0.0, 0.0]),
+        lambda e: e["geometry"].update(shape=[1.0, 1.0, 1.0]),
+        lambda e: e["geometry"].update(spacing_mm=[1.0, 1.0, 1.0]),
+        lambda e: e["geometry"].update(materials=["unobtainium"]),
+        lambda e: e["geometry"].update(z_exit_mm=4.0),
+        lambda e: e["source"].update(kinetic_energy_mev=21.0),
+        lambda e: e["source"].update(z=2),
+        lambda e: e.update(unit_direction=[0.0, 0.6, 0.8]),
+        lambda e: e["scoring"][0].update(shape=[3, 2, 5]),
+        lambda e: e["scoring"][0].update(spacing_mm=[2.0, 2.0, 3.0]),
+        lambda e: e["rng"].update(key="x"),
+        lambda e: e["stopping"].update(model_id_requested="other"),
+        lambda e: e.update(max_steps_origin="user"),
+    ],
+)
+def test_nested_effective_fields_are_bound_and_typed(bundle: Path, fn: Any) -> None:
+    _mutate(bundle, lambda d: fn(d["effective"]))
+    with pytest.raises(ResultFormatError):
+        load(bundle)
+
+
+@pytest.mark.parametrize(
+    "fn",
+    [
+        lambda d: d["statistics"]["grids"][0].update(valid=False),
+        lambda d: d["statistics"]["grids"][0].update(low_batch_count=False),
+        lambda d: d["statistics"].update(normalisation="per batch"),
+        lambda d: d["statistics"]["grids"][0]["energy_total_mev"].update(units="Gy"),
+        lambda d: d["accounting"]["energy_balance"]["in_grid_mev"].__setitem__(0, 2.0),
+        lambda d: d["accounting"]["energy_balance"].update(closure_residual_mev=0.0),
+        lambda d: d["accounting"]["energy_balance"]["outside_mev"].append(1.0),
+        lambda d: d["provenance"]["models"].update(mcs_model="other"),
+        lambda d: d["provenance"]["data"].update(table_stopping_source="other"),
+        lambda d: d["provenance"]["code"].update(git_dirty="no"),
+        lambda d: d["effective_extra"]["materials"][0].update(name="other"),
+    ],
+)
+def test_statistics_accounting_and_provenance_are_bound(bundle: Path, fn: Any) -> None:
+    _mutate(bundle, fn)
+    with pytest.raises(ResultFormatError):
+        load(bundle)
+
+
+def test_catalogue_units_and_effective_tallies_forged_together(bundle: Path) -> None:
+    def fn(d: dict[str, Any]) -> None:
+        d["effective"]["tallies"]["quantities"][0]["units"] = "Gy"
+        for e in d["arrays"]:
+            o = e["origin"]
+            if o["kind"] == "quantity" and o.get("name") == "let" and o["array"] == "mean":
+                e["units"] = "Gy"
+
+    _mutate(bundle, fn)
+    with pytest.raises(ResultFormatError, match="plan"):
+        load(bundle)
+
+
+def test_local_class_energy_channel_removed_with_catalogue_and_archive(bundle: Path) -> None:
+    pre = "grid__dose__q__edep_excluded_from_let__"
+
+    def fn(d: dict[str, Any]) -> None:
+        t = d["effective"]["tallies"]
+        t["channels"] = [
+            c for c in t["channels"] if not (c["kind"] == "E" and c["class_mask"] == 2)
+        ]
+        t["n_channels"] = len(t["channels"])
+        t["quantities"] = [q for q in t["quantities"] if q["name"] != "edep_excluded_from_let"]
+        d["arrays"] = [e for e in d["arrays"] if not e["name"].startswith(pre)]
+
+    _mutate(bundle, fn)
+    m = {k: v for k, v in _members(bundle).items() if not k.startswith(pre)}
+    _write_zip(bundle, sorted(m.items()))  # also recomputes the recorded file hashes
+    with pytest.raises(ResultFormatError, match="plan"):
+        load(bundle)
+
+
+def test_derived_channel_plan_equals_the_engine_plan_for_every_quantity() -> None:
+    """The reader-side plan builder agrees with ``compile_channels`` (EffectiveConfig.summary())."""
+    from ionmc.configio import to_dict
+    from ionmc.lookup import LookupTable
+
+    table = LookupTable.from_file(
+        Path(__file__).resolve().parents[1] / "data" / "synthetic_lookup.json"
+    )
+    names = ("edep", "dose", "fluence", "let_t", "let_d", "let_d_eps")
+    tallies = [TallyRequest(f"t_{q}", "dose", q) for q in names]
+    tallies += [
+        TallyRequest("t_sum", "dose", "lookup_sum", lookup=table.name),
+        TallyRequest("t_avg", "dose", "lookup_dose_avg", lookup=table.name, species=("proton",)),
+        TallyRequest(
+            "t_spec", "dose", "fluence_spectrum", energy_edges_mev_per_u=(1.0, 2.0, 4.0, 8.0, 16.0)
+        ),
+    ]
+    cfg = SimulationConfig(
+        PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 30.0),
+        BoxPhantom((-3.0, -2.0, 0.0), (6.0, 4.0, 8.0), WATER),
+        (ScoringGrid((-3.0, -2.0, 0.0), (2.0, 2.0, 2.0), SHAPE, "dose"),),
+        PhysicsOptions(nuclear=False, stopping_model="bethe-ionmc-v1"),
+        RunOptions("warp-cpu", "float64", 5, 8, n_batches=NB),
+        tallies=tuple(tallies),
+        lookups=(table,),
+    )
+    eff = validate(cfg)
+    doc = {"requested": to_dict(cfg), "provenance": {"data": {"lookups": [table.provenance()]}}}
+    ch, qs, total, n_res = results._derive_channel_plan(doc)
+    plan = eff.summary()["tallies"]
+    assert [{k: v for k, v in c.items() if k not in ("k", "bound_per_history")} for c in
+            plan["channels"]] == ch  # fmt: skip
+    assert plan["quantities"] == qs
+    assert (plan["total_size"], plan["n_residual_columns"]) == (total, n_res)
