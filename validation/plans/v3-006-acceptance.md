@@ -342,7 +342,7 @@ changes_required, two important findings, resolved in place (path safety and the
 ## Status
 
 - 2026-11-23 (planner, S0): freeze candidate; no code. Base 95937553 (V3-013 integrated). Freeze note:
-  `<placeholder: S0 commit SHA, Codex review id, architecture review>`. Not a clinical claim.
+  see the FREEZE bullet below (S0 commit 02c70fc5, Codex REVIEW-86c75161, architecture review findings 1–10). Not a clinical claim.
 - 2026-11-23 (planner): revised after Codex REVIEW-bd983b92 of 00b5e3de (findings 11–15, resolved in place); the
   revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes. Not a clinical claim.
 - 2026-11-23 (planner): second revision after Codex REVIEW-0f7aad46 of 00989a8b (findings 16–19, resolved in place);
@@ -354,3 +354,9 @@ changes_required, two important findings, resolved in place (path safety and the
 - 2026-11-23 (planner): fourth revision after Codex REVIEW-34a0a3e8 of 84662725 (findings 23–24, resolved in place);
   the revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes. Not a clinical
   claim.
+- 2026-11-23 (orchestrator, FREEZE): decision 0045 and this plan are frozen at the S0 commit 02c70fc5 (fourth
+  revision), whose independent Codex review REVIEW-86c751619fff4b7ead36f794672980ea passed with no findings
+  (finished 2026-11-23T03:31:17Z); the earlier S0 commits 00b5e3de, 00989a8b, 034e3fb8 and 84662725 received
+  changes_required verdicts (REVIEW-bd983b92, REVIEW-0f7aad46, REVIEW-c8397a61, REVIEW-34a0a3e8; findings 11–24,
+  all resolved in the review logs), and the architecture/scientific pre-freeze review (reviewer agent, read-only)
+  recorded findings 1–10. Later changes are dated amendments. Implementation starts with S1. Not a clinical claim.

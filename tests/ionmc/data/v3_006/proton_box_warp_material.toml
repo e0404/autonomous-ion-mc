@@ -1,0 +1,50 @@
+# Documented example 2 (synthetic, tiny): warp-cpu float32, an inline material definition
+# (checked exactly as the API checks a Material) and a LET tally.
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[[materials]]
+name = "synthetic_gel"
+density_g_cm3 = 1.05
+mass_fractions = { H = 0.10, C = 0.20, O = 0.70 }
+I_eV = 70.0
+source = "synthetic composition for the configuration tests"
+
+[[materials]]
+name = "water"
+
+[source]
+projectile = "proton"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 25.0
+
+[geometry]
+type = "box"
+lower_mm = [-10.0, -10.0, 0.0]
+size_mm = [20.0, 20.0, 20.0]
+material = "synthetic_gel"
+
+[[scoring]]
+name = "dose"
+origin_mm = [-10.0, -10.0, 0.0]
+spacing_mm = [4.0, 4.0, 2.0]
+shape = [5, 5, 10]
+
+[physics]
+nuclear = false
+stopping_model = "bethe-ionmc-v1"
+straggling = false
+
+[run]
+backend = "warp-cpu"
+precision = "float32"
+seed = 12
+n_histories = 8
+n_batches = 4
+chunk_histories = 1024
+
+[[tallies]]
+name = "let"
+grid = "dose"
+quantity = "let_d"
