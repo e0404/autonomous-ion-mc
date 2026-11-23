@@ -630,6 +630,7 @@ class InputFile:
     sha256: str | None
     content_sha256: str
     item_sha256: str
+    bytes: int | None = None  # file size at load time (None for an API array)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -638,6 +639,7 @@ class InputFile:
             "sha256": dict(UNAVAILABLE) if self.sha256 is None else self.sha256,
             "content_sha256": self.content_sha256,
             "item_sha256": self.item_sha256,
+            "bytes": dict(UNAVAILABLE) if self.bytes is None else self.bytes,
         }
 
 
@@ -717,6 +719,16 @@ class InputManifest:
         for i, f in enumerate(self.files):
             kp = f"input_manifest.files[{i}]({f.role})"
             if f.path is not None:
+                try:
+                    size = Path(f.path).stat().st_size if f.bytes is not None else None
+                except OSError as exc:
+                    raise ConfigError(
+                        kp, f"cannot read input file {Path(f.path).name!r}: {exc}"
+                    ) from exc
+                if size is not None and size != f.bytes:
+                    raise ConfigError(
+                        kp, f"input file {Path(f.path).name!r} changed size since it was loaded"
+                    )
                 now = _sha256_file(f.path, kp)
                 if now != f.sha256:
                     raise ConfigError(
@@ -917,6 +929,12 @@ def _material_from(v: Any, kp: str) -> Material:
         )
         kw["sternheimer"] = _construct(SternheimerParameters, f"{kp}.sternheimer", st)
     return _construct(Material, kp, kw)  # type: ignore[no-any-return]
+
+
+def material_from_record(v: Any) -> Material:
+    """The :class:`~ionmc.materials.Material` of a ``requested.materials`` record (``{"name"}``
+    for a built-in material, else the full definition); ``ConfigError`` when invalid."""
+    return _material_from(v, "materials")
 
 
 def _projectile_from(v: Any, kp: str) -> Projectile:
@@ -1488,7 +1506,8 @@ def load_toml_full(path: str | Path) -> LoadedConfig:
     config, built = _from_dict(doc, None, base)
     items = _config_items(config)
     files = tuple(
-        InputFile(role, p, sha, items[role][0], items[role][1]) for role, p, sha in built.files
+        InputFile(role, p, sha, items[role][0], items[role][1], Path(p).stat().st_size)
+        for role, p, sha in built.files
     )
     manifest = _finish_manifest(
         "toml", str(base), ConfigFileRecord(str(resolved), file_sha), files, config

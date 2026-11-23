@@ -48,7 +48,7 @@ from typing import Any
 import numpy as np
 
 from ionmc import _result_shapes as shapes
-from ionmc.config import validate
+from ionmc.config import MAX_REJECTION_ATTEMPTS, validate
 from ionmc.configio import (
     ConfigError,
     DatasetError,
@@ -56,6 +56,7 @@ from ionmc.configio import (
     array_content_sha256,
     from_dict,
     manifest_for_api_config,
+    material_from_record,
     reader_item_sha256s,
     sha256_canonical,
     to_dict,
@@ -64,23 +65,36 @@ from ionmc.configio import (
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.geometry import VoxelGeometry
 from ionmc.lookup import LookupTable
-from ionmc.physics.projectiles import PROJECTILES
+from ionmc.physics.em import E_S_MEV
+from ionmc.physics.projectiles import DEUTERON, PROJECTILES
 from ionmc.physics.stopping_selection import validate_identity_block
-from ionmc.scoring import MEV_PER_G_TO_GY, min_defined_batches
+from ionmc.scoring import (
+    MEV_PER_G_TO_GY,
+    min_defined_batches,
+    overlap_matrix,
+    reduce_batches,
+    reduce_ratio,
+)
 from ionmc.simulation import (
     IonTransportCounters,
     NuclearEnergyBalance,
     NuclearTransportCounters,
     Result,
     TransportCounters,
+    _channel_sums,
 )
+from ionmc.species import producible, species_by_name
 from ionmc.transport.channels import (
     CLASS_LOCAL,
     CLASS_STEP,
+    EXCLUDED_CHANNEL_NAME,
     GEN_MAX,
+    LOCAL_PIECE_COUNT_NAME,
+    PIECE_COUNT_NAME,
     _generation_range,
     _species_row,
     _spectrum_spec,
+    fe_exponent,
 )
 from ionmc.transport.tally import NUCLEAR_TALLY_NAMES
 
@@ -103,7 +117,20 @@ GRID_CONVENTION = (
     "origin = corner of voxel (0,0,0); C order [ix, iy, iz]; lengths in mm (decision 0037)"
 )
 UNIT_VOCABULARY = frozenset(
-    {"MeV", "Gy", "g", "mm", "mm^-2", "keV/um", "MeV/mm", "g/cm3", "1", "bool", "count"}
+    {
+        "MeV",
+        "Gy",
+        "g",
+        "mm",
+        "mm^-2",
+        "keV/um",
+        "MeV/mm",
+        "g/cm3",
+        "1",
+        "bool",
+        "count",
+        "channel-unit",
+    }
 )
 UNITS_TABLE = {
     "energy": "MeV",
@@ -132,6 +159,8 @@ GRID_ARRAYS: dict[str, tuple[str, str]] = {
     "batch_energy_mev": ("MeV", "per-batch energy estimates E_b / (N/B)"),
 }
 QUANTITY_ARRAYS = ("mean", "std", "defined_mask", "n_nonzero", "rounding_bound")
+# per-batch numerator and denominator channel sums of a quantity (decision 0045 amendment A-2)
+QUANTITY_BATCH_ARRAYS = ("batch_num", "batch_den")
 GEOMETRY_ARRAYS: dict[str, tuple[str, str]] = {
     "material_index": ("1", "index of the voxel material in the geometry material list"),
     "density_g_cm3": ("g/cm3", "per-voxel density override"),
@@ -263,7 +292,7 @@ def _member_pattern(origin: Mapping[str, Any]) -> re.Pattern[str] | None:
     sn = r"[a-z0-9_-]{1,20}"
     if kind == "grid" and arr in GRID_ARRAYS:
         return re.compile(rf"grid__{sn}__{re.escape(arr)}")
-    if kind == "quantity" and arr in QUANTITY_ARRAYS:
+    if kind == "quantity" and arr in (*QUANTITY_ARRAYS, *QUANTITY_BATCH_ARRAYS):
         return re.compile(rf"grid__{sn}__q__{sn}__{re.escape(arr)}")
     if kind == "geometry" and arr in GEOMETRY_ARRAYS:
         return re.compile(rf"geometry__{re.escape(arr)}")
@@ -315,8 +344,71 @@ def check_allowlist(entries: list[dict[str, Any]]) -> None:
             raise _fail(f"array {name!r}: units {e.get('units')!r} outside the vocabulary")
 
 
+def _shaped_sums(eff: Any, ch: Any, ci: int, shape: tuple[int, ...]) -> np.ndarray[Any, Any]:
+    """Per-batch sums of channel ``ci`` as ``[B, *grid, (bins)]``."""
+    a = _channel_sums(eff, ch, ci)
+    bins = a.shape[1] // int(np.prod(shape[1:]))
+    return np.ascontiguousarray(a.reshape((*shape, bins) if bins > 1 else shape))
+
+
+def _quantity_batches(
+    result: Result,
+) -> dict[tuple[str, str], tuple[np.ndarray[Any, Any], np.ndarray[Any, Any] | None]]:
+    """Per-batch numerator (and denominator) channel sums ``[B, *grid, (bins)]`` of every quantity
+    of every grid, from the run's channel accumulators; empty without them."""
+    eff, ch = result.effective_config, result.channel_raw
+    plan = eff.channels
+    out: dict[tuple[str, str], tuple[np.ndarray[Any, Any], np.ndarray[Any, Any] | None]] = {}
+    if plan is None or ch is None:
+        return out
+    nb = result.n_batches
+    for gi, g in enumerate(eff.requested.scoring):
+
+        def put(name: str, num: int, den: int | None, g: Any = g) -> None:
+            sh = (nb, *g.shape)
+            out[(g.name, name)] = (
+                _shaped_sums(eff, ch, num, sh),
+                None if den is None else _shaped_sums(eff, ch, den, sh),
+            )
+
+        for qd in plan.quantities:
+            if qd.request.grid == g.name:
+                put(qd.request.name, qd.numerator, qd.denominator)
+        for ci in plan.channel_index("E", gi):
+            if plan.channels[ci].class_mask == CLASS_LOCAL:
+                put(EXCLUDED_CHANNEL_NAME, ci, None)
+        put(PIECE_COUNT_NAME, plan.count_channel(gi, CLASS_STEP), None)
+        put(LOCAL_PIECE_COUNT_NAME, plan.count_channel(gi, CLASS_LOCAL), None)
+    return out
+
+
+def _lookup_plan(result: Result) -> list[dict[str, Any]]:
+    """Per FE channel the largest table value ``f_max`` of the species the channel selects (the
+    value its quantum and bound rest on; ``EffectiveConfig.summary`` carries only ``k`` and the
+    bound). Persisted in ``effective_extra.lookup_plan`` so that the reader can bind the plan."""
+    eff = result.effective_config
+    plan = eff.channels
+    if plan is None:
+        return []
+    cfg = eff.requested
+    prod = {s for s, _ in producible(cfg.source.projectile, cfg.physics.nuclear)}
+    out: list[dict[str, Any]] = []
+    for ci, c in enumerate(plan.channels):
+        if c.kind != "FE":
+            continue
+        table = plan.lookups[c.lookup]
+        ids = {i for i, v in enumerate(c.species) if v}
+        names = [n for n in table.values if n in prod and species_by_name(n).id in ids]
+        f_max = float(max(float(table.values[n].max()) for n in names))
+        if fe_exponent(f_max) != c.k:
+            raise _fail(f"lookup channel {ci}: f_max {f_max!r} disagrees with the compiled quantum")
+        out.append({"channel": ci, "lookup": table.name, "f_max": f_max})
+    return out
+
+
 def _collect_arrays(result: Result, persist_batches: bool) -> list[_Arr]:
     out: list[_Arr] = []
+    qbatch = _quantity_batches(result) if persist_batches else {}
     used_g: set[str] = set()
     for g in result.grids:
         gs = safe_name(g.name, used_g)
@@ -359,6 +451,29 @@ def _collect_arrays(result: Result, persist_batches: bool) -> list[_Arr]:
                         },
                     )
                 )
+            if (g.name, qname) in qbatch:
+                num, den = qbatch[(g.name, qname)]
+                for base, data in (("batch_num", num), ("batch_den", den)):
+                    if data is None:
+                        continue
+                    out.append(
+                        _Arr(
+                            f"grid__{gs}__q__{qs}__{base}",
+                            data,
+                            ("batch", *axes),
+                            g.name,
+                            "channel-unit",
+                            f"{q.definition} [{base}]",
+                            {
+                                "kind": "quantity",
+                                "grid": g.name,
+                                "name": q.name,
+                                "quantity": q.quantity,
+                                "index": qi,
+                                "array": base,
+                            },
+                        )
+                    )
     geom = result.effective_config.geometry
     if isinstance(geom, VoxelGeometry):
         for base in GEOMETRY_ARRAYS:
@@ -539,6 +654,20 @@ def _cache_dir_fields(stopping: Mapping[str, Any]) -> tuple[Any, str]:
     return cd, "explicit"
 
 
+def _quantity_batch_status(
+    result: Result, arrays: list[_Arr], persist_batches: bool
+) -> dict[str, str]:
+    if any(a.origin.get("array") == "batch_num" for a in arrays):
+        return {"status": "persisted"}
+    if not persist_batches:
+        reason = "user option persist_batches=false"
+    elif not any(g.quantities for g in result.grids):
+        reason = "the result has no tally quantities"
+    else:
+        reason = "the result carries no channel accumulators"
+    return {"status": "not-persisted", "reason": reason}
+
+
 def build_document(
     result: Result,
     manifest: InputManifest | None,
@@ -585,6 +714,7 @@ def build_document(
             "profile_axis": _profile_axis(summary["unit_direction"]),
             "resolutions": [],
             "resolutions_status": "not-computed: reconcile() is added in step S4",
+            "lookup_plan": _lookup_plan(result),
         },
         "provenance": {
             "code": _code_block(env),
@@ -633,6 +763,7 @@ def build_document(
                 if persist_batches
                 else {"status": "not-persisted", "reason": "user option persist_batches=false"}
             ),
+            "quantity_batch_arrays": _quantity_batch_status(result, arrays, persist_batches),
             "grids": _grid_stats(result),
         },
         "accounting": {
@@ -841,7 +972,9 @@ _RUN = (
     "backend device precision production seed rng n_histories n_batches histories_per_batch "
     "cpu_workers chunk_histories timings output_path cache_dir cache_dir_source"
 ).split()
-_STAT = "normalisation uncertainty defined_mask sparse_mask batch_arrays grids".split()
+_STAT = (
+    "normalisation uncertainty defined_mask sparse_mask batch_arrays quantity_batch_arrays grids"
+).split()
 _GRIDSTAT = (
     "name valid low_batch_count shape n_defined_voxels n_sparse_voxels energy_total_mev "
     "dose_max_gy relative_uncertainty_max"
@@ -849,8 +982,9 @@ _GRIDSTAT = (
 _ACC = "energy_balance counters channel_counters valid reasons".split()
 _PROV = "code environment data models".split()
 _EXTRA = (
-    "materials geometry_arrays grid_convention profile_axis resolutions resolutions_status".split()
-)
+    "materials geometry_arrays grid_convention profile_axis resolutions resolutions_status "
+    "lookup_plan"
+).split()
 _MANIFEST = "source base_dir config_file files config_sha256".split()
 _ENTRY = "name dtype shape axes grid units definition content_sha256 origin".split()
 _ORIGIN_KEYS = {"kind", "array", "grid", "name", "quantity", "index"}
@@ -871,7 +1005,7 @@ def _keys(
 
 
 _UNAVAILABLE_KEYS = {"status", "reason"}
-_MANIFEST_FILE = "role path sha256 content_sha256 item_sha256".split()
+_MANIFEST_FILE = "role path sha256 content_sha256 item_sha256 bytes".split()
 
 
 def _str_or_unavailable(v: Any, where: str) -> None:
@@ -911,6 +1045,11 @@ def _check_manifest(m: dict[str, Any]) -> None:
         _need(_is_unavailable(f["sha256"]) or _hex(f["sha256"]), f"{w}.sha256: not a digest")
         _need(_is_unavailable(f["path"]) == _is_unavailable(f["sha256"]), f"{w}: path/sha256")
         _need(_is_unavailable(f["path"]) == (not toml), f"{w}: availability disagrees with source")
+        _need(
+            _is_unavailable(f["bytes"]) == _is_unavailable(f["path"])
+            and (_is_unavailable(f["bytes"]) or (_is_int(f["bytes"]) and f["bytes"] >= 0)),
+            f"{w}.bytes: expected a size (an unavailable record for an API array)",
+        )
         for k in ("content_sha256", "item_sha256"):
             _need(_hex(f[k]), f"{w}.{k} is malformed")
 
@@ -1034,16 +1173,22 @@ def _check_run(r: dict[str, Any]) -> None:
 def _check_statistics(st: dict[str, Any]) -> None:
     for k in ("normalisation", "uncertainty", "defined_mask", "sparse_mask"):
         _need(isinstance(st[k], str), f"statistics.{k}: expected a string")
-    ba = st["batch_arrays"]
-    _need(isinstance(ba, dict), "statistics.batch_arrays: expected an object")
-    if ba.get("status") == "persisted":
-        _need(set(ba) == {"status"}, "statistics.batch_arrays: unknown field(s)")
-    else:
-        _need(
-            set(ba) == {"status", "reason"} and ba["status"] == "not-persisted"
-            and isinstance(ba["reason"], str),
-            "statistics.batch_arrays: malformed record",
-        )  # fmt: skip
+    for key in ("batch_arrays", "quantity_batch_arrays"):
+        ba = st[key]
+        _need(isinstance(ba, dict), f"statistics.{key}: expected an object")
+        if ba.get("status") == "persisted":
+            _need(set(ba) == {"status"}, f"statistics.{key}: unknown field(s)")
+        else:
+            _need(
+                set(ba) == {"status", "reason"} and ba["status"] == "not-persisted"
+                and isinstance(ba["reason"], str),
+                f"statistics.{key}: malformed record",
+            )  # fmt: skip
+    _need(
+        st["batch_arrays"]["status"] == "persisted"
+        or st["quantity_batch_arrays"]["status"] == "not-persisted",
+        "statistics.quantity_batch_arrays cannot be persisted without batch_arrays",
+    )
     for i, g in enumerate(st["grids"]):
         w = f"statistics.grids[{i}]"
         _need(isinstance(g, dict), f"{w}: expected an object")
@@ -1087,6 +1232,14 @@ def _check_extra(x: dict[str, Any]) -> None:
         "effective_extra.resolutions: expected a list of objects",
     )
     _need(isinstance(x["resolutions_status"], str), "effective_extra.resolutions_status: type")
+    lp = x["lookup_plan"]
+    _need(isinstance(lp, list), "effective_extra.lookup_plan: expected a list")
+    for i, e in enumerate(lp):
+        w = f"effective_extra.lookup_plan[{i}]"
+        _keys(e, ["channel", "lookup", "f_max"], w)
+        _need(_is_int(e["channel"]) and e["channel"] >= 0, f"{w}.channel: expected an index")
+        _need(isinstance(e["lookup"], str), f"{w}.lookup: expected a string")
+        _need(_is_num(e["f_max"]) and e["f_max"] > 0, f"{w}.f_max: expected a positive number")
 
 
 def _schema(value: Any, spec: Any, path: str) -> None:
@@ -1252,6 +1405,8 @@ def _check_effective_binding(doc: dict[str, Any]) -> None:
         _need(all(x > 0 for x in g["spacing_mm"]) and all(n >= 1 for n in g["shape"]),
               "effective.scoring: spacing and shape must be positive")  # fmt: skip
     _check_channel_plan(doc)
+    _check_materials(doc)
+    _check_reconciliation(doc)
     try:
         validate_identity_block(eff["stopping"])
     except (ValueError, KeyError, TypeError, IndexError) as exc:
@@ -1268,6 +1423,70 @@ def _check_effective_binding(doc: dict[str, Any]) -> None:
                      ("relative_uncertainty_max", "1")):  # fmt: skip
             _need(g[k]["units"] == u, f"statistics.grids.{k}: units must be {u!r}")
     _check_energy_structure(doc)
+
+
+def _check_materials(doc: dict[str, Any]) -> None:
+    """``effective_extra.materials`` is the complete definition of every geometry material of
+    ``requested`` (composition, density, I, Sternheimer parameters, source); the effective I is
+    recomputed by the library (Bragg additivity when none is requested)."""
+    rq, eff = doc["requested"], doc["effective"]
+    defs = {m["name"]: m for m in rq.get("materials", [])}
+    got = doc["effective_extra"]["materials"]
+    _need(len(got) == len(eff["geometry"]["materials"]), "effective_extra.materials: count")
+    for g, name in zip(got, eff["geometry"]["materials"], strict=True):
+        try:
+            want = _material_def(material_from_record(defs[name]))
+        except (ConfigError, ValueError, KeyError) as exc:
+            raise _fail(f"requested material {name!r} is not a valid definition: {exc}") from exc
+        gi, wi = g["I_eV_effective"], want["I_eV_effective"]
+        _need(abs(gi - wi) <= 1e-12 * abs(wi), f"effective_extra.materials[{name!r}]: effective I")
+        _need({k: v for k, v in g.items() if k != "I_eV_effective"}
+              == {k: v for k, v in want.items() if k != "I_eV_effective"},
+              f"effective_extra.materials[{name!r}] disagrees with requested.materials"
+              )  # fmt: skip
+
+
+def _check_reconciliation(doc: dict[str, Any]) -> None:
+    """Fields of ``effective`` that need no table, lookup or stopping object, bound to their
+    ``requested`` counterpart by the frozen reconciliation table (decision 0045 section 4).
+    Classes: equal (``_check_run_binding``, ``_PHYSICS_BOUND``, source, geometry, scoring),
+    derived (the rules below) and unused (recorded as such)."""
+    eff, rq = doc["effective"], doc["requested"]
+    ph, rph, z = eff["physics"], rq["physics"], eff["source"]["z"]
+    ion = z >= 2
+    _bind(ph["e_cut_effective_mev"] == (rph["e_cut_ion_mev_per_u"] * eff["source"]["a"] if ion
+                                        else rph["e_cut_mev"]),
+          "effective.physics.e_cut_effective_mev (rule per-u-times-A / equal)")  # fmt: skip
+    eor = rph["end_of_range_model"]
+    _bind(ph["end_of_range_model_effective"]
+          == (("continuous_residual_v1" if ion else "point_v1") if eor == "default" else eor),
+          "effective.physics.end_of_range_model_effective (rule default-by-z)")  # fmt: skip
+    _need(ph["ls_effective"] == (ph["ls_requested"] if ion else "off"),
+          "effective.physics.ls_effective disagrees with the rule ls-z1-off")  # fmt: skip
+    _need(ph["scattering_E_s_mev"] == E_S_MEV
+          and ph["max_rejection_attempts"] == MAX_REJECTION_ATTEMPTS,
+          "effective.physics engine constants differ from the library")  # fmt: skip
+    _bind(eff["production"] == (rq["run"]["backend"] != "python"
+                                and rq["run"]["precision"] == "float32"),
+          "effective.production (rule float32-warp)")  # fmt: skip
+    mm = eff["mcs_mapping"]
+    if ion and isinstance(mm, dict) and "evaluation" in mm:
+        if rph["multiple_scattering"]:
+            _bind(mm["evaluation"] == rph["mcs_mapping_eval"], "effective.mcs_mapping.evaluation")
+        else:
+            _bind(mm["evaluation"] == "root" and mm.get("unused") is True,
+                  "effective.mcs_mapping (rule mcs-off-root)")  # fmt: skip
+    st = eff["stopping"]
+    species = [eff["source"]["projectile"], *([DEUTERON.name] if "nuclear" in eff else [])]
+    _need(
+        st["species_transported"] == species,
+        "effective.stopping.species_transported disagrees with the source and nuclear flag",
+    )
+    if ion and isinstance(rph["stopping_model"], str):
+        _bind(st["model_id_effective"] == rph["stopping_model"], "effective.stopping model (z>=2)")
+    nid = rph["nuclear_table_id"]
+    if "nuclear" in eff and nid is not None:
+        _bind(eff["nuclear"]["table_id"] == nid, "effective.nuclear.table_id")
 
 
 def _check_energy_structure(doc: dict[str, Any]) -> None:
@@ -1290,6 +1509,11 @@ def _check_energy_structure(doc: dict[str, Any]) -> None:
         )  # fmt: skip
         assert nuc is not None
         local = nuc["nuclear_local"]
+        _need(all(nuc[k] >= 0 for k in ("nuclear_local", "nuclear_escaped_neutron",
+                                        "nuclear_escaped_gamma", "nuclear_binding")),
+              "energy_balance.nuclear_mev: destinations must be non-negative")  # fmt: skip
+        _need(0 <= nuc["nuclear_alpha_local"] <= nuc["nuclear_local"] * (1 + 1e-12) + 1e-300,
+              "energy_balance.nuclear_mev: 0 <= nuclear_alpha_local <= nuclear_local")  # fmt: skip
         nuc_dest = (nuc["nuclear_local"] + nuc["nuclear_escaped_neutron"]
                     + nuc["nuclear_escaped_gamma"] + nuc["nuclear_binding"]
                     + nuc["nuclear_imbalance"])  # fmt: skip
@@ -1444,6 +1668,36 @@ def _check_channel_plan(doc: dict[str, Any]) -> None:
     _need({k: tl[k] for k in want} == want, "effective.tallies sizes differ from the plan")
     _need(tl["lookups"] == doc["provenance"]["data"]["lookups"],
           "effective.tallies.lookups differ from provenance.data.lookups")  # fmt: skip
+    _check_lookup_plan(doc, got)
+
+
+_F_MIN, _F_MAX = math.ldexp(1.0, -60), math.ldexp(1.0, 60)  # channels.FE_F_{MIN,MAX}_EXPONENT
+
+
+def _check_lookup_plan(doc: dict[str, Any], got: list[dict[str, Any]]) -> None:
+    """The numerical plan of the lookup channels from the persisted per-channel ``f_max``:
+    ``k = fe_exponent(f_max)``, ``bound_per_history = f_max * e_hist`` (``e_hist`` is the bound
+    of the energy channels), ``bounds.f_max`` the maximum. The ``f_max`` values themselves need
+    the table values and stay bound to the lookup digests only (a declared limit)."""
+    tl = doc["effective"]["tallies"]
+    plan = doc["effective_extra"]["lookup_plan"]
+    fe = [(i, c) for i, c in enumerate(got) if c["kind"] == "FE"]
+    _need([e["channel"] for e in plan] == [i for i, _ in fe],
+          "effective_extra.lookup_plan does not list exactly the FE channels")  # fmt: skip
+    ebounds = {c["bound_per_history"] for c in got if c["kind"] == "E"}
+    _need(len(ebounds) == 1, "the energy channels have no common per-history bound")
+    e_hist = next(iter(ebounds))
+    names = [x["name"] for x in doc["provenance"]["data"]["lookups"]]
+    for e, (_i, c) in zip(plan, fe, strict=True):
+        f = float(e["f_max"])
+        _need(c["lookup"] in range(len(names)) and e["lookup"] == names[c["lookup"]],
+              "effective_extra.lookup_plan names a different lookup than its channel")  # fmt: skip
+        _need(_F_MIN <= f <= _F_MAX, "lookup_plan f_max is outside the admissible lookup range")
+        _need(c["k"] == fe_exponent(f), "FE channel quantum disagrees with its persisted f_max")
+        _need(c["bound_per_history"] == f * e_hist,
+              "FE channel bound disagrees with its persisted f_max")  # fmt: skip
+    want = max((float(e["f_max"]) for e in plan), default=0.0)
+    _need(tl["bounds"].get("f_max") == want, "effective.tallies.bounds.f_max is not the maximum")
 
 
 def _check_structure(doc: Any) -> None:
@@ -1755,6 +2009,7 @@ def _expected_catalogue(doc: dict[str, Any], gs: dict[str, str]) -> dict[tuple[A
     nb = doc["run"]["n_batches"]
     persisted = doc["statistics"]["batch_arrays"]["status"] == "persisted"
     plan_q = {q["name"]: q for q in _derive_channel_plan(doc)[1]}
+    qbatch = doc["statistics"]["quantity_batch_arrays"]["status"] == "persisted"
     exp: dict[tuple[Any, ...], _Expect] = {}
     for gi, g in enumerate(eff["scoring"]):
         n, shape = g["name"], list(g["shape"])
@@ -1780,6 +2035,13 @@ def _expected_catalogue(doc: dict[str, Any], gs: dict[str, str]) -> dict[tuple[A
                 exp[("quantity", n, qn, base)] = _Expect(
                     f"grid__{gs[n]}__q__{qs}__{base}", dt, shp, axes, qu, q, qi, f"{qdef} [{base}]"
                 )
+            if qbatch:
+                ratio = plan_q.get(qn, {}).get("kind") == "ratio"
+                for base in ("batch_num", "batch_den") if ratio else ("batch_num",):
+                    exp[("quantity", n, qn, base)] = _Expect(
+                        f"grid__{gs[n]}__q__{qs}__{base}", _F8, [nb, *shp], ["batch", *axes],
+                        "channel-unit", q, qi, f"{qdef} [{base}]",
+                    )  # fmt: skip
     geom = eff["geometry"]
     gshape = list(geom["shape"])
     exp[("geometry", None, None, "material_index")] = _Expect(
@@ -1902,6 +2164,86 @@ def _close(a: np.ndarray[Any, Any], b: np.ndarray[Any, Any], rtol: float, what: 
     _need(ok, f"{what} disagrees with the arrays it is derived from")
 
 
+def _mass_from_geometry(
+    doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]], by: Mapping[Any, str], gi: int
+) -> np.ndarray[Any, Any]:
+    """``mass_g`` of scoring grid ``gi``: the overlap integral of the persisted density (the
+    density array, else the material density of ``effective_extra.materials`` by material index)
+    over the grid voxels (the formula of ``ionmc.scoring.voxel_mass_g``)."""
+    geo, sg = doc["effective"]["geometry"], doc["effective"]["scoring"][gi]
+    dens = by.get(("geometry", None, None, "density_g_cm3"))
+    if dens is not None:
+        rho = arrays[dens]
+    else:
+        nominal = np.array([m["density_g_cm3"] for m in doc["effective_extra"]["materials"]])
+        idx = arrays[by[("geometry", None, None, "material_index")]]
+        _need(bool(np.all((idx >= 0) & (idx < len(nominal)))), "geometry material_index range")
+        rho = nominal[idx]
+
+    def edges(o: Any, d: Any, n: Any, axis: int, exit_mm: Any = None) -> np.ndarray[Any, Any]:
+        e = o[axis] + d[axis] * np.arange(n[axis] + 1, dtype=np.float64)
+        out: np.ndarray[Any, Any] = e if exit_mm is None or axis != 2 else np.minimum(e, exit_mm)
+        return out
+
+    ov = [
+        overlap_matrix(
+            edges(sg["origin_mm"], sg["spacing_mm"], sg["shape"], a),
+            edges(geo["origin_mm"], geo["spacing_mm"], geo["shape"], a, geo["z_exit_mm"]),
+        )
+        for a in range(3)
+    ]
+    mass = np.einsum("ia,jb,kc,abc->ijk", *ov, rho, optimize=True) * 1.0e-3
+    return mass  # type: ignore[no-any-return]
+
+
+def _check_quantity_batches(
+    doc: dict[str, Any],
+    arrays: dict[str, np.ndarray[Any, Any]],
+    by: Mapping[Any, str],
+    gname: str,
+    qname: str,
+    quant: str,
+) -> None:
+    """Means, standard errors, masks and counts of a quantity from its persisted per-batch
+    numerator and denominator sums (tolerance ``1e-9``; the engine's own reductions)."""
+    nb = doc["run"]["n_batches"]
+    hpb = doc["run"]["n_histories"] // nb
+    mean, qstd, qmask, qn = (
+        arrays[by[("quantity", gname, qname, b)]]
+        for b in ("mean", "std", "defined_mask", "n_nonzero")
+    )
+    num = arrays[by[("quantity", gname, qname, "batch_num")]].reshape(nb, -1)
+    w = f"quantity {qname!r} of grid {gname!r}: batch arrays"
+    den_key = ("quantity", gname, qname, "batch_den")
+    _need(bool(np.all(np.isfinite(num))), f"{w} are not finite")
+    if quant in _RATIO_QUANTITIES:
+        den = arrays[by[den_key]].reshape(nb, -1)
+        st = reduce_ratio(num, den)
+        want_mean, want_std = st.mean, np.sqrt(st.variance_of_mean)
+        want_mask, want_nz = st.defined_mask, st.n_nonzero
+    else:
+        _need(den_key not in by, f"{w}: a linear quantity has no denominator")
+        bst = reduce_batches(num, hpb)
+        g = next(x for x in doc["effective"]["scoring"] if x["name"] == gname)
+        if quant == "dose":
+            mass = arrays[by[("grid", gname, None, "mass_g")]].reshape(-1)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                sc = np.where(mass > 0, MEV_PER_G_TO_GY / np.where(mass > 0, mass, 1.0), np.nan)
+        elif quant in _PER_VOLUME:
+            sc = np.full(int(np.prod(g["shape"])), 1.0 / float(np.prod(g["spacing_mm"])))
+        else:
+            sc = np.ones(int(np.prod(g["shape"])))
+        bins = num.shape[1] // sc.size
+        sc = np.repeat(sc, bins) if bins > 1 else sc
+        want_mean, want_std = bst.mean * sc, np.sqrt(bst.variance_of_mean) * sc
+        want_nz = bst.n_nonzero
+        want_mask = want_mean > 0
+    _close(mean.reshape(-1), want_mean, _RTOL_BATCH, f"{w}: mean")
+    _close(qstd.reshape(-1), want_std, _RTOL_BATCH, f"{w}: standard error")
+    _need(bool(np.array_equal(qn.reshape(-1), want_nz)), f"{w}: n_nonzero")
+    _need(bool(np.array_equal(qmask.reshape(-1).astype(bool), want_mask)), f"{w}: defined_mask")
+
+
 def _check_array_invariants(
     doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]], by: Mapping[Any, str]
 ) -> None:
@@ -1931,6 +2273,8 @@ def _check_array_invariants(
         _need(bool(np.all(np.isfinite(en)) and np.all(en >= 0)), f"grid {n!r}: energy_mev")
         _need(bool(np.all(np.isfinite(std)) and np.all(std >= 0)), f"grid {n!r}: energy_std_mev")
         _need(bool(np.all(np.isfinite(mass)) and np.all(mass >= 0)), f"grid {n!r}: mass_g")
+        _close(mass, _mass_from_geometry(doc, arrays, by, i), _RTOL_DERIVED,
+               f"grid {n!r}: mass_g (persisted density x voxel volume)")  # fmt: skip
         pos = mass > 0
         with np.errstate(divide="ignore", invalid="ignore"):
             scale = np.where(pos, MEV_PER_G_TO_GY / np.where(pos, mass, 1.0), np.nan)
@@ -1970,8 +2314,8 @@ def _check_array_invariants(
         if quant in _RATIO_QUANTITIES:
             for a in (mean, qstd, bound):
                 _need(bool(np.all(np.isnan(a[~qmask]))), f"{w}: undefined ratio values are NaN")
-            _need(bool(np.all(qn[qmask] >= min_defined_batches(nb))),
-                  f"{w}: defined bins need max(2, ceil(B/2)) nonzero batches")  # fmt: skip
+            _need(bool(np.array_equal(qmask, qn >= min_defined_batches(nb))),
+                  f"{w}: defined_mask is n_nonzero >= max(2, ceil(B/2))")  # fmt: skip
         else:
             _need(bool(np.array_equal(qmask, mean > 0)), f"{w}: defined_mask is mean > 0")
         _need(bool(np.all(np.isfinite(mean[qmask])) and np.all(np.isfinite(qstd[qmask]))),
@@ -1979,21 +2323,46 @@ def _check_array_invariants(
         _need(bool(np.all(qstd[qmask] >= 0) and np.all(bound[qmask] >= 0)),
               f"{w}: standard error and rounding bound are non-negative")  # fmt: skip
         _need(not bool(np.any(np.isinf(qstd))), f"{w}: infinite standard error")
+        if doc["statistics"]["quantity_batch_arrays"]["status"] == "persisted":
+            _check_quantity_batches(doc, arrays, by, gname, qname, quant)
 
 
-# ---- re-derivation of ``effective`` (decision 0045 amendment A-1, items 1 and 2)
+# ---- tier 2: re-derivation of ``effective`` (decision 0045 amendment A-2)
 
-_F_MIN, _F_MAX = math.ldexp(1.0, -60), math.ldexp(1.0, 60)  # channels.FE_F_{MIN,MAX}_EXPONENT
 LOOKUP_PLAN_EXCLUSIONS = (
     "effective.tallies.channels[kind == 'FE'].k",
     "effective.tallies.channels[kind == 'FE'].bound_per_history",
     "effective.tallies.bounds.f_max",
     "effective.tallies.lookups[*].content_sha256",
+    "effective_extra.lookup_plan[*].f_max",
 )
 REDERIVE_EXCLUSIONS = (
     "effective.stopping.evidence_at_run (persisted verbatim, never recomputed)",
     "every cache_dir (a path of the writing machine)",
 )
+MAX_INPUT_FILE_BYTES = 256 * 2**20
+
+
+class VerificationError(Exception):
+    """Tier-2 verification could not be carried out or failed hard: a data-cache object is
+    missing, an input file does not match the manifest, or the requested configuration is refused
+    by this code. Never raised by :func:`load` (tier 1 touches no cache and no input file)."""
+
+
+@dataclass(frozen=True)
+class VerificationReport:
+    """Outcome of :func:`verify_effective`. ``ok`` is True iff the rebuilt ``summary()`` equals the
+    persisted ``effective`` byte for byte outside ``exclusions``; ``differences`` are JSON
+    pointers (relative to the bundle) of the differing leaves; ``not_rederivable`` names what
+    could not be rebuilt (a user stopping object). A bundle of an earlier code version that
+    differs is not thereby invalid (tier 1 decides validity)."""
+
+    ok: bool
+    status: str  # "reproduced" | "differs" | "not-rederivable"
+    differences: tuple[str, ...] = ()
+    exclusions: tuple[str, ...] = REDERIVE_EXCLUSIONS
+    not_rederivable: tuple[str, ...] = ()
+    lookups_from: dict[str, str] = field(default_factory=dict)  # role -> "input_file"|"placeholder"
 
 
 def _placeholder_lookup(p: Mapping[str, Any], fmax: float) -> LookupTable:
@@ -2009,10 +2378,10 @@ def _placeholder_lookup(p: Mapping[str, Any], fmax: float) -> LookupTable:
     )  # fmt: skip
 
 
-def _comparable(eff: Mapping[str, Any], lookup: bool) -> dict[str, Any]:
+def _comparable(eff: Mapping[str, Any], placeholders: bool) -> dict[str, Any]:
     e = _strip(eff, frozenset({"cache_dir"}))
     e["stopping"].pop("evidence_at_run", None)
-    if lookup and e["tallies"] is not None:
+    if placeholders and e["tallies"] is not None:
         for c in e["tallies"]["channels"]:
             if c["kind"] == "FE":
                 c.pop("k"), c.pop("bound_per_history")
@@ -2022,65 +2391,172 @@ def _comparable(eff: Mapping[str, Any], lookup: bool) -> dict[str, Any]:
     return e  # type: ignore[no-any-return]
 
 
-def _rederive(
-    doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]], by: Mapping[Any, str],
-    rederive: bool,
-) -> tuple[str, tuple[str, ...]]:  # fmt: skip
-    """Rebuild the configuration from ``requested`` (geometry arrays from the persisted members,
-    lookup tables as placeholders of the persisted provenance), ``validate`` it and compare its
-    ``summary()`` with the persisted ``effective`` (canonical JSON), except the documented
-    exclusions. Returns the binding level and the recorded limits."""
-    if not rederive:
-        return "typed-only", ("effective is typed and bound to requested, not re-derived",)
+def _diff(a: Any, b: Any, ptr: str, out: list[str]) -> None:
+    if len(out) >= 50:
+        return
+    if isinstance(a, dict) and isinstance(b, dict):
+        for k in sorted(set(a) | set(b)):
+            if k not in a or k not in b:
+                out.append(f"{ptr}/{k}")
+            else:
+                _diff(a[k], b[k], f"{ptr}/{k}", out)
+    elif isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+        for i, (x, y) in enumerate(zip(a, b, strict=True)):
+            _diff(x, y, f"{ptr}/{i}", out)
+    elif canonical_bytes(a) != canonical_bytes(b):
+        out.append(ptr)
+
+
+def _input_lookup(role: str, path: Path, entry: Mapping[str, Any], max_bytes: int) -> LookupTable:
+    """A trusted lookup file: bounded size, sha256 against the manifest before it is parsed,
+    then the content and item digests of the manifest entry."""
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise VerificationError(f"input file of {role!r} is not readable: {exc}") from exc
+    if size > max_bytes:
+        raise VerificationError(f"input file of {role!r} ({size} bytes) exceeds {max_bytes} bytes")
+    if _is_int(entry["bytes"]) and size != entry["bytes"]:
+        raise VerificationError(
+            f"input file of {role!r} has {size} bytes, the manifest records {entry['bytes']}"
+        )
+    sha, _n = _sha256_path(path)
+    ref = entry["sha256"]
+    if isinstance(ref, str) and sha != ref:
+        raise VerificationError(f"input file of {role!r} does not match the manifest sha256")
+    try:
+        table = LookupTable.from_file(path)
+    except (UnsupportedCombinationError, OSError, ValueError, TypeError, KeyError) as exc:
+        raise VerificationError(f"input file of {role!r} is not a lookup table: {exc}") from exc
+    if (
+        table.content_sha256 != entry["content_sha256"]
+        or sha256_canonical(table.provenance()) != entry["item_sha256"]
+    ):
+        raise VerificationError(f"input file of {role!r} does not match the manifest digests")
+    return table
+
+
+@contextlib.contextmanager
+def _cache_env(cache_dir: str | os.PathLike[str] | None) -> Iterator[None]:
+    old = os.environ.get("IONMC_CACHE_DIR")
+    if cache_dir is not None:
+        os.environ["IONMC_CACHE_DIR"] = str(cache_dir)
+    try:
+        yield
+    finally:
+        if cache_dir is not None:
+            if old is None:
+                os.environ.pop("IONMC_CACHE_DIR", None)
+            else:
+                os.environ["IONMC_CACHE_DIR"] = old
+
+
+def verify_effective(
+    bundle: LoadedResult | str | os.PathLike[str],
+    *,
+    cache_dir: str | os.PathLike[str] | None = None,
+    input_files: Mapping[str, str | os.PathLike[str]] | None = None,
+    max_input_file_bytes: int = MAX_INPUT_FILE_BYTES,
+    **budgets: int,
+) -> VerificationReport:
+    """Tier 2 (explicit trust, decision 0045 amendment A-2): rebuild the configuration from
+    ``requested`` (geometry arrays from the bundle; lookup tables from ``input_files``, a mapping
+    role -> path, each file size-bounded and checked against the manifest before use, otherwise
+    placeholder tables), ``validate`` it and compare ``summary()`` byte for byte with the persisted
+    ``effective``. The caller trusts this installation, its data cache (``cache_dir``, default
+    the environment) and the given input files. A user ``stopping`` object is reported as not
+    re-derivable; a missing cache object raises :class:`VerificationError`. The bundle is never
+    modified. ``budgets`` are those of :func:`load` (when a path is given)."""
+    loaded = bundle if isinstance(bundle, LoadedResult) else load(bundle, **budgets)
+    doc, arrays = loaded.doc, loaded.arrays
     rq, eff = doc["requested"], doc["effective"]
     user = rq["physics"].get("stopping")
-    if isinstance(user, dict) and "status" in user:  # a user stopping object cannot be rebuilt
-        return "typed-only", (
-            "requested.physics.stopping is a not-reconstructible user stopping object: effective "
-            "is typed and bound to requested, not re-derived",
-        )
+    if isinstance(user, dict) and "status" in user:
+        return VerificationReport(
+            False, "not-rederivable",
+            not_rederivable=("requested.physics.stopping is a user stopping object",),
+        )  # fmt: skip
     lookups = doc["provenance"]["data"]["lookups"]
+    files = {f["role"]: f for f in doc["input_manifest"]["files"]}
+    given = {str(k): Path(v) for k, v in (input_files or {}).items()}
+    unknown = sorted(set(given) - {f"lookup:{p['name']}" for p in lookups})
+    if unknown:
+        raise VerificationError(f"input_files names roles without a lookup table: {unknown}")
+    by = {(e["origin"]["kind"], e["origin"]["array"]): e["name"] for e in doc["arrays"]
+          if e["origin"]["kind"] == "geometry"}  # fmt: skip
     geo = {
-        role: arrays[by[("geometry", None, None, base)]]
+        role: arrays[by[("geometry", base)]]
         for role, base in (("material_index", "material_index"), ("density", "density_g_cm3"))
-        if ("geometry", None, None, base) in by
+        if ("geometry", base) in by
     }
-
-    def not_derivable(exc: BaseException) -> ResultFormatError:
-        cached = isinstance(exc, DatasetError) or isinstance(
-            exc.__cause__, FileNotFoundError | OSError
-        )
-        what = "dataset not cached" if cached else "the requested configuration is refused"
-        return _fail(f"effective not re-derivable: {what}: {exc}")
-
+    fplan: dict[str, float] = {}
+    for e in doc["effective_extra"]["lookup_plan"]:
+        fplan[e["lookup"]] = max(fplan.get(e["lookup"], 0.0), float(e["f_max"]))
+    source: dict[str, str] = {}
     try:
-        cfg = from_dict({k: v for k, v in rq.items() if k != "lookups"}, arrays=geo)
-        if lookups:
-            fmax = (eff["tallies"] or {}).get("bounds", {}).get("f_max")
-            _need(
-                isinstance(fmax, float) and _F_MIN <= fmax <= _F_MAX,
-                "effective.tallies.bounds.f_max is outside the admissible lookup range",
-            )
-            cfg = replace(cfg, lookups=tuple(_placeholder_lookup(p, fmax) for p in lookups))
-            for pl, p in zip(cfg.lookups, lookups, strict=True):
-                got = {k: v for k, v in pl.provenance().items() if k != "content_sha256"}
-                _need(got == {k: v for k, v in p.items() if k != "content_sha256"},
-                      f"lookup {p['name']!r}: provenance is not a table description")  # fmt: skip
-        want = validate(cfg).summary()
-    except (DatasetError, UnsupportedCombinationError) as exc:
-        raise not_derivable(exc) from exc
-    if canonical_bytes(_comparable(want, bool(lookups))) != canonical_bytes(
-        _comparable(eff, bool(lookups))
-    ):
-        raise _fail("effective differs from the summary re-derived from requested")
-    if lookups:
-        return "re-derived-except-lookup-plan", LOOKUP_PLAN_EXCLUSIONS
-    return "re-derived", ()
+        with _cache_env(cache_dir):
+            cfg = from_dict({k: v for k, v in rq.items() if k != "lookups"}, arrays=geo)
+            tables = []
+            for p in lookups:
+                role = f"lookup:{p['name']}"
+                if role in given:
+                    tables.append(
+                        _input_lookup(role, given[role], files[role], max_input_file_bytes)
+                    )
+                    source[role] = "input_file"
+                else:
+                    fmax = fplan.get(p["name"], eff["tallies"]["bounds"]["f_max"])
+                    tables.append(_placeholder_lookup(p, fmax))
+                    source[role] = "placeholder"
+            if lookups:
+                cfg = replace(cfg, lookups=tuple(tables))
+            want = validate(cfg).summary()
+    except (DatasetError, UnsupportedCombinationError, ConfigError) as exc:
+        raise VerificationError(f"effective not re-derivable here: {exc}") from exc
+    except OSError as exc:
+        raise VerificationError(f"effective not re-derivable here (data cache): {exc}") from exc
+    placeholders = "placeholder" in source.values()
+    w, h = _comparable(want, placeholders), _comparable(eff, placeholders)
+    excl = REDERIVE_EXCLUSIONS + (LOOKUP_PLAN_EXCLUSIONS if placeholders else ())
+    if canonical_bytes(w) == canonical_bytes(h):
+        return VerificationReport(True, "reproduced", exclusions=excl, lookups_from=source)
+    diffs: list[str] = []
+    _diff(w, h, "/effective", diffs)
+    return VerificationReport(False, "differs", tuple(diffs), excl, lookups_from=source)
 
 
-def _check_invariants(
-    doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]], rederive: bool = True
-) -> tuple[str, tuple[str, ...]]:
+def _binding_limits(doc: Mapping[str, Any]) -> tuple[str, ...]:
+    """What tier 1 does NOT bind (hash-protected only), recorded in ``binding_limits``."""
+    eff = doc["effective"]
+    out = [
+        "effective.tables.*, effective.mcs_mapping (except the evaluation mode), "
+        "effective.scattering_length_g_cm2, effective.max_steps (computed) and "
+        "effective.scoring_pieces derive from registry tables: integrity-protected by the file "
+        "hashes only (verify_effective rebuilds them)",
+        "effective.stopping data pins (data_declared, data_used, content_sha256, domain_resolved, "
+        "evidence_at_run, circular_rows): identity checked by validate_identity_block, never "
+        "recomputed",
+        "built-in material definitions are bound to the installed library version",
+    ]
+    if eff["tallies"] is not None and doc["effective_extra"]["lookup_plan"]:
+        out.append(
+            "effective_extra.lookup_plan[*].f_max (largest table value per FE channel) is bound "
+            "to the lookup content_sha256/item_sha256 only; the table values are not in the bundle"
+        )
+    if "nuclear" in eff:
+        out.append("effective.nuclear except table_id: engine table summary, hash-protected only")
+    user = doc["requested"]["physics"].get("stopping")
+    if isinstance(user, dict) and "status" in user:
+        out.append("requested.physics.stopping is a user object: effective.stopping rests on "
+                   "validate_identity_block only")  # fmt: skip
+    if doc["statistics"]["quantity_batch_arrays"]["status"] != "persisted":
+        out.append("quantity means and standard errors are not recomputed: no per-batch sums")
+    if doc["statistics"]["batch_arrays"]["status"] != "persisted":
+        out.append("grid means and standard errors are not recomputed: no batch arrays")
+    return tuple(out)
+
+
+def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]]) -> None:
     scoring = {g["name"]: tuple(g["shape"]) for g in doc["effective"].get("scoring", [])}
     nb = doc["run"]["n_batches"]
     by = _check_catalogue(doc)
@@ -2188,7 +2664,6 @@ def _check_invariants(
             raise _fail(f"diagnostic {key!r} presence disagrees with the request")
     if (d.get("trace_histories", 0) > 0) != ("trace_end_history" in present):
         raise _fail("trace diagnostics presence disagrees with the request")
-    return _rederive(doc, arrays, by, rederive)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -2202,9 +2677,8 @@ class LoadedResult:
     path: Path
     doc: dict[str, Any]
     arrays: dict[str, np.ndarray[Any, Any]] = field(repr=False)
-    effective_binding: str = "typed-only"
+    effective_binding: str = "bundle-local"
     binding_limits: tuple[str, ...] = ()
-    rederive_exclusions: tuple[str, ...] = REDERIVE_EXCLUSIONS
 
     def grid_array(self, grid: str, base: str) -> np.ndarray[Any, Any]:
         for e in self.doc["arrays"]:
@@ -2230,17 +2704,16 @@ def load(
     max_central_directory_bytes: int = MAX_CENTRAL_DIRECTORY_BYTES,
     max_json_tokens: int = MAX_JSON_TOKENS,
     max_json_depth: int = MAX_JSON_DEPTH,
-    rederive: bool = True,
 ) -> LoadedResult:
-    """Read and verify a bundle; raises :class:`ResultFormatError` on any defect (a malformed
-    bundle never surfaces as a bare ``TypeError``/``KeyError``). The keyword-only budgets are
-    documented in decision 0045 section 1. ``rederive`` (default True) rebuilds ``effective``
-    from ``requested`` and compares (amendment A-1); ``False`` records ``effective_binding ==
-    "typed-only"`` (needs no data cache; never used by ``ionmc verify``)."""
+    """Tier 1 (decision 0045 amendment A-2): read and verify a bundle from ``result.json`` and
+    ``arrays.npz`` only; never the data cache, a registry table, an input file or transport.
+    Raises :class:`ResultFormatError` on any defect (a malformed bundle never surfaces as a bare
+    ``TypeError``/``KeyError``). The keyword-only budgets are documented in decision 0045
+    section 1. ``LoadedResult.binding_limits`` lists what stays hash-protected only; the full
+    re-derivation of ``effective`` is :func:`verify_effective`."""
     try:
         return _load(
             path,
-            rederive=rederive,
             max_total_bytes=max_total_bytes,
             max_array_bytes=max_array_bytes,
             max_json_bytes=max_json_bytes,
@@ -2266,7 +2739,6 @@ def _load(
     max_central_directory_bytes: int = MAX_CENTRAL_DIRECTORY_BYTES,
     max_json_tokens: int = MAX_JSON_TOKENS,
     max_json_depth: int = MAX_JSON_DEPTH,
-    rederive: bool = True,
 ) -> LoadedResult:
     root = Path(path)
     if root.is_symlink() or not root.is_dir():
@@ -2351,8 +2823,8 @@ def _load(
                 raise _fail(f"array {e['name']!r}: content_sha256 mismatch")
             a.flags.writeable = False
             arrays[e["name"]] = a
-    binding, limits = _check_invariants(doc, arrays, rederive)
-    return LoadedResult(root, doc, arrays, binding, limits)
+    _check_invariants(doc, arrays)
+    return LoadedResult(root, doc, arrays, "bundle-local", _binding_limits(doc))
 
 
 def _bundle_file_json(root: Path) -> Path:

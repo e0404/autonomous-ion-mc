@@ -25,7 +25,7 @@ from ionmc.config import PhysicsOptions, RunOptions, SimulationConfig, validate
 from ionmc.configio import array_content_sha256
 from ionmc.geometry import BoxPhantom
 from ionmc.materials import PMMA, WATER
-from ionmc.physics.projectiles import ALPHA, PROTON
+from ionmc.physics.projectiles import PROTON
 from ionmc.results import ResultFormatError, load, save
 from ionmc.scoring import QuantityResult, ScoringGrid, TallyRequest
 from ionmc.simulation import EnergyBalance, GridResult, Result, TransportCounters
@@ -70,7 +70,7 @@ def _quantity(shape: tuple[int, ...] = SHAPE) -> QuantityResult:
     return QuantityResult(
         "let", "let_d", "ratio", "MeV/mm", "sum(l S^2)/sum(l S), S in water",
         mean, 0.1 * mean, mask,
-        np.full(shape, 4, dtype=np.int32), np.where(mask, 1e-9, np.nan), (3, 3),
+        np.where(mask, 4, 0).astype(np.int32), np.where(mask, 1e-9, np.nan), (3, 3),
     )  # fmt: skip
 
 
@@ -873,7 +873,7 @@ def test_item1_ion_run_round_trip(tmp_path: Path) -> None:
     got = load(save(r, tmp_path / "b"))
     doc = got.doc
     assert set(doc["accounting"]["counters"]) == set(r.counters.as_dict())
-    assert doc["valid"] is True and got.effective_binding == "re-derived"
+    assert doc["valid"] is True and got.effective_binding == "bundle-local"
 
 
 def test_item1_bracket_miss_is_diagnostic_only(tmp_path: Path) -> None:
@@ -929,7 +929,7 @@ def test_item1_nuclear_run_round_trip(tmp_path: Path) -> None:
     doc = got.doc
     assert "majorant_violation" in doc["accounting"]["counters"]
     assert "nuclear_mev" in doc["accounting"]["energy_balance"]
-    assert got.effective_binding == "re-derived"
+    assert got.effective_binding == "bundle-local"
     # A-1 item 4: the exact nuclear key set and the signed nuclear terms in the closure
     b = tmp_path / "b"
     _mutate(
@@ -1072,7 +1072,7 @@ def test_item5_reference_manifest_binding(tmp_path: Path) -> None:
             source="toml", base_dir="/x", config_file={"path": "/x/c.toml", "sha256": "3" * 64}
         )
         f = m["files"][0]
-        f.update(path="/x/m.npy", sha256="2" * 64)
+        f.update(path="/x/m.npy", sha256="2" * 64, bytes=123)
         m["config_sha256"] = sha256_canonical(d["requested"])
 
     _mutate(b, lambda d: as_toml(d, "2" * 64))
@@ -1439,7 +1439,7 @@ def test_a1_default_box_and_voxel_round_trips_are_re_derived(tmp_path: Path) -> 
     for i, r in enumerate((make_result(tally=True), make_result(cfg=_voxel_config()),
                            _voxel_result(30.0))):  # fmt: skip
         got = load(save(r, tmp_path / f"b{i}"))
-        assert got.effective_binding == "re-derived" and got.binding_limits == ()
+        assert got.effective_binding == "bundle-local" and len(got.binding_limits) >= 3
 
 
 def _bump_max_steps(d: dict[str, Any]) -> None:
@@ -1455,64 +1455,79 @@ def _bump_table_n_e(d: dict[str, Any]) -> None:
 
 
 @pytest.mark.parametrize("fn", [_bump_max_steps, _bump_scattering, _bump_table_n_e])
-def test_a1_effective_changed_alone_is_refused_unless_typed_only(bundle: Path, fn: Any) -> None:
-    _mutate(bundle, fn)
-    with pytest.raises(ResultFormatError, match="re-derived"):
-        load(bundle)
-    got = load(bundle, rederive=False)
-    assert got.effective_binding == "typed-only" and got.binding_limits
-
-
-def test_a1_missing_cache_fails_closed_and_typed_only_does_not_need_it(
-    tmp_path: Path, monkeypatch: Any
+def test_a2_table_dependent_effective_fields_are_a_declared_tier1_limit(
+    bundle: Path, fn: Any, tmp_path: Path, monkeypatch: Any
 ) -> None:
-    cfg = SimulationConfig(
-        PencilBeamSource(ALPHA, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 400.0),
-        BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), WATER),
-        (ScoringGrid((-10.0, -10.0, 0.0), (5.0, 5.0, 4.0), (4, 4, 10)),),
-        PhysicsOptions(nuclear=False, stopping_model="icru90-water-v1", multiple_scattering=False),
-        RunOptions("warp-cpu", "float64", 17, 16, n_batches=4),
-    )
-    b = save(Simulation(cfg).run(), tmp_path / "b")
-    got = load(b)  # cache present (IONMC_CACHE_DIR of the run)
-    assert got.effective_binding == "re-derived"
-    monkeypatch.setenv("IONMC_CACHE_DIR", str(tmp_path / "empty"))
-    with pytest.raises(ResultFormatError, match="effective not re-derivable"):
-        load(b)
-    assert load(b, rederive=False).effective_binding == "typed-only"
+    """Tier 1 never opens the cache: a changed table-derived field is accepted (hash-protected
+    only, named in binding_limits) and is found by verify_effective (tier 2)."""
+    _mutate(bundle, fn)
+    monkeypatch.setenv("IONMC_CACHE_DIR", str(tmp_path / "empty"))  # tier 1 must not need it
+    got = load(bundle)
+    assert got.effective_binding == "bundle-local" and "effective.tables.*" in got.binding_limits[0]
 
 
-def test_a1_lookup_configuration_binding_and_documented_exclusions(
+def _phys(key: str, value: Any) -> Any:
+    return lambda d: d["effective"]["physics"].__setitem__(key, value)
+
+
+@pytest.mark.parametrize(
+    "fn",
+    [
+        _phys("e_cut_effective_mev", 3.0),
+        _phys("end_of_range_model_effective", "continuous_residual_v1"),
+        _phys("ls_effective", "eff"),
+        _phys("scattering_E_s_mev", 20.0),
+        lambda d: d["effective"].__setitem__("production", True),
+        lambda d: d["effective"]["stopping"].__setitem__("species_transported", ["alpha"]),
+        lambda d: d["effective_extra"]["materials"][0].__setitem__("density_g_cm3", 2.0),
+        lambda d: d["effective_extra"]["materials"][0]["mass_fractions"].__setitem__("H", 0.5),
+        lambda d: d["effective_extra"]["materials"][0].__setitem__("source", "other"),
+        lambda d: d["effective_extra"]["materials"][0].__setitem__("I_eV_effective", 99.0),
+        lambda d: d["effective_extra"].__setitem__("materials", []),
+    ],
+)
+def test_a2_tier1_reconciliation_and_material_negatives(bundle: Path, fn: Any) -> None:
+    _mutate(bundle, fn)
+    with pytest.raises(ResultFormatError):
+        load(bundle)
+
+
+def test_a2_lookup_plan_is_bound_to_the_persisted_f_max(
     lookup_bundle: Path, tmp_path: Path
 ) -> None:
     got = load(lookup_bundle)
-    assert got.effective_binding == "re-derived-except-lookup-plan"
-    assert got.binding_limits == results.LOOKUP_PLAN_EXCLUSIONS
-    ch = _doc(lookup_bundle)["effective"]["tallies"]["channels"]
+    assert any("f_max" in x for x in got.binding_limits)
+    d = _doc(lookup_bundle)
+    ch = d["effective"]["tallies"]["channels"]
     fe = next(i for i, c in enumerate(ch) if c["kind"] == "FE")
     other = next(i for i, c in enumerate(ch) if c["kind"] not in ("FE", "N"))
+    assert d["effective_extra"]["lookup_plan"][0]["channel"] == fe
 
     def edit(tag: str, fn: Any) -> Path:
         b = _copy(lookup_bundle, tmp_path, tag)
         _mutate(b, fn)
         return b
 
-    # excluded: the lookup-dependent quantum and bound (also a negative exponent, which is legal)
-    ok = edit("k", lambda d: d["effective"]["tallies"]["channels"][fe].update(k=-3))
-    assert load(ok).effective_binding == "re-derived-except-lookup-plan"
-    # everything else of the plan is bound exactly
-    for tag, fn in (
-        ("k2", lambda d: d["effective"]["tallies"]["channels"][other].update(
-            k=d["effective"]["tallies"]["channels"][other]["k"] + 1)),
-        ("bl", lambda d: d["effective"]["tallies"]["bounds"].update(
-            B_L_mm=d["effective"]["tallies"]["bounds"]["B_L_mm"] * 1.01)),
-        ("ms", _bump_max_steps),
-    ):  # fmt: skip
+    tl = lambda d: d["effective"]["tallies"]  # noqa: E731
+    cases = {
+        "k": lambda d: tl(d)["channels"][fe].update(k=tl(d)["channels"][fe]["k"] + 1),
+        "bound": lambda d: tl(d)["channels"][fe].update(
+            bound_per_history=tl(d)["channels"][fe]["bound_per_history"] * 1.01),
+        "fmax_plan": lambda d: d["effective_extra"]["lookup_plan"][0].update(
+            f_max=d["effective_extra"]["lookup_plan"][0]["f_max"] * 4.0),
+        "bounds_fmax": lambda d: tl(d)["bounds"].update(f_max=tl(d)["bounds"]["f_max"] * 2.0),
+        "plan_empty": lambda d: d["effective_extra"].__setitem__("lookup_plan", []),
+        "plan_name": lambda d: d["effective_extra"]["lookup_plan"][0].update(lookup="other"),
+        }  # fmt: skip
+    for tag, fn in cases.items():
         with pytest.raises(ResultFormatError):
             load(edit(tag, fn))
-    bad_f = edit("f", lambda d: d["effective"]["tallies"]["bounds"].update(f_max=0.0))
-    with pytest.raises(ResultFormatError, match="f_max"):
-        load(bad_f)
+    # table-derived numerical bounds are a declared tier-1 limit (found by verify_effective)
+    other_k = lambda d: tl(d)["channels"][other].update(k=tl(d)["channels"][other]["k"] + 1)  # noqa: E731
+    bl = lambda d: tl(d)["bounds"].update(B_L_mm=tl(d)["bounds"]["B_L_mm"] * 1.01)  # noqa: E731
+    assert load(edit("other_k", other_k)).binding_limits
+    assert load(edit("bl", bl)).binding_limits
+    d["effective_extra"]["lookup_plan"]  # the unchanged bundle loads (done above)
 
 
 def test_a1_stopping_identity_block_is_validated(bundle: Path, monkeypatch: Any) -> None:
@@ -1612,4 +1627,91 @@ def test_a1_array_invariants_negative_controls(bundle: Path, member: str, fn: An
 
 def test_a1_array_invariants_positive_control_unchanged_arrays(bundle: Path) -> None:
     _alter(bundle, _G + "dose_gy", lambda a: None)  # re-written identically: still accepted
-    assert load(bundle).effective_binding == "re-derived"
+    assert load(bundle).effective_binding == "bundle-local"
+
+
+# ---- amendment A-2: ratio masks, nuclear destinations, per-quantity batch arrays --------------
+
+
+def test_a2_ratio_defined_mask_is_n_nonzero_threshold_in_both_directions(bundle: Path) -> None:
+    # a bin that is undefined although its denominator is nonzero in every batch (all NaN, so
+    # only the threshold rule can refuse it)
+    for base in ("mean", "std", "rounding_bound"):
+        _alter(bundle, _Q + base, _set((1, 1, 1), np.nan))
+    _alter(bundle, _Q + "defined_mask", _set((1, 1, 1), False))
+    with pytest.raises(ResultFormatError, match="n_nonzero >="):
+        load(bundle)
+
+
+def _nuclear_doc(**over: float) -> dict[str, Any]:
+    nuc = {
+        k: 0.0
+        for k in (
+            "nuclear_local",
+            "nuclear_alpha_local",
+            "nuclear_escaped_neutron",
+            "nuclear_escaped_gamma",
+            "nuclear_binding",
+            "nuclear_imbalance",
+        )
+    }
+    nuc.update(nuclear_local=2.0, nuclear_alpha_local=1.0, **over)
+    eb = {
+        "initial_mev": 5.0,
+        "step_deposit_mev": 3.0,
+        "cutoff_mev": 0.0,
+        "escaped_mev": 0.0,
+        "truncated_mev": 0.0,
+        "unaccounted_mev": 0.0,
+        "closure_residual_mev": 0.0,
+        "in_grid_mev": [5.0],
+        "outside_mev": [0.0],
+        "quantization_mev": [],
+        "nuclear_mev": nuc,
+    }
+    return {"accounting": {"energy_balance": eb}, "effective": {"scoring": [{}]}}  # fmt: skip
+
+
+def test_a2_nuclear_destinations_are_non_negative_and_alpha_local_is_part_of_local() -> None:
+    results._check_energy_structure(_nuclear_doc())
+    for bad, match in (({"nuclear_alpha_local": 3.0}, "alpha_local"),):
+        d = _nuclear_doc()
+        d["accounting"]["energy_balance"]["nuclear_mev"].update(bad)
+        with pytest.raises(ResultFormatError, match=match):
+            results._check_energy_structure(d)
+    d = _nuclear_doc()
+    nm = d["accounting"]["energy_balance"]["nuclear_mev"]
+    nm.update(nuclear_binding=-1.0, nuclear_local=3.0)  # keeps the closure, breaks the sign rule
+    with pytest.raises(ResultFormatError, match="non-negative"):
+        results._check_energy_structure(d)
+
+
+def test_a2_quantity_batch_arrays_are_persisted_and_bind_means(
+    lookup_bundle: Path, tmp_path: Path
+) -> None:
+    doc = _doc(lookup_bundle)
+    assert doc["statistics"]["quantity_batch_arrays"] == {"status": "persisted"}
+    names = [e["name"] for e in doc["arrays"] if e["origin"].get("array", "").startswith("batch_")]
+    assert any(n.endswith("__batch_den") for n in names)  # the let_d ratio
+    assert any(n.endswith("__batch_num") for n in names)
+    assert not any("table" in n for n in names)
+    ratio_q = next(e for e in doc["arrays"] if e["origin"].get("quantity") == "let_d")
+    stem = ratio_q["name"].rsplit("__", 1)[0]
+    lin_q = next(e for e in doc["arrays"] if e["origin"].get("quantity") == "lookup_sum")
+    lstem = lin_q["name"].rsplit("__", 1)[0]
+    for tag, member, fn in (
+        ("num", stem + "__batch_num", _scale((0,), 1.5)),
+        ("den", stem + "__batch_den", _scale((1,), 0.5)),
+        ("lin", lstem + "__batch_num", _scale(Ellipsis, 1.01)),
+    ):
+        b = _copy(lookup_bundle, tmp_path, tag)
+        _alter(b, member, fn)
+        with pytest.raises(ResultFormatError, match="batch arrays|disagrees"):
+            load(b)
+
+
+def test_a2_persist_batches_false_records_the_status(tmp_path: Path) -> None:
+    r = Simulation(_ion_config()).run()
+    got = load(save(r, tmp_path / "b", persist_batches=False))
+    assert got.doc["statistics"]["quantity_batch_arrays"]["status"] == "not-persisted"
+    assert any("not recomputed" in x for x in got.binding_limits)

@@ -563,3 +563,43 @@ and never runs transport; everything below is computed from `result.json`, `arra
    with a not-reconstructible user `stopping` object (§6; API only), which cannot be rebuilt and loads with
    `effective_binding = "typed-only"` and a recorded limit; `ionmc verify` reports that limit. Rows OUT-4/OUT-7 gain the corresponding negative controls
    (every identity and invariant above broken one at a time → `ResultFormatError`).
+
+## Amendment A-2 (2026-11-23; after Codex REVIEW-1e17657e of 921b8e55): two verification tiers
+
+Supersedes items 1–2 of Amendment A-1 (items 3–6 stay, as extended below). Reason: a bundle-local reader must stay
+resource-bounded and version-stable, so it may not open the data cache, the registry's tables or any input file;
+complete re-derivation needs exactly those, so it becomes a separate, explicitly trusted tier.
+
+**Tier 1 — `load(path, *, budgets…)` (bundle-local, version-stable, resource-bounded).** Reads only `result.json`
+and `arrays.npz`; never the cache, never a manifest input file, never transport; only the schema-1.0 rules and pure
+library functions whose inputs are in the bundle. It binds: (a) `run` and the run-level `effective` fields to
+`requested`; (b) the array catalogue and `effective.tallies` to the requested tallies, grids and lookup records — the
+channel plan is recomputed from `requested` plus a per-FE-channel scalar `f_max` persisted in `effective.tallies`
+(`k = fe_exponent(f_max)`, `bound_per_history = f_max × e_hist`, `bounds.f_max` = the maximum), so only the per-channel
+`f_max` statistics themselves remain bound through the lookup `content_sha256`/`item_sha256` (declared limit of
+tier 1: verifying `f_max` needs the table values, which the bundle never contains); (c) complete material definitions
+(`effective_extra.materials` ⇔ the requested material definitions, composition, density, I, source) and `mass_g`
+recomputed from the persisted density (or material density) × voxel volume; (d) the persisted `effective.stopping`
+block by `validate_identity_block` against the registry (spec and table identities are immutable by decision 0044, so
+this is version-stable); (e) every field of `effective` that does not depend on tables, lookups or the stopping object
+to its `requested` counterpart through the frozen reconciliation table (§4); (f) A-1 items 4–5 extended: ratio
+quantities `defined_mask ⇔ n_nonzero ≥ threshold` in both directions, per-quantity batch numerators/denominators
+persisted by default (O3) so that means and standard errors are recomputed, nuclear destinations non-negative and
+`0 ≤ nuclear_alpha_local ≤ nuclear_local`. Everything not listed is integrity-protected by the file hashes only and is
+named in `LoadedResult.binding_limits`.
+
+**Tier 2 — `verify_effective(bundle, *, cache_dir, input_files=None, budgets…)` (explicit trust).** Used by
+`ionmc verify --rederive` and by the LV/HR rows; the caller trusts the local installation, its data cache and,
+when `input_files` is given (paths resolved from the manifest, each file bounded by the manifest's recorded size and
+checked against its sha256 before use), the manifest's input files. It rebuilds the configuration from `requested`
+(geometry from the persisted arrays; lookups from the trusted files, otherwise placeholder tables), calls
+`validate(config)` and compares `EffectiveConfig.summary()` byte-for-byte with the persisted `effective` (lookup
+files given → no exclusion; placeholders → the FE plan fields and `f_max` excluded and reported); a user `stopping`
+object cannot be rebuilt and is reported as such. A missing cache object is an explicit tier-2 failure, never a
+tier-1 one. A 1.0 bundle re-derived by a later code version reports "differs from the current code" with the
+differing pointers; it is not thereby invalid (tier 1 decides validity).
+
+Rows: OUT-4/OUT-7 negative controls cover every tier-1 binding above; new row **OUT-12** (CI with the cache present in
+this environment; LV): `verify_effective` with cache and input files reproduces `effective` exactly for the default,
+tabulated, lookup and nuclear round-trip configurations; a mutated `effective` pointer, a missing cache object and a
+mismatching input file are each reported as tier-2 failures; `verify_effective` never changes the bundle.

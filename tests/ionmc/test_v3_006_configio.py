@@ -1095,8 +1095,9 @@ def test_prov8_toml_manifest_records_files_and_binds_the_configuration(tmp_path:
     _json(j)
     assert set(j) == {"source", "base_dir", "config_file", "files", "config_sha256"}
     for f in j["files"]:
-        assert set(f) == {"role", "path", "sha256", "content_sha256", "item_sha256"}
-        assert all(isinstance(f[k], str) for k in f)
+        assert set(f) == {"role", "path", "sha256", "content_sha256", "item_sha256", "bytes"}
+        assert all(isinstance(f[k], str) for k in f if k != "bytes")
+        assert isinstance(f["bytes"], int) and f["bytes"] > 0
     assert m.config_sha256 == configio.config_sha256(c, m)
     assert m.config_sha256 == configio.sha256_canonical(to_dict(c, manifest=m))
     m.verify(c)
