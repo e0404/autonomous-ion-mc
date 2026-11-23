@@ -1268,9 +1268,13 @@ def _lookup_doc_with(tmp_path: Path, **change: Any) -> Path:
     return path
 
 
-def test_cfg7_self_consistent_lookup_tampering_is_refused(tmp_path: Path) -> None:
-    """A numerically identical lookup file with another citation, with the manifest entry's
-    item_sha256 rewritten and config_sha256 recomputed, is refused by verify() and from_dict()."""
+def test_cfg7_lookup_file_with_other_provenance_is_refused_by_verify_and_item_digest(
+    tmp_path: Path,
+) -> None:
+    """A numerically identical lookup file with another citation: verify() refuses it although the
+    entry's file hash, item digest and config_sha256 were rewritten (the in-memory config keeps the
+    original item); from_dict() refuses it by the item digest. A wholly self-consistent alternate
+    configuration (dict, manifest and files all rewritten) is a different configuration."""
     p = _slab_toml(tmp_path)
     c, m = load_toml(p)
     d = to_dict(c, manifest=m)
@@ -1290,9 +1294,16 @@ def test_cfg7_self_consistent_lookup_tampering_is_refused(tmp_path: Path) -> Non
     with pytest.raises(ConfigError) as info:
         m2.verify(c)
     assert "input_manifest.files" in info.value.key_path and "lookup:" in info.value.key_path
-    with pytest.raises(ConfigError) as info2:  # the dict still records the original file hash
-        from_dict(d, manifest=m2)
-    assert info2.value.key_path.startswith("lookups[0]")
+    # from_dict: reference and file hash agree, the manifest's item digest does not match the
+    # reloaded item, so the item-digest check (not the file-hash check) rejects it
+    m3 = replace(
+        m,
+        files=tuple(replace(e, sha256=_sha(path)) if e.role == entry.role else e for e in m.files),
+    )
+    ref = _set(d, ("lookups", 0, "sha256"), _sha(path))
+    with pytest.raises(ConfigError, match="item digest") as info2:
+        from_dict(ref, manifest=m3)
+    assert info2.value.key_path == "lookups[0]"
 
 
 def test_cfg3_malformed_lookup_files_are_config_errors(tmp_path: Path) -> None:
@@ -1311,3 +1322,44 @@ def test_cfg3_malformed_lookup_files_are_config_errors(tmp_path: Path) -> None:
         with pytest.raises(ConfigError) as info:
             load_toml(p)
         assert info.value.key_path == "lookups[0]", change
+
+
+def _tampered_manifest(
+    m: InputManifest, c: SimulationConfig, role: str, path: Path
+) -> InputManifest:
+    files = tuple(replace(f, sha256=_sha(path)) if f.role == role else f for f in m.files)
+    m2 = replace(m, files=files)
+    return replace(m2, config_sha256=configio.config_sha256(c, m2))
+
+
+@pytest.mark.parametrize(
+    ("role", "name", "array"),
+    [
+        ("material_index", "slab_material_index.npy", np.ones((3, 3, 8), dtype=np.int32)),
+        ("density", "slab_density.npy", np.full((3, 3, 8), 2.0)),
+    ],
+)
+def test_prov8_replaced_geometry_file_is_refused_even_with_rewritten_hashes(
+    tmp_path: Path, role: str, name: str, array: Any
+) -> None:
+    c, m = load_toml(_slab_toml(tmp_path))
+    path = tmp_path / "inputs" / name
+    np.save(path, array)
+    m2 = _tampered_manifest(m, c, role, path)
+    with pytest.raises(ConfigError) as info:
+        m2.verify(c)
+    assert role in info.value.key_path
+
+
+def test_prov8_omitted_roles_are_refused(tmp_path: Path) -> None:
+    c, m = load_toml(_slab_toml(tmp_path))
+    for keep in (
+        tuple(f for f in m.files if f.role != "lookup:synthetic_let_linear"),
+        tuple(f for f in m.files if f.role != "density"),
+        (),
+    ):
+        m2 = replace(m, files=keep)
+        m2 = replace(m2, config_sha256=configio.config_sha256(c, m2))
+        with pytest.raises(ConfigError, match="lacks an entry"):
+            m2.verify(c)
+    m.verify(c)

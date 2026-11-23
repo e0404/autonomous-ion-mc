@@ -700,6 +700,8 @@ class InputManifest:
                     "an item field of the configuration (provenance, geometry description) "
                     "differs from the manifest entry's item digest",
                 )
+            if f.path is not None and not f.role.startswith("lookup:"):
+                self._check_geometry_file(f, config, kp)
             if f.path is not None and f.role.startswith("lookup:"):
                 try:
                     reloaded = LookupTable.from_file(f.path, expected_sha256=f.sha256)
@@ -717,11 +719,46 @@ class InputManifest:
                         f"the lookup file {Path(f.path).name!r} no longer yields the recorded "
                         "item (a provenance field of the file changed)",
                     )
+        extra = sorted(set(items) - {f.role for f in self.files})
+        if extra:
+            raise ConfigError(
+                "input_manifest.files",
+                f"the manifest lacks an entry for the array role(s) {extra} of the configuration",
+            )
         if config_sha256(config, self) != self.config_sha256:
             raise ConfigError(
                 "input_manifest.config_sha256",
                 "the manifest does not describe this configuration (the configuration differs "
                 "from the one that was loaded)",
+            )
+
+    @staticmethod
+    def _check_geometry_file(f: InputFile, config: SimulationConfig, kp: str) -> None:
+        """Reload the geometry array file of ``f`` and bind its content and item digests."""
+        assert f.path is not None
+        try:
+            arr = np.load(io.BytesIO(Path(f.path).read_bytes()), allow_pickle=False)
+        except (OSError, ValueError, EOFError) as exc:
+            raise ConfigError(kp, f"cannot reload the array file: {exc}") from exc
+        geometry = config.geometry
+        if not isinstance(arr, np.ndarray) or not isinstance(geometry, VoxelGeometry):
+            raise ConfigError(kp, "the file does not hold the array of a voxel geometry")
+        dtype = np.int32 if f.role == "material_index" else np.float64
+        try:
+            arr = np.ascontiguousarray(arr, dtype=dtype)
+        except (ValueError, TypeError) as exc:
+            raise ConfigError(
+                kp, f"the array file cannot be read as {np.dtype(dtype)}: {exc}"
+            ) from exc
+        item = dict(_geometry_items(geometry)[f.role])
+        item["content_sha256"] = array_content_sha256(arr)
+        item["dtype"] = arr.dtype.str
+        item["array_shape"] = [int(n) for n in arr.shape]
+        if item["content_sha256"] != f.content_sha256 or sha256_canonical(item) != f.item_sha256:
+            raise ConfigError(
+                kp,
+                f"the array file {Path(f.path).name!r} no longer yields the recorded content "
+                "and item digests",
             )
 
 
