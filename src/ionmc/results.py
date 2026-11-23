@@ -114,6 +114,8 @@ MAX_JSON_BYTES = 16 * 2**20
 MAX_CENTRAL_DIRECTORY_BYTES = 2**20
 MAX_JSON_TOKENS = 2_000_000
 MAX_JSON_DEPTH = 64
+MAX_NDIM = 4
+MAX_NDIM_SPECTRUM_BATCH = 5  # (batch, x, y, z, energy bin) of a spectrum quantity's batch arrays
 MAX_NPY_HEADER_BYTES = 1024
 ZLIB_LEVEL = 6
 _EOCD_WINDOW = 65_557
@@ -897,6 +899,8 @@ def save(
             raise FileExistsError(f"{dest.name!r} exists (pass overwrite=True)")
         if dest.is_symlink() or not (dest / "result.json").is_file():
             raise _fail("refusing to overwrite something that is not a result bundle")
+    if not result.valid and not result.requested_config.run.allow_invalid_result:
+        raise _fail("invalid result: the run did not set allow_invalid_result")
     if manifest is not None:
         manifest.verify(result.requested_config)
     arrays = _collect_arrays(result, persist_batches)
@@ -2111,7 +2115,15 @@ def _entry_nbytes(e: dict[str, Any], max_array: int) -> tuple[np.dtype[Any], tup
         raise _fail(f"array {e['name']!r}: dtype {e['dtype']!r} is not allowed")
     dt = np.dtype(e["dtype"])
     shape = tuple(e["shape"])
-    if len(shape) > 4 or any(n < 0 for n in shape):
+    origin = e.get("origin")
+    spectrum_batch = (
+        isinstance(origin, dict)
+        and origin.get("kind") == "quantity"
+        and origin.get("array") in QUANTITY_BATCH_ARRAYS
+    )
+    if len(shape) > (MAX_NDIM_SPECTRUM_BATCH if spectrum_batch else MAX_NDIM) or any(
+        n < 0 for n in shape
+    ):
         raise _fail(f"array {e['name']!r}: invalid shape {shape}")
     n = 1
     for d in shape:
@@ -2896,7 +2908,7 @@ def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any
                 raise _fail(f"array {e['name']!r}: unknown grid {e['grid']!r}")
             shp, gshape = tuple(e["shape"]), scoring[e["grid"]]
             if e["axes"] and e["axes"][0] == "batch":
-                if len(shp) != 4 or shp[0] != nb or shp[1:] != gshape:
+                if len(shp) not in (4, 5) or shp[0] != nb or shp[1:4] != gshape:
                     raise _fail(f"array {e['name']!r}: shape {shp} disagrees with grid {gshape}")
             elif shp[:3] != gshape:
                 raise _fail(f"array {e['name']!r}: shape {shp} disagrees with grid {gshape}")

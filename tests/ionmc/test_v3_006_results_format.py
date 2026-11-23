@@ -647,7 +647,11 @@ def _invalid(r: Result, **kw: Any) -> Result:
     import dataclasses
 
     grids = tuple(dataclasses.replace(g, valid=False) for g in r.grids)
-    return Result(**{**r.__dict__, "valid": False, "grids": grids, **kw})
+    cfg = r.requested_config
+    allowed = dataclasses.replace(cfg, run=dataclasses.replace(cfg.run, allow_invalid_result=True))
+    return Result(
+        **{**r.__dict__, "valid": False, "grids": grids, "requested_config": allowed, **kw}
+    )
 
 
 def _with_channels(lookup: int, path: int) -> Result:

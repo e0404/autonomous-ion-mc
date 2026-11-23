@@ -446,3 +446,12 @@ Rows: OUT-4/OUT-7 negative controls cover every tier-1 binding above; new row **
 this environment; LV): `verify_effective` with cache and input files reproduces `effective` exactly for the default,
 tabulated, lookup and nuclear round-trip configurations; a mutated `effective` pointer, a missing cache object and a
 mismatching input file are each reported as tier-2 failures; `verify_effective` never changes the bundle.
+
+## Amendment A-3 (2026-11-23; S2b implementation finding): array rank of spectrum batch arrays
+
+§1 says shapes have "at most 4 dimensions". Clarification (prospective; no row outcome observed): the per-quantity
+batch numerator/denominator arrays of spectrum tallies have the shape (B, nx, ny, nz, nbins), i.e. five dimensions;
+the reader allows five dimensions only for those two array roles (`MAX_NDIM_SPECTRUM_BATCH`) and keeps the limit of
+four for every other array. The byte budgets apply unchanged. `save` refuses a result with `valid = false` unless the
+run allowed it (`allow_invalid_result`), exactly as §1 states; the S2a fixtures that persist invalid results set that
+option explicitly.
