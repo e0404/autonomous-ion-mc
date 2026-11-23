@@ -1,0 +1,391 @@
+# 0045 — Persisted result bundle, configuration files, `ionmc run` and the requested/effective capability contract
+
+- Status: freeze candidate until the S0 commit is reviewed (planner, 2026-11-23). Frozen together with
+  `validation/plans/v3-006-acceptance.md` by one reviewed commit (independent Codex review and an independent
+  architecture/scientific review) before any V3-006 code exists. Later changes are dated amendments; earlier text is
+  kept.
+- Task: V3-006 (program plan task table: self-describing persisted results, human-readable reports and SVG plots,
+  configuration files, `ionmc run` CLI, fail-closed capability contract with requested/effective configuration).
+- Base: `v3/develop` 95937553 (the V3-013 squash merge, PR #92). V3-006 is implemented on its task branch from this
+  base (orchestrator decision O1); no V3-013 seal binds this branch any more.
+- Affects: architecture (public I/O API, CLI), reproducibility, provenance, capability contract, licensing of
+  distributed outputs. **No physics, table, RNG, stopping-model or transport change.**
+- Builds on: decision 0037 (numpy + warp only; NPZ + JSON sidecars; Markdown reports; SVG by an internal writer; unit
+  and coordinate tables; Philox stream encoding), decision 0039 (fail-closed `validate`,
+  `UnsupportedCombinationError`, `BackendUnavailableError`, `TransportLimitError`), decision 0040 (channels,
+  undefined = NaN + mask, ratio statistics), decision 0041 (nuclear table id), decision 0044 §4–§5 (stopping identity
+  block, `evidence_at_run`, `data_declared`/`data_used`, no silent switch, no environment override).
+- Amends: the docstring rule of `src/ionmc/environment.py` "git is never executed" (§3, orchestrator decision O2):
+  one read-only, timeout-bounded `git` query with every inherited `GIT_*` variable removed becomes the documented
+  fallback of the code identity. Nothing else in decisions 0037–0044 is amended.
+- Markers: **FACT** (read at 95937553, file:line), **ESTIMATE**, **TO VERIFY**, **PROPOSAL** (a design choice frozen
+  by this decision). Not a clinical claim.
+
+## Problem
+
+V2-OUTPUT requires that, outside the producing process, a user recovers the code version/SHA and dirty state,
+requested and effective physics, species/source, geometry/material definitions, transport and scoring grids with
+coordinates, units, external data identifiers/hashes, model/reference versions, actual histories, batches, seeds/RNG
+identity, normalisation, uncertainty definition/validity, escape/truncation, backend and relevant environment;
+missing/undefined quantities are explicit; machine-readable data and human-readable summaries/profiles/plots/reports
+exist; reopening is tested in a separate clean process. V2-CAP requires every public path to honour requested physics
+or raise before returning, discoverable and documented support, persisted requested AND effective configuration and
+discriminating dispatch tests. V2-USER requires a documented configuration/CLI workflow whose results are inspectable
+without test code. None of this exists as a library product today.
+
+## Context
+
+**FACT (read at 95937553).**
+- No library result writer exists. `Result` (`src/ionmc/simulation.py:306–353`) holds `valid`, `requested_config`,
+  `effective_config`, `backend`, `device`, `precision`, `seed`, `rng`, `n_histories`, `n_batches`, `grids`
+  (`GridResult`, `simulation.py:273–303`: mean/std energy and dose, `relative_uncertainty` with NaN where undefined,
+  `defined_mask`, `mass_g`, `n_nonzero_batches`, `sparse_mask`, `low_batch_count`, `batch_energy_mev`, `valid`,
+  `quantities`), `energy_balance`, `counters`, `timings`, `environment`, `diagnostics`, `transport_report`,
+  `channel_raw`, `lookups`.
+- `Simulation.__init__` calls `validate` before any transport (`simulation.py:710–714`); `run` raises
+  `TransportLimitError` carrying the invalid result unless `allow_invalid_result` (`simulation.py:716–747`).
+- `EffectiveConfig.summary()` (`src/ionmc/config.py:607–698`) carries backend, precision, seed, histories, batches,
+  workers, chunking, source, physics (with `end_of_range_model`/`_effective`, `ls_requested`/`ls_effective`,
+  `e_cut_effective_mev`), `mcs_mapping`, geometry (origin/spacing/shape, material **names only**, `z_exit_mm`),
+  scoring grids, table identities and sha256, the stopping identity block `summary()["stopping"]`
+  (`stopping_identity()`, `config.py:590–605`; decision 0044 §4), RNG and tallies; nuclear runs add `nuclear` and
+  `e_cut_deuteron_mev` (`config.py:694–697`). It is bound by frozen V3-008 step documents
+  (`validation/scripts/ion_em/r2_io.py`) and by the V3-013 identity records, so it is a compatibility surface.
+- `validate` resolves more than the draft allowlist named: a non-unit `direction` becomes `unit_direction`
+  (`src/ionmc/sources.py:17, 43–47`); `mcs_mapping_eval` becomes `"root"` and unused for an ion with multiple
+  scattering off and is ignored for protons (`config.py:160–164, 448–453, 1262–1265`); the cutoff is `e_cut_mev`
+  for a proton and `e_cut_ion_mev_per_u × A` for an ion (`config.py:523–530`); `e_cut_deuteron_mev` and
+  `nuclear_table_id` are unused with nuclear off; `straggling_model`/`mcs_model` are unused when their switch is off;
+  `chunk_histories` is unused on the python backend; the stopping identity adds the deuteron species for nuclear
+  runs and a water material row when tallies are requested (`config.py:594–598`); an LS-variant id on z = 1 has the
+  default as effective id (`src/ionmc/physics/stopping_selection.py:105`, `effective_model_id`).
+- `select()` (`stopping_selection.py:112–144`) runs at `PhysicsOptions` construction and wraps every resolution error
+  (unknown id, missing or mismatched cache object, parse failure) into `UnsupportedCombinationError` with the cause
+  kept (`raise ... from exc`).
+- V3-013 is integrated: the evidence registry (`src/ionmc/physics/stopping_evidence.py`) is append-only; the model
+  `icru90-water-v1` now has two records, `consistency-only` and `topas-agreement-shared-lineage:V-C1:PASS` (graded at
+  9f1fa8ec); the default `bethe-ionmc-v1` has `as-graded:0043`, the LS variants `unvalidated`, the NIST model
+  `consistency-only`. No status is named `validated`. `evidence_at_run` therefore depends on the code version and
+  must be persisted as it was at run time, never recomputed at load time.
+- `capabilities()` (`simulation.py:618–630`, `_capabilities_base` 665–704) derives the tally section, the stopping
+  model section (`_stopping_model_capabilities`, 632–663) and the species sections (`species_details`,
+  `species_roles`, `unsupported_species`, with the ion energy domains from `ION_DOMAIN_MEV_PER_U`; 467–485 and
+  following) from the enforcing objects; the proton energy domain, backends, geometry, sources and trace entries are
+  free text. No test proves declared == enforced over the whole matrix.
+- `describe_environment()` (`src/ionmc/environment.py:48–65`) reads `_build_info.json`, which nothing generates, so
+  every run records `git_sha = None`; its docstring states "git is never executed". `.gitignore` does not list
+  `_build_info.json`.
+- `resolve_cache_dir` (`src/ionmc/data/cache.py:37–48`): explicit argument, else `IONMC_CACHE_DIR`, else
+  `~/.cache/ionmc` (a default, not a user choice).
+- CLI (`src/ionmc/cli.py`): `version`, `info`, `notices`, `data {list,fetch,verify,path,import,build}`; argparse
+  errors and `data` without an action return 2 (`cli.py:99–100, 124–131`), `data` errors return 1
+  (`cli.py:118–121`); no `run`. Entry point `ionmc = "ionmc.cli:main"` (`pyproject.toml:27–28`); build backend
+  hatchling 1.32.4; `requires-python >= 3.12`.
+- Validation scripts persist ad hoc (`np.savez_compressed` + JSON step document with `summary()` and the npz sha256).
+- `VoxelGeometry.z_exit_mm` (`src/ionmc/geometry.py:28–52`) is an optional world exit plane; a source has an
+  arbitrary direction and no axis is privileged (decision 0037, "Coordinates and grids").
+- Host runner (`infrastructure/host_runner/host_runner.py:38, 179–195`): read-only bind of the task worktree at
+  `/workspace`, `GIT_WORK_TREE=/workspace`, `HOME=/tmp/home`; Python 3.12.0 with numpy, warp and pytest only (no
+  hatchling), no network.
+
+**ESTIMATE / TO VERIFY.** `np.savez*` stamps zip members with the current local time, so npz file bytes are not
+reproducible (ESTIMATE from CPython `zipfile`; TO VERIFY by row OUT-9). A hatchling build hook can write the build
+stamp without a new build dependency (TO VERIFY by row PROV-5).
+
+## Selected (PROPOSAL)
+
+### 1. Result bundle `ionmc.result/1` (module `src/ionmc/results.py`)
+
+A directory `<name>/`:
+
+| File | Content | Authoritative? |
+|---|---|---|
+| `result.json` | strict JSON (`allow_nan=False`, sorted keys, UTF-8, two-space indent, one final `\n`): `schema = "ionmc.result"`, `schema_version = "1.0"`, `kind = "transport"` (`"influence"` reserved for V3-007), `valid`, the blocks of §2, the `arrays` catalogue and `files` (sha256 and size of every other file) | yes |
+| `arrays.npz` | every array, written by a deterministic writer (`zipfile`, fixed `date_time = (1980, 1, 1, 0, 0, 0)`, fixed member order, `ZIP_DEFLATED` level 6, `np.lib.format.write_array`; read with `allow_pickle=False`) | yes |
+| `report.md` | human-readable report (§5); a pure function of `result.json` + `arrays.npz` | derived |
+| `plots/*.svg` | profiles (§5); a pure function of the same | derived |
+
+- Catalogue entry per array: `name`, `dtype`, `shape`, `axes`, `grid` (scoring-grid name or `null`), `units`
+  (decision 0037 vocabulary plus `"1"`, `"bool"`, `"count"`), `definition`, `content_sha256` = sha256 over
+  `dtype.str | shape | C-order bytes` (compression-independent). Integrity = file sha256 AND every content digest.
+- Persisted per grid: `energy_mev`, `energy_std_mev`, `dose_gy`, `dose_std_gy`, `relative_uncertainty`,
+  `defined_mask`, `mass_g`, `n_nonzero_batches`, `sparse_mask`, `batch_energy_mev`, every `QuantityResult` array;
+  geometry `material_index` and, if set, the density array; requested diagnostics.
+- **Batch arrays are persisted by default** (orchestrator decision O3); `persist_batches = false` is an explicit,
+  recorded choice (`{"status": "not-persisted", "reason": "user option persist_batches=false"}`), never a silent
+  omission.
+- **Never persisted:** stopping, range, LET-water and nuclear table arrays and any array derived node by node from
+  licensed data (NIST, ICRU 90/Geant4, ENDF, AME). Only identities and digests (§2). Enforced by an array-name
+  allowlist in the writer (decisions 0038/0044 licence roles, V1-MUST-020). User lookup tables are referenced by
+  name, metadata and sha256; their values are not embedded.
+- Undefined values: NaN in arrays with their masks; in JSON `{"value": null, "status": "undefined", "reason": ...}`;
+  never 0, never omitted.
+- Reader `load(path) -> LoadedResult` verifies schema, version, every hash, the allowlist and the cross-field
+  invariants and **fails closed** (`ResultFormatError`) on an unknown field at any level, a missing required field, an
+  unknown version, a hash mismatch, a NaN in a JSON number position, an array whose shape disagrees with its grid, or
+  an npz member outside the catalogue. It never reconstructs transport internals and never recomputes
+  `evidence_at_run`.
+- Writer `save(result, path, *, persist_batches=True, overwrite=False)` writes into a temporary sibling directory and
+  renames (no partial bundle), refuses an existing path unless `overwrite`, writes an invalid result only when the run
+  allowed it (`valid = false` and a banner in the report).
+- Versioning: `"MAJOR.MINOR"`; MINOR adds optional blocks, MAJOR breaks; a reader accepts exactly the versions it
+  knows; a frozen synthetic 1.0 fixture stays readable by later readers (orchestrator decision O10).
+
+### 2. Blocks of `result.json`
+
+- `requested`: canonical JSON of the `SimulationConfig` (§6), including `stopping_model` or, for a user `stopping`
+  object, `{"stopping_object": <identity>, "reconstructible": false}`; every referenced input file and the config file
+  by resolved absolute path and sha256 (orchestrator decision O8).
+- `effective`: `EffectiveConfig.summary()` **byte-for-byte unchanged** (orchestrator decision O4), including the
+  decision-0044 `stopping` block as produced at run time; plus `effective_extra` outside it: material definitions
+  (composition, density, I requested/effective, Sternheimer parameters) of every geometry material, array references
+  of `material_index`/density, the grid convention string (decision 0037: origin = corner of voxel (0,0,0), C order
+  `[ix, iy, iz]`, mm), the profile axis of §5 and the resolution list of §4.
+- `provenance`: `code` (§3); `environment` (python, platform, numpy, warp versions, device names, CUDA driver if any;
+  no hostname, user name or home path); `data` (every dataset id, archive and member sha256 and per-run role,
+  collected from `stopping.data_used`, the nuclear setup and the table identities; lookup sha256); `models` (stopping
+  `model_id_effective`, `version`, `spec_sha256`, `evidence_at_run` verbatim; straggling, MCS, end-of-range and
+  delta-electron model names; nuclear table id).
+- `run`: backend, device, precision, production flag, seed, RNG identity (Philox4x32-10, counter/key encoding version,
+  u01 mapping), `n_histories`, `n_batches`, histories per batch, `cpu_workers`, `chunk_histories`; `timings` labelled
+  `"deterministic": false`; `output_path`; `cache_dir` and `cache_dir_source` (`"explicit" | "IONMC_CACHE_DIR" |
+  "default"`, the latter being `~/.cache/ionmc`).
+- **Path pointers (set P, frozen; orchestrator decisions O7/O8).** The only JSON pointers that may hold an absolute
+  path, and therefore a home directory or user name: `/run/output_path`, `/run/cache_dir`,
+  `/requested/config_file/path`, `/requested/geometry/material_index/path`, `/requested/geometry/density/path`,
+  `/requested/lookups/<i>/path`, and every `cache_dir` key inside `/effective/stopping` and `/effective/nuclear` (the
+  decision-0044 and nuclear blocks as `summary()` produces them). They are recorded as user-supplied or
+  user-environment paths. Outside P no string contains the home path, and no path component (split at `/` and `\`)
+  and no whole non-path string equals the user name or the hostname. Reports and plots never print a P value (input
+  files appear by basename and sha256, caches by dataset id).
+- `statistics`: normalisation ("per primary history"), uncertainty definition (batch standard error, B batches,
+  history h in batch h mod B; ratio quantities by the delta method of decision 0040), `low_batch_count`, the
+  definitions of `defined_mask`/`sparse_mask`.
+- `accounting`: every `energy_balance` field (escaped, truncated, residual), every counter, `valid` and the reasons.
+- `units`: the decision-0037 unit table as data.
+
+### 3. Code identity (orchestrator decision O2)
+
+- `code.package_tree_oid`: computed at run time from the imported `ionmc` package directory as a **Git tree
+  object id** (SHA-1 tree/blob encoding, regular-file modes, excluding `__pycache__`, `*.pyc` and the build stamp);
+  equal to `git rev-parse <commit>:src/ionmc` exactly when the code that ran equals that commit's package tree. Needs
+  no git binary; works for wheel, checkout and host snapshot. Authoritative identity and dirty test.
+- `code.git_commit`, `code.git_dirty`, `code.source` (`"stamp" | "git" | "unavailable"`): (a) a build stamp
+  `ionmc/_build_info.json` present in an installed wheel: `git_dirty = runtime oid != stamped oid`; (b) else, if the
+  package lies in a Git work tree, one read-only query (`git rev-parse HEAD` and `HEAD:src/ionmc`) with every `GIT_*`
+  variable removed, `cwd` = the package directory and a timeout; `git_dirty = HEAD tree oid != runtime oid`; (c) else
+  `git_commit = null`, `git_dirty = null`, `status = "unknown"` and the reason.
+- **Build stamp.** Written by a hatchling custom build hook (built into hatchling; no new build dependency:
+  `[build-system] requires` and `uv.lock` stay unchanged, `pyproject.toml` gains only the hook table) when a wheel is
+  built with `uv build --wheel` from a clean checkout in the local validation environment (never on the host runner,
+  which has no hatchling and no network). The hook computes the tree oid and one read-only `git rev-parse HEAD`
+  (`GIT_*` stripped), writes the stamp into a temporary directory and maps it into the wheel with `force_include`;
+  it never writes into `src/ionmc` (S3 also adds `src/ionmc/_build_info.json` to `.gitignore` as a guard). A build
+  without a reachable repository (for example a wheel built from an sdist) stamps `commit = null`,
+  `status = "unknown"`; this outcome is pre-declared, never an error.
+- `ionmc_version` from `_version.py`. Apart from this query the library runs no subprocess and never uses the network.
+
+### 4. Capability contract: declared, enforced, requested, effective
+
+1. **Declared** = `capabilities()`; every entry naming a supported or rejected combination is derived from the
+   constant or predicate that `validate` enforces (already so for tallies, stopping models and the ion species
+   domains), extended to the proton energy domain, backends × precision × (nuclear, tallies, trace, workers), geometry
+   and source types. A free-text entry either becomes derived or is labelled `"informative"`. Enabling a combination
+   later (V3-005B warp nuclear, V3-009 ion nuclear, V3-007 beamlets) changes declaration and enforcement together.
+2. **Enforced = declared**: a sweep enumerates the finite declared matrix plus boundary energies and asserts
+   declared-supported ⇒ `validate` succeeds; declared-unsupported ⇒ `UnsupportedCombinationError` or
+   `BackendUnavailableError` before transport; no third outcome.
+3. **Requested → effective reconciliation** (`reconcile(requested, effective) -> tuple[Resolution, ...]`, run inside
+   `Simulation.__init__` after `validate`, persisted in `effective_extra.resolutions`). Every requested field has one
+   row of the frozen table below with one of four classes: **equal** (effective value must equal the requested one),
+   **derived** (a documented deterministic rule, recorded with the rule name), **unused** (not applicable for this
+   configuration; recorded with the reason, never silently dropped) and **requested-only** (an execution option with
+   no effective counterpart; persisted in `requested`). Any difference outside the table raises
+   `UnsupportedCombinationError("requested X, effective Y")` before transport. A requested feature without its
+   effective implementation object (tallies → channel plan, nuclear → nuclear setup, lookups → lookup channels,
+   multiple scattering → MCS model, straggling → straggling model) raises.
+
+   | Requested field | Effective pointer | Class and rule |
+   |---|---|---|
+   | `source.projectile`, `position_mm`, `kinetic_energy_mev`, `energy_sigma_mev`, `lateral_sigma_mm` | `/effective/source/*` | equal |
+   | `source.direction` | `/effective/unit_direction` | derived `normalise` (d / ‖d‖; `sources.py:43–47`); equal if already unit |
+   | `geometry` (`BoxPhantom`) | `/effective/geometry/*` | derived `box-to-voxel` (one-voxel `VoxelGeometry`) |
+   | `geometry` (`VoxelGeometry`) origin, spacing, shape, materials, `z_exit_mm`; `material_index`, density | `/effective/geometry/*`; `/effective_extra/geometry/*` (content sha256) | equal |
+   | `scoring[i]` | `/effective/scoring/<i>` | equal |
+   | `physics.stopping` / `stopping_model` | `/effective/stopping/model_id_effective` | derived: neither given → `bethe-ionmc-v1`; LS-variant id on z = 1 → `bethe-ionmc-v1` (`effective_model_id`); `stopping` object → `spec_of` id or `unregistered`; otherwise equal |
+   | stopping identity species and materials | `/effective/stopping` (species, tables) | derived: deuteron added for nuclear runs; water row added when tallies are requested and no geometry material is water (`config.py:594–598`) |
+   | stopping option `ls` | `/effective/physics/ls_effective` | derived `ls-z1-off` (z = 1 → `off`); equal for z ≥ 2 |
+   | `physics.nuclear`, `straggling`, `multiple_scattering`, `delta_electrons` | `/effective/physics/*` | equal |
+   | `physics.straggling_model` | `/effective/physics/straggling_model` | equal if `straggling`; unused otherwise |
+   | `physics.mcs_model` | `/effective/physics/mcs_model` | equal if `multiple_scattering`; unused otherwise |
+   | `physics.mcs_mapping_eval` | `/effective/mcs_mapping/evaluation` | ion with MCS on: equal; ion with MCS off: derived `mcs-off-root` (`"root"`, `unused = true`); proton: unused |
+   | `physics.e_cut_mev` | `/effective/physics/e_cut_effective_mev` | proton: equal; ion: unused (must stay at its default 2.0) |
+   | `physics.e_cut_ion_mev_per_u` | `/effective/physics/e_cut_effective_mev` | ion: derived `per-u-times-A`; proton: unused |
+   | `physics.e_cut_deuteron_mev`, `nuclear_table_id` | `/effective/physics/e_cut_deuteron_mev`, `/effective/nuclear` | nuclear on: equal; nuclear off: unused |
+   | `physics.end_of_range_model` | `/effective/physics/end_of_range_model_effective` | `"default"` → derived `point_v1` (z = 1) / `continuous_residual_v1` (z ≥ 2); otherwise equal |
+   | `physics.max_step_mm`, `max_energy_loss_fraction`, `range_alpha`, `range_rho_f_mm`, `short_step_fraction`, `truncated_hinge_diagnostic` | `/effective/physics/*` | equal |
+   | `run.backend`, `precision`, `seed`, `n_histories`, `n_batches`, `cpu_workers` | `/effective/*` | equal; `production` derived (float32 Warp only) |
+   | `run.max_steps` | `/effective/max_steps`, `/effective/max_steps_origin` | `None` → derived `computed`; otherwise equal (`"user"`) |
+   | `run.chunk_histories` | `/effective/chunk_histories` | Warp backends: equal; python: unused |
+   | `run.allow_invalid_result`, `worker_timeout_s`, `memory_budget_bytes` | — | requested-only |
+   | `diagnostics.*`, `tallies[i]`, `lookups[i]` | `/effective/tallies`, diagnostics arrays, lookup sha256 | equal (each request present in the compiled plan) |
+
+4. **Result-level honoured check**: `save` and `load` verify that every requested feature left its trace (tally arrays
+   for every request, nuclear tallies iff nuclear, trace arrays iff requested); a missing trace is an error, never a
+   thinner bundle.
+5. No negotiation, downgrade or fallback of backend, precision or model (decisions 0039, 0044 §5).
+
+### 5. Reports and plots
+
+- `report.md`: identity (tree oid, commit or "unknown", dirty, version, schema), validity banner, requested vs
+  effective table with resolutions, source/geometry/materials (input files by basename and sha256), physics and
+  stopping model with every `evidence_at_run` record reproduced verbatim (status, row, plan, graded-at SHA), data
+  identities and roles, run/RNG, statistics definition, per-grid summary, energy balance and counters, missing-items
+  list, and the line "Not a clinical claim." The report never prints timings or a value of the path set P (§2). The
+  generated text (the report with the verbatim evidence records removed) never matches the regex `\bvalidated\b`; no
+  evidence status is paraphrased; a `topas-agreement-shared-lineage:*` record is followed by the note "shared
+  stopping-data lineage; transport agreement only".
+- SVG (internal writer `src/ionmc/svg.py`): per grid the depth dose profile ± 1σ band, the depth-integrated energy
+  profile and one lateral profile at the depth of maximum; per LET tally the LET_d/LET_t depth profile over defined
+  voxels only (gaps where undefined). Fixed canvas, `format(x, ".6g")`, no timestamps, random ids or embedded fonts.
+- Profile axis (orchestrator decision O9): the grid axis of the largest |component| of the source unit direction
+  (ties → lowest axis index), recorded in `effective_extra.profile_axis`; no axis is privileged by the engine.
+- `regenerate_report(bundle)` reproduces `report.md` and every SVG byte-identically; `save` calls the same function.
+
+### 6. Configuration files `ionmc.config/1` (orchestrator decision O5)
+
+- TOML input read with stdlib `tomllib`; canonical JSON (the `to_dict` form) is what the bundle persists as
+  `requested`. Strict: unknown table or key, wrong type or missing required key → `ConfigError` (a subclass of
+  `UnsupportedCombinationError`) naming the key path (e.g. `physics.nuclear`).
+- Tables: `[source]`, `[geometry]` (`type = "box"` or `"voxel"` with `material_index = {file, sha256}` and optional
+  `density = {file, sha256}`), `[[materials]]` (built-in name or inline definition checked as by the API),
+  `[[scoring]]`, `[physics]` (every `PhysicsOptions` field except the `stopping` object; stopping by
+  `stopping_model` id only), `[run]`, `[diagnostics]`, `[[tallies]]`, `[[lookups]]` (`file`, `sha256`), `[output]`
+  (`path`, `persist_batches`). `nuclear` has no default, as in the API.
+- Relative paths resolve against the config file's directory (`..` allowed); the resolved absolute path and the
+  sha256 are recorded; the sha256 is mandatory for every referenced file (O8). No environment variable overrides a
+  physics or run field (decision 0044 §5).
+
+### 7. CLI
+
+`ionmc run CONFIG.toml [--out DIR] [--overwrite]` (load → validate → reconcile → run → save → report), `ionmc check
+CONFIG.toml` (load, validate and reconcile; print the effective summary; no transport), `ionmc capabilities
+[--nuclear]` (JSON), `ionmc verify DIR` (load with every check), `ionmc report DIR [--check]` (regenerate; `--check`
+compares bytes). Existing subcommands and their codes unchanged. Before constructing `PhysicsOptions` the loader
+checks the `stopping_model` id against `STOPPING_MODELS` (`ConfigError`) and verifies every cache object the selected
+model and the nuclear table need for this run (`cache.verify`; failure → `DatasetError`, a new class that is not an
+`UnsupportedCombinationError`). **Exception → exit code (frozen; first matching line wins, so subclasses precede their
+bases):**
+
+| Order | Condition | Exit | Bundle |
+|---|---|---|---|
+| 1 | argparse usage error | 2 | none |
+| 2 | `ConfigError` (TOML syntax, unknown table/key, wrong type, missing key, unknown `stopping_model` id, sha256 mismatch of a config-referenced input file) | 2 | none |
+| 3 | `DatasetError`; or an `UnsupportedCombinationError` whose `__cause__` chain contains `cache.IntegrityError`, `OfflineError` or `FileNotFoundError` (a missing or mismatched cache object or a dataset parse failure reached through `select()`) | 1 | none |
+| 4 | `UnsupportedCombinationError` (domain, role, combination, reconciliation) | 4 | none |
+| 5 | `BackendUnavailableError` | 5 | none |
+| 6 | `TransportLimitError` (invalid result, `allow_invalid_result = false`) | 3 | none |
+| 7 | run completed with `valid = false` (`allow_invalid_result = true`) | 3 | written, `valid = false`, banner |
+| 8 | `ResultFormatError` (`save`, `verify`, `report --check`) | 6 | none (temporary directory removed) |
+| 9 | any other exception (a defect) | 70 | none; traceback printed |
+| — | success | 0 | written |
+
+No partial bundle on any failure. `run` executes in one process (`cpu_workers = 1` unless the user sets it; the
+single-process directive governs every validation run).
+
+## Rejected alternatives
+
+| Topic | Alternative | Reason rejected |
+|---|---|---|
+| Container | HDF5 / Zarr / netCDF | runtime dependency outside numpy + warp (decision 0037; host venv) |
+| Container | single `.npz` with embedded JSON | not inspectable without code (V2-USER) |
+| Container | pickle of `Result` | executes code on load; not self-describing; Python-version-coupled |
+| Container | pure JSON with arrays | size of batch arrays; lossless only via repr |
+| Arrays | `np.savez_compressed` | non-reproducible zip timestamps; file hash not a content identity |
+| Schema | lenient reader ignoring unknown fields | silent loss of meaning (V2-OUTPUT, V2-CAP) |
+| Schema | extend `EffectiveConfig.summary()` | bound by frozen V3-008 step documents and V3-013 identity records (O4) |
+| Code identity | build stamp only | absent for checkout and host-snapshot runs, which produce the evidence runs |
+| Code identity | runtime `git` only | absent for wheels; `GIT_*` pitfalls; dirtiness only via status |
+| Code identity | caller-supplied `--code-sha` | unverifiable |
+| Contract | negotiation / automatic downgrade | silent switch (V2-CAP, decision 0044 §5) |
+| Contract | documentation-only capability table | drifts from enforcement; untestable |
+| Config | YAML | new dependency |
+| Config | JSON as hand-written input | no comments; JSON stays the persisted canonical form only |
+| Config | Python scripts as configs | executes code; not declarative |
+| Report | HTML / matplotlib | dependency; decision 0037 fixes Markdown + internal SVG |
+| Bundle | persist stopping/LET-water tables | licence roles (0038/0044), V1-MUST-020; identities suffice |
+| Batches | omit batch arrays by default | lossy; re-analysis and parity need them (O3) |
+| Paths | strip every absolute path | breaks the decision-0044 identity (`cache_dir`) and O8; O7 restricts absolute paths to the frozen path set P (§2) |
+
+## Uncertainty
+
+No physical uncertainty is introduced or changed. Software uncertainties: the reproducibility of deflate output across
+zlib versions (the content digest, not the npz file hash, is the cross-host identity; row OUT-9 documents it); Warp
+version strings and device names on hosts without CUDA; the hatchling hook behaviour (PROV-5, TO VERIFY).
+
+## Data roles
+
+Bundles carry dataset identities, hashes and per-run roles exactly as the decision-0044 block and the nuclear setup
+state them; never table values. The roles of decisions 0038, 0041 and 0044 are unchanged. User lookup data are
+referenced by hash. Evidence statuses are reproduced verbatim from `evidence_at_run`; no V3-006 row produces physics
+evidence and no evidence record is appended by V3-006.
+
+## Validation strategy
+
+Frozen in `validation/plans/v3-006-acceptance.md` (rows OUT, PROV, CAP, CFG, REP, CLI, DOC, REG). Every row is a
+software, capability, round-trip, determinism or self-consistency row; **no row is physics evidence**. Discriminating
+tests are defined before implementation: clean-process round trip, unknown-field fail-closed, unsupported combination
+refused with a stable exit code, byte-identical report regeneration, no table values in Git, single process only.
+
+## Expected tradeoffs
+
+- Batch arrays can be large (ESTIMATE: 20 batches × 1e6 voxels × 8 B ≈ 160 MB per grid before compression); the
+  opt-out is recorded.
+- The tree-oid computation reads every package file at run start (ESTIMATE < 50 ms for ≈ 80 files).
+- A strict reader makes every extension (V3-007 influence, V3-009 fragments, V3-012 resources) a MINOR bump with
+  reader support in the same task.
+- `requested` is not reconstructible for runs that pass a user `stopping` object; recorded.
+- One documented exception to "no environment details": the frozen path set P (§2; O7/O8).
+
+## Preserved obligations
+
+- Decision 0044 in full: no silent switch, no environment override, the default and every registered spec unchanged,
+  evidence statuses never named `validated`, no evidence transfer between models.
+- V3-013 results as graded (V-C1 PASS, V-C2 PASS, V-C2-D PASS, V-C1-A case 3 FAIL recorded); V3-008 verdicts incl.
+  row I3 FAIL and I3-FU-1 INCONCLUSIVE; the V3-008 integration note's unresolved qualification obligations.
+- Single-process directive and the operator diagnostic rules (one heavy job, logged pytest runs); multiprocess
+  checks stay deferred and recorded.
+- V1-MUST-009/010 (beamlets, influence matrices), V3-005B (warp nuclear) and V3-009 (ion nuclear) are not claimed.
+
+## Pre-freeze review log (2026-11-23; findings recorded, resolutions applied in place before the freeze)
+
+Independent pre-freeze review (reviewer agent, read-only) of this decision and the plan; findings 1–10:
+
+1. **Blocking.** The requested → effective allowlist missed resolutions that `validate` makes (unit direction,
+   `mcs_mapping_eval`, ion cutoff per u × A, unused nuclear/straggling/MCS/chunk options, added deuteron species and
+   water row, LS-variant id on z = 1) → frozen field-by-field table with the classes equal / derived / unused /
+   requested-only (§4 item 3; Context); plan row CAP-3 requires zero unlisted differences over the CFG-1 set.
+2. Numbering of the V3-005 seed amendment → handled by the orchestrator (dated note of 2026-11-23 in plan v3-005);
+   the plan §C refers to it and obliges V3-005B to restate the exclusion in its seed guard.
+3. **Important.** O7 vs O8: absolute input and config paths contradicted the privacy rule; the default cache is not a
+   user choice; a substring scan for the user name false-positives → frozen path set P of JSON pointers, scan at path
+   components only, `cache_dir_source` recorded (§2); plan row PROV-6.
+4. **Important.** Exit codes ambiguous (`ConfigError` subclasses `UnsupportedCombinationError`; `select()` raises
+   unknown id and missing cache alike; invalid-result code unstated) → loader pre-checks and a frozen exception →
+   exit-code table with subclass precedence (§7); plan rows CLI-2, CAP-7.
+5. **Important.** Build stamp under-specified (sdist path without `.git`, host without hatchling, stamp not ignored)
+   → `uv build --wheel` from a clean checkout in the local environment, stamp mapped into the wheel only, `.gitignore`
+   guard, pre-declared `commit = null` outcome, no new build dependency asserted (§3); plan row PROV-5.
+6. **Important.** Determinism (b) excluded too little → reports never print paths or timings; the excluded pointers
+   are `run.timings` and the path set P (§2, §5); plan §C.
+7. **Minor.** Context stale (derived species sections, `cli.py:99–100`, `Result` fields) → Context corrected;
+   `GridResult.valid` added to the plan's OUT-0 clause map.
+8. **Minor.** The `validated` regex collided with verbatim evidence records → regex scoped to generated text, plus a
+   registry guard (§5); plan row REP-3.
+9. **Minor.** Host-runner provenance unasserted → plan row PROV-7 (HR: `code.source = "git"`, clean tree).
+10. **Minor.** "No integer literal" was literally false (hex digests) → "no decimal seed literal" with the verified
+    window facts (plan §C).
+
+## Later validation outcome
+
+(empty until graded)

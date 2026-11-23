@@ -51,7 +51,12 @@ every MUST requirement to planned evidence is `validation/requirement-ledger.md`
 | V3-010 | Reference evidence: native TOPAS/MCsquare/FRED case bundles and runs, measured data acquisition, parsers, comparison metrics (range metrics, gamma, z-tests), evidence records | V3-006, V3-009 |
 | V3-011 | Adversarial numerical falsification suite and uncertainty coverage tests | V3-007, V3-009 |
 | V3-012 | Performance measurement harness, calibration measurements of the three workload families, frozen release plan and targets (reviewed before merge) | V3-010, V3-011 |
-| V3-013+ | Optimisation within frozen targets; qualification runner producing the exact-SHA report; full qualification; promotion | V3-012 |
+| V3-013 | Explicit selection of stopping-power models and tabulated sources: immutable registry, fail-closed domains and data roles, persisted model identity, configuration-specific validation (`icru90-water-v1`; decision 0044) — assigned on 2026-11-17 as the follow-up directed by the operator's V3-008 integration authorization (IR-20261116-204824-29B867); integrated 2026-11-23 | V3-008 |
+| V3-014+ | Optimisation within frozen targets; qualification runner producing the exact-SHA report; full qualification; promotion | V3-012 |
+
+Dated note (2026-11-23): the identifier V3-013 was taken by the stopping-selection follow-up (row above); the
+optimisation/qualification/promotion row that this table previously listed as "V3-013+" is now "V3-014+" with
+unchanged scope and dependencies.
 
 Research supporting these tasks is delegated to scientific agents; their reports
 are preserved under `docs/research/` once used for a decision.

@@ -680,3 +680,7 @@ OPEN. Not a clinical claim."
   the sealed pins (identity blocks with the single `consistency-only` record), which is the binding comparison; the
   frozen manifest is kept as the record of seal 15 and no longer matches this file on disk, so the sealed evaluator
   fails closed at this state by design (no run or evaluation follows; any re-run is a new seal). Not a clinical claim.
+- 2026-11-23 (orchestrator, integration): V3-013 integrated at `v3/develop` 95937553 (PR #92; Codex REVIEW-27a299c8 at
+  99d12246, VAL-20261123-021844-C66EB6, CI run 45098470647; the PR title kept its draft wording because the
+  integration tool cannot retitle an existing PR, as for PR #84). The V3-013 worktree is retired; its branch is
+  preserved. Not a clinical claim.
