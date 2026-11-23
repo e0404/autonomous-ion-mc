@@ -1,17 +1,16 @@
 """Persisted result bundle ``ionmc.result/1`` (decision 0045 sections 1 and 2).
 
 A bundle is a directory with ``result.json`` (strict canonical JSON), ``arrays.npz`` (deterministic
-zip of ``.npy`` members), ``report.md`` and (later) ``plots/*.svg``. :func:`save` writes it
-atomically from a :class:`~ionmc.simulation.Result`; :func:`load` reads it fail-closed
-(:class:`ResultFormatError`) under explicit resource budgets and never reconstructs transport
-internals or recomputes ``evidence_at_run``.
+zip of ``.npy`` members), ``report.md`` and ``plots/*.svg`` (derived, :mod:`ionmc.report`).
+:func:`save` writes it atomically from a :class:`~ionmc.simulation.Result`; :func:`load` reads
+it fail-closed (:class:`ResultFormatError`) under explicit resource budgets and never
+reconstructs transport internals or recomputes ``evidence_at_run``.
 
-Scope of this module version (plan V3-006, step S2a): ``report.md`` is a minimal deterministic
-placeholder generated here (S5 replaces it by the full report and adds ``plots/``); the
-``effective_extra.resolutions`` list is empty with an explicit ``status`` (``reconcile`` is S4);
-``provenance`` is built by :mod:`ionmc.provenance` (code identity, environment, data, models) and
-checked there against the path set P before writing. No table values are ever persisted: array
-names are checked against an allowlist.
+Scope: ``report.md`` and ``plots/*.svg`` are pure functions of ``result.json`` and the arrays
+(:func:`ionmc.report.render_all`, plan V3-006 step S5); ``provenance`` is built by
+:mod:`ionmc.provenance` (code identity, environment, data, models) and checked there against
+the path set P before writing. No table values are ever persisted: array names are checked
+against an allowlist.
 
 Strictness of ``load``: unknown/missing fields are refused at every level of the blocks this
 module defines; ``requested`` is checked by ``configio.validate_dict_structure``,
@@ -51,6 +50,7 @@ from ionmc import _result_schema_1_0 as frozen
 from ionmc import _result_shapes as shapes
 from ionmc import contract
 from ionmc import provenance as prov
+from ionmc import report as report_mod
 from ionmc.config import validate
 from ionmc.configio import (
     ConfigError,
@@ -771,7 +771,7 @@ def build_document(
 
 
 # ---------------------------------------------------------------------------------------------
-# path hygiene (set P) and report placeholder
+# path hygiene (set P)
 
 
 def check_path_hygiene(doc: Mapping[str, Any]) -> None:
@@ -780,30 +780,6 @@ def check_path_hygiene(doc: Mapping[str, Any]) -> None:
     bad = prov.privacy_violations(doc)
     if bad:
         raise _fail(f"path hygiene (set P): {bad[0]}")
-
-
-def report_placeholder(doc: Mapping[str, Any]) -> str:
-    """Minimal deterministic report (replaced by the full generator in step S5)."""
-    run, code = doc["run"], doc["provenance"]["code"]
-    lines = ["# ionmc result report (placeholder)", ""]
-    if not doc["valid"]:
-        lines += [
-            "**INVALID RESULT: transport-limit counters are nonzero; arrays are not "
-            "physically meaningful.**",
-            "",
-        ]
-    lines += [
-        f"- schema: {doc['schema']} {doc['schema_version']} ({doc['kind']})",
-        f"- code version: {code['ionmc_version']}; commit: {code['git_commit'] or 'unknown'}",
-        f"- backend: {run['backend']}, precision: {run['precision']}, seed: {run['seed']}",
-        f"- histories: {run['n_histories']} in {run['n_batches']} batches",
-        f"- arrays: {len(doc['arrays'])}",
-    ]
-    for g in doc["statistics"]["grids"]:
-        lines.append(
-            f"- grid {g['name']}: defined voxels {g['n_defined_voxels']}, valid {g['valid']}"
-        )
-    return "\n".join([*lines, "", "Not a clinical claim.", ""])
 
 
 # ---------------------------------------------------------------------------------------------
@@ -958,9 +934,15 @@ def save(
     tmp = Path(tempfile.mkdtemp(dir=parent, prefix=".ionmc-tmp-"))
     try:
         write_npz(tmp / "arrays.npz", arrays, zlib_level)
-        (tmp / "report.md").write_text(report_placeholder(doc), encoding="utf-8", newline="\n")
+        derived = report_mod.render_all(doc, {a.name: a.data for a in arrays})
+        for name, text in derived.items():  # report.md and plots/<safe>.svg (decision 0045 s5)
+            if not _file_name_ok(name):
+                raise _fail(f"unsafe derived file name {name!r}")
+            target = tmp / name
+            target.parent.mkdir(exist_ok=True)
+            target.write_text(text, encoding="utf-8", newline="\n")
         doc["files"] = {}
-        for name in ("arrays.npz", "report.md"):
+        for name in ("arrays.npz", *sorted(derived)):
             sha, size = _sha256_path(tmp / name)
             doc["files"][name] = {"sha256": sha, "size": size}
         (tmp / "result.json").write_bytes(canonical_bytes(doc))

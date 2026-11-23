@@ -551,7 +551,9 @@ def test_out11_writer_names(tmp_path: Path, cfg_names: tuple[str, ...]) -> None:
         assert results._MEMBER_RE.fullmatch(m + ".npy"), m
     assert {e["origin"]["grid"] for e in doc["arrays"] if e["grid"]} == set(cfg_names)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["out"]
-    assert sorted(p.name for p in b.iterdir()) == ["arrays.npz", "report.md", "result.json"]
+    assert sorted(p.name for p in b.iterdir()) == [
+        "arrays.npz", "plots", "report.md", "result.json",
+    ]  # fmt: skip
     assert len(load(b).arrays) == len(members)
 
 

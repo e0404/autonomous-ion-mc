@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" font-family="sans-serif" font-size="11">
+<title>Lateral dose profile, grid dose</title>
+<rect x="0" y="0" width="640" height="400" fill="#ffffff"/>
+<text x="72" y="22" font-size="14">Lateral dose profile, grid dose</text>
+<text x="72" y="37" fill="#444444">along x at the depth of maximum dose; band = +-1 standard error</text>
+<line x1="72" y1="344" x2="72" y2="348" stroke="#000000"/>
+<text x="72" y="361" text-anchor="middle">-1</text>
+<line x1="209" y1="344" x2="209" y2="348" stroke="#000000"/>
+<text x="209" y="361" text-anchor="middle">-0.5</text>
+<line x1="346" y1="344" x2="346" y2="348" stroke="#000000"/>
+<text x="346" y="361" text-anchor="middle">0</text>
+<line x1="483" y1="344" x2="483" y2="348" stroke="#000000"/>
+<text x="483" y="361" text-anchor="middle">0.5</text>
+<line x1="620" y1="344" x2="620" y2="348" stroke="#000000"/>
+<text x="620" y="361" text-anchor="middle">1</text>
+<line x1="68" y1="309.754" x2="72" y2="309.754" stroke="#000000"/>
+<line x1="72" y1="309.754" x2="620" y2="309.754" stroke="#e0e0e0"/>
+<text x="65" y="309.754" text-anchor="end" dominant-baseline="middle">4.2e-08</text>
+<line x1="68" y1="246.889" x2="72" y2="246.889" stroke="#000000"/>
+<line x1="72" y1="246.889" x2="620" y2="246.889" stroke="#e0e0e0"/>
+<text x="65" y="246.889" text-anchor="end" dominant-baseline="middle">4.4e-08</text>
+<line x1="68" y1="184.024" x2="72" y2="184.024" stroke="#000000"/>
+<line x1="72" y1="184.024" x2="620" y2="184.024" stroke="#e0e0e0"/>
+<text x="65" y="184.024" text-anchor="end" dominant-baseline="middle">4.6e-08</text>
+<line x1="68" y1="121.158" x2="72" y2="121.158" stroke="#000000"/>
+<line x1="72" y1="121.158" x2="620" y2="121.158" stroke="#e0e0e0"/>
+<text x="65" y="121.158" text-anchor="end" dominant-baseline="middle">4.8e-08</text>
+<line x1="68" y1="58.293" x2="72" y2="58.293" stroke="#000000"/>
+<line x1="72" y1="58.293" x2="620" y2="58.293" stroke="#e0e0e0"/>
+<text x="65" y="58.293" text-anchor="end" dominant-baseline="middle">5e-08</text>
+<rect x="72" y="44" width="548" height="300" fill="none" stroke="#000000"/>
+<text x="346" y="388" text-anchor="middle">x (mm)</text>
+<text x="14" y="194" text-anchor="middle" transform="rotate(-90 14 194)">dose per history (Gy)</text>
+<polygon points="72,44 620,101.248 620,344 72,259.685" fill="#9fc5e8" fill-opacity="0.6" stroke="none"/>
+<polyline points="72,151.843 620,222.624" fill="none" stroke="#1f4e79" stroke-width="1.5"/>
+<line x1="470" y1="54" x2="488" y2="54" stroke="#1f4e79" stroke-width="1.5"/>
+<text x="492" y="58">dose</text>
+</svg>

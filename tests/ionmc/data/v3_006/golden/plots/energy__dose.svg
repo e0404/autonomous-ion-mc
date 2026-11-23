@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" font-family="sans-serif" font-size="11">
+<title>Depth-integrated energy profile, grid dose</title>
+<rect x="0" y="0" width="640" height="400" fill="#ffffff"/>
+<text x="72" y="22" font-size="14">Depth-integrated energy profile, grid dose</text>
+<text x="72" y="37" fill="#444444">sum over the two lateral axes</text>
+<line x1="150.286" y1="344" x2="150.286" y2="348" stroke="#000000"/>
+<text x="150.286" y="361" text-anchor="middle">-5</text>
+<line x1="346" y1="344" x2="346" y2="348" stroke="#000000"/>
+<text x="346" y="361" text-anchor="middle">0</text>
+<line x1="541.714" y1="344" x2="541.714" y2="348" stroke="#000000"/>
+<text x="541.714" y="361" text-anchor="middle">5</text>
+<line x1="68" y1="293.628" x2="72" y2="293.628" stroke="#000000"/>
+<line x1="72" y1="293.628" x2="620" y2="293.628" stroke="#e0e0e0"/>
+<text x="65" y="293.628" text-anchor="end" dominant-baseline="middle">2</text>
+<line x1="68" y1="222.07" x2="72" y2="222.07" stroke="#000000"/>
+<line x1="72" y1="222.07" x2="620" y2="222.07" stroke="#e0e0e0"/>
+<text x="65" y="222.07" text-anchor="end" dominant-baseline="middle">4</text>
+<line x1="68" y1="150.512" x2="72" y2="150.512" stroke="#000000"/>
+<line x1="72" y1="150.512" x2="620" y2="150.512" stroke="#e0e0e0"/>
+<text x="65" y="150.512" text-anchor="end" dominant-baseline="middle">6</text>
+<line x1="68" y1="78.954" x2="72" y2="78.954" stroke="#000000"/>
+<line x1="72" y1="78.954" x2="620" y2="78.954" stroke="#e0e0e0"/>
+<text x="65" y="78.954" text-anchor="end" dominant-baseline="middle">8</text>
+<rect x="72" y="44" width="548" height="300" fill="none" stroke="#000000"/>
+<text x="346" y="388" text-anchor="middle">y (mm), profile axis</text>
+<text x="14" y="194" text-anchor="middle" transform="rotate(-90 14 194)">energy per history (MeV)</text>
+<polyline points="72,344 150.286,335.935 228.571,331.774 306.857,283.339 385.143,150.961 463.429,44 541.714,124.22 620,267.309" fill="none" stroke="#1f4e79" stroke-width="1.5"/>
+<line x1="470" y1="54" x2="488" y2="54" stroke="#1f4e79" stroke-width="1.5"/>
+<text x="492" y="58">energy</text>
+</svg>
