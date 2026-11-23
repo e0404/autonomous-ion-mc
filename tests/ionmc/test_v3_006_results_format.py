@@ -2781,53 +2781,77 @@ def test_out11_without_renameat2_the_writer_fails_closed(tmp_path: Path, monkeyp
     assert sorted(p.name for p in real.rglob("*")) == before
     monkeypatch.undo()
     load(real)
-    assert not [p.name for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]
+    # without the atomic rename the failed writes cannot be parked under a visible name either:
+    # their temporary directories stay where they are (nothing is deleted, amendment A-5)
+    left = sorted(p.name for p in tmp_path.iterdir() if p.name.startswith(".ionmc-tmp-"))
+    assert len(left) == 2
+    for name in left:
+        shutil.rmtree(tmp_path / name)
 
 
-def test_out11_temporary_cleanup_is_bound_to_our_directory_objects(tmp_path: Path) -> None:
-    """REVIEW-b025d078: _discard_tmp removes only the directory object save created; a different
-    object at the root path, or a swapped plots child, is left with every file intact."""
-    ours = tmp_path / ".ionmc-tmp-ours"
-    ours.mkdir()
-    (ours / "f").write_text("x", encoding="utf-8")
-    st = os.lstat(ours)
-    # the root was swapped for a stranger
-    os.rename(ours, tmp_path / "ours_moved")
-    ours.mkdir()
-    (ours / "keep.txt").write_text("sentinel", encoding="utf-8")
-    results._discard_tmp(ours, st)
-    assert (ours / "keep.txt").read_text(encoding="utf-8") == "sentinel"
-    # the plots child was swapped for a stranger directory holding files
-    os.rename(tmp_path / "ours_moved", tmp_path / "ours_back")
-    root = tmp_path / "ours_back"
-    (root / "plots").mkdir()
-    (root / "plots" / "a.svg").write_text("<svg/>", encoding="utf-8")
-    st2 = os.lstat(root)
-    assert (st2.st_dev, st2.st_ino) == (st.st_dev, st.st_ino)
+def test_out11_failed_write_parks_its_temporary_directory(tmp_path: Path, monkeypatch: Any) -> None:
+    """REVIEW-7ea0de3d / amendment A-5: the writer deletes nothing. A write that fails after its
+    temporary directory exists leaves it as <dest>.failed-<token>, named in a note of the
+    exception; the destination never holds a partial bundle. If the temporary directory was
+    moved by another process, nothing is renamed and the note says so."""
+    r = make_result()
+    dest = tmp_path / "fails"
 
-    real_open = os.open
+    def explode(*_a: Any) -> None:
+        raise OSError("disk trouble (forced in the test)")
 
-    def swapping_open(path: Any, flags: int, *a: Any, **kw: Any) -> int:
-        if path == "plots" and "dir_fd" in kw:  # right before the child is opened
-            os.rename(root / "plots", tmp_path / "plots_aside")
-            (root / "plots").mkdir()
-            (root / "plots" / "keep.txt").write_text("sentinel", encoding="utf-8")
-            os.open = real_open
-        return real_open(path, flags, *a, **kw)
+    monkeypatch.setattr(results, "write_npz", explode)
+    with pytest.raises(OSError, match="disk trouble") as info:
+        save(r, dest)
+    monkeypatch.undo()
+    assert not dest.exists()
+    parked = [p for p in tmp_path.iterdir() if p.name.startswith("fails.failed-")]
+    assert len(parked) == 1 and parked[0].is_dir()
+    assert any(f"partial bundle kept at {parked[0].name!r}" in n for n in info.value.__notes__)
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]
+    # the temporary directory moved by another process during the write: nothing is renamed
+    dest2 = tmp_path / "moved"
 
-    os.open = swapping_open
-    try:
-        results._discard_tmp(root, st2)
-    finally:
-        os.open = real_open
-    assert (root / "plots" / "keep.txt").read_text(encoding="utf-8") == "sentinel"
-    assert (tmp_path / "plots_aside" / "a.svg").exists()  # the real child was not touched either
-    assert root.exists()  # the removal stopped at the swapped child (our own files may be gone)
-    # our own undisturbed object, with a plots child, is removed completely
-    mine = tmp_path / ".ionmc-tmp-mine"
-    mine.mkdir()
-    (mine / "result.json").write_text("{}", encoding="utf-8")
-    (mine / "plots").mkdir()
-    (mine / "plots" / "p.svg").write_text("<svg/>", encoding="utf-8")
-    results._discard_tmp(mine, os.lstat(mine))
-    assert not mine.exists()
+    def move_then_explode(path: Path, *_a: Any) -> None:
+        os.rename(path.parent, tmp_path / "taken_away")
+        (path.parent).mkdir()
+        (path.parent / "keep.txt").write_text("stranger", encoding="utf-8")
+        raise OSError("disk trouble (forced in the test)")
+
+    monkeypatch.setattr(results, "write_npz", move_then_explode)
+    with pytest.raises(OSError) as info2:
+        save(r, dest2)
+    monkeypatch.undo()
+    assert any("moved by another process" in n for n in info2.value.__notes__)
+    strangers = [p for p in tmp_path.iterdir() if p.name.startswith(".ionmc-tmp-")]
+    assert len(strangers) == 1
+    assert (strangers[0] / "keep.txt").read_text(encoding="utf-8") == "stranger"
+    assert (tmp_path / "taken_away").is_dir()
+    os.rename(strangers[0], tmp_path / "stranger_parked2")
+
+
+def test_out11_previous_bundle_location_is_reported_truthfully(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """REVIEW-7ea0de3d: when the temporary source is swapped right before the backup rename the
+    callback receives None (the previous bundle's location is unknown), never a guessed path;
+    the moved stranger is not deleted and the new bundle is in place."""
+    r = make_result()
+    dest = tmp_path / "truthful"
+    save(r, dest)
+    aside = tmp_path / "aside_backup"
+
+    def swap_source(src: Path, dst: Path) -> None:
+        os.rename(src, aside)
+        src.mkdir()
+        (src / "keep.txt").write_text("stranger", encoding="utf-8")
+
+    _before(monkeypatch, "_rename_noreplace", swap_source)
+    where: list[Path | None] = []
+    assert save(r, dest, overwrite=True, on_replaced=where.append) == dest
+    monkeypatch.undo()
+    assert where == [None]
+    load(dest)
+    load(aside)  # the previous bundle, intact where the other process put it
+    moved = [p for p in tmp_path.iterdir() if p.name.startswith("truthful.previous-")]
+    assert len(moved) == 1 and (moved[0] / "keep.txt").read_text(encoding="utf-8") == "stranger"

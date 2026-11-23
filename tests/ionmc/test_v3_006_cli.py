@@ -529,15 +529,22 @@ def test_cli2_row9_unexpected_exception_is_70_with_traceback(
 def test_cli2_failure_inside_save_leaves_no_partial_bundle(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """save fails once its temporary directory exists: it is removed; exit 6."""
+    """save fails once its temporary directory exists: exit 6, the destination never holds a
+    partial bundle, and the writer deletes nothing: the temporary directory is kept as
+    <dest>.failed-<token> and named on stderr (decision 0045 amendment A-5)."""
     import ionmc.results as results
 
     def fail(*_a: Any, **_k: Any) -> Any:
         raise ResultFormatError("injected save failure")
 
     monkeypatch.setattr(results.report_mod, "render_all", fail)
-    code, _, _ = _main(["run", str(_write(tmp_path)), "--out", str(tmp_path / "bundle")], capsys)
+    code, _, err = _main(["run", str(_write(tmp_path)), "--out", str(tmp_path / "bundle")], capsys)
     assert code == 6
+    assert not (tmp_path / "bundle").exists()
+    parked = [n for n in _leftovers(tmp_path, {"cfg.toml"})]
+    assert len(parked) == 1 and parked[0].startswith("bundle.failed-"), parked
+    assert f"partial bundle kept at '{parked[0]}'" in err
+    shutil.rmtree(tmp_path / parked[0])
     _clean(tmp_path, {"cfg.toml"})
 
 

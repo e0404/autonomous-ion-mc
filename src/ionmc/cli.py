@@ -8,6 +8,7 @@ import json
 import sys
 import traceback
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, TextIO
 
 from ionmc._version import __version__
@@ -242,6 +243,13 @@ def _canonical(obj: Any) -> str:
     return canonical_json(obj)
 
 
+def _report_previous(kept: Path | None) -> None:
+    if kept is None:
+        print("previous bundle: moved by another process; location unknown", file=sys.stderr)
+    else:
+        print(f"previous bundle kept at {kept}", file=sys.stderr)
+
+
 def _cmd_run(args: argparse.Namespace, out_stream: TextIO) -> int:
     from pathlib import Path
 
@@ -268,7 +276,7 @@ def _cmd_run(args: argparse.Namespace, out_stream: TextIO) -> int:
         manifest=loaded.manifest,
         persist_batches=loaded.output.persist_batches,
         overwrite=args.overwrite,
-        on_replaced=lambda kept: print(f"previous bundle kept at {kept}", file=sys.stderr),
+        on_replaced=_report_previous,
     )
     print(f"bundle {bundle}", file=out_stream)
     if not result.valid:
@@ -370,6 +378,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         if code == 70:
             traceback.print_exc()
         print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        for note in getattr(exc, "__notes__", []):  # e.g. where a failed write left its files
+            print(f"note: {note}", file=sys.stderr)
         return code
 
 

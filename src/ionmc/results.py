@@ -971,11 +971,14 @@ def save(
     persist_batches: bool = True,
     overwrite: bool = False,
     zlib_level: int = ZLIB_LEVEL,
-    on_replaced: Callable[[Path], None] | None = None,
+    on_replaced: Callable[[Path | None], None] | None = None,
 ) -> Path:
     """Write ``result`` as a bundle directory at ``path`` (temporary sibling + atomic rename).
     With ``overwrite`` an existing bundle is replaced and KEPT as ``<path>.previous-<token>``
-    (never deleted; ``on_replaced`` receives that path, decision 0045 amendment A-5)."""
+    (``on_replaced`` receives where it is, or None if another process moved it). The writer
+    deletes nothing: a write that fails after its temporary directory exists leaves it as
+    ``<path>.failed-<token>`` and says so in a note of the exception (decision 0045 amendment
+    A-5)."""
     dest = Path(path)
     parent = dest.parent
     if not parent.is_dir():
@@ -1018,8 +1021,12 @@ def save(
         (tmp / "result.json").write_bytes(canonical_bytes(doc))
         os.chmod(tmp, 0o755)
         _commit_bundle(tmp, st_tmp, dest, replaced, on_replaced)
-    except BaseException:
-        _discard_tmp(tmp, st_tmp)  # only our own temporary object, never a swapped-in entry
+    except BaseException as exc:
+        where = _park_failed_tmp(tmp, st_tmp, dest)  # the writer deletes nothing (amendment A-5)
+        exc.add_note(
+            f"partial bundle kept at {where.name!r}" if where is not None
+            else "the temporary directory of this write was moved by another process"
+        )  # fmt: skip
         raise
     return dest
 
@@ -1092,48 +1099,21 @@ def _is_object(path: Path, st0: os.stat_result) -> bool:
     return st is not None and _same_object(st, st0)
 
 
-def _discard_tmp(tmp: Path, st_tmp: os.stat_result) -> None:
-    """Remove the temporary bundle directory ``save`` created (decision 0045 section 7: no partial
-    bundle is left behind), and only that directory object. Trust boundary (amendment A-5): the
-    temporary directory is created by ``mkdtemp`` with mode 0700, so only the writer's own user
-    can alter its entries; the removal opens the root and proves it (device and inode) to be
-    ``st_tmp``, proves the ``plots`` child to be the entry just listed before descending, checks
-    every leaf against its listing right before the unlink, and stops at any mismatch. The two
-    name-bound removals in the shared parent, ``rmdir`` of the emptied root and of the emptied
-    child, cannot remove anything but an empty directory entry."""
+def _park_failed_tmp(tmp: Path, st_tmp: os.stat_result, dest: Path) -> Path | None:
+    """A write that fails after its temporary directory exists leaves that directory under the
+    visible sibling name ``<dest>.failed-<token>`` (amendment A-5): the writer deletes nothing,
+    because POSIX offers no identity-bound unlink or rmdir. Returns where the directory is (the
+    visible name, or the temporary name when the rename is refused), or None when the entry at
+    the temporary name is no longer the directory this write created (moved by another
+    process): then nothing is renamed either."""
+    if not _is_object(tmp, st_tmp):
+        return None
+    keep = dest.parent / f"{dest.name}.failed-{tmp.name[len('.ionmc-tmp-') :]}"
     try:
-        fd = _open_dir(tmp)
-    except OSError:
-        return
-    try:
-        if not _same_object(os.fstat(fd), st_tmp):
-            return
-        for entry in list(os.scandir(fd)):
-            want = entry.stat(follow_symlinks=False)
-            if entry.is_dir(follow_symlinks=False):
-                sub = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
-                try:
-                    if not _same_object(os.fstat(sub), want):
-                        return  # the child was swapped: nothing below it is ours
-                    for leaf in list(os.scandir(sub)):
-                        lw = leaf.stat(follow_symlinks=False)
-                        if leaf.is_dir(follow_symlinks=False):
-                            return
-                        if _same_object(os.stat(leaf.name, dir_fd=sub, follow_symlinks=False), lw):
-                            os.unlink(leaf.name, dir_fd=sub)
-                finally:
-                    os.close(sub)
-                os.rmdir(entry.name, dir_fd=fd)
-            elif _same_object(os.stat(entry.name, dir_fd=fd, follow_symlinks=False), want):
-                os.unlink(entry.name, dir_fd=fd)
-    except OSError:
-        return
-    finally:
-        os.close(fd)
-    try:
-        os.rmdir(tmp)
-    except OSError:
-        return
+        _rename_noreplace(tmp, keep)
+    except (FileExistsError, ResultFormatError, OSError):
+        return tmp if _is_object(tmp, st_tmp) else None
+    return keep if _is_object(keep, st_tmp) else None
 
 
 def _commit_bundle(
@@ -1141,7 +1121,7 @@ def _commit_bundle(
     st_tmp: os.stat_result,
     dest: Path,
     replaced: tuple[os.stat_result, str] | None,
-    on_replaced: Callable[[Path], None] | None,
+    on_replaced: Callable[[Path | None], None] | None,
 ) -> None:
     """Move the finished temporary bundle to ``dest``. Nothing is ever deleted (REVIEW-0003a8be,
     REVIEW-afa2f91f, REVIEW-1f5c2754, REVIEW-b025d078, REVIEW-dda2bd44). Every atomic
@@ -1154,9 +1134,10 @@ def _commit_bundle(
     ``dest`` must be ``st_tmp`` and the displaced entry must be the validated bundle (same object
     ``replaced[0]``, same result.json digest, still loadable) or the exchange is undone and the
     write fails. The displaced bundle is then KEPT under ``<dest>.previous-<token>`` (amendment
-    A-5); if that rename is refused it stays at the temporary name. Both outcomes are reported
-    through ``on_replaced`` and neither fails the write: once ``dest`` holds the new bundle the
-    write has succeeded. Without the atomic primitives the write fails closed."""
+    A-5); if that rename is refused it stays at the temporary name. ``on_replaced`` receives
+    where the previous bundle verifiably is (None if another process moved it) and never fails
+    the write: once ``dest`` holds the new bundle the write has succeeded. Without the atomic
+    primitives the write fails closed."""
     if replaced is None:
         try:
             _rename_noreplace(tmp, dest)
@@ -1192,9 +1173,15 @@ def _commit_bundle(
     keep = dest.parent / f"{dest.name}.previous-{token}"
     try:
         _rename_noreplace(tmp, keep)
-        kept = keep if _is_object(keep, st0) else tmp
     except (FileExistsError, ResultFormatError, OSError):
-        kept = tmp  # the previous bundle stays at the temporary name; the write has succeeded
+        pass  # the previous bundle stays at the temporary name; the write has succeeded
+    kept: Path | None  # where the previous bundle (object st0) actually is, never a guess
+    if _is_object(keep, st0):
+        kept = keep
+    elif _is_object(tmp, st0):
+        kept = tmp
+    else:
+        kept = None  # moved by another process between the exchange and the rename
     if on_replaced is not None:
         try:
             on_replaced(kept)

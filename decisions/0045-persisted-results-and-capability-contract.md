@@ -635,8 +635,9 @@ writer. Every atomic rename is verified after the fact by the identity (device a
 so a temporary directory swapped right before publication is reported, never published as a success. Once the new
 bundle is at its destination the write has succeeded: moving the previous bundle to its visible name is reported
 through `on_replaced` (at the visible name, or at the temporary name when that rename is refused) and never fails
-the write. Trust boundary of the one destructive step left, the removal of the writer's own temporary directory on a
-failed write (§7: no partial bundle is left behind): that directory is created by `mkdtemp` with mode 0700, so only
-the writer's user can alter its entries; the removal proves the root and the `plots` child by descriptor identity,
-checks every leaf against its listing right before the unlink, stops at any mismatch, and its only name-bound
-removals in the shared parent are `rmdir` calls, which cannot remove content.
+the write; the callback receives where the previous bundle verifiably is, or None if another process moved it.
+The writer deletes nothing at all: POSIX offers no identity-bound unlink or rmdir, so a write that fails after its
+temporary directory was created leaves that directory under the visible sibling name `<path>.failed-<token>` and
+says so in a note of the exception (the CLI prints the note). §7's "no partial bundle on any failure" is thereby
+read as: the destination never holds a partial bundle; a failed write's files stay only under the `.failed-` name,
+for inspection and removal by the user.
