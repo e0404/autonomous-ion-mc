@@ -461,3 +461,10 @@ option explicitly.
   and every build failure fail row PROV-5, and an absent or corrupt cache object fails the cache-backed rows; without
   it (GitHub CI) an absent cache object or an environmental build failure skips, while a corrupt cache object
   (`IntegrityError`) always fails. Not a clinical claim.
+- 2026-11-23 (orchestrator, REG-2 clarification after the first complete CI run at 150ea63e): the REG-2 fixture was
+  generated on the LV machine; the GitHub runner's floating point differs in the last bits of table-derived values
+  (and therefore in the table digests computed from them), as recorded for the A16 digests in V3-005. REG-2 is
+  byte-identical under `IONMC_LV_TIER=1` (the LV machine) and, in CI, structurally equal with a relative tolerance of
+  1e-9 on floats and digest fields of table-derived blocks compared by presence only. Rows that need the data cache
+  skip in CI (no cache there) and fail in the LV tier. The V3-013 tree-pin test is pinned to its derivation commit
+  (note in plan v3-013). Not a clinical claim.

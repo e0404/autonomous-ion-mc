@@ -2217,7 +2217,23 @@ def test_fix9_history_energy_and_particle_bounds_are_derived_from_the_request(
         results._check_channel_numerics(d, tl["channels"])
 
 
+def _require_datasets(*dataset_ids: str) -> None:
+    """Skip a cache-backed case without the dataset; fail in the LV/required tiers."""
+    from ionmc.data import cache
+
+    cdir = cache.resolve_cache_dir(None)
+    for dataset_id in dataset_ids:
+        try:
+            cache.verify(dataset_id, cdir)
+        except FileNotFoundError as exc:
+            required = {os.environ.get("IONMC_REQUIRE_DATA"), os.environ.get("IONMC_LV_TIER")}
+            if "1" in required:
+                pytest.fail(f"required dataset {dataset_id} is not cached: {exc}")
+            pytest.skip(f"{dataset_id} is not in the cache (IONMC_CACHE_DIR)")
+
+
 def test_fix10_tabulated_bundle_content_digest_is_registry_bound(tmp_path: Path) -> None:
+    _require_datasets("nist-pstar-water-2005", "nist-astar-water-2005")
     from ionmc.physics.stopping_models import NIST_MODEL_ID
 
     cfg = dataclasses.replace(

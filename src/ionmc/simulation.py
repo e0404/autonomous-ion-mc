@@ -23,18 +23,17 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ionmc import config as _cfg_module
+from ionmc import contract
 from ionmc.config import (
     BACKENDS,
     CHANNEL_BACKENDS,
-    DEFAULT_CHUNK_HISTORIES,
     DELTA_ELECTRON_MODELS,
     E_CUT_ION_DEFAULT_MEV_PER_U,
     ION_DOMAIN_MEV_PER_U,
     ION_PROJECTILES,
-    MAX_CPU_WORKERS,
     MCS_MAPPING_EVALS,
     MCS_MODELS,
-    MIN_CHUNK_HISTORIES,
     PRECISIONS,
     STRAGGLING_MODELS,
     EffectiveConfig,
@@ -466,6 +465,28 @@ _PROTON_DOMAIN_NOTE = (
 )
 
 
+def _proton_energy_domain() -> dict[str, Any]:
+    """Proton source energy domain: numbers derived from the enforcing constants and the model
+    registry (``contract.source_window_total_mev``); the prose is labelled informative."""
+    from ionmc.physics.stopping_models import STOPPING_MODELS
+
+    windows = {}
+    for mid in STOPPING_MODELS:
+        w = contract.source_window_total_mev(PROTON, mid)
+        wn = contract.source_window_total_mev(PROTON, mid, nuclear=True)
+        windows[mid] = {
+            "min": None if w is None else w[0],
+            "max": None if w is None else w[1],
+            "max_nuclear": None if wn is None else wn[1],
+        }
+    return {
+        "unit": "MeV (total kinetic energy)",
+        "rule": "E0 and E0 + 6 sigma_E inside [2 x cutoff, model maximum]; see windows_by_model",
+        "windows_by_model": windows,
+        "informative": _PROTON_DOMAIN_NOTE,
+    }
+
+
 def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
     """Per-species capability matrix, derived from the objects that enforce it
     (``ION_PROJECTILES``, ``ION_DOMAIN_MEV_PER_U``, ``producible``, ``validate``)."""
@@ -487,7 +508,7 @@ def _species_capabilities(nuclear: bool = False) -> dict[str, Any]:
                     "rule": "min <= E0/A and (E0 + 6 sigma_E)/A <= max (decision 0043 section 5)",
                 }
                 if ion
-                else {"unit": "MeV (total kinetic energy)", "rule": _PROTON_DOMAIN_NOTE}
+                else _proton_energy_domain()
             ),
             "cutoff": (
                 {
@@ -664,6 +685,18 @@ def _stopping_model_capabilities() -> dict[str, Any]:
     }
 
 
+def _trace_precisions() -> list[str]:
+    """Precisions that accept ``trace_histories > 0`` (derived from the validate predicate)."""
+    return [
+        p
+        for p in PRECISIONS
+        if any(
+            contract.run_combination_status(b, p, False, False, True, 1)[0] != contract.UNSUPPORTED
+            for b in BACKENDS
+        )
+    ]
+
+
 def _capabilities_base() -> dict[str, Any]:
     return {
         "species": [PROTON.name, *(p.name for p in ION_PROJECTILES)],
@@ -679,9 +712,15 @@ def _capabilities_base() -> dict[str, Any]:
                 else "not available (no usable CUDA device; no fallback)"
             ),
         },
-        "trace": "float64 only (float32 with trace_histories > 0 is rejected)",
-        "chunk_histories": {"default": DEFAULT_CHUNK_HISTORIES, "minimum": MIN_CHUNK_HISTORIES},
-        "max_cpu_workers": MAX_CPU_WORKERS,
+        "trace": (
+            f"{' and '.join(_trace_precisions())} only "
+            "(other precisions with trace_histories > 0 are rejected)"
+        ),
+        "chunk_histories": {
+            "default": _cfg_module.DEFAULT_CHUNK_HISTORIES,
+            "minimum": _cfg_module.MIN_CHUNK_HISTORIES,
+        },
+        "max_cpu_workers": _cfg_module.MAX_CPU_WORKERS,
         "backend_names": list(BACKENDS),
         "precisions": list(PRECISIONS),
         "physics": {
@@ -701,7 +740,20 @@ def _capabilities_base() -> dict[str, Any]:
             "species and generation channels; see 'tallies')",
         ],
         "tallies": _tally_capabilities(),
-        "max_scoring_grids": 4,
+        "max_scoring_grids": _cfg_module.MAX_SCORING_GRIDS,
+        "declared": contract.declared_capabilities(),
+        "informative": {
+            "free_text_keys": [
+                "backends",
+                "trace",
+                "geometry",
+                "sources",
+                "scoring",
+                "physics.stopping",
+                "tallies",
+            ],
+            "meaning": "entries named here are prose; the derived declaration is 'declared'",
+        },
     }
 
 
@@ -713,6 +765,11 @@ class Simulation:
         t0 = time.perf_counter()
         self.config = config
         self.effective: EffectiveConfig = validate(config)
+        # requested -> effective reconciliation (decision 0045 section 4): raises before transport;
+        # kept here (not a Result field); results.save recomputes it from the persisted blocks
+        self.resolutions: tuple[contract.Resolution, ...] = contract.reconcile(
+            config, self.effective
+        )
         self._setup_s = time.perf_counter() - t0
 
     def run(self) -> Result:

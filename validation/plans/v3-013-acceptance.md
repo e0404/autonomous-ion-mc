@@ -684,3 +684,9 @@ OPEN. Not a clinical claim."
   99d12246, VAL-20261123-021844-C66EB6, CI run 45098470647; the PR title kept its draft wording because the
   integration tool cannot retitle an existing PR, as for PR #84). The V3-013 worktree is retired; its branch is
   preserved. Not a clinical claim.
+- 2026-11-23 (orchestrator, post-integration maintenance, recorded by V3-006): the test
+  `tests/ionmc/test_steps_v13.py::test_committed_predictions_pin_script_and_tree` compared the committed
+  `vc-predictions.json` tree pin with the `src/ionmc` tree at HEAD, which every later task changes; it now compares
+  the pin with the tree of the recorded derivation commit 53d779ae (c5b33495…) and, when that commit is reachable,
+  verifies the constant against `git rev-parse`. The sealed predictions and the evaluation are unchanged. Not a
+  clinical claim.

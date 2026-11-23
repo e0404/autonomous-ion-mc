@@ -49,6 +49,7 @@ import numpy as np
 
 from ionmc import _result_schema_1_0 as frozen
 from ionmc import _result_shapes as shapes
+from ionmc import contract
 from ionmc import provenance as prov
 from ionmc.config import validate
 from ionmc.configio import (
@@ -685,6 +686,7 @@ def build_document(
     summary = _snapshot(result).get("effective_summary") or eff.summary()
     cfg = result.requested_config
     manifest_dict = (manifest or manifest_for_api_config(cfg)).to_dict()
+    requested = to_dict(cfg, manifest=manifest)
     stopping = summary.get("stopping", {})
     cache_dir, cache_source = _cache_dir_fields(stopping)
     counters = result.counters.as_dict()
@@ -704,7 +706,7 @@ def build_document(
         "schema_version": SCHEMA_VERSION,
         "kind": KIND,
         "valid": bool(result.valid),
-        "requested": to_dict(cfg, manifest=manifest),
+        "requested": requested,
         "input_manifest": manifest_dict,
         "effective": summary,
         "effective_extra": {
@@ -715,8 +717,8 @@ def build_document(
             },
             "grid_convention": GRID_CONVENTION,
             "profile_axis": _profile_axis(summary["unit_direction"]),
-            "resolutions": [],
-            "resolutions_status": "not-computed: reconcile() is added in step S4",
+            "resolutions": [r.to_dict() for r in contract.reconcile(requested, summary)],
+            "resolutions_status": "computed: contract.reconcile(requested, effective)",
             "lookup_plan": _lookup_plan(result),
         },
         "provenance": {
@@ -805,6 +807,9 @@ def report_placeholder(doc: Mapping[str, Any]) -> str:
 
 
 def _honoured(result: Result, arrays: list[_Arr]) -> None:
+    """Every requested feature left its trace (decision 0045 section 4 item 4): tally arrays for
+    every request, nuclear tallies iff nuclear, trace arrays iff requested. A missing trace is an
+    error, never a thinner bundle."""
     cfg = result.requested_config
     have = {
         (a.origin.get("grid"), a.origin.get("name"))
@@ -822,10 +827,46 @@ def _honoured(result: Result, arrays: list[_Arr]) -> None:
     ):
         if flag and key not in diag:
             raise _fail(f"requested diagnostic {key!r} left no array")
-    if d.trace_histories > 0 and "trace_end_history" not in diag:
-        raise _fail("requested trace diagnostics left no array")
-    if cfg.physics.nuclear != isinstance(result.energy_balance, NuclearEnergyBalance):
+    _honoured_trace(d.trace_histories > 0, diag)
+    nuclear = cfg.physics.nuclear
+    if nuclear != isinstance(result.energy_balance, NuclearEnergyBalance):
         raise _fail("nuclear request and nuclear energy balance disagree")
+    if nuclear != isinstance(result.counters, NuclearTransportCounters):
+        raise _fail("nuclear request and nuclear counters disagree")
+    if nuclear != (result.effective_config.nuclear is not None):
+        raise _fail("nuclear request and nuclear setup of the effective configuration disagree")
+
+
+def _honoured_trace(requested: bool, diag: set[Any]) -> None:
+    trace = {k for k in diag if str(k).startswith("trace_")}
+    if requested:
+        missing = sorted({f"trace_{c}" for c in _trace_columns()} - trace)
+        if missing:
+            raise _fail(f"requested trace diagnostics left no array: {missing}")
+    elif trace:
+        raise _fail("trace arrays present although no trace was requested")
+
+
+def _check_honoured(doc: dict[str, Any]) -> None:
+    """The reader's half of the honoured check, from ``result.json`` alone."""
+    rq, eff = doc["requested"], doc["effective"]
+    origins = [e["origin"] for e in doc["arrays"]]
+    have = {(o.get("grid"), o.get("name")) for o in origins if o["kind"] == "quantity"}
+    want = {(t["grid"], t["name"]) for t in rq.get("tallies", [])}
+    _need(want <= have, "tally arrays differ from the requested tallies")
+    diag = {o["array"] for o in origins if o["kind"] == "diagnostic"}
+    d = rq["diagnostics"]
+    for flag, key in ((d["track_end_positions"], "end_position_mm"),
+                      (d["escape_records"], "escape_history")):  # fmt: skip
+        _need(bool(flag) == (key in diag), f"diagnostic {key!r} presence disagrees with requested")
+    try:
+        _honoured_trace(d["trace_histories"] > 0, diag)
+    except ResultFormatError as exc:
+        raise _fail(str(exc)) from exc
+    nuc = bool(rq["physics"]["nuclear"])
+    _need(("nuclear" in eff) == nuc, "effective.nuclear presence disagrees with requested")
+    _need(("nuclear_mev" in doc["accounting"]["energy_balance"]) == nuc,
+          "nuclear energy balance presence disagrees with requested")  # fmt: skip
 
 
 def save(
@@ -852,9 +893,9 @@ def save(
     if manifest is not None:
         manifest.verify(result.requested_config)
     arrays = _collect_arrays(result, persist_batches)
+    _honoured(result, arrays)
     doc = build_document(result, manifest, arrays, persist_batches, str(dest))
     check_allowlist(doc["arrays"])
-    _honoured(result, arrays)
     check_path_hygiene(doc)
     tmp = Path(tempfile.mkdtemp(dir=parent, prefix=".ionmc-tmp-"))
     try:
@@ -1386,6 +1427,7 @@ def _check_effective_binding(doc: dict[str, Any]) -> None:
     _check_channel_plan(doc)
     _check_materials(doc)
     _check_reconciliation(doc)
+    _check_honoured(doc)
     try:
         validate_identity_block(eff["stopping"])
     except (ValueError, KeyError, TypeError, IndexError) as exc:
@@ -1558,45 +1600,25 @@ def _check_materials(doc: dict[str, Any]) -> None:
 
 def _check_reconciliation(doc: dict[str, Any]) -> None:
     """Fields of ``effective`` that need no table, lookup or stopping object, bound to their
-    ``requested`` counterpart by the frozen reconciliation table (decision 0045 section 4).
-    Classes: equal (``_check_run_binding``, ``_PHYSICS_BOUND``, source, geometry, scoring),
-    derived (the rules below) and unused (recorded as such)."""
+    ``requested`` counterpart by the frozen reconciliation table of decision 0045 section 4:
+    the one implementation ``contract.reconcile`` that ``Simulation`` and ``save`` also call. The
+    persisted ``effective_extra.resolutions`` must be exactly its output."""
     eff, rq = doc["effective"], doc["requested"]
-    ph, rph, z = eff["physics"], rq["physics"], eff["source"]["z"]
-    ion = z >= 2
-    _bind(ph["e_cut_effective_mev"] == (rph["e_cut_ion_mev_per_u"] * eff["source"]["a"] if ion
-                                        else rph["e_cut_mev"]),
-          "effective.physics.e_cut_effective_mev (rule per-u-times-A / equal)")  # fmt: skip
-    eor = rph["end_of_range_model"]
-    _bind(ph["end_of_range_model_effective"]
-          == (("continuous_residual_v1" if ion else "point_v1") if eor == "default" else eor),
-          "effective.physics.end_of_range_model_effective (rule default-by-z)")  # fmt: skip
-    _need(ph["ls_effective"] == (ph["ls_requested"] if ion else "off"),
-          "effective.physics.ls_effective disagrees with the rule ls-z1-off")  # fmt: skip
+    try:
+        res = contract.reconcile(rq, eff)
+    except UnsupportedCombinationError as exc:
+        head = (
+            "effective.scoring disagrees with requested.scoring"
+            if str(exc).startswith("scoring")
+            else "effective disagrees with requested"
+        )
+        raise _fail(f"{head}: {exc}") from exc
+    _need([r.to_dict() for r in res] == doc["effective_extra"]["resolutions"],
+          "effective_extra.resolutions differ from the reconciliation")  # fmt: skip
+    ph = eff["physics"]
     _need(ph["scattering_E_s_mev"] == frozen.SCATTERING_E_S_MEV
           and ph["max_rejection_attempts"] == frozen.MAX_REJECTION_ATTEMPTS,
           "effective.physics engine constants differ from the library")  # fmt: skip
-    _bind(eff["production"] == (rq["run"]["backend"] != "python"
-                                and rq["run"]["precision"] == "float32"),
-          "effective.production (rule float32-warp)")  # fmt: skip
-    mm = eff["mcs_mapping"]
-    if ion and isinstance(mm, dict) and "evaluation" in mm:
-        if rph["multiple_scattering"]:
-            _bind(mm["evaluation"] == rph["mcs_mapping_eval"], "effective.mcs_mapping.evaluation")
-        else:
-            _bind(mm["evaluation"] == "root" and mm.get("unused") is True,
-                  "effective.mcs_mapping (rule mcs-off-root)")  # fmt: skip
-    st = eff["stopping"]
-    species = [eff["source"]["projectile"], *([frozen.DEUTERON_NAME] if "nuclear" in eff else [])]
-    _need(
-        st["species_transported"] == species,
-        "effective.stopping.species_transported disagrees with the source and nuclear flag",
-    )
-    if ion and isinstance(rph["stopping_model"], str):
-        _bind(st["model_id_effective"] == rph["stopping_model"], "effective.stopping model (z>=2)")
-    nid = rph["nuclear_table_id"]
-    if "nuclear" in eff and nid is not None:
-        _bind(eff["nuclear"]["table_id"] == nid, "effective.nuclear.table_id")
 
 
 def _check_energy_structure(doc: dict[str, Any]) -> None:
