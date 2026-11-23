@@ -11,6 +11,7 @@ import inspect
 import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -227,28 +228,60 @@ def test_doc1_pages_are_in_the_navigation() -> None:
 # ---- the reproduction procedure of docs/workflow.md section 8 is executed, not only described
 
 
+def _digests(doc: Any) -> dict[str, str]:
+    return {str(e["name"]): str(e["content_sha256"]) for e in doc["arrays"]}
+
+
 def test_workflow_reproduction_procedure_is_executable(tmp_path: Path) -> None:
-    """``from_dict(result.json.requested)`` + the same seed, backend and precision reproduces
-    every array content digest and the effective block (docs/workflow.md section 8; row OUT-3,
-    small). A ``not-reconstructible`` record is refused by ``from_dict``, as the page states."""
+    """docs/workflow.md section 8, executed: ``from_dict(result.json.requested)`` with the same
+    seed, backend and precision reproduces every array content digest and the effective block
+    (row OUT-3, small) for a box with no referenced files and for the file-backed voxel slab with
+    a lookup table, whose references are reloaded through the manifest of ``load_toml_full``;
+    without that manifest the reference is refused, and a ``not-reconstructible`` record is
+    refused by name, never guessed."""
     from ionmc.simulation import Simulation
 
-    toml = Path(__file__).parent / "data" / "v3_006" / "proton_box.toml"
-    cfg = configio.load_toml_full(toml).config
+    data = Path(__file__).parent / "data" / "v3_006"
+    # (a) a box configuration: no referenced files, no manifest needed
+    cfg = configio.load_toml_full(data / "proton_box.toml").config
     cfg = dataclasses.replace(cfg, run=dataclasses.replace(cfg.run, n_histories=8, n_batches=4))
-    first = results.save(Simulation(cfg).run(), tmp_path / "first")
-    loaded = results.load(first)
-    again = configio.from_dict(loaded.doc["requested"])
-    second = results.save(Simulation(again).run(), tmp_path / "second")
-    doc1, doc2 = loaded.doc, results.load(second).doc
-    digests = lambda d: {e["name"]: e["content_sha256"] for e in d["arrays"]}  # noqa: E731
-    assert digests(doc1) == digests(doc2) and digests(doc1)
-    assert doc1["effective"] == doc2["effective"]
-    assert doc1["requested"] == doc2["requested"]
-    # the limit the page states: a not-reconstructible record is refused, never guessed
-    broken = dict(loaded.doc["requested"])
-    broken["geometry"] = {**broken["geometry"], "material_index": {"status": "not-reconstructible"}}
-    with pytest.raises(configio.ConfigError):
-        configio.from_dict(broken)
+    first = results.load(results.save(Simulation(cfg).run(), tmp_path / "box_first")).doc
+    again = configio.from_dict(first["requested"])
+    second = results.load(results.save(Simulation(again).run(), tmp_path / "box_second")).doc
+    assert _digests(first) == _digests(second) and _digests(first)
+    assert first["effective"] == second["effective"] and first["requested"] == second["requested"]
+    # (b) the file-backed voxel slab with a lookup table: references reloaded through the manifest
+    loaded = configio.load_toml_full(data / "voxel_slab_lookup.toml")
+    first_v = results.load(
+        results.save(
+            Simulation(loaded.config).run(), tmp_path / "slab_first", manifest=loaded.manifest
+        )  # fmt: skip
+    ).doc
+    rq = first_v["requested"]
+    assert {"ref", "sha256", "content_sha256"} <= set(rq["geometry"]["material_index"])
+    assert "ref" in rq["lookups"][0]  # the lookup table is a reference as well
+    again_v = configio.from_dict(rq, manifest=loaded.manifest)
+    second_v = results.load(
+        results.save(Simulation(again_v).run(), tmp_path / "slab_second", manifest=loaded.manifest)
+    ).doc
+    assert _digests(first_v) == _digests(second_v) and _digests(first_v)
+    assert first_v["effective"] == second_v["effective"]
+    assert first_v["requested"] == second_v["requested"]
+    # the limits the page states: a reference needs the manifest; a not-reconstructible record
+    # is refused by name (the error names the key path and the status)
+    with pytest.raises(configio.ConfigError, match="material_index.*no manifest"):
+        configio.from_dict(rq)
+    broken = dict(rq)
+    broken["geometry"] = {
+        **rq["geometry"],
+        "material_index": {
+            "status": "not-reconstructible",
+            "reason": "in-process array",
+            "content_sha256": rq["geometry"]["material_index"]["content_sha256"],
+        },
+    }
+    with pytest.raises(configio.ConfigError, match="material_index: not-reconstructible"):
+        configio.from_dict(broken, manifest=loaded.manifest)
     page = (Path(__file__).parents[2] / "docs" / "workflow.md").read_text(encoding="utf-8")
-    assert "configio.from_dict" in page and "not-reconstructible" in page
+    for phrase in ("configio.from_dict", "not-reconstructible", "InputManifest", "not-rederivable"):
+        assert phrase in page, phrase

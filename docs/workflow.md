@@ -102,13 +102,15 @@ timings differ. Limits of the reconstruction:
   every file against the recorded digests; the files themselves are not in the bundle.
 - An array that was passed in process (an API run without a file) and a user-constructed
   `stopping` object are recorded as `not-reconstructible`; `from_dict` refuses such a record
-  rather than guessing. Their identity is still bound by the digests of the persisted arrays
-  and by the `effective` block, which `ionmc verify --rederive` re-derives.
+  rather than guessing. The identity of such an array is still bound by the digests of the
+  persisted arrays; a user-constructed `stopping` object cannot be rebuilt by tier 2 either:
+  `ionmc verify --rederive` reports `not-rederivable` for it (tier 1 still binds its identity).
 - The `[output]` table (bundle path, batch persistence) is not part of `requested`; pass the
   output path to `save` or `ionmc run --out` again.
 
-`tests/ionmc/test_v3_006_docs.py` runs this procedure on a tiny proton box and checks the equal
-digests, so the text above is executed, not only described. The recorded `provenance.code`
+`tests/ionmc/test_v3_006_docs.py` runs this procedure on a tiny proton box and on the file-backed
+voxel slab with a lookup table (manifest from `load_toml_full`) and checks the equal digests and the
+refusals, so the text above is executed, not only described. The recorded `provenance.code`
 identifies the code that produced the bundle.
 
 ## 9. Offline reuse
