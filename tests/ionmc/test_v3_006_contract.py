@@ -1243,6 +1243,16 @@ def test_cap3c_trace_count_is_reconciled_exactly() -> None:
     rq4["diagnostics"]["trace_histories"] = 41
     with pytest.raises(UnsupportedCombinationError, match="at most n_histories 40"):
         contract.reconcile(rq4, summary, ev)
+    # a negative count (DiagnosticsOptions forbids it) is refused, never read as "no trace"
+    with pytest.raises(UnsupportedCombinationError, match="requested -1, effective 'a count >= 0'"):
+        contract.requested_trace_count(-1, 40)
+    cfg0 = _cfg(run={"n_histories": 40})
+    eff0 = validate(cfg0)
+    rq5, ev5 = to_dict(cfg0), contract.evidence_from_effective(eff0)
+    contract.reconcile(rq5, eff0.summary(), ev5)
+    rq5["diagnostics"]["trace_histories"] = -1
+    with pytest.raises(UnsupportedCombinationError, match="trace_histories: requested -1"):
+        contract.reconcile(rq5, eff0.summary(), ev5)
     # from persisted origins: the length of trace_end_history
     ev3 = contract.evidence_from_origins(
         [
@@ -1288,7 +1298,13 @@ def test_cap5_writer_and_reader_refuse_a_changed_trace_count_and_tally_semantics
     _mutate(bf, lambda d: d["requested"]["diagnostics"].update(trace_histories=5))
     with pytest.raises(ResultFormatError, match="trace"):
         load(bf)
+    # 0 -> -1 on a bundle without a trace: refused by the reader
     r = tally_result
+    b0 = save(r, tmp_path / "notrace")
+    load(b0)
+    _mutate(b0, lambda d: d["requested"]["diagnostics"].update(trace_histories=-1))
+    with pytest.raises(ResultFormatError, match="trace"):
+        load(b0)
     for field, value in (("let_medium", "bone"), ("dose_reference", "water")):
         req = dataclasses.replace(
             r.requested_config,

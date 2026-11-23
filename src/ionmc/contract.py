@@ -618,6 +618,8 @@ def requested_trace_count(trace_histories: int, n_histories: int) -> int | None:
     than histories is a request no run realises (``config.validate`` refuses it); it is refused
     here as well, so a persisted request can never grow past the realised count."""
     t, n = int(trace_histories), int(n_histories)
+    if t < 0:  # DiagnosticsOptions forbids it; a persisted request must not slip past
+        raise _differ("diagnostics.trace_histories", t, "a count >= 0")
     if t > n:
         raise _differ("diagnostics.trace_histories", t, f"at most n_histories {n}")
     return t if t > 0 else None

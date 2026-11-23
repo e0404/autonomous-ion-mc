@@ -2322,35 +2322,46 @@ def test_banded_overlap_equals_the_dense_matrix() -> None:
     assert np.allclose(got, want, rtol=1e-12, atol=0.0) and np.any(want > 0)
 
 
-def test_out10_skinny_geometry_and_grid_do_not_allocate_a_dense_overlap(
-    tmp_path: Path, monkeypatch: Any
-) -> None:
-    """A valid bundle with geometry and scoring arrays of shape [1, 1, N]: the reader's mass
-    check needs O(N) workspace, never an N x N matrix (N = 40000 would be 12.8 GB)."""
+def _voxel_bundle(
+    tmp_path: Path, monkeypatch: Any, geo_shape: tuple[int, int, int],
+    grid_shape: tuple[int, int, int], label: str,
+) -> Path:  # fmt: skip
+    """A valid bundle whose geometry (density array) and scoring grid have the given shapes over
+    the same 10 x 10 x 10 mm box. The engine's own mass uses the dense product; the synthetic
+    result takes the banded one (equal to 1e-12 by the test above), so the test never allocates
+    a dense overlap itself."""
     import ionmc.simulation as sim
     from ionmc.geometry import VoxelGeometry
     from ionmc.simulation import _grid_result
 
-    n = 40000
-    rho = np.full((1, 1, n), 1.0)
-    geo = VoxelGeometry((-5.0, -5.0, 0.0), (10.0, 10.0, 0.01), (1, 1, n), (WATER,),
-                        np.zeros((1, 1, n), dtype=np.int32), rho)  # fmt: skip
+    rho = np.full(geo_shape, 1.0)
+    # the box is 10 mm, or longer where a finer spacing than 0.01 mm would exceed the
+    # scoring-pieces bound of validate (the two shapes share the box edge by edge)
+    box = tuple(max(10.0, 0.01 * max(a, b)) for a, b in zip(geo_shape, grid_shape, strict=True))
+    gsp = tuple(ln / n for ln, n in zip(box, geo_shape, strict=True))
+    geo = VoxelGeometry((-5.0, -5.0, 0.0), gsp, geo_shape, (WATER,),
+                        np.zeros(geo_shape, dtype=np.int32), rho)  # fmt: skip
     cfg = SimulationConfig(
         PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 20.0),
         geo,
-        (ScoringGrid((-5.0, -5.0, 0.0), (10.0, 10.0, 0.01), (1, 1, n), "dose"),),
+        (
+            ScoringGrid(
+                (-5.0, -5.0, 0.0),
+                tuple(ln / n for ln, n in zip(box, grid_shape, strict=True)),
+                grid_shape,
+                "dose",
+            ),
+        ),  # fmt: skip
         PhysicsOptions(nuclear=False, stopping_model="bethe-ionmc-v1"),
         RunOptions("python", "float64", 11, 8, n_batches=NB),
     )
     eff = validate(cfg)
-    # the engine's own mass uses the dense product; the synthetic result takes the banded one
-    # (equal to 1e-12 by the test above), so the test never allocates N x N itself
     monkeypatch.setattr(sim, "voxel_mass_g", lambda g, ge: results.banded_voxel_mass(
         [g.edges_mm(k) for k in range(3)],
         [ge.origin_mm[k] + ge.spacing_mm[k] * np.arange(ge.shape[k] + 1) for k in range(3)],
         ge.densities_g_cm3()))  # fmt: skip
     rng = np.random.default_rng(5)  # synthetic arrays only
-    sums = rng.uniform(0.5, 2.0, (NB, n)) * 2.0
+    sums = rng.uniform(0.5, 2.0, (NB, int(np.prod(grid_shape)))) * 2.0
     grid = _grid_result(cfg.scoring[0], sums, eff, True)
     base = make_result()
     in_grid = (float(np.sum(grid.energy_mev)) * 8,)
@@ -2359,8 +2370,39 @@ def test_out10_skinny_geometry_and_grid_do_not_allocate_a_dense_overlap(
                         (total - in_grid[0],))  # fmt: skip
     r = Result(True, cfg, eff, "python", "cpu", "float64", 11, dict(eff.rng), 8, NB, (grid,),
                bal, TransportCounters(), {"total": 0.1}, base.environment, {})  # fmt: skip
-    b = save(r, tmp_path / "skinny")
+    return save(r, tmp_path / label)
+
+
+def test_out10_skinny_geometry_and_grid_do_not_allocate_a_dense_overlap(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """A valid bundle with geometry and scoring arrays of shape [1, 1, N]: the reader's mass
+    check needs O(N) workspace, never an N x N matrix (N = 40000 would be 12.8 GB)."""
+    n = 40000
+    b = _voxel_bundle(tmp_path, monkeypatch, (1, 1, n), (1, 1, n), "skinny")
     before = _peak_kb()
     loaded = load(b)
     assert _peak_kb() - before < 256 * 1024  # KiB: far below one dense N x N float64 matrix
     assert loaded.arrays["grid__dose__mass_g"].shape == (1, 1, n)
+
+
+def test_out10_crossed_aspect_ratios_keep_the_mass_intermediates_bounded(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Geometry [1, N, N] with a scoring grid [N, 1, 1] (and the transpose): the contraction
+    order keeps every intermediate within max(density size, mass size); the naive order would
+    pass through [N, N, N] (N = 600: 1.7 GB)."""
+    n = 600
+    for geo_shape, grid_shape, label in (((1, n, n), (n, 1, 1), "crossed"),
+                                         ((n, 1, 1), (1, n, n), "crossed_t")):  # fmt: skip
+        b = _voxel_bundle(tmp_path, monkeypatch, geo_shape, grid_shape, label)
+        before = _peak_kb()
+        loaded = load(b)
+        assert _peak_kb() - before < 256 * 1024, label
+        assert loaded.arrays["grid__dose__mass_g"].shape == grid_shape
+    # the bound is asserted against the array budget, not only achieved
+    monkeypatch.setattr(results, "MAX_ARRAY_BYTES", 8)  # one float64
+    with pytest.raises(ResultFormatError, match="exceeds the bound"):
+        results.banded_voxel_mass(
+            [np.linspace(0.0, 1.0, 3)] * 3, [np.linspace(0.0, 1.0, 3)] * 3, np.ones((2, 2, 2))
+        )

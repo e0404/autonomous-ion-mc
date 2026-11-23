@@ -863,7 +863,7 @@ def _honoured(result: Result, arrays: list[_Arr]) -> None:
         if flag and key not in diag:
             raise _fail(f"requested diagnostic {key!r} left no array")
     _honoured_trace(d.trace_histories > 0, diag)
-    if d.trace_histories > 0:
+    if d.trace_histories != 0:
         ends = [a for a in arrays if a.origin["kind"] == "diagnostic"
                 and a.origin["array"] == "trace_end_history"]  # fmt: skip
         _honoured_trace_count(d.trace_histories, cfg.run.n_histories,
@@ -891,6 +891,8 @@ def _honoured_trace_count(requested: int, n_histories: int, realised: list[int])
     """The exact trace count: ``trace_end_history`` holds exactly ``trace_histories`` traced
     primaries (transport.tally.build_diagnostics), one array, no more and no fewer; a request
     for more traces than histories is refused (no run realises it, ``validate`` refuses it)."""
+    if int(requested) < 0:
+        raise _fail(f"trace count: requested {requested} is negative")
     if int(requested) > int(n_histories):
         raise _fail(f"trace count: requested {requested} traces of {n_histories} histories")
     if realised != [int(requested)]:
@@ -911,7 +913,7 @@ def _check_honoured(doc: dict[str, Any]) -> None:
         _need(bool(flag) == (key in diag), f"diagnostic {key!r} presence disagrees with requested")
     try:
         _honoured_trace(d["trace_histories"] > 0, diag)
-        if d["trace_histories"] > 0:
+        if d["trace_histories"] != 0:  # the exact count; a negative count is refused
             ends = [int(e["shape"][0]) for e in doc["arrays"]
                     if e["origin"]["kind"] == "diagnostic"
                     and e["origin"]["array"] == "trace_end_history"]  # fmt: skip
@@ -2542,11 +2544,22 @@ def banded_voxel_mass(
 ) -> np.ndarray[Any, Any]:
     """``scoring.voxel_mass_g`` (the overlap integral of the density over every scoring voxel,
     g, volumes mm3 -> cm3) for an untrusted bundle: per-axis banded overlaps and three bounded
-    contractions, never a dense ``(n, m)`` overlap matrix (REVIEW-5b86e36f finding 2)."""
+    contractions, never a dense ``(n, m)`` overlap matrix (REVIEW-5b86e36f finding 2).
+
+    The axes are contracted in ascending order of ``n_out / n_in`` (reductions first, expansions
+    last), so every intermediate is no larger than the larger of the density array and the mass
+    array (REVIEW-ab52bc7a finding 2: geometry ``[1, N, N]`` with a grid ``[N, 1, 1]`` would
+    otherwise pass through ``[N, N, N]``); the bound is also asserted against the array budget."""
     out = np.asarray(rho, dtype=np.float64)
-    for axis in range(3):
+    n_in = [int(x) for x in out.shape]
+    n_out = [int(len(e) - 1) for e in grid_edges]
+    bound = max(int(np.prod(n_in, dtype=np.int64)), int(np.prod(n_out, dtype=np.int64)))
+    for axis in sorted(range(3), key=lambda a: n_out[a] / max(n_in[a], 1)):
+        size = int(out.size // max(n_in[axis], 1)) * n_out[axis]
+        if size > bound or size * 8 > MAX_ARRAY_BYTES:
+            raise _fail(f"voxel mass: intermediate of {size} elements exceeds the bound {bound}")
         band = banded_overlap(grid_edges[axis], geometry_edges[axis])
-        out = _contract_axis(out, axis, int(len(grid_edges[axis]) - 1), band)
+        out = _contract_axis(out, axis, n_out[axis], band)
     return out * 1.0e-3
 
 
