@@ -1,10 +1,12 @@
 # V3-006 acceptance plan — self-describing persisted results, reports, configuration files, `ionmc run`, requested/effective capability contract
 
-> **Status: freeze candidate until the S0 commit is reviewed (planner, 2026-11-23, base `v3/develop` 95937553 = the
-> V3-013 squash merge, PR #92).** Frozen together with decision 0045
-> (`decisions/0045-persisted-results-and-capability-contract.md`) by one reviewed commit (independent Codex review and
-> an independent architecture/scientific review) before any V3-006 code exists. Later changes are dated amendments;
-> earlier text is kept. Not a clinical claim.
+> **Status: freeze candidate, revised 2026-11-23 after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
+> (changes_required; findings 11–15 of the pre-freeze review log, resolved in place). The revised S0 commit is
+> re-reviewed; the freeze is the first S0 commit whose Codex review passes (planner, 2026-11-23, base `v3/develop`
+> 95937553 = the V3-013 squash merge, PR #92).** Frozen together with decision 0045
+> (`decisions/0045-persisted-results-and-capability-contract.md`) by that commit, after an independent
+> architecture/scientific review, before any V3-006 code exists. Later changes are dated amendments; earlier text is
+> kept. Not a clinical claim.
 
 Markers: **FACT** (read at 95937553; file:line in decision 0045, Context), **ESTIMATE**, **TO VERIFY**. Row classes:
 *regression*, *contract* (fail closed), *round-trip*, *determinism*, *self-consistency*, *workflow*. Tiers: CI
@@ -20,9 +22,9 @@ conformant qualification.
 
 | Ledger row | Suite | What V3-006 delivers | Evidence required at the exact integration head | Remaining after V3-006 |
 |---|---|---|---|---|
-| V2-OUTPUT | S-PROV-OUTPUT | library bundle writer/reader; every V2-OUTPUT clause mapped to a JSON pointer or array | OUT-0..OUT-9, PROV-1..PROV-6, REP-1..REP-4 PASS (CI + LV; OUT-2 on HR for warp-cuda) | influence-matrix metadata (V3-007); conformant qualification |
-| V2-CAP | S-CAP-CONTRACT | declared == enforced sweep; reconciliation; honoured check; requested AND effective persisted | CAP-1..CAP-7 PASS (CI; CAP-1 CUDA cases on HR) | V3-005B, V3-007, V3-009 extend the matrix |
-| V2-USER | S-WORKFLOW-USER | TOML config, `ionmc run/check/capabilities/verify/report`, documentation | CLI-1..CLI-6, CFG-1..CFG-6, DOC-1 PASS (advanced, not closed) | clean-install qualification incl. data acquisition, multi-beamlet, influence output |
+| V2-OUTPUT | S-PROV-OUTPUT | library bundle writer/reader; every V2-OUTPUT clause mapped to a JSON pointer or array | OUT-0..OUT-10, PROV-1..PROV-8, REP-1..REP-4 PASS (CI + LV; OUT-2 and PROV-7 on HR) | influence-matrix metadata (V3-007); conformant qualification |
+| V2-CAP | S-CAP-CONTRACT | declared == enforced sweep; reconciliation; honoured check; requested AND effective persisted | CAP-1a, CAP-1c, CAP-2..CAP-7 PASS (CI); CAP-1b PASS (LV, CUDA cases HR) | V3-005B, V3-007, V3-009 extend the matrix |
+| V2-USER | S-WORKFLOW-USER | TOML config, `ionmc run/check/capabilities/verify/report`, documentation | CLI-1..CLI-6, CFG-1..CFG-7, DOC-1 PASS (advanced, not closed) | clean-install qualification incl. data acquisition, multi-beamlet, influence output |
 | V1-MUST-019 Separation of transport from data source | S-CAP-CONTRACT | selection by registered id in configs; identity persisted (no new mechanism) | CFG-4, PROV-3 | qualification |
 | V1-MUST-020 No large physics datasets in Git | S-PROV-DATA | no table values in bundles or committed fixtures | OUT-8, REG-4 | qualification |
 | V1-MUST-025 Provenance | S-PROV-OUTPUT | `provenance.code/data/models` incl. the decision-0044 block and nuclear table id | PROV-1..PROV-4 | qualification |
@@ -54,13 +56,21 @@ V2-RELEASE, any physics row, any evidence record.
 4. **Capability contract**: declared (`capabilities()`, derived from enforcing objects) = enforced (sweep); the frozen
    field-by-field reconciliation table of decision 0045 §4 (equal / derived / unused / requested-only); result-level
    honoured check; no negotiation or fallback.
-5. **Configuration**: TOML (`tomllib`), strict, `ionmc.config/1`; stopping by `stopping_model` id only; files by
-   path + mandatory sha256, relative paths resolved against the config directory and recorded absolute (O8).
+5. **Configuration**: TOML (`tomllib`), strict, `ionmc.config/1`; `physics.stopping_model` required (absence →
+   `ConfigError`); files by path + mandatory sha256, relative paths resolved against the config directory and recorded
+   absolute (O8).
 6. **CLI**: `ionmc run | check | capabilities | verify | report`; the frozen exception → exit-code table of decision
    0045 §7 (0 success, 1 dataset/cache, 2 usage/config incl. unknown model id, 3 invalid result, 4 unsupported
    combination, 5 backend unavailable, 6 result format, 70 defect; subclasses before bases).
 7. **Batches** persisted by default; `persist_batches = false` recorded (O3). **Profile axis** = dominant axis of the
    source direction, recorded (O9). **Golden fixture**: one synthetic KB-scale bundle (O10).
+
+
+8. **Input manifest**: immutable `InputManifest` from the loader, passed to `save`; API runs record `source = "api"`
+   with `unavailable` file pointers; `save` refuses changed files. **Round trip**: canonical semantic comparison over
+   the reconstructible subset; the rest is recorded `not-reconstructible` (decision 0045 §6).
+9. **Untrusted bundles**: `load` validates ZIP directory, catalogue and NPY headers before allocation and streams
+   decompression under configurable byte budgets with safe defaults (decision 0045 §1).
 
 ## C. Seeds and determinism rules (declared before any run)
 
@@ -100,14 +110,14 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | Step | Content | Rows that must pass at the step's commit |
 |---|---|---|
 | S0 | decision 0045, this plan, ledger notes, V3-013 integration notes; no code | review only |
-| S1 | `ionmc.configio`: `to_dict`/`from_dict` of every config dataclass, TOML loader, `ConfigError` | CFG-1..CFG-6, REG-1..REG-3 |
-| S2 | `ionmc.results`: deterministic npz writer, `save`/`load`, schema 1.0, allowlist, invariants; seed guard test | OUT-0, OUT-1, OUT-2 (CI part), OUT-4..OUT-9, seed guard |
+| S1 | `ionmc.configio`: `to_dict`/`from_dict` of every config dataclass, TOML loader, `InputManifest`, `ConfigError` | CFG-1..CFG-7, REG-1..REG-3 |
+| S2 | `ionmc.results`: deterministic npz writer, `save`/`load`, schema 1.0, allowlist, invariants, resource budgets and adversarial fixtures; seed guard test | OUT-0, OUT-1, OUT-2 (CI part), OUT-4..OUT-10, PROV-8, seed guard |
 | S3 | `ionmc.provenance`: tree oid, hatchling build-stamp hook (wheel only; `.gitignore` guard), read-only git fallback, environment, path set P, data/model aggregation; `environment.py` docstring amended | PROV-1..PROV-6 |
-| S4 | contract: derived `capabilities()` entries, sweep, `reconcile`, honoured check | CAP-1..CAP-7 |
+| S4 | contract: derived `capabilities()` entries, sweep, targeted rule pairs, `reconcile`, honoured check | CAP-1a, CAP-1c, CAP-2..CAP-7 |
 | S5 | `ionmc.svg`, `ionmc.report`, `regenerate_report`, synthetic golden fixture | REP-1..REP-4 |
 | S6 | CLI subcommands and exit codes | CLI-1..CLI-3, CLI-6 (CI part) |
 | S7 | docs (results format, configuration reference, CLI, workflow), ledger rows | DOC-1, docs build |
-| S8 | LV/HR runs (`out6`), one at a time: OUT-2/OUT-3 on three backends, CLI-4 offline, CLI-5, CLI-6, PROV-7 and REG-1 on the host | all rows |
+| S8 | LV/HR runs (`out6`), one at a time: OUT-2/OUT-3 on three backends, CLI-4 offline, CLI-5, CLI-6, PROV-7 and REG-1 on the host, CAP-1b (LV, CUDA cases HR) | all rows |
 
 ### Discriminating rows (defined before implementation; all gating)
 
@@ -116,7 +126,7 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | OUT-0 | Clause map: a table in the test module maps every V2-OUTPUT clause (incl. `Result.valid`, every `GridResult.valid`, backend, device, RNG identity) to a JSON pointer or array name; each exists and is non-empty or carries an explicit status | every clause resolved | CI |
-| OUT-1 | In-process round trip `load(save(r))`: (a) proton box python; (b) voxel slab with LET, spectrum and synthetic lookup tallies, warp-cpu float64; (c) invalid result with `allow_invalid_result` | arrays bitwise equal (dtype, shape, NaN positions); JSON values equal | CI |
+| OUT-1 | In-process round trip `load(save(r))`: (a) proton box python; (b) voxel slab with LET, spectrum and synthetic lookup tallies, warp-cpu float64; (c) invalid result with `allow_invalid_result`; (d) a TOML run with its `InputManifest` (paths and hashes at `/input_manifest/*`); (e) the same config built through the API without a manifest (`source = "api"`, every file pointer `unavailable`) | arrays bitwise equal (dtype, shape, NaN positions); JSON values equal | CI |
 | OUT-2 | **Clean-process round trip**: bundle written by one process, read by `python -I` (package path injected explicitly) which recomputes every digest and prints a canonical dump | dump equals the writer's | CI; LV/HR on all three backends |
 | OUT-3 | Reproduction from the bundle: `from_dict(requested)` + same seed re-run (python, warp-cpu float64) | every `content_sha256` and `effective` equal | CI (small), LV (`out6` r_index 6) |
 | OUT-4 | **Unknown-field fail-closed** and other negative controls, each separate: unknown key at top level and nested; missing required key; `schema_version` "1.1" and "2.0"; flipped byte in `arrays.npz`; altered member with recomputed file hash; NaN literal; array shape ≠ grid shape; extra npz member; missing file hash entry | each raises `ResultFormatError` naming the defect | CI |
@@ -125,6 +135,7 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | OUT-7 | Undefined values: `defined_mask` False ⇒ NaN, never 0; JSON undefined scalars carry `status`; a writer patched to write 0 there is rejected by `load` | exact | CI |
 | OUT-8 | **No table values**: npz names ⊆ allowlist; no member equals bitwise any stopping/range/LET-water/nuclear table array of the run; injecting `tables.range_mm` is refused by `save` | exact | CI |
 | OUT-9 | Determinism: `save` twice → identical bytes; a different zlib level changes the file hash but not the content digests (documents which identity is authoritative) | exact | CI |
+| OUT-10 | **Untrusted-bundle budgets** (synthetic KB-scale adversarial fixtures): NPY header longer than the bound; header disagreeing with the catalogue; duplicate ZIP member; more members than catalogue entries; declared shape whose byte size exceeds the budget (e.g. 2**40 elements); member whose declared uncompressed size exceeds the budget; compressed member that inflates beyond its declared size; oversized `result.json`; plus a positive control at the default budgets | each raises `ResultFormatError` before allocating the declared size (peak RSS increase bounded by 64 MiB, measured with `resource.getrusage`); the positive control loads | CI |
 
 **PROV — provenance**
 
@@ -137,14 +148,17 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | PROV-5 | Build stamp: `uv build --wheel` from a clean checkout in the LV environment (not the host runner) gives a wheel whose `ionmc/_build_info.json` carries the commit and a tree oid equal to the runtime oid of the installed wheel; the checkout stays clean (`git status --porcelain` empty, no stamp under `src/ionmc`); a build without a reachable repository stamps `commit = null`, `status = "unknown"`; `[build-system] requires` and `uv.lock` are unchanged by S3 | exact | LV (TO VERIFY: offline build environment from the uv cache) |
 | PROV-6 | Privacy: absolute paths only at the pointers of the path set P (decision 0045 §2); outside P no string contains `Path.home()`, and no path component (split at `/` and `\`) and no whole non-path string equals `getpass.getuser()` or `os.uname().nodename` (no substring matching; a user named `root` does not hit `mcs_mapping.evaluation = "root"`, which is not a path); `cache_dir_source` recorded; reports print no P value | exact | CI |
 | PROV-7 | Host runner: an `out6` r_index 2 bundle written under the controlled host runner (read-only snapshot at `/workspace`, `GIT_WORK_TREE` set, `HOME=/tmp/home`) at a clean committed SHA has `code.source = "git"`, `git_dirty = false`, `git_commit` = the run's code SHA and a tree oid equal to `git rev-parse <sha>:src/ionmc`; any other outcome is a FAIL handled by prospective amendment | exact | HR |
+| PROV-8 | Input manifest: a TOML run records `source = "toml"`, `base_dir`, the config file and every referenced file with path and sha256; an API run records `source = "api"` and `unavailable` file pointers; editing a referenced file between load and `save` makes `save` raise `ConfigError` (CLI exit 2, no bundle); a manifest `content_sha256` that disagrees with the config arrays is refused | exact | CI |
 
 **CAP — capability contract**
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
-| CAP-1 | Sweep over the declared matrix: species × {below, inside, upper edge, above} energy domain × backend × precision × nuclear × tallies × trace × each registered stopping model × {water, PMMA} | supported ⇔ `validate` passes; unsupported ⇔ raises before transport; zero third outcomes; zero undeclared combinations | CI (CUDA cases as `BackendUnavailableError` when absent), HR |
+| CAP-1a | Cache-independent sweep: species × energy-domain class {below, inside, upper edge, above} × backend × precision × nuclear × tallies × trace, for `bethe-ionmc-v1` and its LS variants against `validate`; tabulated models only through their declared domains (no cache) | declared == enforced over these dimensions: supported ⇔ `validate` passes, unsupported ⇔ raises before transport; zero third outcomes | CI (CUDA cases as `BackendUnavailableError` when absent) |
+| CAP-1b | Cache-backed sweep of `nist-pstar-astar-water-2005` and `icru90-water-v1` (species × energy-domain class × backend × precision × nuclear × {water, PMMA}) against `validate` | as CAP-1a; a missing cache object is a FAIL, never a skip | LV; HR (CUDA cases) |
+| CAP-1c | Targeted rule pairs: one positive and one negative case for every other `validate` rule (geometry kind and voxel constraints, scoring-grid count and shape, source sigmas, cutoffs, end-of-range and MCS modes, `mcs_mapping_eval`, worker and chunk limits, memory budget, diagnostics incl. trace); a checklist of the rules (`validate` source order) is part of the test module and reviewed | each positive passes, each negative raises before transport | CI |
 | CAP-2 | Declaration is derived: monkeypatching an enforcing constant changes `capabilities()` identically | exact | CI |
-| CAP-3 | Reconciliation: (a) every row of the frozen table of decision 0045 §4 item 3 is exercised and recorded with its class and rule; (b) `reconcile` over the CFG-1 generated config set yields zero differences outside the table for every config that passes `validate`, and every effective pointer of the table resolves; (c) a synthetic unlisted difference (patched effective field) raises `UnsupportedCombinationError` | exact | CI |
+| CAP-3 | Reconciliation: (a) every row of the frozen table of decision 0045 §4 item 3 is exercised and recorded with its class and rule; (b) `reconcile` over the CFG-1 generated config set yields zero differences outside the table for every config that passes `validate`, and every effective pointer of the table resolves; (c) a synthetic unlisted difference (patched effective field) raises `UnsupportedCombinationError`; (d) the API behaviour of decision 0044 is preserved: neither or both of `stopping`/`stopping_model` still fail at `PhysicsOptions` construction | exact | CI |
 | CAP-4 | Discriminating dispatch: for tallies, nuclear, lookups, multiple scattering, straggling and stopping model, patching the consumer to drop the feature makes `Simulation(...)` or `save` raise | each raises | CI |
 | CAP-5 | Honoured check: a `Result` lacking one requested tally, or carrying nuclear tallies on a non-nuclear request, is refused by `save` | exact | CI |
 | CAP-6 | Requested and effective persisted separately (`end_of_range_model = "default"`, LS `eff` on a proton, `max_steps` unset) | exact | CI |
@@ -154,12 +168,13 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
-| CFG-1 | `from_dict(to_dict(c)) == c` for generated configs covering every field of every config dataclass | exact | CI |
+| CFG-1 | Round trip over the reconstructible subset (decision 0045 §6): for generated configs covering every field of every config dataclass except user `stopping` objects and in-memory arrays, `to_dict(from_dict(to_dict(c))) == to_dict(c)` with arrays compared by `content_sha256`, and `validate(...).summary()` equal | exact | CI |
 | CFG-2 | Documented TOML examples give the same `validate(...).summary()` as the equivalent API constructions | equal | CI |
-| CFG-3 | Unknown key, misspelt table, wrong type, missing `nuclear`, missing sha256, sha256 mismatch: `ConfigError` with the key path; `..` paths resolve and are recorded absolute with sha256 | exact | CI |
+| CFG-3 | Unknown key, misspelt table, wrong type, missing `nuclear`, missing `physics.stopping_model` (error names that key), missing sha256, sha256 mismatch: `ConfigError` with the key path; `..` paths resolve and are recorded absolute with sha256 | exact | CI |
 | CFG-4 | Stopping by `stopping_model` id only; a `stopping` table is rejected; unknown id raises | exact | CI |
 | CFG-5 | Built-in material names resolve to the identical `Material`; inline definitions checked as by the API | exact | CI |
 | CFG-6 | No environment variable overrides a physics/run field (`IONMC_*` set in the test) | exact | CI |
+| CFG-7 | Not-reconstructible records: a config with a user `stopping` object and one with an API-created lookup table serialise to `{"status": "not-reconstructible", "reason": ...}` at the affected pointer; `from_dict` of either raises `ConfigError` naming it; no default is substituted | exact | CI |
 
 **REP — reports and plots**
 
@@ -197,10 +212,10 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 1. Codex review of every step's exact commit (lifecycle; a Codex approval is not scientific validation).
 2. Independent architecture review (reviewer agent, read-only, not the author) of S0 and of the final head: (a) OUT-0
    completeness against the V2-OUTPUT text; (b) reader strictness: attempt a bundle that loads but misrepresents
-   (swapped grids, renamed arrays); (c) CAP-1 completeness against `capabilities()` and `validate`; (d) licence: no
-   node-derived ICRU 90/NIST/ENDF values in bundles or fixtures; (e) privacy of provenance fields (O7); (f) no report
-   text implies validation or clinical use, and evidence records stay verbatim; (g) the `environment.py` amendment
-   and `GIT_*` handling (O2).
+   (swapped grids, renamed arrays); (c) CAP-1a/1b/1c completeness against `capabilities()` and the `validate` rules;
+   (d) licence: no node-derived ICRU 90/NIST/ENDF values in bundles or fixtures; (e) privacy of provenance fields
+   (O7); (f) no report text implies validation or clinical use, and evidence records stay verbatim; (g) the
+   `environment.py` amendment and `GIT_*` handling (O2).
 3. Contrary evidence is preserved: a row failing after the freeze is amended prospectively, never deleted.
 
 ## F. Integration gates
@@ -246,7 +261,32 @@ Independent pre-freeze review (reviewer agent, read-only) of decision 0045 and t
 10. **Minor.** "No integer literal" was literally false (hex digests) → "no decimal seed literal" with the verified
     window facts (§C).
 
+Codex REVIEW-bd983b92 (REVIEW-bd983b92e86c4f14bdadde38fd9a2619, 2026-11-23) of the S0 commit 00b5e3de:
+changes_required, five important findings, resolved in place:
+
+11. **Important.** The reconciliation row "neither `stopping` nor `stopping_model` → `bethe-ionmc-v1`" contradicted
+    decision 0044 and `select()` (exactly one is required; absence fails at `PhysicsOptions` construction) → row
+    deleted; TOML configs require `physics.stopping_model` (absence → `ConfigError` naming the key); the API
+    behaviour of decision 0044 is unchanged and preserved by CAP-3 (decision 0045 §4, §6; rows CFG-3, CAP-3).
+12. **Important.** An exact config round trip over every field is impossible (user `stopping` objects, in-memory
+    lookup and geometry arrays, `eq=False` classes) → canonical semantic comparison (`to_dict` equality, arrays by
+    `content_sha256`) over the declared reconstructible subset; the rest round-trips to an explicit
+    `not-reconstructible` record (decision 0045 §6; rows CFG-1, CFG-7).
+13. **Important.** `save` could not produce the input-file pointers (`Result` and `LookupTable` keep no paths) →
+    immutable `InputManifest` produced by the loader and passed to `save`; API runs record `source = "api"` with
+    explicit `unavailable` file pointers; `save` refuses a manifest whose hashes no longer match (decision 0045 §2,
+    §6; rows OUT-1 (d)–(e), PROV-8).
+14. **Important.** CAP-1 over-claimed (dimensions omitted; no CI cache for tabulated models) → CAP-1a (CI,
+    cache-independent matrix), CAP-1b (LV/HR, cache-backed tabulated models) and CAP-1c (one positive and one
+    negative case for every other `validate` rule); claim restated as "declared == enforced over the enumerated
+    dimensions"; the global "zero undeclared combinations" claim removed (decision 0045 §4 item 2).
+15. **Important.** `load`/`ionmc verify` lacked resource-exhaustion defences for untrusted bundles → pre-allocation
+    validation of the ZIP directory, catalogue and NPY headers, streamed decompression under configurable byte
+    budgets with safe defaults (decision 0045 §1); row OUT-10 with synthetic KB-scale adversarial fixtures in S2.
+
 ## Status
 
 - 2026-11-23 (planner, S0): freeze candidate; no code. Base 95937553 (V3-013 integrated). Freeze note:
   `<placeholder: S0 commit SHA, Codex review id, architecture review>`. Not a clinical claim.
+- 2026-11-23 (planner): revised after Codex REVIEW-bd983b92 of 00b5e3de (findings 11–15, resolved in place); the
+  revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes. Not a clinical claim.

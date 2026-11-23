@@ -1,9 +1,10 @@
 # 0045 — Persisted result bundle, configuration files, `ionmc run` and the requested/effective capability contract
 
-- Status: freeze candidate until the S0 commit is reviewed (planner, 2026-11-23). Frozen together with
-  `validation/plans/v3-006-acceptance.md` by one reviewed commit (independent Codex review and an independent
-  architecture/scientific review) before any V3-006 code exists. Later changes are dated amendments; earlier text is
-  kept.
+- Status: freeze candidate, revised 2026-11-23 after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
+  (changes_required; findings 11–15 of the pre-freeze review log, resolved in place). The revised S0 commit is
+  re-reviewed; the freeze is the first S0 commit whose Codex review passes (together with
+  `validation/plans/v3-006-acceptance.md`, after an independent architecture/scientific review), before any V3-006
+  code exists (planner). Later changes are dated amendments; earlier text is kept.
 - Task: V3-006 (program plan task table: self-describing persisted results, human-readable reports and SVG plots,
   configuration files, `ionmc run` CLI, fail-closed capability contract with requested/effective configuration).
 - Base: `v3/develop` 95937553 (the V3-013 squash merge, PR #92). V3-006 is implemented on its task branch from this
@@ -125,17 +126,28 @@ A directory `<name>/`:
   unknown version, a hash mismatch, a NaN in a JSON number position, an array whose shape disagrees with its grid, or
   an npz member outside the catalogue. It never reconstructs transport internals and never recomputes
   `evidence_at_run`.
-- Writer `save(result, path, *, persist_batches=True, overwrite=False)` writes into a temporary sibling directory and
-  renames (no partial bundle), refuses an existing path unless `overwrite`, writes an invalid result only when the run
-  allowed it (`valid = false` and a banner in the report).
+- **Untrusted bundles (resource budgets).** Before any array is read, `load` validates the ZIP central directory and
+  the catalogue: member count ≤ catalogue size, no duplicate or unexpected member names, every member's declared
+  uncompressed size and the catalogue's `shape` × `dtype.itemsize` within a byte budget derived from the catalogue and
+  bounded by `max_array_bytes` and `max_total_bytes`, shapes with at most 4 dimensions and no negative or overflowing
+  extent; each NPY header is parsed with `np.lib.format.read_magic` and `read_array_header_1_0`/`_2_0` (header length
+  bounded) and must equal the catalogue entry before data are read; decompression is streamed with a byte budget and
+  stops at the declared size; `result.json` is read with a size limit. Budgets are keyword arguments of `load` (and
+  options of `ionmc verify`/`report`) with safe defaults (`max_total_bytes` = 8 GiB, `max_array_bytes` = 4 GiB,
+  `max_json_bytes` = 64 MiB); any violation raises `ResultFormatError` before allocation.
+- Writer `save(result, path, *, manifest=None, persist_batches=True, overwrite=False)` writes into a temporary sibling
+  directory and renames (no partial bundle), refuses an existing path unless `overwrite`, writes an invalid result
+  only when the run allowed it (`valid = false` and a banner in the report).
 - Versioning: `"MAJOR.MINOR"`; MINOR adds optional blocks, MAJOR breaks; a reader accepts exactly the versions it
   knows; a frozen synthetic 1.0 fixture stays readable by later readers (orchestrator decision O10).
 
 ### 2. Blocks of `result.json`
 
 - `requested`: canonical JSON of the `SimulationConfig` (§6), including `stopping_model` or, for a user `stopping`
-  object, `{"stopping_object": <identity>, "reconstructible": false}`; every referenced input file and the config file
-  by resolved absolute path and sha256 (orchestrator decision O8).
+  object (API only), `{"stopping_object": <identity>, "reconstructible": false}`.
+- `input_manifest`: the `InputManifest` of §6 (config file and every referenced file by resolved absolute path and
+  sha256, `base_dir`, `source`; orchestrator decision O8); for API runs `source = "api"` and every file pointer
+  `{"status": "unavailable", "reason": "constructed in process"}`.
 - `effective`: `EffectiveConfig.summary()` **byte-for-byte unchanged** (orchestrator decision O4), including the
   decision-0044 `stopping` block as produced at run time; plus `effective_extra` outside it: material definitions
   (composition, density, I requested/effective, Sternheimer parameters) of every geometry material, array references
@@ -151,13 +163,12 @@ A directory `<name>/`:
   `"deterministic": false`; `output_path`; `cache_dir` and `cache_dir_source` (`"explicit" | "IONMC_CACHE_DIR" |
   "default"`, the latter being `~/.cache/ionmc`).
 - **Path pointers (set P, frozen; orchestrator decisions O7/O8).** The only JSON pointers that may hold an absolute
-  path, and therefore a home directory or user name: `/run/output_path`, `/run/cache_dir`,
-  `/requested/config_file/path`, `/requested/geometry/material_index/path`, `/requested/geometry/density/path`,
-  `/requested/lookups/<i>/path`, and every `cache_dir` key inside `/effective/stopping` and `/effective/nuclear` (the
-  decision-0044 and nuclear blocks as `summary()` produces them). They are recorded as user-supplied or
-  user-environment paths. Outside P no string contains the home path, and no path component (split at `/` and `\`)
-  and no whole non-path string equals the user name or the hostname. Reports and plots never print a P value (input
-  files appear by basename and sha256, caches by dataset id).
+  path, and therefore a home directory or user name: `/run/output_path`, `/run/cache_dir`, `/input_manifest/base_dir`,
+  `/input_manifest/config_file/path`, `/input_manifest/files/<i>/path`, and every `cache_dir` key inside
+  `/effective/stopping` and `/effective/nuclear` (the decision-0044 and nuclear blocks as `summary()` produces them).
+  They are recorded as user-supplied or user-environment paths. Outside P no string contains the home path, and no
+  path component (split at `/` and `\`) and no whole non-path string equals the user name or the hostname. Reports and
+  plots never print a P value (input files appear by basename and sha256, caches by dataset id).
 - `statistics`: normalisation ("per primary history"), uncertainty definition (batch standard error, B batches,
   history h in batch h mod B; ratio quantities by the delta method of decision 0040), `low_batch_count`, the
   definitions of `defined_mask`/`sparse_mask`.
@@ -192,9 +203,14 @@ A directory `<name>/`:
    domains), extended to the proton energy domain, backends × precision × (nuclear, tallies, trace, workers), geometry
    and source types. A free-text entry either becomes derived or is labelled `"informative"`. Enabling a combination
    later (V3-005B warp nuclear, V3-009 ion nuclear, V3-007 beamlets) changes declaration and enforcement together.
-2. **Enforced = declared**: a sweep enumerates the finite declared matrix plus boundary energies and asserts
-   declared-supported ⇒ `validate` succeeds; declared-unsupported ⇒ `UnsupportedCombinationError` or
-   `BackendUnavailableError` before transport; no third outcome.
+2. **Enforced = declared over the enumerated dimensions**: a sweep enumerates the finite declared matrix (species ×
+   energy-domain class × backend × precision × nuclear × tallies × trace × stopping model) plus boundary energies and
+   asserts declared-supported ⇒ `validate` succeeds; declared-unsupported ⇒ `UnsupportedCombinationError` or
+   `BackendUnavailableError` before transport; no third outcome. Tabulated models are swept against `validate` only
+   where their cache is present (local and host tiers); without cache only their declared domains are checked. Every
+   remaining `validate` rule (geometry kind and voxel constraints, scoring-grid count and shape, source sigmas,
+   cutoffs, end-of-range and MCS modes, worker and chunk limits, diagnostics) has a targeted positive/negative pair.
+   No global claim about combinations outside the enumerated dimensions is made.
 3. **Requested → effective reconciliation** (`reconcile(requested, effective) -> tuple[Resolution, ...]`, run inside
    `Simulation.__init__` after `validate`, persisted in `effective_extra.resolutions`). Every requested field has one
    row of the frozen table below with one of four classes: **equal** (effective value must equal the requested one),
@@ -212,7 +228,7 @@ A directory `<name>/`:
    | `geometry` (`BoxPhantom`) | `/effective/geometry/*` | derived `box-to-voxel` (one-voxel `VoxelGeometry`) |
    | `geometry` (`VoxelGeometry`) origin, spacing, shape, materials, `z_exit_mm`; `material_index`, density | `/effective/geometry/*`; `/effective_extra/geometry/*` (content sha256) | equal |
    | `scoring[i]` | `/effective/scoring/<i>` | equal |
-   | `physics.stopping` / `stopping_model` | `/effective/stopping/model_id_effective` | derived: neither given → `bethe-ionmc-v1`; LS-variant id on z = 1 → `bethe-ionmc-v1` (`effective_model_id`); `stopping` object → `spec_of` id or `unregistered`; otherwise equal |
+   | `physics.stopping` / `stopping_model` | `/effective/stopping/model_id_effective` | derived: LS-variant id on z = 1 → `bethe-ionmc-v1` (`effective_model_id`); `stopping` object (API only) → `spec_of` id or `unregistered`; otherwise equal. Exactly one of the two is required (decision 0044 §2, `select()`); absence fails at `PhysicsOptions` construction and is not a resolution |
    | stopping identity species and materials | `/effective/stopping` (species, tables) | derived: deuteron added for nuclear runs; water row added when tallies are requested and no geometry material is water (`config.py:594–598`) |
    | stopping option `ls` | `/effective/physics/ls_effective` | derived `ls-z1-off` (z = 1 → `off`); equal for z ≥ 2 |
    | `physics.nuclear`, `straggling`, `multiple_scattering`, `delta_electrons` | `/effective/physics/*` | equal |
@@ -259,12 +275,26 @@ A directory `<name>/`:
   `UnsupportedCombinationError`) naming the key path (e.g. `physics.nuclear`).
 - Tables: `[source]`, `[geometry]` (`type = "box"` or `"voxel"` with `material_index = {file, sha256}` and optional
   `density = {file, sha256}`), `[[materials]]` (built-in name or inline definition checked as by the API),
-  `[[scoring]]`, `[physics]` (every `PhysicsOptions` field except the `stopping` object; stopping by
-  `stopping_model` id only), `[run]`, `[diagnostics]`, `[[tallies]]`, `[[lookups]]` (`file`, `sha256`), `[output]`
-  (`path`, `persist_batches`). `nuclear` has no default, as in the API.
+  `[[scoring]]`, `[physics]` (every `PhysicsOptions` field except the `stopping` object; `stopping_model` is
+  **required**: absence → `ConfigError` naming `physics.stopping_model`; the API keeps decision 0044's rule
+  unchanged), `[run]`, `[diagnostics]`, `[[tallies]]`, `[[lookups]]` (`file`, `sha256`), `[output]` (`path`,
+  `persist_batches`). `nuclear` has no default, as in the API.
 - Relative paths resolve against the config file's directory (`..` allowed); the resolved absolute path and the
   sha256 are recorded; the sha256 is mandatory for every referenced file (O8). No environment variable overrides a
   physics or run field (decision 0044 §5).
+- **`InputManifest`** (immutable; produced by the loader): `source = "toml" | "api"`, `base_dir`, `config_file` (path,
+  sha256) and `files` (one entry per referenced file: role `material_index | density | lookup:<name>`, resolved
+  absolute path, file sha256 and, for arrays, `content_sha256`). It is a side carrier: `Simulation` and
+  `SimulationConfig` are unchanged; the CLI passes it to `save(..., manifest=...)`. `save` re-hashes every listed file
+  and checks every `content_sha256` against the arrays of the requested config; a mismatch raises `ConfigError` (exit
+  2, no bundle). Without a manifest `save` records `source = "api"` with `unavailable` file pointers.
+- **Round-trip semantics.** Equality of configurations is canonical and semantic: `to_dict` equality, arrays compared
+  by `content_sha256` (`VoxelGeometry` and `LookupTable` use identity equality, `eq=False`). The exact round trip
+  `from_dict(to_dict(c))` is guaranteed for the reconstructible subset: every field except user `stopping` objects and
+  arrays that exist only in memory (API-created lookup tables, geometry arrays without a file); those serialise to
+  `{"status": "not-reconstructible", "reason": ...}` and `from_dict` refuses them (`ConfigError`), never substituting
+  a default.
+
 
 ### 7. CLI
 
@@ -385,6 +415,29 @@ Independent pre-freeze review (reviewer agent, read-only) of this decision and t
 9. **Minor.** Host-runner provenance unasserted → plan row PROV-7 (HR: `code.source = "git"`, clean tree).
 10. **Minor.** "No integer literal" was literally false (hex digests) → "no decimal seed literal" with the verified
     window facts (plan §C).
+
+Codex REVIEW-bd983b92 (REVIEW-bd983b92e86c4f14bdadde38fd9a2619, 2026-11-23) of the S0 commit 00b5e3de:
+changes_required, five important findings, resolved in place:
+
+11. **Important.** The reconciliation row "neither `stopping` nor `stopping_model` → `bethe-ionmc-v1`" contradicted
+    decision 0044 and `select()` (exactly one is required; absence fails at `PhysicsOptions` construction) → row
+    deleted; TOML configs require `physics.stopping_model` (absence → `ConfigError` naming the key); the API
+    behaviour of decision 0044 is unchanged and preserved by CAP-3 (decision 0045 §4, §6; rows CFG-3, CAP-3).
+12. **Important.** An exact config round trip over every field is impossible (user `stopping` objects, in-memory
+    lookup and geometry arrays, `eq=False` classes) → canonical semantic comparison (`to_dict` equality, arrays by
+    `content_sha256`) over the declared reconstructible subset; the rest round-trips to an explicit
+    `not-reconstructible` record (decision 0045 §6; rows CFG-1, CFG-7).
+13. **Important.** `save` could not produce the input-file pointers (`Result` and `LookupTable` keep no paths) →
+    immutable `InputManifest` produced by the loader and passed to `save`; API runs record `source = "api"` with
+    explicit `unavailable` file pointers; `save` refuses a manifest whose hashes no longer match (decision 0045 §2,
+    §6; rows OUT-1 (d)–(e), PROV-8).
+14. **Important.** CAP-1 over-claimed (dimensions omitted; no CI cache for tabulated models) → CAP-1a (CI,
+    cache-independent matrix), CAP-1b (LV/HR, cache-backed tabulated models) and CAP-1c (one positive and one
+    negative case for every other `validate` rule); claim restated as "declared == enforced over the enumerated
+    dimensions"; the global "zero undeclared combinations" claim removed (§4 item 2).
+15. **Important.** `load`/`ionmc verify` lacked resource-exhaustion defences for untrusted bundles → pre-allocation
+    validation of the ZIP directory, catalogue and NPY headers, streamed decompression under configurable byte
+    budgets with safe defaults (decision 0045 §1); row OUT-10 with synthetic KB-scale adversarial fixtures in S2.
 
 ## Later validation outcome
 
