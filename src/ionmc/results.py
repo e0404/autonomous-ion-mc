@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import collections
 import contextlib
+import copy
 import hashlib
 import json
 import math
@@ -39,7 +40,7 @@ import struct
 import tempfile
 import zipfile
 import zlib
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
@@ -667,6 +668,11 @@ def _environment_at_run(result: Result) -> dict[str, Any]:
     return dict(snap) if isinstance(snap, Mapping) else prov.environment_block()
 
 
+def _snap_or(result: Result, key: str, fallback: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    snap = _snapshot(result).get(key)
+    return copy.deepcopy(dict(snap)) if isinstance(snap, Mapping) else fallback()
+
+
 def build_document(
     result: Result,
     manifest: InputManifest | None,
@@ -676,7 +682,7 @@ def build_document(
 ) -> dict[str, Any]:
     """The result.json document without the ``files`` block."""
     eff = result.effective_config
-    summary = eff.summary()
+    summary = _snapshot(result).get("effective_summary") or eff.summary()
     cfg = result.requested_config
     manifest_dict = (manifest or manifest_for_api_config(cfg)).to_dict()
     stopping = summary.get("stopping", {})
@@ -716,8 +722,8 @@ def build_document(
         "provenance": {
             "code": _code_at_run(result),
             "environment": _environment_at_run(result),
-            "data": prov.data_block(summary, result.lookups),
-            "models": prov.models_block(summary),
+            "data": _snap_or(result, "data", lambda: prov.data_block(summary, result.lookups)),
+            "models": _snap_or(result, "models", lambda: prov.models_block(summary)),
         },
         "run": {
             "backend": result.backend,

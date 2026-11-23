@@ -475,16 +475,19 @@ def test_out8_no_table_value_equals_a_persisted_member(case_d: Case, case_a: Cas
 
 
 def _require_datasets(*dataset_ids: str) -> None:
-    """Skip a cache-backed case without the dataset; fail under IONMC_REQUIRE_DATA=1."""
+    """Skip a cache-backed case without the dataset (CI tier); fail when the dataset is absent
+    under IONMC_REQUIRE_DATA=1 or IONMC_LV_TIER=1. A corrupt object, malformed manifest or pin
+    mismatch (``cache.IntegrityError``) is never a skip."""
     from ionmc.data import cache
 
     cdir = cache.resolve_cache_dir(None)
+    required = "1" in (os.environ.get("IONMC_REQUIRE_DATA"), os.environ.get("IONMC_LV_TIER"))
     for dataset_id in dataset_ids:
         try:
             cache.verify(dataset_id, cdir)
-        except (FileNotFoundError, cache.IntegrityError) as exc:
-            if os.environ.get("IONMC_REQUIRE_DATA") == "1":
-                pytest.fail(f"IONMC_REQUIRE_DATA=1 but {dataset_id} is not cached: {exc}")
+        except FileNotFoundError as exc:
+            if required:
+                pytest.fail(f"{dataset_id} is required here but not cached: {exc}")
             pytest.skip(f"{dataset_id} is not in the cache (IONMC_CACHE_DIR)")
 
 

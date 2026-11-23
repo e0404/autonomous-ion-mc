@@ -13,6 +13,7 @@ result) unless ``RunOptions.allow_invalid_result`` is set, in which case the ret
 
 from __future__ import annotations
 
+import copy
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -53,6 +54,7 @@ from ionmc.physics.exact_omega import (
     TABLE_EVAL_CONTRACT,
 )
 from ionmc.physics.projectiles import PROTON
+from ionmc.provenance import data_block, models_block
 from ionmc.scoring import (
     GENERATION_CHOICES,
     MEV_PER_G_TO_GY,
@@ -766,6 +768,19 @@ def _device_description(eff: EffectiveConfig, raw: RawTransport) -> str:
     return f"{base} x {workers} processes" if workers > 1 else base
 
 
+def _run_environment(eff: EffectiveConfig, lookups: tuple[Any, ...]) -> dict[str, Any]:
+    """``describe_environment()`` plus the run-time provenance snapshot: the effective summary as
+    produced now (persisted unchanged by ``results.save``) and the data/models blocks derived
+    from it, so that a later change of the registry or the live objects cannot alter them."""
+    env = describe_environment()
+    summary = copy.deepcopy(eff.summary())
+    snap = env["provenance_snapshot"]
+    snap["effective_summary"] = summary
+    snap["data"] = data_block(summary, lookups)
+    snap["models"] = models_block(summary)
+    return env
+
+
 def _with_timings(result: Result, timings: dict[str, float]) -> Result:
     return Result(
         valid=result.valid,
@@ -997,6 +1012,7 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         for i, g in enumerate(cfg.scoring)
     )
     t = raw.tallies
+    lookups = () if eff.channels is None else tuple(lk.provenance() for lk in eff.channels.lookups)
     balance_cls = EnergyBalance if eff.nuclear is None else NuclearEnergyBalance
     extra: dict[str, Any] = (
         {}
@@ -1030,11 +1046,9 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         energy_balance=balance,
         counters=counters,
         timings={},
-        environment=describe_environment(),
+        environment=_run_environment(eff, lookups),
         diagnostics=raw.diagnostics,
         transport_report=raw.meta,
         channel_raw=raw.channels,
-        lookups=()
-        if eff.channels is None
-        else tuple(lk.provenance() for lk in eff.channels.lookups),
+        lookups=lookups,
     )

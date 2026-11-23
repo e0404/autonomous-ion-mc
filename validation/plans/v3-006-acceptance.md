@@ -455,3 +455,9 @@ the reader allows five dimensions only for those two array roles (`MAX_NDIM_SPEC
 four for every other array. The byte budgets apply unchanged. `save` refuses a result with `valid = false` unless the
 run allowed it (`allow_invalid_result`), exactly as §1 states; the S2a fixtures that persist invalid results set that
 option explicitly.
+- 2026-11-23 (orchestrator, S3 review clarification; Codex REVIEW-531894cb): the local-validation tier (LV) is selected
+  by the environment variable `IONMC_LV_TIER=1`, exported by the logged runner of every LV run together with
+  `IONMC_REQUIRE_DATA=1`, `IONMC_SINGLE_PROCESS=1` and the thread limits. Under `IONMC_LV_TIER=1` a missing build tool
+  and every build failure fail row PROV-5, and an absent or corrupt cache object fails the cache-backed rows; without
+  it (GitHub CI) an absent cache object or an environmental build failure skips, while a corrupt cache object
+  (`IntegrityError`) always fails. Not a clinical claim.

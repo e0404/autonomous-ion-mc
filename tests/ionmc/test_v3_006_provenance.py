@@ -58,16 +58,19 @@ def _config(model: str) -> SimulationConfig:
 
 
 def _require_datasets(*dataset_ids: str) -> None:
-    """Skip a cache-backed case without the dataset; fail under IONMC_REQUIRE_DATA=1."""
+    """Skip a cache-backed case without the dataset (CI tier); fail when the dataset is absent
+    under IONMC_REQUIRE_DATA=1 or IONMC_LV_TIER=1. A corrupt object, malformed manifest or pin
+    mismatch (``cache.IntegrityError``) is never a skip."""
     from ionmc.data import cache
 
     cdir = cache.resolve_cache_dir(None)
+    required = "1" in (os.environ.get("IONMC_REQUIRE_DATA"), os.environ.get("IONMC_LV_TIER"))
     for dataset_id in dataset_ids:
         try:
             cache.verify(dataset_id, cdir)
-        except (FileNotFoundError, cache.IntegrityError) as exc:
-            if os.environ.get("IONMC_REQUIRE_DATA") == "1":
-                pytest.fail(f"IONMC_REQUIRE_DATA=1 but {dataset_id} is not cached: {exc}")
+        except FileNotFoundError as exc:
+            if required:
+                pytest.fail(f"{dataset_id} is required here but not cached: {exc}")
             pytest.skip(f"{dataset_id} is not in the cache (IONMC_CACHE_DIR)")
 
 
@@ -334,9 +337,16 @@ _ENV_BUILD_ERRORS = (
 )  # fmt: skip
 
 
+def _lv_tier() -> bool:
+    """The declared local-validation selector: every PROV-5 failure fails there."""
+    return os.environ.get("IONMC_LV_TIER") == "1"
+
+
 def _uv_build(src: Path, out: Path) -> Path:
     uv = shutil.which("uv")
     if uv is None:
+        if _lv_tier():
+            pytest.fail("IONMC_LV_TIER=1 but uv is not on PATH")
         pytest.skip("uv is not available")
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     cache = ROOT / ".uv-cache"
@@ -348,9 +358,8 @@ def _uv_build(src: Path, out: Path) -> Path:
     )  # fmt: skip
     if proc.returncode != 0:
         msg = f"uv build --wheel --offline failed: {proc.stderr.strip()[-600:]}"
-        low = proc.stderr.lower()
-        environmental = any(k in low for k in _ENV_BUILD_ERRORS)
-        if environmental and os.environ.get("IONMC_REQUIRE_DATA") != "1":
+        environmental = any(k in proc.stderr.lower() for k in _ENV_BUILD_ERRORS)
+        if environmental and not _lv_tier():
             pytest.skip(msg)
         pytest.fail(msg)
     (wheel,) = out.glob("ionmc-*.whl")
@@ -442,4 +451,25 @@ def test_prov_run_time_identity_survives_save(
     monkeypatch.undo()
     same = _doc(save(result, tmp_path / "c"))["provenance"]
     assert "saved_with" not in same["code"] and same["environment"] == snap["environment"]
+    load(tmp_path / "b")
+
+
+def test_prov_run_time_effective_snapshot_survives_registry_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ionmc.physics import stopping_evidence as ev
+
+    result = Simulation(_config("bethe-ionmc-v1")).run()
+    run_summary = result.environment["provenance_snapshot"]["effective_summary"]
+    run_evidence = json.loads(json.dumps(run_summary["stopping"]["evidence_at_run"]))
+    extra = dict(ev.STOPPING_EVIDENCE)
+    for k, v in list(extra.items()):
+        extra[k] = (*v, v[0])
+    monkeypatch.setattr(ev, "STOPPING_EVIDENCE", extra)
+    live = result.effective_config.summary()["stopping"]["evidence_at_run"]
+    assert len(live) == len(run_evidence) + 1  # the live registry differs from the run's state
+    doc = _doc(save(result, tmp_path / "b"))
+    assert doc["effective"]["stopping"]["evidence_at_run"] == run_evidence
+    assert doc["provenance"]["models"]["evidence_at_run"] == run_evidence
+    assert doc["effective"] == json.loads(results.canonical_bytes(run_summary))
     load(tmp_path / "b")
