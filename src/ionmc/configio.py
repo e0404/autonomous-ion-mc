@@ -1266,6 +1266,72 @@ def from_dict(
     return _from_dict(d, manifest, bd)[0]
 
 
+def _check_array_record(v: Any, kp: str, required: bool) -> None:
+    """A serialised array position: reference, not-reconstructible record, file form or null."""
+    if v is None and not required:
+        return
+    t = _table(v, kp)
+    forms = (
+        {"ref", "sha256", "content_sha256"},
+        {"status", "reason", "content_sha256"},
+        {"file", "sha256"},
+    )
+    if set(t) not in forms:
+        raise ConfigError(kp, f"unknown or missing key(s) in array record {sorted(t)}")
+
+
+def validate_dict_structure(d: Any) -> None:
+    """Structure-only validation of a :func:`to_dict` document (never opens a file).
+
+    Same key knowledge as :func:`from_dict`: an unknown or missing key, a wrong type or an
+    unknown schema/version raises ``ConfigError`` naming the key path. Array positions accept the
+    reference, ``not-reconstructible`` and file records; no value is resolved or constructed.
+    """
+    top = _table(d, "<root>")
+    for k in top:
+        if k not in TOP_KEYS:
+            raise ConfigError(k, f"unknown top-level key (valid keys: {', '.join(TOP_KEYS)})")
+    if top.get("schema") != SCHEMA or top.get("schema_version") != SCHEMA_VERSION:
+        raise ConfigError("schema", f"must be {SCHEMA!r} {SCHEMA_VERSION!r}")
+    for k in REQUIRED_TOP:
+        if k not in top:
+            raise ConfigError(k, "required table is missing")
+    for i, m in enumerate(_seq(top.get("materials", []), "materials")):
+        t = _table(m, f"materials[{i}]")
+        if set(t) != {"name"}:
+            kw = _read(t, f"materials[{i}]", MATERIAL_FIELDS)
+            _table(kw["mass_fractions"], f"materials[{i}].mass_fractions")
+            if kw.get("sternheimer") is not None:
+                st = _table(kw["sternheimer"], f"materials[{i}].sternheimer")
+                _read(st, f"materials[{i}].sternheimer", STERNHEIMER_FIELDS)
+    sk = _read(_table(top["source"], "source"), "source", SOURCE_FIELDS)
+    if not isinstance(sk["projectile"], str):
+        _read(_table(sk["projectile"], "source.projectile"), "source.projectile", PROJECTILE_FIELDS)
+    g = _table(top["geometry"], "geometry")
+    if g.get("type") == "box":
+        _read(g, "geometry", BOX_FIELDS)
+    elif g.get("type") == "voxel":
+        _read(g, "geometry", VOXEL_FIELDS)
+        _check_array_record(g["material_index"], "geometry.material_index", True)
+        _check_array_record(g.get("density"), "geometry.density", False)
+    else:
+        raise ConfigError("geometry.type", "must be 'box' or 'voxel'")
+    for i, t in enumerate(_table_list(top["scoring"], "scoring")):
+        _read(t, f"scoring[{i}]", SCORING_FIELDS)
+    ph = _table(top["physics"], "physics")
+    if "stopping" in ph and not isinstance(ph["stopping"], dict):
+        raise ConfigError("physics.stopping", "must be a record")
+    _read({k: v for k, v in ph.items() if k != "stopping"}, "physics", PHYSICS_FIELDS)
+    _read(_table(top["run"], "run"), "run", RUN_FIELDS)
+    _read(_table(top.get("diagnostics", {}), "diagnostics"), "diagnostics", DIAGNOSTICS_FIELDS)
+    for i, t in enumerate(_table_list(top.get("tallies", []), "tallies")):
+        _read(t, f"tallies[{i}]", TALLY_FIELDS)
+    for i, r in enumerate(_seq(top.get("lookups", []), "lookups")):
+        _check_array_record(r, f"lookups[{i}]", True)
+    if "output" in top:
+        _table(top["output"], "output")
+
+
 def _parse_toml(path: str | Path) -> tuple[dict[str, Any], Path, str]:
     p = Path(path)
     try:
