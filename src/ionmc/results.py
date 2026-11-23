@@ -55,7 +55,7 @@ from ionmc.configio import (
     validate_dict_structure,
 )
 from ionmc.geometry import VoxelGeometry
-from ionmc.simulation import NuclearEnergyBalance, Result
+from ionmc.simulation import NuclearEnergyBalance, Result, TransportCounters
 
 SCHEMA = "ionmc.result"
 SCHEMA_VERSION = "1.0"
@@ -306,7 +306,7 @@ def _collect_arrays(result: Result, persist_batches: bool) -> list[_Arr]:
                     {"kind": "grid", "grid": g.name, "array": base},
                 )
             )
-        for qname, q in g.quantities.items():
+        for qi, (qname, q) in enumerate(g.quantities.items()):
             qs = safe_name(qname, used_q)
             axes = _SPATIAL + (("energy_bin",) if np.ndim(q.mean) == 4 else ())
             for base in QUANTITY_ARRAYS:
@@ -324,6 +324,7 @@ def _collect_arrays(result: Result, persist_batches: bool) -> list[_Arr]:
                             "grid": g.name,
                             "name": q.name,
                             "quantity": q.quantity,
+                            "index": qi,
                             "array": base,
                         },
                     )
@@ -524,6 +525,11 @@ def build_document(
     stopping = summary.get("stopping", {})
     cache_dir, cache_source = _cache_dir_fields(stopping)
     counters = result.counters.as_dict()
+    ch = result.channel_raw
+    channel_counters = {
+        "lookup_out_of_domain": 0 if ch is None else int(ch.lookup_out_of_domain),
+        "path_bound_exceeded": 0 if ch is None else int(ch.path_bound_exceeded),
+    }
     ph = summary["physics"]
     geom = eff.geometry
     by_origin = {
@@ -608,8 +614,9 @@ def build_document(
         "accounting": {
             "energy_balance": _balance(result),
             "counters": counters,
+            "channel_counters": channel_counters,
             "valid": bool(result.valid),
-            "reasons": sorted(k for k, v in counters.items() if v),
+            "reasons": sorted(k for k, v in (counters | channel_counters).items() if v),
         },
         "units": dict(UNITS_TABLE),
         "arrays": [a.entry() for a in sorted(arrays, key=lambda x: x.name)],
@@ -815,14 +822,14 @@ _GRIDSTAT = (
     "name valid low_batch_count shape n_defined_voxels n_sparse_voxels energy_total_mev "
     "dose_max_gy relative_uncertainty_max"
 ).split()
-_ACC = "energy_balance counters valid reasons".split()
+_ACC = "energy_balance counters channel_counters valid reasons".split()
 _PROV = "code environment data models".split()
 _EXTRA = (
     "materials geometry_arrays grid_convention profile_axis resolutions resolutions_status".split()
 )
 _MANIFEST = "source base_dir config_file files config_sha256".split()
 _ENTRY = "name dtype shape axes grid units definition content_sha256 origin".split()
-_ORIGIN_KEYS = {"kind", "array", "grid", "name", "quantity"}
+_ORIGIN_KEYS = {"kind", "array", "grid", "name", "quantity", "index"}
 
 
 def _keys(
@@ -871,6 +878,29 @@ def _check_manifest(m: dict[str, Any]) -> None:
         _str_or_unavailable(f["sha256"], f"input_manifest.files[{i}].sha256")
 
 
+def _is_int(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+_COUNTER_KEYS = tuple(f.name for f in fields(TransportCounters))
+_CHANNEL_COUNTER_KEYS = ("lookup_out_of_domain", "path_bound_exceeded")
+
+
+def _check_accounting(acc: dict[str, Any]) -> None:
+    for blk, keys in (("counters", _COUNTER_KEYS), ("channel_counters", _CHANNEL_COUNTER_KEYS)):
+        c = acc[blk]
+        if not isinstance(c, dict) or set(c) != set(keys):
+            raise _fail(f"accounting.{blk}: keys must be exactly {sorted(keys)}")
+        if not all(_is_int(v) and v >= 0 for v in c.values()):
+            raise _fail(f"accounting.{blk}: values must be non-negative integers")
+    if not isinstance(acc["valid"], bool):
+        raise _fail("accounting.valid must be a boolean")
+    if not (isinstance(acc["reasons"], list) and all(isinstance(r, str) for r in acc["reasons"])):
+        raise _fail("accounting.reasons: expected a list of strings")
+    if not isinstance(acc["energy_balance"], dict):
+        raise _fail("accounting.energy_balance: expected an object")
+
+
 def _check_structure(doc: Any) -> None:
     _keys(doc, _TOP, "result.json")
     if doc["schema"] != SCHEMA:
@@ -887,7 +917,16 @@ def _check_structure(doc: Any) -> None:
         raise _fail("statistics.grids: expected a list")
     for i, g in enumerate(st["grids"]):
         _keys(g, _GRIDSTAT, f"statistics.grids[{i}]")
-    _keys(doc["accounting"], _ACC, "accounting")
+    acc = _keys(doc["accounting"], _ACC, "accounting")
+    _check_accounting(acc)
+    if not _is_int(doc["run"]["n_batches"]) or doc["run"]["n_batches"] < 1:
+        raise _fail("run.n_batches must be a positive integer")
+    ba = st["batch_arrays"]
+    if not isinstance(ba, dict) or ba.get("status") not in ("persisted", "not-persisted"):
+        raise _fail("statistics.batch_arrays: malformed status record")
+    for i, g in enumerate(st["grids"]):
+        if not (isinstance(g["name"], str) and isinstance(g["shape"], list)):
+            raise _fail(f"statistics.grids[{i}]: malformed name or shape")
     _keys(doc["provenance"], _PROV, "provenance")
     _keys(doc["effective_extra"], _EXTRA, "effective_extra")
     _keys(doc["input_manifest"], _MANIFEST, "input_manifest")
@@ -908,7 +947,17 @@ def _check_structure(doc: Any) -> None:
         _keys(e, _ENTRY, f"arrays[{i}]")
         if not isinstance(e["origin"], dict) or not set(e["origin"]) <= _ORIGIN_KEYS:
             raise _fail(f"arrays[{i}].origin: unknown field(s)")
-        if not (isinstance(e["shape"], list) and all(isinstance(n, int) for n in e["shape"])):
+        for k in ("name", "dtype", "units", "definition"):
+            if not isinstance(e[k], str):
+                raise _fail(f"arrays[{i}].{k}: expected a string")
+        if not (isinstance(e["axes"], list) and all(isinstance(a, str) for a in e["axes"])):
+            raise _fail(f"arrays[{i}].axes: expected a list of strings")
+        if e["grid"] is not None and not isinstance(e["grid"], str):
+            raise _fail(f"arrays[{i}].grid: expected a string or null")
+        for k, v in e["origin"].items():
+            if not (_is_int(v) if k == "index" else isinstance(v, str)):
+                raise _fail(f"arrays[{i}].origin.{k}: wrong type")
+        if not (isinstance(e["shape"], list) and all(_is_int(n) for n in e["shape"])):
             raise _fail(f"arrays[{i}].shape: expected a list of integers")
         if not (isinstance(e["content_sha256"], str) and _SHA_RE.fullmatch(e["content_sha256"])):
             raise _fail(f"arrays[{i}].content_sha256 is malformed")
@@ -919,7 +968,7 @@ def _check_structure(doc: Any) -> None:
         _keys(f, ["sha256", "size"], f"files[{name!r}]")
         if not (isinstance(f["sha256"], str) and _SHA_RE.fullmatch(f["sha256"])):
             raise _fail(f"files[{name!r}].sha256 is malformed")
-        if not isinstance(f["size"], int) or f["size"] < 0:
+        if not _is_int(f["size"]) or f["size"] < 0:
             raise _fail(f"files[{name!r}].size is malformed")
 
 
@@ -927,8 +976,16 @@ def _check_structure(doc: Any) -> None:
 # load: files and ZIP
 
 
+_PLOT_RE = re.compile(r"^plots/[a-z0-9_-]{1,64}\.svg$")
+_FIXED_FILES = ("arrays.npz", "report.md")
+
+
+def _file_name_ok(name: Any) -> bool:
+    return isinstance(name, str) and (name in _FIXED_FILES or bool(_PLOT_RE.fullmatch(name)))
+
+
 def _bundle_file(root: Path, name: str) -> Path:
-    if not isinstance(name, str) or not _FILE_RE.fullmatch(name):
+    if not _file_name_ok(name):
         raise _fail(f"unsafe file name {name!r} in the files map")
     p = root / name
     try:
@@ -1038,15 +1095,106 @@ def _read_member(
 # load: cross-field invariants
 
 
+def _check_catalogue(doc: dict[str, Any]) -> dict[tuple[Any, Any, Any, Any], str]:
+    """Bind every entry to its deterministic member name and require the exact inventory."""
+    sc = doc["effective"]["scoring"]
+    if not (isinstance(sc, list) and all(isinstance(g, dict) for g in sc)):
+        raise _fail("effective.scoring: expected a list of objects")
+    gnames = [g["name"] for g in sc]
+    for g in sc:
+        if not (
+            isinstance(g["name"], str) and isinstance(g["shape"], list) and len(g["shape"]) == 3
+        ):
+            raise _fail("effective.scoring: malformed grid entry")
+    if len(set(gnames)) != len(gnames):
+        raise _fail("effective.scoring: duplicate grid names")
+    used: set[str] = set()
+    gs = {n: safe_name(n, used) for n in gnames}
+    entries = doc["arrays"]
+    if [e["name"] for e in entries] != sorted(e["name"] for e in entries):
+        raise _fail("arrays: catalogue must be in sorted member-name order")
+    by: dict[tuple[Any, Any, Any, Any], str] = {}
+    qidx: dict[str, dict[str, int]] = {}
+    for e in entries:
+        o = e["origin"]
+        kind, arr = o.get("kind"), o.get("array")
+        key = (kind, o.get("grid"), o.get("name"), arr)
+        if key in by:  # reachable: the allowlist pattern does not bind the grid part of a name
+            raise _fail(f"arrays: duplicate semantic origin {key!r}")
+        by[key] = e["name"]
+        if len(e["axes"]) != len(e["shape"]):
+            raise _fail(f"array {e['name']!r}: axes and shape lengths differ")
+        if e["grid"] != o.get("grid"):
+            raise _fail(f"array {e['name']!r}: grid field and origin disagree")
+        if kind in ("grid", "quantity"):
+            if o.get("grid") not in gs:
+                raise _fail(f"array {e['name']!r}: unknown grid {o.get('grid')!r}")
+        elif e["grid"] is not None:
+            raise _fail(f"array {e['name']!r}: only grid arrays carry a grid")
+        if kind == "grid":
+            if arr not in GRID_ARRAYS or e["name"] != f"grid__{gs[o['grid']]}__{arr}":
+                raise _fail(f"array {e['name']!r} does not match its semantic origin")
+        elif kind == "quantity":
+            if arr not in QUANTITY_ARRAYS or not isinstance(o.get("name"), str):
+                raise _fail(f"array {e['name']!r}: malformed quantity origin")
+            if not _is_int(o.get("index")):
+                raise _fail(f"array {e['name']!r}: quantity origin lacks an index")
+            if qidx.setdefault(o["grid"], {}).setdefault(o["name"], o["index"]) != o["index"]:
+                raise _fail(f"quantity {o['name']!r}: inconsistent index")
+        elif kind == "geometry":
+            if arr not in GEOMETRY_ARRAYS or e["name"] != f"geometry__{arr}":
+                raise _fail(f"array {e['name']!r} does not match its semantic origin")
+        elif kind == "diagnostic":
+            if e["name"] != f"diag__{arr}":
+                raise _fail(f"array {e['name']!r} does not match its semantic origin")
+        else:
+            raise _fail(f"array {e['name']!r}: unknown origin kind {kind!r}")
+    persisted = doc["statistics"]["batch_arrays"]["status"] == "persisted"
+    for g in gnames:
+        for base in GRID_ARRAYS:
+            want = persisted if base == "batch_energy_mev" else True
+            if (("grid", g, None, base) in by) != want:
+                raise _fail(f"grid {g!r}: array {base!r} must be {'present' if want else 'absent'}")
+        names = qidx.get(g, {})
+        if sorted(names.values()) != list(range(len(names))):
+            raise _fail(f"grid {g!r}: quantity indices are not 0..n-1")
+        usedq: set[str] = set()
+        for qn, _ in sorted(names.items(), key=lambda kv: kv[1]):
+            qs = safe_name(qn, usedq)
+            for base in QUANTITY_ARRAYS:
+                name = by.get(("quantity", g, qn, base))
+                if name != f"grid__{gs[g]}__q__{qs}__{base}":
+                    raise _fail(f"quantity {qn!r}: array {base!r} is missing or misnamed")
+    geo = doc["effective_extra"]["geometry_arrays"]
+    if not isinstance(geo, dict):
+        raise _fail("effective_extra.geometry_arrays: expected an object")
+    if ("geometry", None, None, "material_index") not in by:
+        raise _fail("geometry material_index array is missing")
+    for base in GEOMETRY_ARRAYS:
+        if geo.get(base) != by.get(("geometry", None, None, base)):
+            raise _fail(f"effective_extra.geometry_arrays.{base} disagrees with the catalogue")
+    d = doc["requested"].get("diagnostics", {})
+    want_d: set[str] = set()
+    if d.get("track_end_positions"):
+        want_d |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith(("end_", "control_"))}
+    if d.get("escape_records"):
+        want_d |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith("escape_")}
+    if d.get("trace_histories", 0) > 0:
+        want_d |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith("trace_")}
+        want_d |= {f"trace_{c}" for c in _trace_columns()}
+    have_d = {k[3] for k in by if k[0] == "diagnostic"}
+    if have_d != want_d:
+        raise _fail(
+            f"diagnostic arrays {sorted(have_d)} disagree with the request {sorted(want_d)}"
+        )
+    return by
+
+
 def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]]) -> None:
     scoring = {g["name"]: tuple(g["shape"]) for g in doc["effective"].get("scoring", [])}
     nb = doc["run"]["n_batches"]
-    by: dict[tuple[Any, Any, Any, Any], str] = {}
+    by = _check_catalogue(doc)
     for e in doc["arrays"]:
-        o = e["origin"]
-        by[(o["kind"], o.get("grid"), o.get("name"), o["array"])] = e["name"]
-        if e["grid"] != o.get("grid"):
-            raise _fail(f"array {e['name']!r}: grid field and origin disagree")
         if e["grid"] is not None:
             if e["grid"] not in scoring:
                 raise _fail(f"array {e['name']!r}: unknown grid {e['grid']!r}")
@@ -1102,11 +1250,11 @@ def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any
                 m = arrays[by[("quantity", gname, qname, "defined_mask")]].astype(bool)
                 if (~m & ~np.isnan(arrays[name])).any():
                     raise _fail(f"quantity {qname!r}: ratio values must be NaN where undefined")
-    counters = doc["accounting"]["counters"]
-    nonzero = sorted(k for k, v in counters.items() if v)
-    if doc["valid"] != (not nonzero) or doc["accounting"]["valid"] != doc["valid"]:
+    acc = doc["accounting"]
+    nonzero = sorted(k for k, v in (acc["counters"] | acc["channel_counters"]).items() if v)
+    if doc["valid"] != (not nonzero) or acc["valid"] != doc["valid"]:
         raise _fail("valid disagrees with the transport-limit counters")
-    if doc["accounting"]["reasons"] != nonzero:
+    if acc["reasons"] != nonzero:
         raise _fail("accounting.reasons disagree with the counters")
     req = doc["requested"]
     have = {(o[1], o[2]) for o in by if o[0] == "quantity"}
@@ -1163,7 +1311,38 @@ def load(
     max_json_tokens: int = MAX_JSON_TOKENS,
     max_json_depth: int = MAX_JSON_DEPTH,
 ) -> LoadedResult:
-    """Read and verify a bundle; raises :class:`ResultFormatError` on any defect."""
+    """Read and verify a bundle; raises :class:`ResultFormatError` on any defect (a malformed
+    bundle never surfaces as a bare ``TypeError``/``KeyError``). The keyword-only budgets are
+    documented in decision 0045 section 1."""
+    try:
+        return _load(
+            path,
+            max_total_bytes=max_total_bytes,
+            max_array_bytes=max_array_bytes,
+            max_json_bytes=max_json_bytes,
+            max_central_directory_bytes=max_central_directory_bytes,
+            max_json_tokens=max_json_tokens,
+            max_json_depth=max_json_depth,
+        )
+    except ResultFormatError:
+        raise
+    except (
+        KeyError, TypeError, ValueError, AttributeError, IndexError, OverflowError, OSError,
+        RecursionError, ConfigError,
+    ) as exc:  # fmt: skip
+        raise _fail(f"malformed bundle ({type(exc).__name__}: {exc})") from exc
+
+
+def _load(
+    path: str | os.PathLike[str],
+    *,
+    max_total_bytes: int = MAX_TOTAL_BYTES,
+    max_array_bytes: int = MAX_ARRAY_BYTES,
+    max_json_bytes: int = MAX_JSON_BYTES,
+    max_central_directory_bytes: int = MAX_CENTRAL_DIRECTORY_BYTES,
+    max_json_tokens: int = MAX_JSON_TOKENS,
+    max_json_depth: int = MAX_JSON_DEPTH,
+) -> LoadedResult:
     root = Path(path)
     if root.is_symlink() or not root.is_dir():
         raise _fail("bundle path is not a directory")
@@ -1187,8 +1366,9 @@ def load(
     entries = doc["arrays"]
     check_allowlist(entries)
     files = doc["files"]
-    if "arrays.npz" not in files:
-        raise _fail("files has no entry for arrays.npz")
+    for name in files:
+        if not _file_name_ok(name):
+            raise _fail(f"unsafe file name {name!r} in the files map")
     import stat as _stat
 
     for de in os.scandir(root):
@@ -1198,9 +1378,18 @@ def load(
         if _stat.S_ISLNK(st.st_mode):
             raise _fail(f"{de.name!r} is a symbolic link (refused)")
         if de.name == "plots" and _stat.S_ISDIR(st.st_mode):
+            for pe in os.scandir(root / "plots"):
+                pst = pe.stat(follow_symlinks=False)
+                if _stat.S_ISLNK(pst.st_mode) or not _stat.S_ISREG(pst.st_mode):
+                    raise _fail(f"plots/{pe.name!r} is a symbolic link or not a regular file")
+                if f"plots/{pe.name}" not in files:
+                    raise _fail(f"unexpected entry 'plots/{pe.name}' in the bundle")
             continue
         if de.name not in files:
             raise _fail(f"unexpected entry {de.name!r} in the bundle")
+    for need in _FIXED_FILES:
+        if need not in files:
+            raise _fail(f"files has no entry for {need}")
     for name, rec in files.items():
         p = _bundle_file(root, name)
         sha, size = _sha256_path(p)

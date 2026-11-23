@@ -608,3 +608,191 @@ def test_effective_top_keys_equal_the_summaries_fixture() -> None:
     )
     union = {k for c in fx["cases"].values() for k in c["summary"]}
     assert union == set(results.EFFECTIVE_TOP_KEYS)
+
+
+# ---- review REVIEW-741411bd regressions -------------------------------------------------------
+
+
+def _with_channels(lookup: int, path: int) -> Result:
+    from ionmc.transport.tally import ChannelRaw
+
+    r = make_result()
+    raw = ChannelRaw(np.zeros((NB, 1), dtype=np.int64), [], lookup, path)
+    return Result(**{**r.__dict__, "valid": False, "channel_raw": raw})
+
+
+@pytest.mark.parametrize("which", ["lookup_out_of_domain", "path_bound_exceeded"])
+def test_item1_invalid_by_channel_counter_round_trips(tmp_path: Path, which: str) -> None:
+    r = _with_channels(*((2, 0) if which == "lookup_out_of_domain" else (0, 3)))
+    doc = load(save(r, tmp_path / "b")).doc
+    assert doc["valid"] is False and doc["accounting"]["reasons"] == [which]
+    assert doc["accounting"]["channel_counters"][which] > 0
+    _mutate(tmp_path / "b", lambda d: d["accounting"]["channel_counters"].update({which: 0}))
+    with pytest.raises(ResultFormatError, match="valid disagrees"):
+        load(tmp_path / "b")
+
+
+def test_item2_swapped_grid_labels_and_renamed_array(tmp_path: Path) -> None:
+    b = save(make_result(("g1", "g2")), tmp_path / "b")
+    pristine = _doc(b)
+
+    def swap(d: dict[str, Any]) -> None:
+        other = {"g1": "g2", "g2": "g1"}
+        for e in d["arrays"]:
+            if e["grid"]:
+                e["grid"] = e["origin"]["grid"] = other[e["grid"]]
+        for g in d["statistics"]["grids"]:
+            g["name"] = other[g["name"]]
+
+    _mutate(b, swap)
+    with pytest.raises(ResultFormatError, match="semantic origin"):
+        load(b)
+    _put_doc(b, pristine)
+
+    def rename(d: dict[str, Any]) -> None:
+        for e in d["arrays"]:
+            if e["origin"].get("array") == "energy_mev" and e["grid"] == "g1":
+                e["origin"]["array"] = "energy_std_mev"
+
+    _mutate(b, rename)
+    with pytest.raises(ResultFormatError, match="allowlist|duplicate semantic origin"):
+        load(b)
+
+
+def _drop_member(b: Path, name: str) -> None:
+    m = {k: v for k, v in _members(b).items() if k != name + ".npy"}
+    _write_zip(b, sorted(m.items()))
+    _mutate(b, lambda d: d.update(arrays=[e for e in d["arrays"] if e["name"] != name]))
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "grid__dose__energy_std_mev",
+        "grid__dose__n_nonzero_batches",
+        "grid__dose__sparse_mask",
+        "grid__dose__batch_energy_mev",
+        "grid__dose__q__let__rounding_bound",
+        "geometry__material_index",
+    ],
+)
+def test_item3_omitted_arrays_are_refused(bundle: Path, name: str) -> None:
+    _drop_member(bundle, name)
+    with pytest.raises(ResultFormatError, match="must be present|missing|geometry"):
+        load(bundle)
+
+
+def test_item3_batches_declared_not_persisted_must_be_absent(tmp_path: Path) -> None:
+    b = save(make_result(), tmp_path / "b", persist_batches=False)
+    assert load(b).doc["statistics"]["batch_arrays"]["status"] == "not-persisted"
+    _mutate(b, lambda d: d["statistics"]["batch_arrays"].update(status="persisted"))
+    with pytest.raises(ResultFormatError, match="batch_energy_mev"):
+        load(b)
+
+
+def test_item4_file_tree(bundle: Path) -> None:
+    def register(name: str, data: bytes) -> None:
+        (bundle / name).parent.mkdir(exist_ok=True)
+        (bundle / name).write_bytes(data)
+        _refile_add(bundle, name)
+
+    def _refile_add(b: Path, name: str) -> None:
+        d = _doc(b)
+        sha, size = results._sha256_path(b / name)
+        d["files"][name] = {"sha256": sha, "size": size}
+        _put_doc(b, d)
+
+    register("plots/p.svg", b"<svg/>")
+    assert "plots/p.svg" in load(bundle).doc["files"]  # a listed plot is fine
+    (bundle / "plots" / "stray.svg").write_bytes(b"x")
+    with pytest.raises(ResultFormatError, match="unexpected entry"):
+        load(bundle)
+    (bundle / "plots" / "stray.svg").unlink()
+    os.symlink(bundle / "arrays.npz", bundle / "plots" / "link.svg")
+    with pytest.raises(ResultFormatError, match="symbolic link"):
+        load(bundle)
+    (bundle / "plots" / "link.svg").unlink()
+    register("extra.txt", b"x")
+    with pytest.raises(ResultFormatError, match="unsafe file name"):
+        load(bundle)
+
+
+def test_item4_report_is_required(bundle: Path) -> None:
+    (bundle / "report.md").unlink()
+    _mutate(bundle, lambda d: d["files"].pop("report.md"))
+    with pytest.raises(ResultFormatError, match="report.md"):
+        load(bundle)
+
+
+@pytest.mark.parametrize(
+    "fn",
+    [
+        lambda d: d["arrays"][0].update(axes=5),
+        lambda d: d["arrays"][0].update(axes=[1, 2, 3]),
+        lambda d: d["accounting"].update(counters="x"),
+        lambda d: d["accounting"]["counters"].update(stall="many"),
+        lambda d: d["accounting"].update(reasons=7),
+        lambda d: d["run"].update(n_batches="four"),
+        lambda d: d["statistics"].update(batch_arrays=[]),
+        lambda d: d["effective"].update(scoring=5),
+        lambda d: d["effective"].update(scoring=[{"name": 1, "shape": 2}]),
+    ],
+)
+def test_item5_malformed_types_are_format_errors(bundle: Path, fn: Any) -> None:
+    _mutate(bundle, fn)
+    with pytest.raises(ResultFormatError):
+        load(bundle)
+
+
+def test_item6_output_and_stopping_record_schemas(bundle: Path) -> None:
+    from ionmc.configio import ConfigError, to_dict, validate_dict_structure
+
+    good = to_dict(_config())
+    good["output"] = {"path": None, "persist_batches": True}
+    validate_dict_structure(good)
+    rec = {
+        "status": "not-reconstructible",
+        "reason": "r",
+        "reconstructible": False,
+        "stopping_object": {"class": "C", "model_id": "m", "spec_sha256": "0" * 64},
+    }
+    validate_dict_structure({**good, "physics": {**good["physics"], "stopping": rec}})
+    bad_rec = {**rec, "stopping_object": {**rec["stopping_object"], "surprise": "x"}}
+    for physics in (
+        {"stopping": {"surprise": 1}},
+        {"stopping": bad_rec},
+        {"stopping": {**rec, "x": 1}},
+    ):
+        with pytest.raises(ConfigError, match="physics.stopping"):
+            validate_dict_structure({**good, "physics": {**good["physics"], **physics}})
+    with pytest.raises(ConfigError, match=r"output\.surprise"):
+        validate_dict_structure({**good, "output": {"surprise": 1}})
+    _mutate(bundle, lambda d: d["requested"].update(output={"surprise": 1}))
+    with pytest.raises(ResultFormatError, match="output"):
+        load(bundle)
+    _mutate(bundle, lambda d: d["requested"].update(output={}))
+    _mutate(bundle, lambda d: d["requested"]["physics"].update(stopping={"surprise": 1}))
+    with pytest.raises(ResultFormatError, match="physics.stopping"):
+        load(bundle)
+
+
+def test_duplicate_semantic_origin_is_refused(bundle: Path) -> None:
+    m = _members(bundle)
+    src = "grid__dose__energy_mev"
+    m["grid__zz__energy_mev.npy"] = m[src + ".npy"]  # same bytes under a second allowlisted name
+    _write_zip(bundle, sorted(m.items()))
+
+    def dup(d: dict[str, Any]) -> None:
+        e = next(x for x in d["arrays"] if x["name"] == src)
+        d["arrays"] = sorted(
+            [*d["arrays"], {**e, "name": "grid__zz__energy_mev"}], key=lambda x: x["name"]
+        )
+
+    _mutate(bundle, dup)
+    with pytest.raises(ResultFormatError, match="duplicate semantic origin"):
+        load(bundle)
+
+
+def test_unknown_budget_keyword_is_a_type_error(bundle: Path) -> None:
+    with pytest.raises(TypeError):
+        load(bundle, max_everything=1)  # type: ignore[call-arg]

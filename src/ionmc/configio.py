@@ -787,6 +787,9 @@ def manifest_for_api_config(config: SimulationConfig) -> InputManifest:
 # reconstruction: dict -> config
 
 
+OUTPUT_FIELDS: Schema = {"path": (_opt(_str), False), "persist_batches": (_bool, False)}
+
+
 @dataclass(frozen=True)
 class OutputOptions:
     """The ``[output]`` table: ``path`` (absolute if given) and ``persist_batches``."""
@@ -1171,7 +1174,7 @@ def _output_from(v: Any, base_dir: Path | None) -> OutputOptions:
     kw = _read(
         _table(v, "output"),
         "output",
-        {"path": (_opt(_str), False), "persist_batches": (_bool, False)},
+        OUTPUT_FIELDS,
     )
     path = kw.get("path")
     if path is not None:
@@ -1319,8 +1322,8 @@ def validate_dict_structure(d: Any) -> None:
     for i, t in enumerate(_table_list(top["scoring"], "scoring")):
         _read(t, f"scoring[{i}]", SCORING_FIELDS)
     ph = _table(top["physics"], "physics")
-    if "stopping" in ph and not isinstance(ph["stopping"], dict):
-        raise ConfigError("physics.stopping", "must be a record")
+    if "stopping" in ph:
+        _check_stopping_record(ph["stopping"])
     _read({k: v for k, v in ph.items() if k != "stopping"}, "physics", PHYSICS_FIELDS)
     _read(_table(top["run"], "run"), "run", RUN_FIELDS)
     _read(_table(top.get("diagnostics", {}), "diagnostics"), "diagnostics", DIAGNOSTICS_FIELDS)
@@ -1329,7 +1332,27 @@ def validate_dict_structure(d: Any) -> None:
     for i, r in enumerate(_seq(top.get("lookups", []), "lookups")):
         _check_array_record(r, f"lookups[{i}]", True)
     if "output" in top:
-        _table(top["output"], "output")
+        _read(_table(top["output"], "output"), "output", OUTPUT_FIELDS)
+
+
+def _check_stopping_record(v: Any) -> None:
+    """The exact ``not-reconstructible`` record :func:`to_dict` writes for a stopping object."""
+    t = _table(v, "physics.stopping")
+    want = {"status", "reason", "reconstructible", "stopping_object"}
+    if set(t) != want:
+        raise ConfigError(
+            "physics.stopping", f"keys must be exactly {sorted(want)}, got {sorted(t)}"
+        )
+    if t["status"] != "not-reconstructible" or t["reconstructible"] is not False:
+        raise ConfigError("physics.stopping", "must be a not-reconstructible record")
+    _str(t["reason"], "physics.stopping.reason")
+    so = _table(t["stopping_object"], "physics.stopping.stopping_object")
+    if set(so) != {"class", "model_id", "spec_sha256"}:
+        raise ConfigError(
+            "physics.stopping.stopping_object", "keys must be exactly class, model_id, spec_sha256"
+        )
+    for k, x in so.items():
+        _str(x, f"physics.stopping.stopping_object.{k}")
 
 
 def _parse_toml(path: str | Path) -> tuple[dict[str, Any], Path, str]:
