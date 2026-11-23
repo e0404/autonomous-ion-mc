@@ -7,6 +7,7 @@ S2b). No physics table value, no ``out6`` seed and no worker process appears (RE
 
 from __future__ import annotations
 
+import errno
 import io
 import json
 import os
@@ -2668,25 +2669,32 @@ def test_out11_commit_time_races_never_delete_what_was_not_authorised(
     load(aside)
     monkeypatch.undo()
     _no_leftovers(tmp_path)
-    # (3) the displaced object is swapped for a stranger right before its deletion
-    dest = tmp_path / "swap_at_delete"
+    # (3) the displaced authorised bundle is never deleted: it is kept as <dest>.previous-<token>
+    dest = tmp_path / "kept"
+    first = save(r, dest)
+    original = (first / "result.json").read_bytes()
+    kept_paths: list[Path] = []
+    save(r, dest, overwrite=True, on_replaced=kept_paths.append)
+    assert len(kept_paths) == 1 and kept_paths[0].name.startswith("kept.previous-")
+    load(dest)
+    load(kept_paths[0])
+    assert (kept_paths[0] / "result.json").read_bytes() == original
+    # (4) when the previous bundle cannot be moved to its visible name, it stays where it is
+    dest = tmp_path / "stuck"
     save(r, dest)
-    aside2 = tmp_path / "aside_delete"
 
-    def swap_displaced(path: Path, _st: Any) -> None:
-        os.rename(path, aside2)
-        path.mkdir()
-        (path / "keep.txt").write_text("sentinel", encoding="utf-8")
+    def refuse(src: Path, dst: Path) -> None:
+        raise FileExistsError(errno.EEXIST, "forced in the test", str(dst))
 
-    _before(monkeypatch, "_delete_dir_object", swap_displaced)
-    with pytest.raises(results.BundleDisplacedError, match="left at"):
+    monkeypatch.setattr(results, "_rename_noreplace", refuse)
+    with pytest.raises(results.BundleDisplacedError, match="stays at"):
         save(r, dest, overwrite=True)
-    load(dest)  # the new bundle is in place
-    load(aside2)  # the displaced real bundle was not deleted
-    kept = [p for p in tmp_path.iterdir() if p.name.startswith("swap_at_delete.displaced-")]
-    assert len(kept) == 1 and (kept[0] / "keep.txt").read_text(encoding="utf-8") == "sentinel"
     monkeypatch.undo()
-    assert not [p.name for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]
+    load(dest)  # the new bundle is in place
+    stuck = [p for p in tmp_path.iterdir() if p.name.startswith(".ionmc-tmp-")]
+    assert len(stuck) == 1
+    load(stuck[0])  # the previous bundle, intact
+    os.rename(stuck[0], tmp_path / "stuck_previous")
     # the control: an undisturbed authorised bundle is replaced with nothing left behind
     dest = tmp_path / "plain2"
     save(r, dest)
@@ -2732,42 +2740,50 @@ def test_out11_without_renameat2_the_writer_fails_closed(tmp_path: Path, monkeyp
     assert not [p.name for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]
 
 
-def test_out11_final_rmdir_cannot_remove_content_and_cleanup_is_bound_to_our_object(
-    tmp_path: Path, monkeypatch: Any
-) -> None:
-    """REVIEW-1f5c2754: (a) a non-empty stranger swapped into the emptied displaced path right
-    before its rmdir survives (rmdir removes at most an empty entry) and the write reports the
-    displaced object; (b) the temporary-directory cleanup removes only our own directory object."""
-    r = make_result()
-    dest = tmp_path / "late_rmdir"
-    save(r, dest)
-    aside = tmp_path / "aside_rmdir"
-
-    def swap_before_rmdir(path: Path) -> None:
-        os.rename(path, aside)
-        path.mkdir()
-        (path / "keep.txt").write_text("sentinel", encoding="utf-8")
-
-    _before(monkeypatch, "_rmdir_empty", swap_before_rmdir)
-    with pytest.raises(results.BundleDisplacedError, match="left at"):
-        save(r, dest, overwrite=True)
-    load(dest)  # the new bundle is in place
-    kept = [p for p in tmp_path.iterdir() if p.name.startswith("late_rmdir.displaced-")]
-    assert len(kept) == 1 and (kept[0] / "keep.txt").read_text(encoding="utf-8") == "sentinel"
-    assert aside.is_dir() and not list(aside.iterdir())  # the emptied validated object itself
-    monkeypatch.undo()
-    # (b) _discard_tmp: a different object at the path is left alone, our own is removed
+def test_out11_temporary_cleanup_is_bound_to_our_directory_objects(tmp_path: Path) -> None:
+    """REVIEW-b025d078: _discard_tmp removes only the directory object save created; a different
+    object at the root path, or a swapped plots child, is left with every file intact."""
     ours = tmp_path / ".ionmc-tmp-ours"
     ours.mkdir()
     (ours / "f").write_text("x", encoding="utf-8")
     st = os.lstat(ours)
+    # the root was swapped for a stranger
     os.rename(ours, tmp_path / "ours_moved")
     ours.mkdir()
     (ours / "keep.txt").write_text("sentinel", encoding="utf-8")
     results._discard_tmp(ours, st)
     assert (ours / "keep.txt").read_text(encoding="utf-8") == "sentinel"
+    # the plots child was swapped for a stranger directory holding files
     os.rename(tmp_path / "ours_moved", tmp_path / "ours_back")
-    st2 = os.lstat(tmp_path / "ours_back")
+    root = tmp_path / "ours_back"
+    (root / "plots").mkdir()
+    (root / "plots" / "a.svg").write_text("<svg/>", encoding="utf-8")
+    st2 = os.lstat(root)
     assert (st2.st_dev, st2.st_ino) == (st.st_dev, st.st_ino)
-    results._discard_tmp(tmp_path / "ours_back", st2)
-    assert not (tmp_path / "ours_back").exists()
+
+    real_open = os.open
+
+    def swapping_open(path: Any, flags: int, *a: Any, **kw: Any) -> int:
+        if path == "plots" and "dir_fd" in kw:  # right before the child is opened
+            os.rename(root / "plots", tmp_path / "plots_aside")
+            (root / "plots").mkdir()
+            (root / "plots" / "keep.txt").write_text("sentinel", encoding="utf-8")
+            os.open = real_open
+        return real_open(path, flags, *a, **kw)
+
+    os.open = swapping_open
+    try:
+        results._discard_tmp(root, st2)
+    finally:
+        os.open = real_open
+    assert (root / "plots" / "keep.txt").read_text(encoding="utf-8") == "sentinel"
+    assert (tmp_path / "plots_aside" / "a.svg").exists()  # the real child was not touched either
+    assert root.exists()  # the removal stopped at the swapped child (our own files may be gone)
+    # our own undisturbed object, with a plots child, is removed completely
+    mine = tmp_path / ".ionmc-tmp-mine"
+    mine.mkdir()
+    (mine / "result.json").write_text("{}", encoding="utf-8")
+    (mine / "plots").mkdir()
+    (mine / "plots" / "p.svg").write_text("<svg/>", encoding="utf-8")
+    results._discard_tmp(mine, os.lstat(mine))
+    assert not mine.exists()

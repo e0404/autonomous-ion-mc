@@ -36,7 +36,7 @@ from ionmc.errors import (
 )
 from ionmc.physics import stopping_models
 from ionmc.physics.stopping_models import STOPPING_MODELS, DataPin, StoppingModelSpec
-from ionmc.results import ResultFormatError, VerificationError
+from ionmc.results import ResultFormatError, VerificationError, load
 
 DATA = Path(__file__).resolve().parent / "data" / "v3_006"
 CARBON = DATA / "carbon_box.toml"
@@ -247,8 +247,13 @@ def test_cli1_run_uses_output_table_and_refuses_overwrite(
     capsys.readouterr()
     code, _, err = _main(["run", str(cfg)], capsys)
     assert code == 2 and "--overwrite" in err
-    assert main(["run", str(cfg), "--overwrite"]) == 0
-    assert _leftovers(tmp_path / "out", {"b"}) == []
+    code, _, err = _main(["run", str(cfg), "--overwrite"], capsys)
+    assert code == 0 and "previous bundle kept at" in err
+    # --overwrite never deletes: the previous bundle is kept beside the new one (amendment A-5)
+    kept = _leftovers(tmp_path / "out", {"b"})
+    assert len(kept) == 1 and kept[0].startswith("b.previous-")
+    assert load(tmp_path / "out" / kept[0]).doc["requested"] is not None
+    shutil.rmtree(tmp_path / "out" / kept[0])
     shutil.rmtree(tmp_path / "d")
     # neither --out nor [output].path
     code, _, err = _main(["run", str(_write(tmp_path, name="nopath.toml"))], capsys)

@@ -268,6 +268,7 @@ def _cmd_run(args: argparse.Namespace, out_stream: TextIO) -> int:
         manifest=loaded.manifest,
         persist_batches=loaded.output.persist_batches,
         overwrite=args.overwrite,
+        on_replaced=lambda kept: print(f"previous bundle kept at {kept}", file=sys.stderr),
     )
     print(f"bundle {bundle}", file=out_stream)
     if not result.valid:

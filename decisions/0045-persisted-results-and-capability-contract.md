@@ -621,3 +621,14 @@ observed): the derived files `report.md` and `plots/*.svg` have their own budget
 size and against its budget before any file is hashed, so no byte of an over-large or mis-sized file is read. The
 ±1 standard-error bands of the plots are drawn as `mean - std` to `mean + std` without clipping at zero; a voxel whose
 standard error exceeds its dose shows a band crossing zero, as the label says.
+
+## Amendment A-5 (2026-11-23; after Codex REVIEW-b025d078 of f9e474ef): `overwrite` keeps the previous bundle
+
+§1 says `save` "refuses an existing path unless `overwrite`". Clarification (prospective): with `overwrite` the writer
+never deletes anything. The finished bundle is exchanged atomically with the existing one (`renameat2`
+`RENAME_EXCHANGE`; an absent destination is taken by `RENAME_NOREPLACE`; without these primitives the write fails
+closed), the displaced directory is proven through its own descriptor to be the bundle validated before the write
+(same device and inode, same `result.json`, still loadable) and is then kept as the sibling `<path>.previous-<token>`,
+which `ionmc run --overwrite` reports on stderr; a failed proof undoes the exchange and the write fails. Removing the
+kept previous bundle is the user's decision. Every deletion race of a name-based `rmtree` is thereby out of the
+writer; its own temporary directory is removed only through a descriptor proven to be that directory object.
