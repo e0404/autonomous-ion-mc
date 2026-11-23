@@ -73,19 +73,31 @@ def _quantity(shape: tuple[int, ...] = SHAPE) -> QuantityResult:
     )  # fmt: skip
 
 
+def _pieces() -> dict[str, QuantityResult]:
+    out = {}
+    for n in ("scoring_pieces", "scoring_pieces_local"):
+        one = np.ones(SHAPE)
+        out[n] = QuantityResult(
+            n, "count", "linear", "1", "synthetic piece count", one, 0.0 * one,
+            np.ones(SHAPE, dtype=bool), np.full(SHAPE, 4, dtype=np.int32), 0.0 * one, (3,),
+        )  # fmt: skip
+    return out
+
+
 def make_result(
     names: tuple[str, ...] = ("dose",),
     tally: bool = False,
     diagnostics: dict[str, Any] | None = None,
+    cfg: SimulationConfig | None = None,
 ) -> Result:
-    cfg = _config(names, tally)
+    cfg = cfg or _config(names, tally)
     eff = validate(cfg)
     grids = []
     for i, n in enumerate(names):
         g = _grid(n, seed=i)
         if tally and i == 0:
             g = GridResult(*[getattr(g, f) for f in g.__dataclass_fields__ if f != "quantities"],
-                           quantities={"let": _quantity()})  # fmt: skip
+                           quantities={"let": _quantity(), **_pieces()})  # fmt: skip
         grids.append(g)
     bal = EnergyBalance(
         8.0, 7.0, 0.5, 0.25, 0.0, 0.0, tuple(1.0 for _ in names), (6.0,) * len(names)
@@ -255,7 +267,7 @@ def test_out4_array_shape_disagrees_with_grid(tmp_path: Path) -> None:
         g.relative_uncertainty, g.defined_mask, g.mass_g, g.n_nonzero_batches, g.sparse_mask,
         g.low_batch_count, g.batch_energy_mev, g.valid])  # fmt: skip
     r2 = Result(**{**r.__dict__, "grids": (bad,)})
-    with pytest.raises(ResultFormatError, match="disagrees with grid"):
+    with pytest.raises(ResultFormatError, match="disagrees with grid|does not match"):
         load(save(r2, tmp_path / "b"))
 
 
@@ -685,7 +697,7 @@ def test_item3_omitted_arrays_are_refused(bundle: Path, name: str) -> None:
 def test_item3_batches_declared_not_persisted_must_be_absent(tmp_path: Path) -> None:
     b = save(make_result(), tmp_path / "b", persist_batches=False)
     assert load(b).doc["statistics"]["batch_arrays"]["status"] == "not-persisted"
-    _mutate(b, lambda d: d["statistics"]["batch_arrays"].update(status="persisted"))
+    _mutate(b, lambda d: d["statistics"].update(batch_arrays={"status": "persisted"}))
     with pytest.raises(ResultFormatError, match="batch_energy_mev"):
         load(b)
 
@@ -756,7 +768,10 @@ def test_item6_output_and_stopping_record_schemas(bundle: Path) -> None:
         "reconstructible": False,
         "stopping_object": {"class": "C", "model_id": "m", "spec_sha256": "0" * 64},
     }
-    validate_dict_structure({**good, "physics": {**good["physics"], "stopping": rec}})
+    user = {**good["physics"], "stopping_model": None}
+    validate_dict_structure({**good, "physics": {**user, "stopping": rec}})
+    with pytest.raises(ConfigError, match="stopping_model"):
+        validate_dict_structure({**good, "physics": {**good["physics"], "stopping": rec}})
     bad_rec = {**rec, "stopping_object": {**rec["stopping_object"], "surprise": "x"}}
     for physics in (
         {"stopping": {"surprise": 1}},
@@ -764,14 +779,17 @@ def test_item6_output_and_stopping_record_schemas(bundle: Path) -> None:
         {"stopping": {**rec, "x": 1}},
     ):
         with pytest.raises(ConfigError, match="physics.stopping"):
-            validate_dict_structure({**good, "physics": {**good["physics"], **physics}})
+            validate_dict_structure({**good, "physics": {**user, **physics}})
     with pytest.raises(ConfigError, match=r"output\.surprise"):
         validate_dict_structure({**good, "output": {"surprise": 1}})
     _mutate(bundle, lambda d: d["requested"].update(output={"surprise": 1}))
     with pytest.raises(ResultFormatError, match="output"):
         load(bundle)
     _mutate(bundle, lambda d: d["requested"].update(output={}))
-    _mutate(bundle, lambda d: d["requested"]["physics"].update(stopping={"surprise": 1}))
+    _mutate(
+        bundle,
+        lambda d: d["requested"]["physics"].update(stopping={"surprise": 1}, stopping_model=None),
+    )
     with pytest.raises(ResultFormatError, match="physics.stopping"):
         load(bundle)
 
@@ -796,3 +814,233 @@ def test_duplicate_semantic_origin_is_refused(bundle: Path) -> None:
 def test_unknown_budget_keyword_is_a_type_error(bundle: Path) -> None:
     with pytest.raises(TypeError):
         load(bundle, max_everything=1)  # type: ignore[call-arg]
+
+
+# ---- review REVIEW-9469eb55 regressions -------------------------------------------------------
+
+import dataclasses  # noqa: E402
+
+from ionmc.configio import sha256_canonical  # noqa: E402
+from ionmc.geometry import VoxelGeometry  # noqa: E402
+from ionmc.physics.projectiles import CARBON12  # noqa: E402
+from ionmc.simulation import (  # noqa: E402
+    IonTransportCounters,
+    NuclearEnergyBalance,
+    Simulation,
+)
+
+_RUN_CACHE = os.environ.get("IONMC_CACHE_DIR")
+
+
+def _ion_config(backend: str = "warp-cpu") -> SimulationConfig:
+    return SimulationConfig(
+        PencilBeamSource(CARBON12, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 1200.0),
+        BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), WATER),
+        (ScoringGrid((-10.0, -10.0, 0.0), (5.0, 5.0, 4.0), (4, 4, 10)),),
+        PhysicsOptions(nuclear=False, stopping_model="bethe-ionmc-v1", multiple_scattering=False),
+        RunOptions(backend, "float64", 15, 8, n_batches=4),
+    )
+
+
+def test_item1_ion_run_round_trip(tmp_path: Path) -> None:
+    r = Simulation(_ion_config()).run()
+    assert isinstance(r.counters, IonTransportCounters)
+    doc = load(save(r, tmp_path / "b")).doc
+    assert set(doc["accounting"]["counters"]) == set(r.counters.as_dict())
+    assert doc["valid"] is True
+
+
+def test_item1_bracket_miss_is_diagnostic_only(tmp_path: Path) -> None:
+    cfg = dataclasses.replace(
+        _config(),
+        source=PencilBeamSource(CARBON12, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 1200.0),
+        physics=PhysicsOptions(
+            nuclear=False, stopping_model="bethe-ionmc-v1", multiple_scattering=False
+        ),
+    )
+    r = make_result(cfg=cfg)
+    r = Result(**{**r.__dict__, "counters": IonTransportCounters(mcs_table_bracket_miss=5)})
+    doc = load(save(r, tmp_path / "b")).doc
+    assert doc["valid"] is True and doc["accounting"]["reasons"] == []
+    assert doc["accounting"]["counters"]["mcs_table_bracket_miss"] == 5
+    bad = Result(
+        **{**r.__dict__, "valid": False, "counters": IonTransportCounters(mcs_mapping_failure=2)}
+    )
+    d2 = load(save(bad, tmp_path / "c")).doc
+    assert d2["accounting"]["reasons"] == ["mcs_mapping_failure"]
+    # the base counter schema is refused for an ion run
+    _mutate(tmp_path / "b", lambda d: d["accounting"]["counters"].pop("mcs_mapping_failure"))
+    with pytest.raises(ResultFormatError, match="keys must be exactly"):
+        load(tmp_path / "b")
+
+
+def _nuclear_table_id() -> str:
+    from ionmc.data import cache
+    from ionmc.nuclear.tables import NuclearTable, NuclearTableError
+
+    cdir = cache.resolve_cache_dir(None)
+    for p in sorted((cdir / "derived").glob("nuclear-proton-*.json")):
+        tid = p.stem.removeprefix("nuclear-proton-")
+        try:
+            info = NuclearTable.load(None, tid).info
+        except NuclearTableError:
+            continue
+        if "transport_path_bound_terms" in info:
+            return tid
+    pytest.skip("no built nuclear table in the cache (IONMC_CACHE_DIR)")
+
+
+def test_item1_nuclear_run_round_trip(tmp_path: Path) -> None:
+    tid = _nuclear_table_id()
+    cfg = SimulationConfig(
+        PencilBeamSource(PROTON, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 150.0, 0.0, 0.0),
+        BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 200.0), WATER),
+        (ScoringGrid((-10.0, -10.0, 0.0), (5.0, 5.0, 10.0), (4, 4, 20)),),
+        PhysicsOptions(nuclear=True, nuclear_table_id=tid, stopping_model="bethe-ionmc-v1"),
+        RunOptions("python", "float64", 16, 40, n_batches=4),
+    )
+    r = Simulation(cfg).run()
+    assert isinstance(r.energy_balance, NuclearEnergyBalance)
+    doc = load(save(r, tmp_path / "b")).doc
+    assert "majorant_violation" in doc["accounting"]["counters"]
+    assert "nuclear_mev" in doc["accounting"]["energy_balance"]
+
+
+def _put_members(b: Path, extra: dict[str, bytes]) -> None:
+    m = {**_members(b), **extra}
+    _write_zip(b, sorted(m.items()))
+
+
+def test_item2_quantity_relabelled(bundle: Path) -> None:
+    def relabel(d: dict[str, Any]) -> None:
+        for e in d["arrays"]:
+            if e["origin"].get("name") == "let":
+                e["origin"]["quantity"] = "let_t"
+
+    _mutate(bundle, relabel)
+    with pytest.raises(ResultFormatError, match="semantic origin"):
+        load(bundle)
+
+
+def test_item2_unit_and_axes_changes_refused(bundle: Path) -> None:
+    _mutate(
+        bundle,
+        lambda d: d["arrays"][0].update(units="MeV" if d["arrays"][0]["units"] != "MeV" else "Gy"),
+    )
+    with pytest.raises(ResultFormatError):
+        load(bundle)
+
+
+def test_item2_unrequested_quantity_added(bundle: Path) -> None:
+    m = _members(bundle)
+    extra = {}
+    for base in results.QUANTITY_ARRAYS:
+        extra[f"grid__dose__q__other__{base}.npy"] = m[f"grid__dose__q__let__{base}.npy"]
+    _put_members(bundle, extra)
+
+    def add(d: dict[str, Any]) -> None:
+        new = []
+        for e in d["arrays"]:
+            if e["origin"].get("name") == "let":
+                c = json.loads(json.dumps(e))
+                c["name"] = e["name"].replace("__q__let__", "__q__other__")
+                c["origin"].update(name="other", index=3)
+                new.append(c)
+        d["arrays"] = sorted(d["arrays"] + new, key=lambda x: x["name"])
+
+    _mutate(bundle, add)
+    with pytest.raises(ResultFormatError, match="inventory differs"):
+        load(bundle)
+
+
+def test_item2_geometry_shape_in_effective_changed(bundle: Path) -> None:
+    _mutate(bundle, lambda d: d["effective"]["geometry"].update(shape=[3, 2, 5]))
+    with pytest.raises(ResultFormatError):
+        load(bundle)
+
+
+@pytest.mark.parametrize(
+    "fn",
+    [
+        lambda d: d["run"].update(seed="x"),
+        lambda d: d["run"].update(production="yes"),
+        lambda d: d["statistics"]["grids"][0].update(valid="yes"),
+        lambda d: d["statistics"]["grids"][0].update(shape=[1, "a"]),
+        lambda d: d["accounting"].update(energy_balance={"x": 1}),
+        lambda d: d["accounting"]["energy_balance"].update(initial_mev="a"),
+        lambda d: d["statistics"].update(batch_arrays={"status": "persisted", "reason": "x"}),
+        lambda d: d["input_manifest"].update(config_sha256="zz"),
+        lambda d: d["effective_extra"].update(materials=5),
+        lambda d: d["effective_extra"].update(profile_axis=7),
+        lambda d: d["units"].update(extra="x"),
+        lambda d: d["provenance"].update(code=[]),
+        lambda d: d["statistics"].update(normalisation=5),
+    ],
+)
+def test_item3_malformed_fields_are_refused(bundle: Path, fn: Any) -> None:
+    _mutate(bundle, fn)
+    with pytest.raises(ResultFormatError):
+        load(bundle)
+
+
+def test_item4_user_stopping_object_round_trip(tmp_path: Path) -> None:
+    from ionmc.configio import to_dict, validate_dict_structure
+    from ionmc.physics.stopping import BetheStoppingSource
+
+    base = _config()
+    cfg = dataclasses.replace(
+        base, physics=PhysicsOptions(nuclear=False, stopping=BetheStoppingSource())
+    )
+    d = to_dict(cfg)
+    assert d["physics"]["stopping_model"] is None and "stopping" in d["physics"]
+    validate_dict_structure(d)
+    doc = load(save(make_result(cfg=cfg), tmp_path / "b")).doc
+    assert doc["requested"]["physics"]["stopping"]["reconstructible"] is False
+
+
+def _voxel_config() -> SimulationConfig:
+    base = _config()
+    geom = VoxelGeometry(
+        (-3.0, -2.0, 0.0), (2.0, 2.0, 2.0), SHAPE, (WATER,), np.zeros(SHAPE, dtype=np.int32)
+    )
+    return dataclasses.replace(base, geometry=geom)
+
+
+def test_item5_stale_config_digest(bundle: Path) -> None:
+    _mutate(bundle, lambda d: d["requested"]["run"].update(seed=12))
+    with pytest.raises(ResultFormatError, match="config_sha256"):
+        load(bundle)
+
+
+def test_item5_reference_manifest_binding(tmp_path: Path) -> None:
+    b = save(make_result(cfg=_voxel_config()), tmp_path / "b")
+    pristine = _doc(b)
+    mi = pristine["requested"]["geometry"]["material_index"]
+    assert mi["status"] == "not-reconstructible"
+    # api manifest with a different content digest than the requested record
+    _mutate(b, lambda d: d["input_manifest"]["files"][0].update(content_sha256="1" * 64))
+    with pytest.raises(ResultFormatError, match="digests differ"):
+        load(b)
+    _put_doc(b, pristine)
+
+    def as_toml(d: dict[str, Any], ref_sha: str) -> None:
+        content = d["requested"]["geometry"]["material_index"]["content_sha256"]
+        d["requested"]["geometry"]["material_index"] = {
+            "ref": "material_index", "sha256": ref_sha, "content_sha256": content,
+        }  # fmt: skip
+        m = d["input_manifest"]
+        m.update(
+            source="toml", base_dir="/x", config_file={"path": "/x/c.toml", "sha256": "3" * 64}
+        )
+        f = m["files"][0]
+        f.update(path="/x/m.npy", sha256="2" * 64)
+        m["config_sha256"] = sha256_canonical(d["requested"])
+
+    _mutate(b, lambda d: as_toml(d, "2" * 64))
+    assert load(b).doc["input_manifest"]["source"] == "toml"  # consistent: accepted
+    _mutate(b, lambda d: as_toml(d, "4" * 64))
+    with pytest.raises(ResultFormatError, match="disagrees with the manifest entry"):
+        load(b)
+    _mutate(b, lambda d: d["input_manifest"]["files"][0].update(role="density"))
+    with pytest.raises(ResultFormatError):
+        load(b)

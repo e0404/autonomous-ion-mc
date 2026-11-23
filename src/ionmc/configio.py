@@ -1322,9 +1322,15 @@ def validate_dict_structure(d: Any) -> None:
     for i, t in enumerate(_table_list(top["scoring"], "scoring")):
         _read(t, f"scoring[{i}]", SCORING_FIELDS)
     ph = _table(top["physics"], "physics")
-    if "stopping" in ph:
+    schema: dict[str, Any] = dict(PHYSICS_FIELDS)
+    if "stopping" in ph:  # a user stopping object: record present <=> stopping_model is null
         _check_stopping_record(ph["stopping"])
-    _read({k: v for k, v in ph.items() if k != "stopping"}, "physics", PHYSICS_FIELDS)
+        if ph.get("stopping_model", "absent") is not None:
+            raise ConfigError("physics.stopping_model", "must be null beside a stopping record")
+        schema["stopping_model"] = (_opt(_str), True)
+    elif ph.get("stopping_model") is None:
+        raise ConfigError("physics.stopping_model", "required (a string) without a stopping record")
+    _read({k: v for k, v in ph.items() if k != "stopping"}, "physics", schema)
     _read(_table(top["run"], "run"), "run", RUN_FIELDS)
     _read(_table(top.get("diagnostics", {}), "diagnostics"), "diagnostics", DIAGNOSTICS_FIELDS)
     for i, t in enumerate(_table_list(top.get("tallies", []), "tallies")):

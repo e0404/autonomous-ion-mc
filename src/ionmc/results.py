@@ -51,11 +51,18 @@ from ionmc.configio import (
     InputManifest,
     array_content_sha256,
     manifest_for_api_config,
+    sha256_canonical,
     to_dict,
     validate_dict_structure,
 )
 from ionmc.geometry import VoxelGeometry
-from ionmc.simulation import NuclearEnergyBalance, Result, TransportCounters
+from ionmc.simulation import (
+    IonTransportCounters,
+    NuclearEnergyBalance,
+    NuclearTransportCounters,
+    Result,
+    TransportCounters,
+)
 
 SCHEMA = "ionmc.result"
 SCHEMA_VERSION = "1.0"
@@ -616,7 +623,7 @@ def build_document(
             "counters": counters,
             "channel_counters": channel_counters,
             "valid": bool(result.valid),
-            "reasons": sorted(k for k, v in (counters | channel_counters).items() if v),
+            "reasons": _invalidating(counters, channel_counters),
         },
         "units": dict(UNITS_TABLE),
         "arrays": [a.entry() for a in sorted(arrays, key=lambda x: x.name)],
@@ -858,47 +865,211 @@ def _str_or_unavailable(v: Any, where: str) -> None:
         raise _fail(f"{where}: expected a string or an unavailable record")
 
 
+def _is_unavailable(v: Any) -> bool:
+    return isinstance(v, dict) and set(v) == _UNAVAILABLE_KEYS and v["status"] == "unavailable"
+
+
 def _check_manifest(m: dict[str, Any]) -> None:
-    """Strict keys of ``input_manifest`` (``InputManifest.to_dict`` forms, toml and api)."""
-    if m["source"] not in ("toml", "api"):
-        raise _fail(f"input_manifest.source: {m['source']!r} is not 'toml' or 'api'")
-    _str_or_unavailable(m["base_dir"], "input_manifest.base_dir")
+    """Strict keys and types of ``input_manifest`` (``InputManifest.to_dict`` forms)."""
+    _need(m["source"] in ("toml", "api"), f"input_manifest.source: {m['source']!r} unknown")
+    toml = m["source"] == "toml"
     cf = m["config_file"]
-    if isinstance(cf, dict) and set(cf) == {"path", "sha256"}:
-        pass
+    if toml:
+        _need(isinstance(m["base_dir"], str), "input_manifest.base_dir: toml needs a path")
+        _need(
+            isinstance(cf, dict) and set(cf) == {"path", "sha256"}
+            and isinstance(cf["path"], str) and _hex(cf["sha256"]),
+            "input_manifest.config_file: expected {path, sha256}",
+        )  # fmt: skip
     else:
-        _str_or_unavailable(cf, "input_manifest.config_file")
-        if isinstance(cf, str):
-            raise _fail("input_manifest.config_file: expected {path, sha256} or unavailable")
-    if not isinstance(m["files"], list) or not isinstance(m["config_sha256"], str):
-        raise _fail("input_manifest: malformed files or config_sha256")
+        _need(_is_unavailable(m["base_dir"]) and _is_unavailable(cf), "api manifest: unavailable")
+    _need(_hex(m["config_sha256"]), "input_manifest.config_sha256 is malformed")
+    _need(isinstance(m["files"], list), "input_manifest.files: expected a list")
     for i, f in enumerate(m["files"]):
-        _keys(f, _MANIFEST_FILE, f"input_manifest.files[{i}]")
-        _str_or_unavailable(f["path"], f"input_manifest.files[{i}].path")
-        _str_or_unavailable(f["sha256"], f"input_manifest.files[{i}].sha256")
+        w = f"input_manifest.files[{i}]"
+        _keys(f, _MANIFEST_FILE, w)
+        _need(isinstance(f["role"], str), f"{w}.role: expected a string")
+        _str_or_unavailable(f["path"], f"{w}.path")
+        _str_or_unavailable(f["sha256"], f"{w}.sha256")
+        _need(_is_unavailable(f["sha256"]) or _hex(f["sha256"]), f"{w}.sha256: not a digest")
+        _need(_is_unavailable(f["path"]) == _is_unavailable(f["sha256"]), f"{w}: path/sha256")
+        _need(_is_unavailable(f["path"]) == (not toml), f"{w}: availability disagrees with source")
+        for k in ("content_sha256", "item_sha256"):
+            _need(_hex(f[k]), f"{w}.{k} is malformed")
+
+
+_DIAGNOSTIC_COUNTERS = frozenset({"mcs_table_bracket_miss"})  # never invalidates (simulation.py)
+_COUNTER_KEYS = {
+    "base": tuple(f.name for f in fields(TransportCounters)),
+    "ion": tuple(f.name for f in fields(IonTransportCounters)),
+    "nuclear": tuple(f.name for f in fields(NuclearTransportCounters)),
+}
+_CHANNEL_COUNTER_KEYS = ("lookup_out_of_domain", "path_bound_exceeded")
+
+
+def _invalidating(counters: Mapping[str, int], channel: Mapping[str, int]) -> list[str]:
+    """Names of the nonzero counters that invalidate a result (not the diagnostic ones)."""
+    both = {**counters, **channel}
+    return sorted(k for k, v in both.items() if v and k not in _DIAGNOSTIC_COUNTERS)
+
+
+def _run_type(doc: Mapping[str, Any]) -> str:
+    eff = doc["effective"]
+    if "nuclear" in eff:
+        return "nuclear"
+    return "ion" if eff["source"]["z"] >= 2 else "base"
 
 
 def _is_int(v: Any) -> bool:
     return isinstance(v, int) and not isinstance(v, bool)
 
 
-_COUNTER_KEYS = tuple(f.name for f in fields(TransportCounters))
-_CHANNEL_COUNTER_KEYS = ("lookup_out_of_domain", "path_bound_exceeded")
+_BALANCE_LISTS = ("in_grid_mev", "outside_mev", "quantization_mev")
+_BALANCE_SCALARS = (
+    "initial_mev step_deposit_mev cutoff_mev escaped_mev truncated_mev unaccounted_mev "
+    "closure_residual_mev"
+).split()
 
 
-def _check_accounting(acc: dict[str, Any]) -> None:
-    for blk, keys in (("counters", _COUNTER_KEYS), ("channel_counters", _CHANNEL_COUNTER_KEYS)):
+def _is_num(v: Any) -> bool:
+    return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _check_accounting(doc: dict[str, Any]) -> None:
+    acc = doc["accounting"]
+    rt = _run_type(doc)
+    for blk, keys in (("counters", _COUNTER_KEYS[rt]), ("channel_counters", _CHANNEL_COUNTER_KEYS)):
         c = acc[blk]
         if not isinstance(c, dict) or set(c) != set(keys):
-            raise _fail(f"accounting.{blk}: keys must be exactly {sorted(keys)}")
+            raise _fail(f"accounting.{blk}: keys must be exactly {sorted(keys)} ({rt} run)")
         if not all(_is_int(v) and v >= 0 for v in c.values()):
             raise _fail(f"accounting.{blk}: values must be non-negative integers")
     if not isinstance(acc["valid"], bool):
         raise _fail("accounting.valid must be a boolean")
     if not (isinstance(acc["reasons"], list) and all(isinstance(r, str) for r in acc["reasons"])):
         raise _fail("accounting.reasons: expected a list of strings")
-    if not isinstance(acc["energy_balance"], dict):
-        raise _fail("accounting.energy_balance: expected an object")
+    eb = acc["energy_balance"]
+    want = {*_BALANCE_SCALARS, *_BALANCE_LISTS} | ({"nuclear_mev"} if rt == "nuclear" else set())
+    if not isinstance(eb, dict) or set(eb) != want:
+        raise _fail(f"accounting.energy_balance: keys must be exactly {sorted(want)}")
+    if not all(_is_num(eb[k]) for k in _BALANCE_SCALARS):
+        raise _fail("accounting.energy_balance: scalar fields must be finite numbers")
+    for k in _BALANCE_LISTS:
+        if not (isinstance(eb[k], list) and all(_is_num(x) for x in eb[k])):
+            raise _fail(f"accounting.energy_balance.{k}: expected a list of numbers")
+    if rt == "nuclear" and not (
+        isinstance(eb["nuclear_mev"], dict) and all(_is_num(x) for x in eb["nuclear_mev"].values())
+    ):
+        raise _fail("accounting.energy_balance.nuclear_mev: expected numbers")
+
+
+_CACHE_SOURCES = ("explicit", "IONMC_CACHE_DIR", "default", "not-used")
+_MATERIAL_KEYS = (
+    "name density_g_cm3 mass_fractions I_eV_requested I_eV_effective sternheimer source"
+).split()
+_SCALAR_FLOAT = ("value", "units")
+_SCALAR_UNDEF = ("value", "status", "reason", "units")
+
+
+def _need(cond: bool, msg: str) -> None:
+    if not cond:
+        raise _fail(msg)
+
+
+def _is_str_list(v: Any) -> bool:
+    return isinstance(v, list) and all(isinstance(x, str) for x in v)
+
+
+def _hex(v: Any) -> bool:
+    return isinstance(v, str) and bool(_SHA_RE.fullmatch(v))
+
+
+def _check_scalar_record(r: Any, where: str) -> None:
+    _need(isinstance(r, dict) and r.get("units") in UNIT_VOCABULARY, f"{where}: malformed record")
+    if "status" in r:
+        _need(set(r) == set(_SCALAR_UNDEF), f"{where}: malformed undefined record")
+        _need(r["status"] == "undefined" and r["value"] is None, f"{where}: malformed undefined")
+        _need(isinstance(r["reason"], str), f"{where}: reason must be a string")
+    else:
+        _need(set(r) == set(_SCALAR_FLOAT) and _is_num(r["value"]), f"{where}: malformed value")
+
+
+def _check_run(r: dict[str, Any]) -> None:
+    for k in ("backend", "device", "precision", "output_path"):
+        _need(isinstance(r[k], str), f"run.{k}: expected a string")
+    for k in ("seed", "n_histories", "n_batches", "histories_per_batch", "cpu_workers"):
+        _need(_is_int(r[k]) and r[k] >= 0, f"run.{k}: expected a non-negative integer")
+    _need(r["n_batches"] >= 1, "run.n_batches must be positive")
+    _need(_is_int(r["chunk_histories"]), "run.chunk_histories: expected an integer")
+    _need(isinstance(r["production"], bool), "run.production: expected a boolean")
+    _need(isinstance(r["rng"], dict), "run.rng: expected an object")
+    _need(r["cache_dir"] is None or isinstance(r["cache_dir"], str), "run.cache_dir: type")
+    _need(r["cache_dir_source"] in _CACHE_SOURCES, "run.cache_dir_source: unknown value")
+    t = r["timings"]
+    _need(isinstance(t, dict) and set(t) == {"deterministic", "values_s"}, "run.timings: keys")
+    _need(t["deterministic"] is False, "run.timings.deterministic must be false")
+    _need(
+        isinstance(t["values_s"], dict) and all(_is_num(v) for v in t["values_s"].values()),
+        "run.timings.values_s: expected numbers",
+    )
+
+
+def _check_statistics(st: dict[str, Any]) -> None:
+    for k in ("normalisation", "uncertainty", "defined_mask", "sparse_mask"):
+        _need(isinstance(st[k], str), f"statistics.{k}: expected a string")
+    ba = st["batch_arrays"]
+    _need(isinstance(ba, dict), "statistics.batch_arrays: expected an object")
+    if ba.get("status") == "persisted":
+        _need(set(ba) == {"status"}, "statistics.batch_arrays: unknown field(s)")
+    else:
+        _need(
+            set(ba) == {"status", "reason"} and ba["status"] == "not-persisted"
+            and isinstance(ba["reason"], str),
+            "statistics.batch_arrays: malformed record",
+        )  # fmt: skip
+    for i, g in enumerate(st["grids"]):
+        w = f"statistics.grids[{i}]"
+        _need(isinstance(g, dict), f"{w}: expected an object")
+        _need(isinstance(g["name"], str), f"{w}.name: expected a string")
+        for k in ("valid", "low_batch_count"):
+            _need(isinstance(g[k], bool), f"{w}.{k}: expected a boolean")
+        _need(
+            isinstance(g["shape"], list) and all(_is_int(n) and n >= 0 for n in g["shape"]),
+            f"{w}.shape: expected integers",
+        )
+        for k in ("n_defined_voxels", "n_sparse_voxels"):
+            _need(_is_int(g[k]) and g[k] >= 0, f"{w}.{k}: expected a non-negative integer")
+        for k in ("energy_total_mev", "dose_max_gy", "relative_uncertainty_max"):
+            _check_scalar_record(g[k], f"{w}.{k}")
+
+
+def _check_extra(x: dict[str, Any]) -> None:
+    _need(isinstance(x["materials"], list), "effective_extra.materials: expected a list")
+    for i, m in enumerate(x["materials"]):
+        w = f"effective_extra.materials[{i}]"
+        _keys(m, _MATERIAL_KEYS, w)
+        _need(isinstance(m["name"], str) and isinstance(m["source"], str), f"{w}: strings")
+        _need(_is_num(m["density_g_cm3"]) and _is_num(m["I_eV_effective"]), f"{w}: numbers")
+        _need(m["I_eV_requested"] is None or _is_num(m["I_eV_requested"]), f"{w}.I_eV_requested")
+        _need(
+            isinstance(m["mass_fractions"], dict)
+            and all(_is_num(v) for v in m["mass_fractions"].values()),
+            f"{w}.mass_fractions: expected numbers",
+        )
+        _need(m["sternheimer"] is None or isinstance(m["sternheimer"], dict), f"{w}.sternheimer")
+    ga = x["geometry_arrays"]
+    _need(
+        isinstance(ga, dict) and set(ga) == set(GEOMETRY_ARRAYS)
+        and all(v is None or isinstance(v, str) for v in ga.values()),
+        "effective_extra.geometry_arrays: malformed",
+    )  # fmt: skip
+    _need(x["grid_convention"] == GRID_CONVENTION, "effective_extra.grid_convention differs")
+    _need(_is_int(x["profile_axis"]) and 0 <= x["profile_axis"] <= 2, "profile_axis: 0, 1 or 2")
+    _need(
+        isinstance(x["resolutions"], list) and all(isinstance(r, dict) for r in x["resolutions"]),
+        "effective_extra.resolutions: expected a list of objects",
+    )
+    _need(isinstance(x["resolutions_status"], str), "effective_extra.resolutions_status: type")
 
 
 def _check_structure(doc: Any) -> None:
@@ -911,28 +1082,22 @@ def _check_structure(doc: Any) -> None:
         raise _fail(f"unknown kind {doc['kind']!r}")
     if not isinstance(doc["valid"], bool):
         raise _fail("valid must be a boolean")
-    _keys(doc["run"], _RUN, "run")
+    _check_run(_keys(doc["run"], _RUN, "run"))
     st = _keys(doc["statistics"], _STAT, "statistics")
     if not isinstance(st["grids"], list):
         raise _fail("statistics.grids: expected a list")
     for i, g in enumerate(st["grids"]):
         _keys(g, _GRIDSTAT, f"statistics.grids[{i}]")
-    acc = _keys(doc["accounting"], _ACC, "accounting")
-    _check_accounting(acc)
-    if not _is_int(doc["run"]["n_batches"]) or doc["run"]["n_batches"] < 1:
-        raise _fail("run.n_batches must be a positive integer")
-    ba = st["batch_arrays"]
-    if not isinstance(ba, dict) or ba.get("status") not in ("persisted", "not-persisted"):
-        raise _fail("statistics.batch_arrays: malformed status record")
-    for i, g in enumerate(st["grids"]):
-        if not (isinstance(g["name"], str) and isinstance(g["shape"], list)):
-            raise _fail(f"statistics.grids[{i}]: malformed name or shape")
-    _keys(doc["provenance"], _PROV, "provenance")
-    _keys(doc["effective_extra"], _EXTRA, "effective_extra")
-    _keys(doc["input_manifest"], _MANIFEST, "input_manifest")
-    for k in ("requested", "effective", "units"):
+    _check_statistics(st)
+    _keys(doc["accounting"], _ACC, "accounting")
+    for k in ("requested", "effective", "units", "provenance"):
         if not isinstance(doc[k], dict):
             raise _fail(f"{k}: expected an object")
+    _keys(doc["provenance"], _PROV, "provenance")
+    for k in _PROV:  # free-form until S3 defines them
+        _need(isinstance(doc["provenance"][k], dict), f"provenance.{k}: expected an object")
+    _need(doc["units"] == UNITS_TABLE, "units: differs from the unit table")
+    _check_extra(_keys(doc["effective_extra"], _EXTRA, "effective_extra"))
     try:
         validate_dict_structure(doc["requested"])
     except ConfigError as exc:
@@ -940,7 +1105,10 @@ def _check_structure(doc: Any) -> None:
     unknown = sorted(set(doc["effective"]) - set(EFFECTIVE_TOP_KEYS))
     if unknown:
         raise _fail(f"effective: unknown field(s) {unknown}")
-    _check_manifest(doc["input_manifest"])
+    src = doc["effective"].get("source")
+    _need(isinstance(src, dict) and _is_int(src.get("z")), "effective.source.z: expected integer")
+    _check_accounting(doc)
+    _check_manifest(_keys(doc["input_manifest"], _MANIFEST, "input_manifest"))
     if not isinstance(doc["arrays"], list):
         raise _fail("arrays: expected a list")
     for i, e in enumerate(doc["arrays"]):
@@ -959,17 +1127,60 @@ def _check_structure(doc: Any) -> None:
                 raise _fail(f"arrays[{i}].origin.{k}: wrong type")
         if not (isinstance(e["shape"], list) and all(_is_int(n) for n in e["shape"])):
             raise _fail(f"arrays[{i}].shape: expected a list of integers")
-        if not (isinstance(e["content_sha256"], str) and _SHA_RE.fullmatch(e["content_sha256"])):
+        if not _hex(e["content_sha256"]):
             raise _fail(f"arrays[{i}].content_sha256 is malformed")
     files = doc["files"]
     if not isinstance(files, dict):
         raise _fail("files: expected an object")
     for name, f in files.items():
         _keys(f, ["sha256", "size"], f"files[{name!r}]")
-        if not (isinstance(f["sha256"], str) and _SHA_RE.fullmatch(f["sha256"])):
+        if not _hex(f["sha256"]):
             raise _fail(f"files[{name!r}].sha256 is malformed")
         if not _is_int(f["size"]) or f["size"] < 0:
             raise _fail(f"files[{name!r}].size is malformed")
+    _check_manifest_binding(doc)
+
+
+def _check_manifest_binding(doc: dict[str, Any]) -> None:
+    """Bind ``input_manifest`` to the persisted ``requested`` document (no file is opened)."""
+    req, m = doc["requested"], doc["input_manifest"]
+    if sha256_canonical(req) != m["config_sha256"]:
+        raise _fail("input_manifest.config_sha256 does not match the requested document")
+    g = req["geometry"]
+    recs: list[tuple[str | None, dict[str, Any]]] = []
+    if g["type"] == "voxel":
+        recs.append(("material_index", g["material_index"]))
+        if g.get("density") is not None:
+            recs.append(("density", g["density"]))
+    recs += [(None, r) for r in req.get("lookups", [])]
+    files = m["files"]
+    by_role = {f["role"]: f for f in files}
+    refs = []
+    for want_role, r in recs:
+        if "ref" not in r:
+            continue
+        role = r["ref"]
+        ok = (
+            role == want_role if want_role else isinstance(role, str) and role.startswith("lookup:")
+        )
+        _need(ok, f"requested reference {role!r} has the wrong role for its position")
+        f = by_role.get(role)
+        _need(f is not None, f"requested reference {role!r} has no manifest entry")
+        assert f is not None
+        _need(
+            f["sha256"] == r["sha256"] and f["content_sha256"] == r["content_sha256"],
+            f"requested reference {role!r} disagrees with the manifest entry",
+        )
+        refs.append(role)
+    _need(len(set(refs)) == len(refs), "requested references repeat a manifest role")
+    for f in files:
+        if isinstance(f["sha256"], str):
+            _need(f["role"] in refs, f"manifest file {f['role']!r} is not referenced")
+    _need(len(recs) == len(files), "requested array positions and manifest files differ in number")
+    _need(
+        sorted(r["content_sha256"] for _, r in recs) == sorted(f["content_sha256"] for f in files),
+        "requested array digests and manifest content digests differ",
+    )
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1095,21 +1306,150 @@ def _read_member(
 # load: cross-field invariants
 
 
+_LINEAR_UNITS = {
+    "edep": "MeV",
+    "dose": "Gy",
+    "fluence": "mm^-2",
+    "fluence_spectrum": "mm^-2",
+    "let_t": "keV/um",
+    "let_d": "keV/um",
+    "let_d_eps": "keV/um",
+}
+_F8, _B1, _I4 = {"<f8"}, {"|b1"}, {"<i4", "<i8"}
+_GRID_DTYPES = {
+    "defined_mask": _B1, "sparse_mask": _B1, "n_nonzero_batches": _I4,
+}  # fmt: skip
+_QUANTITY_DTYPES = {"mean": _F8, "std": _F8, "rounding_bound": _F8, "defined_mask": _B1}
+
+
+@dataclass(frozen=True)
+class _Expect:
+    name: str
+    dtypes: set[str]
+    shape: list[int] | None
+    axes: list[str] | None
+    units: str | None  # None: any lookup unit
+    quantity: str | None = None
+    index: int | None = None
+
+
+def _quantity_plan(
+    req: Mapping[str, Any], grid: str, shape: list[int]
+) -> list[tuple[str, str, str | None, list[int]]]:
+    """Ordered (name, quantity, units, shape) of the quantities of ``grid`` the run must have:
+    the requested tallies, then the optional excluded-energy channel and the two piece counts."""
+    out: list[tuple[str, str, str | None, list[int]]] = []
+    for t in req.get("tallies", []):
+        if t["grid"] != grid:
+            continue
+        q = t["quantity"]
+        shp = list(shape)
+        if q == "fluence_spectrum":
+            shp.append(len(t["energy_edges_mev_per_u"]) + 1)
+        out.append((t["name"], q, _LINEAR_UNITS.get(q), shp))
+    return out
+
+
+def _expected_catalogue(doc: dict[str, Any], gs: dict[str, str]) -> dict[tuple[Any, ...], _Expect]:
+    """Every array the bundle must hold, derived from ``requested``/``effective`` only."""
+    req, eff = doc["requested"], doc["effective"]
+    nb = doc["run"]["n_batches"]
+    persisted = doc["statistics"]["batch_arrays"]["status"] == "persisted"
+    exp: dict[tuple[Any, ...], _Expect] = {}
+    for g in eff["scoring"]:
+        n, shape = g["name"], list(g["shape"])
+        for base, (units, _d) in GRID_ARRAYS.items():
+            if base == "batch_energy_mev" and not persisted:
+                continue
+            batch = base == "batch_energy_mev"
+            exp[("grid", n, None, base)] = _Expect(
+                f"grid__{gs[n]}__{base}",
+                _GRID_DTYPES.get(base, _F8),
+                ([nb] if batch else []) + shape,
+                (["batch"] if batch else []) + list(_SPATIAL),
+                units,
+            )
+        plan = _quantity_plan(req, n, shape)
+        if plan:
+            tail = [
+                ("scoring_pieces", "count", "1", shape),
+                ("scoring_pieces_local", "count", "1", shape),
+            ]
+            excl: tuple[str, str, str | None, list[int]] = (
+                "edep_excluded_from_let", "edep", "MeV", shape,
+            )  # fmt: skip
+            actual = _actual_quantity_names(doc, n)
+            plan = [*plan, *([excl] if excl[0] in actual else []), *tail]
+        used: set[str] = set()
+        for qi, (qn, q, qunits, shp) in enumerate(plan):
+            qs = safe_name(qn, used)
+            axes = list(_SPATIAL) + (["energy_bin"] if len(shp) == 4 else [])
+            for base in QUANTITY_ARRAYS:
+                qu: str | None = {"defined_mask": "bool", "n_nonzero": "count"}.get(base, qunits)
+                dt = _I4 if base == "n_nonzero" else _QUANTITY_DTYPES[base]
+                exp[("quantity", n, qn, base)] = _Expect(
+                    f"grid__{gs[n]}__q__{qs}__{base}", dt, shp, axes, qu, q, qi
+                )
+    geom = eff["geometry"]
+    gshape = list(geom["shape"])
+    exp[("geometry", None, None, "material_index")] = _Expect(
+        "geometry__material_index", _I4, gshape, list(_SPATIAL), "1"
+    )
+    if req["geometry"].get("density") is not None:
+        exp[("geometry", None, None, "density_g_cm3")] = _Expect(
+            "geometry__density_g_cm3", _F8, gshape, list(_SPATIAL), "g/cm3"
+        )
+    d = req.get("diagnostics", {})
+    want: set[str] = set()
+    if d.get("track_end_positions"):
+        want |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith(("end_", "control_"))}
+    if d.get("escape_records"):
+        want |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith("escape_")}
+    if d.get("trace_histories", 0) > 0:
+        want |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith("trace_")}
+        want |= {f"trace_{c}" for c in _trace_columns()}
+    for k in want:
+        exp[("diagnostic", None, None, k)] = _Expect(
+            f"diag__{k}", set(_ALLOWED_DTYPES), None, None, DIAGNOSTIC_ARRAYS.get(k, ("1", ""))[0]
+        )
+    return exp
+
+
+def _actual_quantity_names(doc: dict[str, Any], grid: str) -> set[str]:
+    return {
+        e["origin"].get("name")
+        for e in doc["arrays"]
+        if e["origin"].get("kind") == "quantity" and e["origin"].get("grid") == grid
+    }
+
+
 def _check_catalogue(doc: dict[str, Any]) -> dict[tuple[Any, Any, Any, Any], str]:
-    """Bind every entry to its deterministic member name and require the exact inventory."""
-    sc = doc["effective"]["scoring"]
+    """Compare the catalogue to the exact expectation derived from ``requested``/``effective``
+    (names, dtype, shape, axes, units, quantity metadata) and require unique origins."""
+    sc, rsc = doc["effective"]["scoring"], doc["requested"]["scoring"]
     if not (isinstance(sc, list) and all(isinstance(g, dict) for g in sc)):
         raise _fail("effective.scoring: expected a list of objects")
-    gnames = [g["name"] for g in sc]
     for g in sc:
-        if not (
-            isinstance(g["name"], str) and isinstance(g["shape"], list) and len(g["shape"]) == 3
-        ):
+        if not (isinstance(g.get("name"), str) and isinstance(g.get("shape"), list)):
             raise _fail("effective.scoring: malformed grid entry")
+        if len(g["shape"]) != 3 or not all(_is_int(n) for n in g["shape"]):
+            raise _fail("effective.scoring: malformed grid shape")
+    gnames = [g["name"] for g in sc]
     if len(set(gnames)) != len(gnames):
         raise _fail("effective.scoring: duplicate grid names")
-    used: set[str] = set()
-    gs = {n: safe_name(n, used) for n in gnames}
+    if [g["name"] for g in rsc] != gnames or [list(g["shape"]) for g in rsc] != [
+        g["shape"] for g in sc
+    ]:
+        raise _fail("effective.scoring disagrees with requested.scoring")
+    geo = doc["effective"]["geometry"]
+    if not (
+        isinstance(geo, dict) and isinstance(geo.get("shape"), list) and len(geo["shape"]) == 3
+        and all(_is_int(n) for n in geo["shape"])
+    ):  # fmt: skip
+        raise _fail("effective.geometry.shape: expected three integers")
+    rg = doc["requested"]["geometry"]
+    if rg["type"] == "voxel" and list(rg["shape"]) != list(geo["shape"]):
+        raise _fail("effective.geometry.shape disagrees with requested.geometry.shape")
     entries = doc["arrays"]
     if [e["name"] for e in entries] != sorted(e["name"] for e in entries):
         raise _fail("arrays: catalogue must be in sorted member-name order")
@@ -1117,76 +1457,47 @@ def _check_catalogue(doc: dict[str, Any]) -> dict[tuple[Any, Any, Any, Any], str
     qidx: dict[str, dict[str, int]] = {}
     for e in entries:
         o = e["origin"]
-        kind, arr = o.get("kind"), o.get("array")
-        key = (kind, o.get("grid"), o.get("name"), arr)
+        key = (o.get("kind"), o.get("grid"), o.get("name"), o.get("array"))
         if key in by:  # reachable: the allowlist pattern does not bind the grid part of a name
             raise _fail(f"arrays: duplicate semantic origin {key!r}")
         by[key] = e["name"]
-        if len(e["axes"]) != len(e["shape"]):
+        if len(e["axes"]) != len(e["shape"]) and o.get("kind") != "diagnostic":
             raise _fail(f"array {e['name']!r}: axes and shape lengths differ")
         if e["grid"] != o.get("grid"):
             raise _fail(f"array {e['name']!r}: grid field and origin disagree")
-        if kind in ("grid", "quantity"):
-            if o.get("grid") not in gs:
-                raise _fail(f"array {e['name']!r}: unknown grid {o.get('grid')!r}")
-        elif e["grid"] is not None:
-            raise _fail(f"array {e['name']!r}: only grid arrays carry a grid")
-        if kind == "grid":
-            if arr not in GRID_ARRAYS or e["name"] != f"grid__{gs[o['grid']]}__{arr}":
-                raise _fail(f"array {e['name']!r} does not match its semantic origin")
-        elif kind == "quantity":
-            if arr not in QUANTITY_ARRAYS or not isinstance(o.get("name"), str):
+        if o.get("kind") == "quantity":
+            if not _is_int(o.get("index")) or not isinstance(o.get("name"), str):
                 raise _fail(f"array {e['name']!r}: malformed quantity origin")
-            if not _is_int(o.get("index")):
-                raise _fail(f"array {e['name']!r}: quantity origin lacks an index")
-            if qidx.setdefault(o["grid"], {}).setdefault(o["name"], o["index"]) != o["index"]:
+            if qidx.setdefault(o.get("grid"), {}).setdefault(o["name"], o["index"]) != o["index"]:
                 raise _fail(f"quantity {o['name']!r}: inconsistent index")
-        elif kind == "geometry":
-            if arr not in GEOMETRY_ARRAYS or e["name"] != f"geometry__{arr}":
-                raise _fail(f"array {e['name']!r} does not match its semantic origin")
-        elif kind == "diagnostic":
-            if e["name"] != f"diag__{arr}":
-                raise _fail(f"array {e['name']!r} does not match its semantic origin")
-        else:
-            raise _fail(f"array {e['name']!r}: unknown origin kind {kind!r}")
-    persisted = doc["statistics"]["batch_arrays"]["status"] == "persisted"
-    for g in gnames:
-        for base in GRID_ARRAYS:
-            want = persisted if base == "batch_energy_mev" else True
-            if (("grid", g, None, base) in by) != want:
-                raise _fail(f"grid {g!r}: array {base!r} must be {'present' if want else 'absent'}")
-        names = qidx.get(g, {})
+    used: set[str] = set()
+    gs = {n: safe_name(n, used) for n in gnames}
+    exp = _expected_catalogue(doc, gs)
+    if set(exp) != set(by):
+        missing = sorted(set(exp) - set(by), key=str)
+        extra = sorted(set(by) - set(exp), key=str)
+        raise _fail(f"array inventory differs from the request: missing {missing}, extra {extra}")
+    for e in entries:
+        o = e["origin"]
+        x = exp[(o["kind"], o.get("grid"), o.get("name"), o["array"])]
+        bad = (
+            e["name"] != x.name
+            or e["dtype"] not in x.dtypes
+            or (x.shape is not None and list(e["shape"]) != x.shape)
+            or (x.axes is not None and list(e["axes"]) != x.axes)
+            or (x.units is not None and e["units"] != x.units)
+            or (x.quantity is not None and o.get("quantity") != x.quantity)
+            or (x.index is not None and o.get("index") != x.index)
+        )
+        if bad:
+            raise _fail(f"array {e['name']!r} does not match its semantic origin and the request")
+    for g, names in qidx.items():
         if sorted(names.values()) != list(range(len(names))):
             raise _fail(f"grid {g!r}: quantity indices are not 0..n-1")
-        usedq: set[str] = set()
-        for qn, _ in sorted(names.items(), key=lambda kv: kv[1]):
-            qs = safe_name(qn, usedq)
-            for base in QUANTITY_ARRAYS:
-                name = by.get(("quantity", g, qn, base))
-                if name != f"grid__{gs[g]}__q__{qs}__{base}":
-                    raise _fail(f"quantity {qn!r}: array {base!r} is missing or misnamed")
-    geo = doc["effective_extra"]["geometry_arrays"]
-    if not isinstance(geo, dict):
-        raise _fail("effective_extra.geometry_arrays: expected an object")
-    if ("geometry", None, None, "material_index") not in by:
-        raise _fail("geometry material_index array is missing")
+    ga = doc["effective_extra"]["geometry_arrays"]
     for base in GEOMETRY_ARRAYS:
-        if geo.get(base) != by.get(("geometry", None, None, base)):
+        if ga.get(base) != by.get(("geometry", None, None, base)):
             raise _fail(f"effective_extra.geometry_arrays.{base} disagrees with the catalogue")
-    d = doc["requested"].get("diagnostics", {})
-    want_d: set[str] = set()
-    if d.get("track_end_positions"):
-        want_d |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith(("end_", "control_"))}
-    if d.get("escape_records"):
-        want_d |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith("escape_")}
-    if d.get("trace_histories", 0) > 0:
-        want_d |= {k for k in DIAGNOSTIC_ARRAYS if k.startswith("trace_")}
-        want_d |= {f"trace_{c}" for c in _trace_columns()}
-    have_d = {k[3] for k in by if k[0] == "diagnostic"}
-    if have_d != want_d:
-        raise _fail(
-            f"diagnostic arrays {sorted(have_d)} disagree with the request {sorted(want_d)}"
-        )
     return by
 
 
@@ -1251,7 +1562,7 @@ def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any
                 if (~m & ~np.isnan(arrays[name])).any():
                     raise _fail(f"quantity {qname!r}: ratio values must be NaN where undefined")
     acc = doc["accounting"]
-    nonzero = sorted(k for k, v in (acc["counters"] | acc["channel_counters"]).items() if v)
+    nonzero = _invalidating(acc["counters"], acc["channel_counters"])
     if doc["valid"] != (not nonzero) or acc["valid"] != doc["valid"]:
         raise _fail("valid disagrees with the transport-limit counters")
     if acc["reasons"] != nonzero:
