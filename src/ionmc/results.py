@@ -1456,6 +1456,10 @@ def _check_stopping_pins(doc: dict[str, Any]) -> None:
     eff, rq = doc["effective"], doc["requested"]
     st = eff["stopping"]
     rec = rq["physics"].get("stopping")
+    _need(st["selected_by"] == ("stopping-object" if isinstance(rec, dict) else "stopping_model"),
+          "effective.stopping.selected_by differs from the requested selection path")  # fmt: skip
+    _need(st["range_construction"] == frozen.RANGE_CONSTRUCTION,
+          "effective.stopping.range_construction differs from the frozen rule")  # fmt: skip
     if isinstance(rec, dict):  # a user stopping object: the requested record is all there is
         obj = rec.get("stopping_object", {})
         _need(st["model_id_requested"] == obj.get("model_id")
@@ -1470,7 +1474,9 @@ def _check_stopping_pins(doc: dict[str, Any]) -> None:
         return
     declared = [_canonical(p) for p in spec.data]
     ls_req = str(req_spec.options.get("ls", "off"))
-    options = {**_canonical(req_spec.options), "class": st["options"].get("class"),
+    cls = (rec.get("stopping_object", {}).get("class") if isinstance(rec, dict)
+           else frozen.REGISTERED_SOURCE_CLASS.get(st["model_id_requested"]))  # fmt: skip
+    options = {**_canonical(req_spec.options), "class": cls,
                "ls_requested": ls_req,
                "ls_effective": ls_req if eff["source"]["z"] >= 2 else "off"}  # fmt: skip
     for key, want in (
@@ -1479,7 +1485,7 @@ def _check_stopping_pins(doc: dict[str, Any]) -> None:
         ("decision", spec.decision), ("domain", _canonical(spec.domain)),
         ("data_declared", declared), ("options", options),
     ):  # fmt: skip
-        _need(isinstance(st["options"].get("class"), str) and st[key] == want,
+        _need(isinstance(cls, str) and st[key] == want,
               f"effective.stopping.{key} differs from the registered model")  # fmt: skip
     mats = list(eff["geometry"]["materials"])
     if rq.get("tallies") and "water" not in mats:
@@ -1492,6 +1498,12 @@ def _check_stopping_pins(doc: dict[str, Any]) -> None:
         _need(len(reg) == 1 and use["pin"] == reg[0] and len(use["table"]) == 2,
               "effective.stopping.data_used pin differs from the registered pin")  # fmt: skip
         got[(use["table"][0], use["table"][1], use["pin"]["dataset_id"])] += 1
+    digest = st["content_sha256"]  # of the parsed table arrays: only the cache object has it
+    if spec.kind == "analytic":
+        _need(digest is None, "effective.stopping.content_sha256 of an analytic model must be null")
+    elif ids:
+        _need(isinstance(digest, str) and _hex(digest),
+              "effective.stopping.content_sha256 of a tabulated model is not a digest")  # fmt: skip
     if ids is not None:  # a registered model without a known per-projectile rule: pins only
         want = collections.Counter((proj, m, i) for i in ids for m in mats)
         _need(got == want, "effective.stopping.data_used differs from the uses of the run: "
@@ -1733,9 +1745,14 @@ def _check_channel_numerics(doc: dict[str, Any], got: list[dict[str, Any]]) -> N
         e_hist = next(iter(ebs))
         _need(("E_bound_mev" in b) == nuclear and ("max_particles" in b) == nuclear,
               "effective.tallies.bounds nuclear entries disagree with the nuclear run")  # fmt: skip
-        if nuclear:
-            _need(b["E_bound_mev"] == e_hist and float(b["max_particles"]) >= 1.0
-                  and float(b["max_particles"]) == int(b["max_particles"]),
+        # the history energy bound from the REQUESTED source: E_hi = min(E0 + 6 sigma, table
+        # maximum); the table cap is a declared limit, so E0 <= E_hi <= E0 + 6 sigma
+        e0, sg = eff["source"]["kinetic_energy_mev"], eff["source"]["energy_sigma_mev"]
+        _need(e0 <= b["E_hi_mev"] <= e0 + 6.0 * sg,
+              "bounds.E_hi_mev is outside [E0, E0 + 6 sigma_E] of the source")  # fmt: skip
+        if nuclear:  # e_hist = max(E_hi, table bound): the table bound is a declared limit
+            _need(b["E_bound_mev"] == e_hist and e_hist >= b["E_hi_mev"]
+                  and float(b["max_particles"]) == frozen.NUCLEAR_MAX_PARTICLES,
                   "effective.tallies.bounds energy bound or particle limit differs")  # fmt: skip
         else:
             _need(b["E_hi_mev"] == e_hist,
@@ -1745,7 +1762,7 @@ def _check_channel_numerics(doc: dict[str, Any], got: list[dict[str, Any]]) -> N
               and b["B_ES"] == s_max * e_hist,
               "effective.tallies.bounds B_LS, B_LS2 or B_ES differ from S_w_max B_L")  # fmt: skip
         n_bound = float(eff["max_steps"]) * 2.0 * eff["scoring_pieces"] * (
-            int(b["max_particles"]) if nuclear else 1)  # fmt: skip
+            frozen.NUCLEAR_MAX_PARTICLES if nuclear else 1)  # fmt: skip
         bound = {"E": e_hist, "N": n_bound, "L": b_l, "FL": b_l, "LS": b["B_LS_mev"],
                  "LS2": b["B_LS2"], "ES": b["B_ES"]}  # fmt: skip
         k_l = frozen.adaptive_exponent(hpb, b_l) if any(
@@ -2758,10 +2775,13 @@ def _binding_limits(doc: Mapping[str, Any]) -> tuple[str, ...]:
         "effective.scattering_length_g_cm2, effective.max_steps (computed) and "
         "effective.scoring_pieces derive from registry tables: integrity-protected by the file "
         "hashes only (verify_effective rebuilds them)",
-        "effective.stopping data pins (data_declared, data_used, content_sha256, domain_resolved, "
-        "evidence_at_run, circular_rows): identity checked by validate_identity_block, never "
-        "recomputed",
-        "built-in material definitions are bound to the installed library version",
+        "effective.stopping.content_sha256 (digest of the parsed table arrays: only a trusted "
+        "cache has it; verify_effective rebuilds it), domain_resolved, evidence_at_run and "
+        "circular_rows are format-checked only; identity, options, selection path, range "
+        "construction and pins are bound to the registry and the request",
+        "effective.tallies bounds S_w_max, B_L and a table cap of E_hi (primary-only run) or the "
+        "table energy bound (nuclear run) derive from registry tables: bound only through the "
+        "algebraic relations and [E0, E0 + 6 sigma_E]",
     ]
     if eff["tallies"] is not None and doc["effective_extra"]["lookup_plan"]:
         out.append(

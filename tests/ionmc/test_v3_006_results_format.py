@@ -1774,6 +1774,10 @@ def test_fix7_frozen_snapshot_equals_live_definitions() -> None:
         ch.FE_F_MIN_EXPONENT, ch.FE_F_MAX_EXPONENT, ch.GEN_MAX)  # fmt: skip
     assert (fz.CLASS_STEP, fz.CLASS_LOCAL) == (ch.CLASS_STEP, ch.CLASS_LOCAL)
     assert fz.NUCLEAR_TALLY_NAMES == NUCLEAR_TALLY_NAMES
+    from ionmc.physics.stopping import RANGE_CONSTRUCTION
+
+    assert fz.NUCLEAR_MAX_PARTICLES == ch.MAX_PARTICLES
+    assert fz.RANGE_CONSTRUCTION == RANGE_CONSTRUCTION
     for f in (1e-9, 0.37, 1.0, 5.5, 1e6):
         assert fz.fe_exponent(f) == ch.fe_exponent(f)
     for hpb, bound in ((1, 1.0), (1000, 3.7), (10**6, 1e-3), (50, 2.0**30)):
@@ -1876,8 +1880,11 @@ def _pin_doc(**over: Any) -> dict[str, Any]:
         "range_start": spec.range_start,
         "decision": spec.decision,
         "domain": _canonical(spec.domain),
-        "options": {**_canonical(spec.options), "class": "C", "ls_requested": "off",
-                    "ls_effective": "off"},
+        "options": {**_canonical(spec.options), "class": "NistStarCombinedSource",
+                    "ls_requested": "off", "ls_effective": "off"},
+        "selected_by": "stopping_model",
+        "range_construction": "exact-loglog-quadrature-v1",
+        "content_sha256": "a" * 64,
         "species_transported": ["proton"],
         "data_declared": [_canonical(p) for p in spec.data],
         "data_used": [{"pin": pin, "role_in_this_run": "construction",
@@ -1912,7 +1919,8 @@ def test_fix8_stopping_identity_is_complete_and_data_used_is_an_exact_multiset()
     results._check_stopping_pins(_pin_doc())
     for key, bad in (("version", "9"), ("kind", "analytic"), ("interpolation", "x"),
                      ("range_start", "x"), ("decision", "x"), ("domain", {}),
-                     ("options", {"class": "C"})):  # fmt: skip
+                     ("options", {"class": "C"}), ("selected_by", "stopping-object"),
+                     ("range_construction", "other"), ("content_sha256", None)):  # fmt: skip
         with pytest.raises(ResultFormatError, match=key):
             results._check_stopping_pins(_pin_doc(**{key: bad}))
     d = _pin_doc()  # a duplicated use is not the multiset of the run
@@ -2065,3 +2073,55 @@ def test_fix8_user_stopping_object_is_bound_to_the_requested_record(tmp_path: Pa
         _mutate(bb, fn)
         with pytest.raises(ResultFormatError):
             load(bb)
+
+
+def test_fix9_stopping_options_class_selection_and_content_are_bound(tmp_path: Path) -> None:
+    b = save(make_result(tally=True), tmp_path / "b")
+    load(b)
+    mirror = "a" * 64
+
+    def content(d: dict[str, Any]) -> None:  # mirrored into provenance: still not an analytic's
+        d["effective"]["stopping"]["content_sha256"] = mirror
+        d["provenance"]["data"]["stopping_content_sha256"] = mirror
+
+    for tag, fn in {
+        "selected": lambda d: d["effective"]["stopping"].update(selected_by="stopping-object"),
+        "class": lambda d: d["effective"]["stopping"]["options"].update(
+            **{"class": "NistStarCombinedSource"}
+        ),
+        "range": lambda d: d["effective"]["stopping"].update(range_construction="other"),
+        "content": content,
+    }.items():
+        bb = _copy(b, tmp_path, tag)
+        _mutate(bb, fn)
+        with pytest.raises(ResultFormatError):
+            load(bb)
+
+
+def test_fix9_history_energy_and_particle_bounds_are_derived_from_the_request(
+    bundle: Path, tmp_path: Path
+) -> None:
+    d = _doc(bundle)
+    tl = d["effective"]["tallies"]
+    assert not any("nuclear" in x and "max_particles" in x for x in load(bundle).binding_limits)
+
+    def e_side(dd: dict[str, Any]) -> None:  # every E bound, E_hi_mev and B_ES scaled together
+        t = dd["effective"]["tallies"]
+        for c in t["channels"]:
+            if c["kind"] == "E":
+                c["bound_per_history"] *= 2.0
+        t["bounds"]["E_hi_mev"] *= 2.0
+        t["bounds"]["B_ES"] *= 2.0
+
+    bb = _copy(bundle, tmp_path, "e")
+    _mutate(bb, e_side)
+    with pytest.raises(ResultFormatError, match="E_hi_mev"):
+        load(bb)
+    # N side of a nuclear run: max_particles and every N bound changed together
+    d["effective"]["nuclear"] = {}
+    tl["bounds"].update(E_bound_mev=tl["bounds"]["E_hi_mev"], max_particles=64.0)
+    for c in tl["channels"]:
+        if c["kind"] == "N":
+            c["bound_per_history"] *= 64.0
+    with pytest.raises(ResultFormatError, match="recomputed plan|particle"):
+        results._check_channel_numerics(d, tl["channels"])

@@ -40,6 +40,16 @@ E_QUANTUM_EXPONENT = 30
 FE_F_MIN_EXPONENT = -60
 FE_F_MAX_EXPONENT = 60
 GEN_MAX = 2**31 - 1
+NUCLEAR_MAX_PARTICLES = 32  # particles of one nuclear history (channels.MAX_PARTICLES)
+RANGE_CONSTRUCTION = "exact-loglog-quadrature-v1"
+# source class of every registered stopping model id (``options.class`` of the identity block)
+REGISTERED_SOURCE_CLASS = {
+    "bethe-ionmc-v1": "BetheStoppingSource",
+    "bethe-ionmc-v1+ls-eff": "BetheStoppingSource",
+    "bethe-ionmc-v1+ls-bare_mixed": "BetheStoppingSource",
+    "nist-pstar-astar-water-2005": "NistStarCombinedSource",
+    "icru90-water-v1": "Icru90WaterSource",
+}
 CLASS_STEP = 1
 CLASS_LOCAL = 2
 DEUTERON_NAME = "deuteron"
