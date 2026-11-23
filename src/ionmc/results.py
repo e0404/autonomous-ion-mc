@@ -47,8 +47,9 @@ from typing import Any
 
 import numpy as np
 
+from ionmc import _result_schema_1_0 as frozen
 from ionmc import _result_shapes as shapes
-from ionmc.config import MAX_REJECTION_ATTEMPTS, validate
+from ionmc.config import validate
 from ionmc.configio import (
     ConfigError,
     DatasetError,
@@ -56,7 +57,6 @@ from ionmc.configio import (
     array_content_sha256,
     from_dict,
     manifest_for_api_config,
-    material_from_record,
     reader_item_sha256s,
     sha256_canonical,
     to_dict,
@@ -65,12 +65,18 @@ from ionmc.configio import (
 from ionmc.errors import UnsupportedCombinationError
 from ionmc.geometry import VoxelGeometry
 from ionmc.lookup import LookupTable
-from ionmc.physics.em import E_S_MEV
-from ionmc.physics.projectiles import DEUTERON, PROJECTILES
+from ionmc.physics.stopping_models import (
+    DATASET_OF,
+    ICRU_DATASET_ID,
+    ICRU_MODEL_ID,
+    ICRU_SPECIES,
+    NIST_MODEL_ID,
+    STOPPING_MODELS,
+    _canonical,
+    spec_sha256,
+)
 from ionmc.physics.stopping_selection import validate_identity_block
 from ionmc.scoring import (
-    MEV_PER_G_TO_GY,
-    min_defined_batches,
     overlap_matrix,
     reduce_batches,
     reduce_ratio,
@@ -88,7 +94,6 @@ from ionmc.transport.channels import (
     CLASS_LOCAL,
     CLASS_STEP,
     EXCLUDED_CHANNEL_NAME,
-    GEN_MAX,
     LOCAL_PIECE_COUNT_NAME,
     PIECE_COUNT_NAME,
     _generation_range,
@@ -96,7 +101,6 @@ from ionmc.transport.channels import (
     _spectrum_spec,
     fe_exponent,
 )
-from ionmc.transport.tally import NUCLEAR_TALLY_NAMES
 
 SCHEMA = "ionmc.result"
 SCHEMA_VERSION = "1.0"
@@ -1284,7 +1288,9 @@ def _check_run_binding(doc: dict[str, Any]) -> None:
         _bind(run[k] == rrun[k], f"run.{k}")
         _bind(eff[k] == rrun[k], f"effective.{k}")
     _need(run["production"] == eff["production"], "run.production disagrees with effective")
-    _need(run["rng"] == eff["rng"], "run.rng disagrees with effective.rng")
+    rng = frozen.rng_identity(rrun["precision"])  # the frozen schema-1.0 record (Philox4x32-10)
+    _need(run["rng"] == rng and eff["rng"] == rng,
+          "run.rng / effective.rng differ from the frozen schema-1.0 RNG identity")  # fmt: skip
     _need(run["n_histories"] >= 1, "run.n_histories must be positive")
     _need(run["n_histories"] % run["n_batches"] == 0, "n_histories is not a multiple of n_batches")
     _need(run["histories_per_batch"] == run["n_histories"] // run["n_batches"],
@@ -1369,8 +1375,8 @@ def _check_effective_binding(doc: dict[str, Any]) -> None:
     src, rs = eff["source"], rq["source"]
     rp = rs["projectile"]
     if isinstance(rp, str):
-        reg = PROJECTILES[rp]
-        want = {"projectile": rp, "z": reg.z, "a": reg.a, "mass_mev": reg.mass_mev}
+        rz, ra, rmass = frozen.PROJECTILES[rp]
+        want = {"projectile": rp, "z": rz, "a": ra, "mass_mev": rmass}
     else:
         want = {
             k: rp[{"projectile": "name"}.get(k, k)] for k in ("projectile", "z", "a", "mass_mev")
@@ -1411,6 +1417,7 @@ def _check_effective_binding(doc: dict[str, Any]) -> None:
         validate_identity_block(eff["stopping"])
     except (ValueError, KeyError, TypeError, IndexError) as exc:
         raise _fail(f"effective.stopping identity block is inconsistent: {exc}") from exc
+    _check_stopping_pins(doc)
     # statistics definitions and units
     st = doc["statistics"]
     for k, v in STAT_TEXT.items():
@@ -1425,6 +1432,54 @@ def _check_effective_binding(doc: dict[str, Any]) -> None:
     _check_energy_structure(doc)
 
 
+def _expected_pin_datasets(model_id: str, projectile: str) -> list[str] | None:
+    """Dataset ids a registered tabulated model reads for ``projectile``; ``None`` when the
+    model's pin rule is not known to this schema version."""
+    if model_id == NIST_MODEL_ID:
+        return [DATASET_OF[projectile]] if projectile in DATASET_OF else []
+    if model_id == ICRU_MODEL_ID:
+        return [ICRU_DATASET_ID] if projectile in ICRU_SPECIES else []
+    return None
+
+
+def _check_stopping_pins(doc: dict[str, Any]) -> None:
+    """Registry-backed pin check of ``effective.stopping`` (specs are immutable): the declared
+    pins equal the registered spec's, and ``data_used`` holds exactly the pins of the model for
+    each transported projectile (each equal to the registered pin, a table of a geometry
+    material), none for an analytic model. A model that is not registered (a user object) is a
+    declared binding limit."""
+    st = doc["effective"]["stopping"]
+    spec = STOPPING_MODELS.get(st["model_id_effective"])
+    if spec is None:
+        return
+    _need(st["spec_sha256"] == spec_sha256(spec),
+          "effective.stopping.spec_sha256 differs from the registered model spec")  # fmt: skip
+    declared = [_canonical(p) for p in spec.data]
+    _need(st["data_declared"] == declared, "effective.stopping.data_declared differs from the "
+          "registered model")  # fmt: skip
+    mats = set(doc["effective"]["geometry"]["materials"])
+    want: set[tuple[str, str]] | None = set()
+    for sp in st["species_transported"]:
+        ids = [] if spec.kind == "analytic" else _expected_pin_datasets(spec.model_id, sp)
+        if ids is None:  # a registered model without a known per-projectile rule: pins only
+            want = None
+            break
+        assert want is not None
+        want |= {(sp, i) for i in ids}
+    got: set[tuple[str, str]] = set()
+    for use in st["data_used"]:
+        proj, mat = use["table"][0], use["table"][1]
+        ds = use["pin"]["dataset_id"]
+        reg = [d for d in declared if d["dataset_id"] == ds]
+        _need(len(reg) == 1 and use["pin"] == reg[0] and mat in mats,
+              "effective.stopping.data_used pin differs from the registered pin or names a "
+              "material outside the geometry")  # fmt: skip
+        got.add((proj, ds))
+    if want is not None:
+        _need(got == want, "effective.stopping.data_used differs from the registered pins: "
+              f"{sorted(got)} != {sorted(want)}")  # fmt: skip
+
+
 def _check_materials(doc: dict[str, Any]) -> None:
     """``effective_extra.materials`` is the complete definition of every geometry material of
     ``requested`` (composition, density, I, Sternheimer parameters, source); the effective I is
@@ -1435,8 +1490,8 @@ def _check_materials(doc: dict[str, Any]) -> None:
     _need(len(got) == len(eff["geometry"]["materials"]), "effective_extra.materials: count")
     for g, name in zip(got, eff["geometry"]["materials"], strict=True):
         try:
-            want = _material_def(material_from_record(defs[name]))
-        except (ConfigError, ValueError, KeyError) as exc:
+            want = frozen.material_definition(defs[name])
+        except (ValueError, KeyError, TypeError) as exc:
             raise _fail(f"requested material {name!r} is not a valid definition: {exc}") from exc
         gi, wi = g["I_eV_effective"], want["I_eV_effective"]
         _need(abs(gi - wi) <= 1e-12 * abs(wi), f"effective_extra.materials[{name!r}]: effective I")
@@ -1463,8 +1518,8 @@ def _check_reconciliation(doc: dict[str, Any]) -> None:
           "effective.physics.end_of_range_model_effective (rule default-by-z)")  # fmt: skip
     _need(ph["ls_effective"] == (ph["ls_requested"] if ion else "off"),
           "effective.physics.ls_effective disagrees with the rule ls-z1-off")  # fmt: skip
-    _need(ph["scattering_E_s_mev"] == E_S_MEV
-          and ph["max_rejection_attempts"] == MAX_REJECTION_ATTEMPTS,
+    _need(ph["scattering_E_s_mev"] == frozen.SCATTERING_E_S_MEV
+          and ph["max_rejection_attempts"] == frozen.MAX_REJECTION_ATTEMPTS,
           "effective.physics engine constants differ from the library")  # fmt: skip
     _bind(eff["production"] == (rq["run"]["backend"] != "python"
                                 and rq["run"]["precision"] == "float32"),
@@ -1477,7 +1532,7 @@ def _check_reconciliation(doc: dict[str, Any]) -> None:
             _bind(mm["evaluation"] == "root" and mm.get("unused") is True,
                   "effective.mcs_mapping (rule mcs-off-root)")  # fmt: skip
     st = eff["stopping"]
-    species = [eff["source"]["projectile"], *([DEUTERON.name] if "nuclear" in eff else [])]
+    species = [eff["source"]["projectile"], *([frozen.DEUTERON_NAME] if "nuclear" in eff else [])]
     _need(
         st["species_transported"] == species,
         "effective.stopping.species_transported disagrees with the source and nuclear flag",
@@ -1503,15 +1558,17 @@ def _check_energy_structure(doc: dict[str, Any]) -> None:
     nuc_dest = local = 0.0
     if "nuclear_mev" in eb:
         _need(
-            isinstance(nuc, dict) and set(nuc) == set(NUCLEAR_TALLY_NAMES)
+            isinstance(nuc, dict) and set(nuc) == set(frozen.NUCLEAR_TALLY_NAMES)
             and all(_is_num(v) for v in nuc.values()),
-            f"energy_balance.nuclear_mev: keys must be exactly {sorted(NUCLEAR_TALLY_NAMES)}",
+            "energy_balance.nuclear_mev: keys must be exactly "
+            f"{sorted(frozen.NUCLEAR_TALLY_NAMES)}",
         )  # fmt: skip
         assert nuc is not None
         local = nuc["nuclear_local"]
-        _need(all(nuc[k] >= 0 for k in ("nuclear_local", "nuclear_escaped_neutron",
-                                        "nuclear_escaped_gamma", "nuclear_binding")),
-              "energy_balance.nuclear_mev: destinations must be non-negative")  # fmt: skip
+        # nuclear_binding and nuclear_imbalance are SIGNED (NuclearEnergyBalance): only the
+        # genuinely unsigned destinations are checked
+        _need(all(nuc[k] >= 0 for k in frozen.NUCLEAR_UNSIGNED_DESTINATIONS),
+              "energy_balance.nuclear_mev: unsigned destinations must be non-negative")  # fmt: skip
         _need(0 <= nuc["nuclear_alpha_local"] <= nuc["nuclear_local"] * (1 + 1e-12) + 1e-300,
               "energy_balance.nuclear_mev: 0 <= nuclear_alpha_local <= nuclear_local")  # fmt: skip
         nuc_dest = (nuc["nuclear_local"] + nuc["nuclear_escaped_neutron"]
@@ -1536,11 +1593,12 @@ def _check_energy_structure(doc: dict[str, Any]) -> None:
 # ---- the channel plan derived from the REQUESTED tallies (no value of effective.tallies is used)
 
 _QRULES = {  # quantity -> (numerator kind, class, denominator, units, definition)
-    "fluence": ("L", CLASS_STEP, None, "mm", "sum of path lengths"),
-    "let_t": ("LS", CLASS_STEP, ("L", CLASS_STEP), "MeV/mm",
+    "fluence": ("L", frozen.CLASS_STEP, None, "mm", "sum of path lengths"),
+    "let_t": ("LS", frozen.CLASS_STEP, ("L", frozen.CLASS_STEP), "MeV/mm",
               "sum(l S)/sum(l), S = unrestricted electronic stopping power in water"),
-    "let_d": ("LS2", CLASS_STEP, ("LS", CLASS_STEP), "MeV/mm", "sum(l S^2)/sum(l S), S in water"),
-    "let_d_eps": ("ES", CLASS_STEP, ("E", CLASS_STEP), "MeV/mm",
+    "let_d": ("LS2", frozen.CLASS_STEP, ("LS", frozen.CLASS_STEP), "MeV/mm",
+              "sum(l S^2)/sum(l S), S in water"),
+    "let_d_eps": ("ES", frozen.CLASS_STEP, ("E", frozen.CLASS_STEP), "MeV/mm",
                   "sum(eps S)/sum(eps) over step deposits, S in water"),
 }  # fmt: skip
 
@@ -1569,7 +1627,7 @@ def _derive_channel_plan(
 
     qdefs: list[tuple[dict[str, Any], str, tuple[Any, ...], Any, str, str]] = []
     used: set[int] = set()
-    both = CLASS_STEP | CLASS_LOCAL
+    both = frozen.CLASS_STEP | frozen.CLASS_LOCAL
     for t in rq.get("tallies", []):
         gi = gi_of[t["grid"]]
         used.add(gi)
@@ -1583,7 +1641,7 @@ def _derive_channel_plan(
 
         def spec(kind: str, cls: int, li: int = -1, sp: Any = None, _g: int = gi,
                  _gen: tuple[int, int] = gen, _s: Any = sps) -> tuple[Any, ...]:  # fmt: skip
-            pseudo = kind == "E" and bool(cls & CLASS_LOCAL) and _s is None
+            pseudo = kind == "E" and bool(cls & frozen.CLASS_LOCAL) and _s is None
             return get(kind, _g, cls, _s, _gen, li, sp, pseudo=pseudo)
 
         if q in ("edep", "dose"):
@@ -1593,21 +1651,22 @@ def _derive_channel_plan(
             qdefs.append((t, "ratio" if den else "linear", spec(nk, nc),
                           None if den is None else spec(*den), units, defn))  # fmt: skip
         elif q == "lookup_sum":
-            qdefs.append((t, "linear", spec("FE", CLASS_STEP, li=li), None, f"MeV*[{lu}]",
+            qdefs.append((t, "linear", spec("FE", frozen.CLASS_STEP, li=li), None, f"MeV*[{lu}]",
                           "sum(eps f)"))  # fmt: skip
         elif q == "lookup_dose_avg":
-            qdefs.append((t, "ratio", spec("FE", CLASS_STEP, li=li), spec("E", CLASS_STEP), lu,
+            qdefs.append((t, "ratio", spec("FE", frozen.CLASS_STEP, li=li),
+                          spec("E", frozen.CLASS_STEP), lu,
                           "sum(eps f)/sum(eps) over step deposits"))  # fmt: skip
         elif q == "fluence_spectrum":
-            qdefs.append((t, "linear", spec("FL", CLASS_STEP, sp=sp), None, "mm",
+            qdefs.append((t, "linear", spec("FL", frozen.CLASS_STEP, sp=sp), None, "mm",
                           "sum of path lengths per energy bin per nucleon (under/overflow "
                           "included)"))  # fmt: skip
         else:
             raise _fail(f"requested tally {t['name']!r}: unknown quantity {q!r}")
     for gi in sorted(used):
-        get("N", gi, CLASS_STEP, None, (0, GEN_MAX))
-        get("N", gi, CLASS_LOCAL, None, (0, GEN_MAX), pseudo=True)
-        get("E", gi, CLASS_LOCAL, None, (0, GEN_MAX), pseudo=True)
+        get("N", gi, frozen.CLASS_STEP, None, (0, frozen.GEN_MAX))
+        get("N", gi, frozen.CLASS_LOCAL, None, (0, frozen.GEN_MAX), pseudo=True)
+        get("E", gi, frozen.CLASS_LOCAL, None, (0, frozen.GEN_MAX), pseudo=True)
     ordered = sorted(specs.items(), key=lambda kv: kv[1]["grid"])
     channels: list[dict[str, Any]] = []
     index: dict[tuple[Any, ...], int] = {}
@@ -1676,9 +1735,9 @@ _F_MIN, _F_MAX = math.ldexp(1.0, -60), math.ldexp(1.0, 60)  # channels.FE_F_{MIN
 
 def _check_lookup_plan(doc: dict[str, Any], got: list[dict[str, Any]]) -> None:
     """The numerical plan of the lookup channels from the persisted per-channel ``f_max``:
-    ``k = fe_exponent(f_max)``, ``bound_per_history = f_max * e_hist`` (``e_hist`` is the bound
-    of the energy channels), ``bounds.f_max`` the maximum. The ``f_max`` values themselves need
-    the table values and stay bound to the lookup digests only (a declared limit)."""
+    ``k = fe_exponent(f_max)`` (frozen), ``bound_per_history = f_max * e_hist`` (``e_hist`` is the
+    bound of the energy channels), ``bounds.f_max`` the maximum. The ``f_max`` values themselves
+    need the table values and stay bound to the lookup digests only (a declared limit)."""
     tl = doc["effective"]["tallies"]
     plan = doc["effective_extra"]["lookup_plan"]
     fe = [(i, c) for i, c in enumerate(got) if c["kind"] == "FE"]
@@ -1693,7 +1752,8 @@ def _check_lookup_plan(doc: dict[str, Any], got: list[dict[str, Any]]) -> None:
         _need(c["lookup"] in range(len(names)) and e["lookup"] == names[c["lookup"]],
               "effective_extra.lookup_plan names a different lookup than its channel")  # fmt: skip
         _need(_F_MIN <= f <= _F_MAX, "lookup_plan f_max is outside the admissible lookup range")
-        _need(c["k"] == fe_exponent(f), "FE channel quantum disagrees with its persisted f_max")
+        _need(c["k"] == frozen.fe_exponent(f),
+              "FE channel quantum disagrees with its persisted f_max")  # fmt: skip
         _need(c["bound_per_history"] == f * e_hist,
               "FE channel bound disagrees with its persisted f_max")  # fmt: skip
     want = max((float(e["f_max"]) for e in plan), default=0.0)
@@ -2196,6 +2256,88 @@ def _mass_from_geometry(
     return mass  # type: ignore[no-any-return]
 
 
+def _quantity_channels(doc: dict[str, Any], gname: str, qname: str) -> tuple[int, int | None]:
+    """Numerator and denominator channel of a persisted quantity: a requested tally from the plan
+    derived from ``requested``; the excluded-energy channel is the energy channel of class local
+    only; the piece counts are the automatic N channels of their class."""
+    gi = [g["name"] for g in doc["requested"]["scoring"]].index(gname)
+    channels, quantities, _t, _n = _derive_channel_plan(doc)
+    tallies = doc["requested"].get("tallies", [])
+    for t, q in zip(tallies, quantities, strict=True):
+        if t["grid"] == gname and t["name"] == qname:
+            return q["numerator"], q["denominator"]
+
+    def find(kind: str, cls: int) -> int:
+        return next(
+            i for i, c in enumerate(channels)
+            if c["kind"] == kind and c["grid"] == gi and c["class_mask"] == cls
+        )  # fmt: skip
+
+    if qname == EXCLUDED_CHANNEL_NAME:
+        return find("E", frozen.CLASS_LOCAL), None
+    if qname == PIECE_COUNT_NAME:
+        return find("N", frozen.CLASS_STEP), None
+    if qname == LOCAL_PIECE_COUNT_NAME:
+        return find("N", frozen.CLASS_LOCAL), None
+    raise _fail(f"quantity {qname!r} of grid {gname!r} has no channel in the plan")
+
+
+def _check_rounding_bound(
+    doc: dict[str, Any],
+    arrays: dict[str, np.ndarray[Any, Any]],
+    by: Mapping[Any, str],
+    gname: str,
+    qname: str,
+    quant: str,
+    scale: np.ndarray[Any, Any] | None,
+    want_mean: np.ndarray[Any, Any],
+    want_mask: np.ndarray[Any, Any],
+) -> None:
+    """Recompute ``rounding_bound`` from the persisted channel plan (quantum exponents ``k``) and
+    the persisted per-batch piece counts, with the formulas of ``simulation._grid_quantities``:
+    linear ``n_pp(c) 2^-k / 2 * scale`` and ratio ``ratio_rounding_bound(xbar, n_pp(num) q/2,
+    ybar, n_pp(den) q/2, mean)`` (``NaN`` where undefined, ``+inf`` kept), where ``n_pp(c)`` is
+    the sum over the piece-count channels of the classes of ``c`` of the mean batch count per
+    primary (``channels.piece_count_indices``); compared at ``1e-9``."""
+    nb = doc["run"]["n_batches"]
+    hpb = doc["run"]["n_histories"] // nb
+    chans = doc["effective"]["tallies"]["channels"]
+    num_ci, den_ci = _quantity_channels(doc, gname, qname)
+
+    def counts(name: str) -> np.ndarray[Any, Any]:
+        a = arrays[by[("quantity", gname, name, "batch_num")]].reshape(nb, -1)
+        return a.mean(axis=0) / hpb  # type: ignore[no-any-return]
+
+    pp = {
+        frozen.CLASS_STEP: counts(PIECE_COUNT_NAME),
+        frozen.CLASS_LOCAL: counts(LOCAL_PIECE_COUNT_NAME),
+    }
+
+    def half_bound(ci: int) -> np.ndarray[Any, Any]:
+        c = chans[ci]
+        total = np.zeros_like(pp[frozen.CLASS_STEP])
+        for cls, n in pp.items():
+            if c["class_mask"] & cls:
+                total = total + n
+        return total * (math.ldexp(1.0, -c["k"]) / 2.0)
+
+    num = arrays[by[("quantity", gname, qname, "batch_num")]].reshape(nb, -1)
+    if den_ci is None:
+        assert scale is not None
+        want = np.repeat(half_bound(num_ci), num.shape[1] // half_bound(num_ci).size) * scale
+    else:
+        den = arrays[by[("quantity", gname, qname, "batch_den")]].reshape(nb, -1)
+        bound = frozen.ratio_rounding_bound(
+            num.mean(axis=0) / hpb, half_bound(num_ci), den.mean(axis=0) / hpb,
+            half_bound(den_ci), want_mean,
+        )  # fmt: skip
+        want = np.where(want_mask, bound, np.nan)
+    got = arrays[by[("quantity", gname, qname, "rounding_bound")]].reshape(-1)
+    w = f"quantity {qname!r} of grid {gname!r}: rounding_bound"
+    _need(bool(np.array_equal(np.isinf(got), np.isinf(want))), f"{w} (infinite entries)")
+    _close(np.where(np.isinf(got), 0.0, got), np.where(np.isinf(want), 0.0, want), _RTOL_BATCH, w)
+
+
 def _check_quantity_batches(
     doc: dict[str, Any],
     arrays: dict[str, np.ndarray[Any, Any]],
@@ -2215,9 +2357,12 @@ def _check_quantity_batches(
     num = arrays[by[("quantity", gname, qname, "batch_num")]].reshape(nb, -1)
     w = f"quantity {qname!r} of grid {gname!r}: batch arrays"
     den_key = ("quantity", gname, qname, "batch_den")
-    _need(bool(np.all(np.isfinite(num))), f"{w} are not finite")
+    _need(bool(np.all(np.isfinite(num)) and np.all(num >= 0)),
+          f"{w} are not finite and non-negative")  # fmt: skip
     if quant in _RATIO_QUANTITIES:
         den = arrays[by[den_key]].reshape(nb, -1)
+        _need(bool(np.all(np.isfinite(den)) and np.all(den >= 0)),
+              f"{w} (denominator) are not finite and non-negative")  # fmt: skip
         st = reduce_ratio(num, den)
         want_mean, want_std = st.mean, np.sqrt(st.variance_of_mean)
         want_mask, want_nz = st.defined_mask, st.n_nonzero
@@ -2228,7 +2373,9 @@ def _check_quantity_batches(
         if quant == "dose":
             mass = arrays[by[("grid", gname, None, "mass_g")]].reshape(-1)
             with np.errstate(divide="ignore", invalid="ignore"):
-                sc = np.where(mass > 0, MEV_PER_G_TO_GY / np.where(mass > 0, mass, 1.0), np.nan)
+                sc = np.where(
+                    mass > 0, frozen.MEV_PER_G_TO_GY / np.where(mass > 0, mass, 1.0), np.nan
+                )
         elif quant in _PER_VOLUME:
             sc = np.full(int(np.prod(g["shape"])), 1.0 / float(np.prod(g["spacing_mm"])))
         else:
@@ -2238,6 +2385,8 @@ def _check_quantity_batches(
         want_mean, want_std = bst.mean * sc, np.sqrt(bst.variance_of_mean) * sc
         want_nz = bst.n_nonzero
         want_mask = want_mean > 0
+    _check_rounding_bound(doc, arrays, by, gname, qname, quant, sc if den_key not in by else None,
+                          want_mean, want_mask)  # fmt: skip
     _close(mean.reshape(-1), want_mean, _RTOL_BATCH, f"{w}: mean")
     _close(qstd.reshape(-1), want_std, _RTOL_BATCH, f"{w}: standard error")
     _need(bool(np.array_equal(qn.reshape(-1), want_nz)), f"{w}: n_nonzero")
@@ -2277,7 +2426,7 @@ def _check_array_invariants(
                f"grid {n!r}: mass_g (persisted density x voxel volume)")  # fmt: skip
         pos = mass > 0
         with np.errstate(divide="ignore", invalid="ignore"):
-            scale = np.where(pos, MEV_PER_G_TO_GY / np.where(pos, mass, 1.0), np.nan)
+            scale = np.where(pos, frozen.MEV_PER_G_TO_GY / np.where(pos, mass, 1.0), np.nan)
             _close(dose, np.where(pos, en * scale, np.nan), _RTOL_DERIVED, f"grid {n!r}: dose_gy")
             _close(dstd, np.where(pos, std * scale, np.nan), _RTOL_DERIVED,
                    f"grid {n!r}: dose_std_gy")  # fmt: skip
@@ -2314,7 +2463,7 @@ def _check_array_invariants(
         if quant in _RATIO_QUANTITIES:
             for a in (mean, qstd, bound):
                 _need(bool(np.all(np.isnan(a[~qmask]))), f"{w}: undefined ratio values are NaN")
-            _need(bool(np.array_equal(qmask, qn >= min_defined_batches(nb))),
+            _need(bool(np.array_equal(qmask, qn >= frozen.min_defined_batches(nb))),
                   f"{w}: defined_mask is n_nonzero >= max(2, ceil(B/2))")  # fmt: skip
         else:
             _need(bool(np.array_equal(qmask, mean > 0)), f"{w}: defined_mask is mean > 0")
@@ -2550,7 +2699,10 @@ def _binding_limits(doc: Mapping[str, Any]) -> tuple[str, ...]:
         out.append("requested.physics.stopping is a user object: effective.stopping rests on "
                    "validate_identity_block only")  # fmt: skip
     if doc["statistics"]["quantity_batch_arrays"]["status"] != "persisted":
-        out.append("quantity means and standard errors are not recomputed: no per-batch sums")
+        out.append(
+            "quantity means, standard errors and rounding bounds are not recomputed: no "
+            "per-batch sums"
+        )
     if doc["statistics"]["batch_arrays"]["status"] != "persisted":
         out.append("grid means and standard errors are not recomputed: no batch arrays")
     return tuple(out)

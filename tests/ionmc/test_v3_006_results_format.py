@@ -1525,7 +1525,10 @@ def test_a2_lookup_plan_is_bound_to_the_persisted_f_max(
     # table-derived numerical bounds are a declared tier-1 limit (found by verify_effective)
     other_k = lambda d: tl(d)["channels"][other].update(k=tl(d)["channels"][other]["k"] + 1)  # noqa: E731
     bl = lambda d: tl(d)["bounds"].update(B_L_mm=tl(d)["bounds"]["B_L_mm"] * 1.01)  # noqa: E731
-    assert load(edit("other_k", other_k)).binding_limits
+    # the quantum exponent of a channel that feeds a quantity is bound through rounding_bound
+    # (fix round 7); the table-derived bound of the plan stays a declared limit
+    with pytest.raises(ResultFormatError, match="rounding_bound"):
+        load(edit("other_k", other_k))
     assert load(edit("bl", bl)).binding_limits
     d["effective_extra"]["lookup_plan"]  # the unchanged bundle loads (done above)
 
@@ -1672,7 +1675,7 @@ def _nuclear_doc(**over: float) -> dict[str, Any]:
     return {"accounting": {"energy_balance": eb}, "effective": {"scoring": [{}]}}  # fmt: skip
 
 
-def test_a2_nuclear_destinations_are_non_negative_and_alpha_local_is_part_of_local() -> None:
+def test_a2_unsigned_nuclear_destinations_and_alpha_local_part_of_local() -> None:
     results._check_energy_structure(_nuclear_doc())
     for bad, match in (({"nuclear_alpha_local": 3.0}, "alpha_local"),):
         d = _nuclear_doc()
@@ -1681,8 +1684,16 @@ def test_a2_nuclear_destinations_are_non_negative_and_alpha_local_is_part_of_loc
             results._check_energy_structure(d)
     d = _nuclear_doc()
     nm = d["accounting"]["energy_balance"]["nuclear_mev"]
-    nm.update(nuclear_binding=-1.0, nuclear_local=3.0)  # keeps the closure, breaks the sign rule
+    nm.update(nuclear_escaped_gamma=-1.0, nuclear_local=3.0)  # keeps the closure, breaks the sign
     with pytest.raises(ResultFormatError, match="non-negative"):
+        results._check_energy_structure(d)
+
+
+def test_fix7_nuclear_binding_and_imbalance_are_signed() -> None:
+    d = _nuclear_doc(nuclear_binding=-1.0, nuclear_imbalance=1.0)  # exothermic: negative binding
+    results._check_energy_structure(d)
+    d = _nuclear_doc(nuclear_binding=-0.5, nuclear_imbalance=0.25)  # breaks only the closure
+    with pytest.raises(ResultFormatError, match="closure"):
         results._check_energy_structure(d)
 
 
@@ -1715,3 +1726,214 @@ def test_a2_persist_batches_false_records_the_status(tmp_path: Path) -> None:
     got = load(save(r, tmp_path / "b", persist_batches=False))
     assert got.doc["statistics"]["quantity_batch_arrays"]["status"] == "not-persisted"
     assert any("not recomputed" in x for x in got.binding_limits)
+
+
+# ---- fix round 7: frozen schema-1.0 rules, RNG identity, stopping pins, rounding bound ----------
+
+
+def test_fix7_frozen_snapshot_equals_live_definitions() -> None:
+    import math as _m
+
+    from ionmc import _result_schema_1_0 as fz
+    from ionmc.config import MAX_REJECTION_ATTEMPTS, U01_MAPPING
+    from ionmc.materials import ELEMENTS, MATERIALS
+    from ionmc.physics.em import E_S_MEV
+    from ionmc.physics.projectiles import PROJECTILES
+    from ionmc.scoring import MEV_PER_G_TO_GY, min_defined_batches
+    from ionmc.simulation import ratio_rounding_bound
+    from ionmc.transport import channels as ch
+    from ionmc.transport.tally import NUCLEAR_TALLY_NAMES
+
+    assert fz.PROJECTILES == {n: (p.z, p.a, p.mass_mev) for n, p in PROJECTILES.items()}
+    assert fz.ELEMENTS == {s: (e.Z, e.A_g_mol, e.I_eV) for s, e in ELEMENTS.items()}
+    assert set(fz.MATERIALS) == set(MATERIALS)
+    for n, m in MATERIALS.items():
+        assert fz.material_definition({"name": n}) == results._material_def(m)
+    inline = {"name": "x", "density_g_cm3": 1.1, "mass_fractions": {"H": 0.1, "O": 0.9}}
+    from ionmc.configio import material_from_record
+
+    want = results._material_def(material_from_record(inline))
+    got = fz.material_definition(inline)
+    assert got["I_eV_effective"] == pytest.approx(want["I_eV_effective"], rel=1e-14)
+    assert {k: v for k, v in got.items() if k != "I_eV_effective"} == {
+        k: v for k, v in want.items() if k != "I_eV_effective"
+    }
+    assert (fz.SCATTERING_E_S_MEV, fz.MAX_REJECTION_ATTEMPTS) == (E_S_MEV, MAX_REJECTION_ATTEMPTS)
+    assert fz.MEV_PER_G_TO_GY == MEV_PER_G_TO_GY and fz.U01_MAPPING == U01_MAPPING
+    assert (fz.K_MAX, fz.CAPACITY_EXPONENT, fz.E_QUANTUM_EXPONENT) == (
+        ch.K_MAX, ch.CAPACITY_EXPONENT, ch.E_QUANTUM_EXPONENT)  # fmt: skip
+    assert (fz.FE_F_MIN_EXPONENT, fz.FE_F_MAX_EXPONENT, fz.GEN_MAX) == (
+        ch.FE_F_MIN_EXPONENT, ch.FE_F_MAX_EXPONENT, ch.GEN_MAX)  # fmt: skip
+    assert (fz.CLASS_STEP, fz.CLASS_LOCAL) == (ch.CLASS_STEP, ch.CLASS_LOCAL)
+    assert fz.NUCLEAR_TALLY_NAMES == NUCLEAR_TALLY_NAMES
+    for f in (1e-9, 0.37, 1.0, 5.5, 1e6):
+        assert fz.fe_exponent(f) == ch.fe_exponent(f)
+    for hpb, bound in ((1, 1.0), (1000, 3.7), (10**6, 1e-3), (50, 2.0**30)):
+        assert fz.adaptive_exponent(hpb, bound) == ch.adaptive_exponent(hpb, bound)
+    assert all(fz.min_defined_batches(n) == min_defined_batches(n) for n in range(1, 40))
+    x, y = np.array([1.0, 2.0, 0.0]), np.array([4.0, 0.1, 0.0])
+    a, b, r = np.array([0.1, 0.1, 0.1]), np.array([0.2, 0.2, 0.2]), np.array([0.25, 20.0, 0.5])
+    assert np.array_equal(
+        fz.ratio_rounding_bound(x, a, y, b, r), ratio_rounding_bound(x, a, y, b, r)
+    )
+    cfg = _config()
+    assert fz.rng_identity(cfg.run.precision) == validate(cfg).rng
+    assert _m.isfinite(fz.MEV_PER_G_TO_GY)
+
+
+def test_fix7_tier1_does_not_use_the_live_registries(bundle: Path, monkeypatch: Any) -> None:
+    import ast
+    import inspect
+
+    import ionmc.config
+    import ionmc.materials
+    import ionmc.physics.em
+    import ionmc.physics.projectiles
+    import ionmc.scoring
+    import ionmc.transport.channels as chm
+
+    forbidden = {
+        "E_S_MEV", "MAX_REJECTION_ATTEMPTS", "PROJECTILES", "DEUTERON", "MEV_PER_G_TO_GY",
+        "min_defined_batches", "fe_exponent", "NUCLEAR_TALLY_NAMES", "material_from_record",
+        "_material_def", "CLASS_STEP", "CLASS_LOCAL", "GEN_MAX", "MATERIALS", "ELEMENTS",
+    }  # fmt: skip
+    tier1 = (
+        results._check_run_binding, results._check_effective_binding, results._check_materials,
+        results._check_reconciliation, results._check_energy_structure,
+        results._derive_channel_plan, results._check_channel_plan, results._check_lookup_plan,
+        results._check_quantity_batches, results._check_rounding_bound,
+        results._quantity_channels, results._check_array_invariants,
+        results._mass_from_geometry, results._check_invariants, results._check_stopping_pins,
+    )  # fmt: skip
+    for fn in tier1:
+        names = {
+            n.id if isinstance(n, ast.Name) else n.attr
+            for n in ast.walk(ast.parse(inspect.getsource(fn).lstrip()))
+            if isinstance(n, ast.Name | ast.Attribute)
+        }
+        # a frozen.<name> attribute is the allowed route
+        src = inspect.getsource(fn)
+        live = {n for n in forbidden & names if f"frozen.{n}" not in src or n in ("MATERIALS",)}
+        assert not live, (fn.__name__, live)
+
+    # drift of every live constant and helper does not change the verdict of load()
+    def boom(*a: Any, **k: Any) -> Any:
+        raise AssertionError("live helper used by tier 1")
+
+    monkeypatch.setattr(results, "fe_exponent", boom, raising=False)
+    monkeypatch.setattr(results, "CLASS_STEP", 99, raising=False)
+    monkeypatch.setattr(results, "CLASS_LOCAL", 98, raising=False)
+    monkeypatch.setattr(ionmc.physics.em, "E_S_MEV", 99.0)
+    monkeypatch.setattr(ionmc.config, "MAX_REJECTION_ATTEMPTS", 1)
+    monkeypatch.setattr(ionmc.scoring, "MEV_PER_G_TO_GY", 1.0)
+    monkeypatch.setattr(ionmc.scoring, "min_defined_batches", boom)
+    monkeypatch.setattr(chm, "fe_exponent", boom)
+    monkeypatch.setitem(
+        ionmc.physics.projectiles.PROJECTILES, "proton",
+        dataclasses.replace(PROTON, mass_mev=PROTON.mass_mev * 1.001, name="proton"),
+    )  # fmt: skip
+    monkeypatch.setitem(
+        ionmc.materials.MATERIALS, "water", dataclasses.replace(WATER, density_g_cm3=2.0)
+    )
+    assert load(bundle).doc["schema"] == "ionmc.result"
+
+
+def test_fix7_rng_identity_is_the_frozen_record(bundle: Path) -> None:
+    def both(d: dict[str, Any]) -> None:  # an adversary that keeps run.rng == effective.rng
+        d["run"]["rng"]["generator"] = "philox4x32-7"
+        d["effective"]["rng"]["generator"] = "philox4x32-7"
+
+    _mutate(bundle, both)
+    with pytest.raises(ResultFormatError, match="RNG identity"):
+        load(bundle)
+
+
+def _pin_doc(**over: Any) -> dict[str, Any]:
+    from ionmc.physics.stopping_models import (
+        NIST_MODEL_ID,
+        STOPPING_MODELS,
+        _canonical,
+        spec_sha256,
+    )
+
+    spec = STOPPING_MODELS[NIST_MODEL_ID]
+    pin = next(_canonical(p) for p in spec.data if p.dataset_id == "nist-pstar-water-2005")
+    st: dict[str, Any] = {
+        "model_id_effective": NIST_MODEL_ID,
+        "spec_sha256": spec_sha256(spec),
+        "species_transported": ["proton"],
+        "data_declared": [_canonical(p) for p in spec.data],
+        "data_used": [{"pin": pin, "role_in_this_run": "construction",
+                       "table": ["proton", "water"], "cache_dir": None}],
+    }  # fmt: skip
+    st.update(over)
+    return {"effective": {"stopping": st, "geometry": {"materials": ["water"]}}}
+
+
+def test_fix7_stopping_pins_are_registry_backed() -> None:
+    results._check_stopping_pins(_pin_doc())
+    with pytest.raises(ResultFormatError, match="data_used"):  # pin removed
+        results._check_stopping_pins(_pin_doc(data_used=[]))
+    d = _pin_doc()  # rewritten pin with mirrored provenance (declared and used agree)
+    st = d["effective"]["stopping"]
+    for p in (st["data_used"][0]["pin"], *st["data_declared"]):
+        if p["dataset_id"] == "nist-pstar-water-2005":
+            p["archive_sha256"] = "0" * 64
+    with pytest.raises(ResultFormatError, match="data_declared|pin"):
+        results._check_stopping_pins(d)
+    d = _pin_doc()  # a pin of a projectile that was not transported
+    d["effective"]["stopping"]["species_transported"] = ["alpha"]
+    with pytest.raises(ResultFormatError, match="data_used"):
+        results._check_stopping_pins(d)
+
+
+def test_fix7_user_stopping_object_binds_what_it_can_and_records_the_limit(
+    tmp_path: Path,
+) -> None:
+    from ionmc.physics.stopping import BetheStoppingSource
+
+    cfg = dataclasses.replace(
+        _config(), physics=PhysicsOptions(nuclear=False, stopping=BetheStoppingSource())
+    )
+    b = save(make_result(cfg=cfg), tmp_path / "b")
+    got = load(b)
+    assert any("user object" in x for x in got.binding_limits)  # tier 1: the declared limit
+    _mutate(b, lambda d: d["effective"]["stopping"].update(species_transported=["alpha"]))
+    with pytest.raises(ResultFormatError):  # every bindable field is still bound
+        load(b)
+
+
+def test_fix7_rounding_bound_is_recomputed_from_the_plan_and_piece_counts(
+    lookup_bundle: Path, tmp_path: Path
+) -> None:
+    assert load(lookup_bundle).doc["statistics"]["quantity_batch_arrays"]["status"] == "persisted"
+    for q in ("let", "weighted", "scoring_pieces"):
+        b = _copy(lookup_bundle, tmp_path, q)
+        _alter(b, f"grid__dose__q__{q}__rounding_bound", _scale(Ellipsis, 1.5))
+        with pytest.raises(ResultFormatError, match="rounding_bound"):
+            load(b)
+    b = _copy(lookup_bundle, tmp_path, "k")  # the persisted quantum exponent is part of the plan
+    _mutate(b, lambda d: d["effective"]["tallies"]["channels"][0].update(
+        k=d["effective"]["tallies"]["channels"][0]["k"] + 1))  # fmt: skip
+    with pytest.raises(ResultFormatError):
+        load(b)
+    b = _copy(lookup_bundle, tmp_path, "cnt")  # piece counts feed the bound
+    _alter(b, "grid__dose__q__scoring_pieces__batch_num", _scale(Ellipsis, 2.0))
+    with pytest.raises(ResultFormatError):
+        load(b)
+
+
+@pytest.mark.parametrize("which", ["batch_num", "batch_den"])
+def test_fix7_batch_sums_must_be_non_negative(
+    lookup_bundle: Path, tmp_path: Path, which: str
+) -> None:
+    b = _copy(lookup_bundle, tmp_path, which)
+    _alter(b, f"grid__dose__q__let__{which}", _set((0, 0, 0, 0), -1.0))
+    with pytest.raises(ResultFormatError, match="non-negative"):
+        load(b)
+
+
+def test_fix7_stopping_spec_sha256_is_registry_backed() -> None:
+    results._check_stopping_pins(_pin_doc())
+    with pytest.raises(ResultFormatError, match="spec_sha256"):
+        results._check_stopping_pins(_pin_doc(spec_sha256="0" * 64))

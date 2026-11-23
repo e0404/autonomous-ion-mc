@@ -146,3 +146,16 @@ def test_input_file_size_must_equal_the_manifest_record() -> None:
              "item_sha256": "0" * 64, "bytes": LOOKUP_FILE.stat().st_size + 1}  # fmt: skip
     with pytest.raises(VerificationError, match="manifest records"):
         _input_lookup("lookup:x", LOOKUP_FILE, entry, 2**30)
+
+
+def test_user_stopping_object_is_reported_not_rederivable(tmp_path: Path) -> None:
+    import dataclasses
+
+    from ionmc.physics.stopping import BetheStoppingSource
+
+    cfg = dataclasses.replace(
+        _ion_config(), physics=PhysicsOptions(nuclear=False, stopping=BetheStoppingSource())
+    )
+    rep = verify_effective(save(Simulation(cfg).run(), tmp_path / "b"))
+    assert rep.status == "not-rederivable" and not rep.ok
+    assert rep.not_rederivable and "user stopping object" in rep.not_rederivable[0]
