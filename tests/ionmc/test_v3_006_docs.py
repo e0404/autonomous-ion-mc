@@ -222,3 +222,33 @@ def test_doc1_pages_are_in_the_navigation() -> None:
     for name in NEW_PAGES:
         assert name in found, name
         assert (DOCS / name).is_file()
+
+
+# ---- the reproduction procedure of docs/workflow.md section 8 is executed, not only described
+
+
+def test_workflow_reproduction_procedure_is_executable(tmp_path: Path) -> None:
+    """``from_dict(result.json.requested)`` + the same seed, backend and precision reproduces
+    every array content digest and the effective block (docs/workflow.md section 8; row OUT-3,
+    small). A ``not-reconstructible`` record is refused by ``from_dict``, as the page states."""
+    from ionmc.simulation import Simulation
+
+    toml = Path(__file__).parent / "data" / "v3_006" / "proton_box.toml"
+    cfg = configio.load_toml_full(toml).config
+    cfg = dataclasses.replace(cfg, run=dataclasses.replace(cfg.run, n_histories=8, n_batches=4))
+    first = results.save(Simulation(cfg).run(), tmp_path / "first")
+    loaded = results.load(first)
+    again = configio.from_dict(loaded.doc["requested"])
+    second = results.save(Simulation(again).run(), tmp_path / "second")
+    doc1, doc2 = loaded.doc, results.load(second).doc
+    digests = lambda d: {e["name"]: e["content_sha256"] for e in d["arrays"]}  # noqa: E731
+    assert digests(doc1) == digests(doc2) and digests(doc1)
+    assert doc1["effective"] == doc2["effective"]
+    assert doc1["requested"] == doc2["requested"]
+    # the limit the page states: a not-reconstructible record is refused, never guessed
+    broken = dict(loaded.doc["requested"])
+    broken["geometry"] = {**broken["geometry"], "material_index": {"status": "not-reconstructible"}}
+    with pytest.raises(configio.ConfigError):
+        configio.from_dict(broken)
+    page = (Path(__file__).parents[2] / "docs" / "workflow.md").read_text(encoding="utf-8")
+    assert "configio.from_dict" in page and "not-reconstructible" in page

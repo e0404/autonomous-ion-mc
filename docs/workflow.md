@@ -78,10 +78,38 @@ list what tier 1 does not bind. For an untrusted bundle lower the reader budgets
 
 ## 8. Reproduce from `requested`
 
-The `requested` block of `result.json` is the complete configuration. Writing it back as a TOML file
-(with the same input files, which `input_manifest` identifies by sha256) and running it with the same seed, backend
-and precision uses the same random streams; compare the two reports and `ionmc verify` output. The recorded `provenance.code` identifies the
-code that produced the bundle.
+The `requested` block of `result.json` is the `configio.to_dict` form of the configuration that was run:
+every value of every table, with the random seed, backend and precision. It is read back with
+`configio.from_dict`, not by writing a TOML file:
+
+```python
+from ionmc import configio, results
+from ionmc.simulation import Simulation
+
+loaded = results.load("results/proton_box")            # tier 1
+cfg = configio.from_dict(loaded.doc["requested"])       # the configuration that was run
+again = Simulation(cfg).run()                           # same seed, backend, precision: same streams
+results.save(again, "results/proton_box_again")
+```
+
+Every array `content_sha256` of the second bundle equals the first (the same random streams
+produce the same deposits) and the `effective` blocks are equal apart from nothing; only the
+timings differ. Limits of the reconstruction:
+
+- A geometry array or a lookup table given as a **file** is stored as a reference (`ref`,
+  `sha256`, `content_sha256`), not by value. `from_dict` reloads it through an `InputManifest`
+  built from the same files (`configio.load_toml_full` builds one for a TOML run), re-hashing
+  every file against the recorded digests; the files themselves are not in the bundle.
+- An array that was passed in process (an API run without a file) and a user-constructed
+  `stopping` object are recorded as `not-reconstructible`; `from_dict` refuses such a record
+  rather than guessing. Their identity is still bound by the digests of the persisted arrays
+  and by the `effective` block, which `ionmc verify --rederive` re-derives.
+- The `[output]` table (bundle path, batch persistence) is not part of `requested`; pass the
+  output path to `save` or `ionmc run --out` again.
+
+`tests/ionmc/test_v3_006_docs.py` runs this procedure on a tiny proton box and checks the equal
+digests, so the text above is executed, not only described. The recorded `provenance.code`
+identifies the code that produced the bundle.
 
 ## 9. Offline reuse
 
