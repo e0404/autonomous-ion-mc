@@ -1,0 +1,31 @@
+{
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "b53b2800f81a4e64",
+    "payload_sha256": "e58e10f9caff8c83838f22a97c0c742c18683b807bb90143cb9d179edeaea574",
+    "public_key": "2fa323ebc164551322a8268176a463563f8036a2a91cf6de02d7a1ebfe407bfe",
+    "schema": "ionmc-attestation-1",
+    "signature": "00a4320db656f715c4a62f99ff7f29cf912b89557bd6bb4a67a4310f9a696e8c83746e11f6a6a91aa1b6739dc19331c5e1578b35458d2e5819a6f16bd7bbfc09",
+    "signed_at_utc": "2026-11-23T01:19:19.825502+00:00",
+    "signer": "codex-worker"
+  },
+  "base_sha": "9926cc00c1d889b51fa510b02e2936aef2b7f5f5",
+  "experiment_id": "experiment-v3",
+  "finished_at": "2026-11-23T01:19:19.821880+00:00",
+  "head_sha": "83e49dbc7bb320f191055477fb638128e2a591d6",
+  "model": "gpt-5.6-sol",
+  "provider": "openai",
+  "report": {
+    "findings": [],
+    "head_sha": "83e49dbc7bb320f191055477fb638128e2a591d6",
+    "summary": "Both prior important findings are resolved: Amendment A-2 now has the substantive structured operator response, and the evaluator records complete per-backend/row Warp module maps and canonical digests with regression coverage. The 18 new k=1 sample records are signed, sequential, seal-descended, use the frozen seeds and configurations, preserve the sealed environment and source tree, and have consistent within-group Warp attestations. No blocking or important unresolved findings remain.",
+    "verdict": "pass"
+  },
+  "report_sha256": "6a507eea01228ff6e44764d5ee5148da53b28018a75e352fed9a23f8df1a8b31",
+  "review_id": "REVIEW-47ccbb246e994208a9dae4bb212f44d5",
+  "schema_version": 1,
+  "started_at": "2026-11-23T01:14:30.363787+00:00",
+  "status": "passed",
+  "task_id": "V3-013",
+  "tool": "codex exec"
+}

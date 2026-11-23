@@ -596,3 +596,10 @@ OPEN. Not a clinical claim."
   Wall times of the six `vc-sample` runs (icru90 / bethe): case 1 4363 / 3902 s, case 2 5991 / 5389 s,
   case 3 9006 / 8463 s. No TOPAS run has been started; the samples commit's review is the second pin.
   Not a clinical claim.
+- 2026-11-23 (orchestrator, §D step 4 — samples pin note): samples review REVIEW-47ccbb246e994208a9dae4bb212f44d5 at 83e49dbc7bb320f191055477fb638128e2a591d6
+  (signed codex-worker record, verdict pass, no findings, finished 2026-11-23T01:19:19Z; committed verbatim as
+  `validation/results/stopping/v3-013/samples-review.json`; verified against the committed trust file). With the
+  seal pin (REVIEW-42e8dbb1 at 5de58656) this is the second pin the sealed evaluator requires; the 18 ionmc samples
+  commit descends from the seal and this pin commit descends from it. Next, in order (§D steps 5–6): this pin
+  commit's own Codex review; the three TOPAS smokes (part 19, one at a time); the evidence parts 0–3 × 3 cases;
+  the sealed evaluator through `sealed_launch.py`. Not a clinical claim.
