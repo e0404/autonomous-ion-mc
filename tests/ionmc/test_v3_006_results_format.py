@@ -11,6 +11,7 @@ import io
 import json
 import os
 import resource
+import shutil
 import struct
 import zipfile
 from pathlib import Path
@@ -22,7 +23,7 @@ import pytest
 from ionmc import results
 from ionmc.config import PhysicsOptions, RunOptions, SimulationConfig, validate
 from ionmc.geometry import BoxPhantom
-from ionmc.materials import WATER
+from ionmc.materials import PMMA, WATER
 from ionmc.physics.projectiles import PROTON
 from ionmc.results import ResultFormatError, load, save
 from ionmc.scoring import QuantityResult, ScoringGrid, TallyRequest
@@ -68,18 +69,26 @@ def _quantity(shape: tuple[int, ...] = SHAPE) -> QuantityResult:
     mask = np.ones(shape, dtype=bool)
     mean[0, 0, 0], mask[0, 0, 0] = np.nan, False
     return QuantityResult(
-        "let", "let_d", "ratio", "keV/um", "synthetic ratio", mean, 0.1 * mean, mask,
+        "let", "let_d", "ratio", "MeV/mm", "sum(l S^2)/sum(l S), S in water",
+        mean, 0.1 * mean, mask,
         np.full(shape, 4, dtype=np.int32), np.where(mask, 1e-9, np.nan), (3, 3),
     )  # fmt: skip
 
 
 def _pieces() -> dict[str, QuantityResult]:
+    """The automatic channels of a tally grid: the excluded-energy channel (the compiled plan of a
+    LET tally has a local-class energy channel) and the two piece counts."""
+    spec = (
+        ("edep_excluded_from_let", "edep", "MeV", results._EXCLUDED_DEFINITION),
+        ("scoring_pieces", "count", "1", results._PIECE_DEFINITIONS["scoring_pieces"]),
+        ("scoring_pieces_local", "count", "1", results._PIECE_DEFINITIONS["scoring_pieces_local"]),
+    )
     out = {}
-    for n in ("scoring_pieces", "scoring_pieces_local"):
+    for n, q, u, d in spec:
         one = np.ones(SHAPE)
         out[n] = QuantityResult(
-            n, "count", "linear", "1", "synthetic piece count", one, 0.0 * one,
-            np.ones(SHAPE, dtype=bool), np.full(SHAPE, 4, dtype=np.int32), 0.0 * one, (3,),
+            n, q, "linear", u, d, one, 0.0 * one, np.ones(SHAPE, dtype=bool),
+            np.full(SHAPE, 4, dtype=np.int32), 0.0 * one, (3,),
         )  # fmt: skip
     return out
 
@@ -103,7 +112,7 @@ def make_result(
         8.0, 7.0, 0.5, 0.25, 0.0, 0.0, tuple(1.0 for _ in names), (6.0,) * len(names)
     )
     return Result(
-        True, cfg, eff, "python", "cpu", "float64", 11, {"name": "philox4x32-10"}, 8, NB,
+        True, cfg, eff, "python", "cpu", "float64", 11, dict(eff.rng), 8, NB,
         tuple(grids), bal, TransportCounters(), {"total": 0.1},
         {"ionmc_version": "0", "python_version": "3", "numpy_version": np.__version__,
          "warp_version": None, "warp_error": None, "warp_devices": [],
@@ -495,6 +504,8 @@ def test_out10_directory_bombs_refused_before_zipfile(bundle: Path, monkeypatch:
 def _json_bomb(kind: str) -> bytes:
     if kind == "objects":
         return b"[" + b'{"a":1},' * 600_000 + b"{}]"
+    if kind == "empties":
+        return b"[" + b"{}," * 1_900_000 + b"{}]"
     if kind == "depth":
         return b"[" * 65 + b"]" * 65
     if kind == "numbers":
@@ -502,7 +513,7 @@ def _json_bomb(kind: str) -> bytes:
     return b"[" + b"true,false,null," * 700_000 + b"null]"
 
 
-@pytest.mark.parametrize("kind", ["objects", "depth", "numbers", "literals"])
+@pytest.mark.parametrize("kind", ["objects", "depth", "numbers", "literals", "empties"])
 def test_out10_json_bombs_refused_before_json_loads(
     bundle: Path, monkeypatch: Any, kind: str
 ) -> None:
@@ -1007,7 +1018,7 @@ def _voxel_config() -> SimulationConfig:
 
 
 def test_item5_stale_config_digest(bundle: Path) -> None:
-    _mutate(bundle, lambda d: d["requested"]["run"].update(seed=12))
+    _mutate(bundle, lambda d: d["requested"]["run"].update(allow_invalid_result=True))
     with pytest.raises(ResultFormatError, match="config_sha256"):
         load(bundle)
 
@@ -1044,3 +1055,155 @@ def test_item5_reference_manifest_binding(tmp_path: Path) -> None:
     _mutate(b, lambda d: d["input_manifest"]["files"][0].update(role="density"))
     with pytest.raises(ResultFormatError):
         load(b)
+
+
+# ---- review REVIEW-89227ea7 regressions -------------------------------------------------------
+
+
+def test_item1_validly_typed_semantic_mismatches_are_refused(bundle: Path) -> None:
+    pristine = _doc(bundle)
+    cases = [
+        lambda d: d["effective"].update(physics="corrupt"),
+        lambda d: d["effective"]["physics"].pop("nuclear"),
+        lambda d: d["effective"]["physics"].update(surprise=1),
+        lambda d: d["provenance"].update(code={}),
+        lambda d: d["provenance"]["code"].update(git_dirty="no"),
+        lambda d: d["run"].update(seed=12),
+        lambda d: d["effective"].update(seed=12),
+        lambda d: d["run"].update(n_histories=16),
+        lambda d: d["statistics"]["grids"][0].update(shape=[3, 2, 5]),
+        lambda d: d["statistics"]["grids"][0].update(
+            energy_total_mev={"value": 1.5, "units": "MeV"}
+        ),
+        lambda d: d["effective_extra"].update(profile_axis=0),
+        lambda d: d["provenance"]["models"].update(stopping_model_id_effective="other"),
+    ]
+    for fn in cases:
+        _put_doc(bundle, pristine)
+        _mutate(bundle, fn)
+        with pytest.raises(ResultFormatError):
+            load(bundle)
+
+
+def test_item1_array_record_types() -> None:
+    from ionmc.configio import ConfigError, to_dict, validate_dict_structure
+
+    good = to_dict(_config())
+    geo = {**good["geometry"]}
+    vox = {"type": "voxel", "origin_mm": [0, 0, 0], "spacing_mm": [1, 1, 1], "shape": [1, 1, 1],
+           "materials": ["water"], "z_exit_mm": None, "density": None}  # fmt: skip
+    rec = {"status": "not-reconstructible", "reason": "r", "content_sha256": "a" * 64}
+    validate_dict_structure({**good, "geometry": {**vox, "material_index": rec}})
+    for bad in (
+        {**rec, "content_sha256": "xyz"},
+        {**rec, "reason": 5},
+        {**rec, "status": "other"},
+    ):
+        with pytest.raises(ConfigError):
+            validate_dict_structure({**good, "geometry": {**vox, "material_index": bad}})
+    assert geo
+
+
+def test_item2_automatic_channel_removed(bundle: Path) -> None:
+    gone = {
+        e["name"] + ".npy"
+        for e in _doc(bundle)["arrays"]
+        if e["origin"].get("name") == "edep_excluded_from_let"
+    }
+    assert len(gone) == 5
+    m = {k: v for k, v in _members(bundle).items() if k not in gone}
+    _write_zip(bundle, sorted(m.items()))
+    _mutate(
+        bundle,
+        lambda d: d.update(arrays=[e for e in d["arrays"] if e["name"] + ".npy" not in gone]),
+    )
+    with pytest.raises(ResultFormatError, match="inventory differs"):
+        load(bundle)
+
+
+def test_item2_grid_origin_changed_in_effective(bundle: Path) -> None:
+    _mutate(bundle, lambda d: d["effective"]["scoring"][0].update(origin_mm=[-3.0, -2.0, 1.0]))
+    with pytest.raises(ResultFormatError, match="effective.scoring disagrees"):
+        load(bundle)
+
+
+@pytest.fixture(scope="module")
+def lookup_bundle(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    from ionmc.lookup import LookupTable
+
+    data = Path(__file__).resolve().parent / "data" / "v3_006"
+    table = LookupTable.from_file(
+        Path(__file__).resolve().parents[1] / "data" / "synthetic_lookup.json"
+    )
+    cfg = SimulationConfig(
+        PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 30.0),
+        VoxelGeometry(
+            (-6.0, -6.0, 0.0), (4.0, 4.0, 4.0), (3, 3, 8), (WATER, PMMA),
+            np.load(data / "slab_material_index.npy"), np.load(data / "slab_density.npy"),
+        ),
+        (ScoringGrid((-6.0, -6.0, 0.0), (4.0, 4.0, 4.0), (3, 3, 8)),),
+        PhysicsOptions(nuclear=False, stopping_model="bethe-ionmc-v1"),
+        RunOptions("warp-cpu", "float64", 13, 8, n_batches=4),
+        tallies=(
+            TallyRequest("let", "dose", "let_d"),
+            TallyRequest("weighted", "dose", "lookup_sum", lookup=table.name),
+        ),
+        lookups=(table,),
+    )  # fmt: skip
+    r = Simulation(cfg).run()
+    return save(r, tmp_path_factory.mktemp("lk") / "b")
+
+
+def test_item2_lookup_tally_round_trip_and_unit_change(lookup_bundle: Path, tmp_path: Path) -> None:
+    got = load(lookup_bundle)
+    names = {
+        e["origin"].get("name") for e in got.doc["arrays"] if e["origin"]["kind"] == "quantity"
+    }
+    assert {"weighted", "let", "scoring_pieces"} <= names
+    assert [e["role"] for e in got.doc["input_manifest"]["files"]]
+    b = tmp_path / "copy"
+    shutil.copytree(lookup_bundle, b)
+
+    def unit(d: dict[str, Any]) -> None:
+        for e in d["arrays"]:
+            if e["origin"].get("name") == "weighted" and e["origin"]["array"] == "mean":
+                e["units"] = "Gy"
+
+    _mutate(b, unit)
+    with pytest.raises(ResultFormatError, match="semantic origin"):
+        load(b)
+
+
+def test_item3_role_and_item_digest_mutations(lookup_bundle: Path, tmp_path: Path) -> None:
+    b = tmp_path / "copy"
+    shutil.copytree(lookup_bundle, b)
+    pristine = _doc(b)
+
+    def swap_roles(d: dict[str, Any]) -> None:
+        f = d["input_manifest"]["files"]
+        f[0]["role"], f[1]["role"] = f[1]["role"], f[0]["role"]
+
+    def one_role(d: dict[str, Any]) -> None:
+        d["input_manifest"]["files"][0]["role"] = "lookup:other"
+
+    def item(d: dict[str, Any]) -> None:
+        d["input_manifest"]["files"][0]["item_sha256"] = "5" * 64
+
+    for fn, match in (
+        (swap_roles, "digests differ|roles"),
+        (one_role, "roles"),
+        (item, "item_sha256"),
+    ):
+        _put_doc(b, pristine)
+        _mutate(b, fn)
+        with pytest.raises(ResultFormatError, match=match):
+            load(b)
+
+
+def test_result_shapes_match_the_summaries_fixture() -> None:
+    from ionmc._result_shapes import SHAPES, derive
+
+    fx = json.loads(
+        (Path(__file__).parent / "data/v3_006/summaries-95937553.json").read_text(encoding="utf-8")
+    )
+    assert derive([c["summary"] for c in fx["cases"].values()]) == SHAPES

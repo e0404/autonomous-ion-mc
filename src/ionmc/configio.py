@@ -50,6 +50,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import tomllib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, fields, replace
@@ -450,6 +451,41 @@ def _geometry_items(geometry: VoxelGeometry) -> dict[str, dict[str, Any]]:
         if role == "material_index":
             item["materials"] = [_material_dict(m) for m in geometry.materials]
         out[role] = item
+    return out
+
+
+def reader_item_sha256s(
+    requested: Mapping[str, Any],
+    geometry_arrays: Mapping[str, Any],
+    lookup_provenance: list[dict[str, Any]],
+) -> dict[str, str]:
+    """Role -> ``item_sha256`` recomputed from a persisted ``requested`` document, the persisted
+    geometry arrays and the persisted lookup provenance records (no file is opened); equals the
+    loader's value for the same configuration (see :func:`_geometry_items`)."""
+    out: dict[str, str] = {}
+    g = requested["geometry"]
+    if g["type"] == "voxel":
+        defs = {m["name"]: m for m in requested.get("materials", [])}
+        mats = []
+        for name in g["materials"]:
+            rec = defs[name]
+            mats.append(_material_dict(MATERIALS[name]) if set(rec) == {"name"} else rec)
+        for role, arr in geometry_arrays.items():
+            item: dict[str, Any] = {
+                "role": role,
+                "dtype": arr.dtype.str,
+                "array_shape": [int(n) for n in arr.shape],
+                "content_sha256": array_content_sha256(arr),
+                "origin_mm": g["origin_mm"],
+                "spacing_mm": g["spacing_mm"],
+                "shape": g["shape"],
+                "z_exit_mm": g["z_exit_mm"],
+            }
+            if role == "material_index":
+                item["materials"] = mats
+            out[role] = sha256_canonical(item)
+    for prov in lookup_provenance:
+        out[f"lookup:{prov['name']}"] = sha256_canonical(prov)
     return out
 
 
@@ -1270,7 +1306,8 @@ def from_dict(
 
 
 def _check_array_record(v: Any, kp: str, required: bool) -> None:
-    """A serialised array position: reference, not-reconstructible record, file form or null."""
+    """A serialised array position: reference, not-reconstructible record, file form or null;
+    status/reason are strings, ``ref`` a string and every digest 64 lower-case hex digits."""
     if v is None and not required:
         return
     t = _table(v, kp)
@@ -1281,6 +1318,15 @@ def _check_array_record(v: Any, kp: str, required: bool) -> None:
     )
     if set(t) not in forms:
         raise ConfigError(kp, f"unknown or missing key(s) in array record {sorted(t)}")
+    for k, x in t.items():
+        if k in ("sha256", "content_sha256"):
+            if not (isinstance(x, str) and re.fullmatch(r"[0-9a-f]{64}", x)):
+                raise ConfigError(f"{kp}.{k}", "must be 64 lower-case hex digits")
+        elif k == "status":
+            if x != "not-reconstructible":
+                raise ConfigError(f"{kp}.status", "must be 'not-reconstructible'")
+        else:
+            _str(x, f"{kp}.{k}")
 
 
 def validate_dict_structure(d: Any) -> None:

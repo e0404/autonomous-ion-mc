@@ -46,11 +46,13 @@ from typing import Any
 
 import numpy as np
 
+from ionmc._result_shapes import SHAPES, jtype
 from ionmc.configio import (
     ConfigError,
     InputManifest,
     array_content_sha256,
     manifest_for_api_config,
+    reader_item_sha256s,
     sha256_canonical,
     to_dict,
     validate_dict_structure,
@@ -83,7 +85,7 @@ GRID_CONVENTION = (
     "origin = corner of voxel (0,0,0); C order [ix, iy, iz]; lengths in mm (decision 0037)"
 )
 UNIT_VOCABULARY = frozenset(
-    {"MeV", "Gy", "g", "mm", "mm^-2", "keV/um", "g/cm3", "1", "bool", "count"}
+    {"MeV", "Gy", "g", "mm", "mm^-2", "keV/um", "MeV/mm", "g/cm3", "1", "bool", "count"}
 )
 UNITS_TABLE = {
     "energy": "MeV",
@@ -134,18 +136,14 @@ DIAGNOSTIC_ARRAYS: dict[str, tuple[str, str]] = {
 # Union of the top-level keys of EffectiveConfig.summary() over the REG-2 summaries fixture
 # (tests/ionmc/data/v3_006/summaries-95937553.json; pinned equal by a test). Deeper levels of
 # ``effective`` are a verbatim copy of summary() and are not checked key by key.
-EFFECTIVE_TOP_KEYS = (
-    "backend precision production seed n_histories n_batches cpu_workers chunk_histories "
-    "max_steps scoring_pieces max_steps_origin unit_direction source physics mcs_mapping "
-    "geometry scoring tables stopping scattering_length_g_cm2 rng tallies nuclear"
-).split()
+EFFECTIVE_TOP_KEYS = tuple(SHAPES)
 _ALLOWED_DTYPES = frozenset({"<f8", "<f4", "<i4", "<i8", "<u4", "|b1", "|u1", "|i1"})
 _NAME_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
 _MEMBER_RE = re.compile(r"^[a-z0-9_-]{1,64}\.npy$")
 _FILE_RE = re.compile(r"^(?:[a-z0-9_-]{1,64}\.[a-z0-9]{1,8}|plots/[a-z0-9_-]{1,64}\.svg)$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _TOKEN_RE = re.compile(
-    rb'"(?:[^"\\]++|\\.)*+"|-?[0-9][0-9.eE+\-]*+|true|false|null|[{}\[\]:]', re.DOTALL
+    rb'"(?:[^"\\]++|\\.)*+"|-?[0-9][0-9.eE+\-]*+|true|false|null|[{}\[\]:,]', re.DOTALL
 )
 
 
@@ -779,19 +777,19 @@ def save(
 
 
 def prescan_json(data: bytes, max_tokens: int, max_depth: int) -> None:
-    """Single pass over raw JSON bytes: count tokens and object members, track nesting depth.
-    Allocation does not grow with the content (lazy regex iteration, early exit)."""
+    """Single pass over raw JSON bytes: every token (values, opening and closing delimiters,
+    commas and colons) counts against one budget and the nesting depth is tracked. Allocation
+    does not grow with the content (lazy regex iteration, early exit)."""
     tokens = depth = 0
     for m in _TOKEN_RE.finditer(data):
         c = m.group()[0]
-        if c in b"}]":
-            depth -= 1
-            continue
         tokens += 1
         if c in b"{[":
             depth += 1
             if depth > max_depth:
                 raise _fail(f"result.json nesting depth exceeds {max_depth}")
+        elif c in b"}]":
+            depth -= 1
         if tokens > max_tokens:
             raise _fail(f"result.json has more than {max_tokens} JSON tokens")
 
@@ -1072,6 +1070,113 @@ def _check_extra(x: dict[str, Any]) -> None:
     _need(isinstance(x["resolutions_status"], str), "effective_extra.resolutions_status: type")
 
 
+# ``mcs_mapping`` varies with the MCS mode and the projectile (keys of the unused/off variants are
+# not in the REG-2 fixture); only its JSON type is checked.
+_OPEN_BLOCKS = frozenset({"mcs_mapping"})
+
+
+def _types_ok(v: Any, types: list[str]) -> bool:
+    return jtype(v) in types
+
+
+def _check_effective(eff: dict[str, Any]) -> None:
+    """``effective`` against the shapes of ``EffectiveConfig.summary()`` (keys and JSON types of
+    every top-level value and of its dict children; deeper levels are a verbatim copy)."""
+    unknown = sorted(set(eff) - set(SHAPES))
+    if unknown:
+        raise _fail(f"effective: unknown field(s) {unknown}")
+    for k, spec in SHAPES.items():
+        if k not in eff:
+            _need(not spec["required"], f"effective: missing required field {k!r}")
+            continue
+        v = eff[k]
+        _need(_types_ok(v, spec["types"]), f"effective.{k}: expected {spec['types']}")
+        if isinstance(v, dict) and "keys" in spec and k not in _OPEN_BLOCKS:
+            ks = spec["keys"]
+            _need(set(v) <= set(ks), f"effective.{k}: unknown field(s) {sorted(set(v) - set(ks))}")
+            for c, cs in ks.items():
+                if c not in v:
+                    _need(not cs["required"], f"effective.{k}: missing required field {c!r}")
+                else:
+                    _need(_types_ok(v[c], cs["types"]), f"effective.{k}.{c}: wrong type")
+
+
+def _is_none_or_container(v: Any) -> bool:
+    return v is None or isinstance(v, dict | list)
+
+
+def _opt_str(v: Any) -> bool:
+    return v is None or isinstance(v, str)
+
+
+def _check_provenance(p: dict[str, Any]) -> None:
+    code, env, data, models = p["code"], p["environment"], p["data"], p["models"]
+    _keys(code, "ionmc_version git_commit git_dirty package_tree_oid source status reason".split(),
+          "provenance.code")  # fmt: skip
+    _need(
+        _opt_str(code["ionmc_version"]) and _opt_str(code["git_commit"])
+        and _opt_str(code["package_tree_oid"]) and (code["git_dirty"] is None
+        or isinstance(code["git_dirty"], bool))
+        and code["source"] in ("stamp", "git", "unavailable")
+        and isinstance(code["status"], str) and isinstance(code["reason"], str),
+        "provenance.code: malformed record",
+    )  # fmt: skip
+    _keys(env, "python_version platform numpy_version warp_version warp_devices warp_error".split(),
+          "provenance.environment")  # fmt: skip
+    _need(
+        all(_opt_str(env[k]) for k in ("python_version", "platform", "numpy_version"))
+        and _opt_str(env["warp_version"]) and _opt_str(env["warp_error"])
+        and isinstance(env["warp_devices"], list),
+        "provenance.environment: malformed record",
+    )  # fmt: skip
+    _keys(data, "stopping_data_used stopping_content_sha256 table_sha256 table_stopping_source "
+          "table_materials nuclear lookups".split(), "provenance.data")  # fmt: skip
+    _need(
+        isinstance(data["stopping_data_used"], list) and _opt_str(data["stopping_content_sha256"])
+        and isinstance(data["table_sha256"], str) and isinstance(data["table_stopping_source"], str)
+        and isinstance(data["table_materials"], dict | list)
+        and (data["nuclear"] is None or isinstance(data["nuclear"], dict))
+        and isinstance(data["lookups"], list)
+        and all(isinstance(x, dict) and isinstance(x.get("name"), str) for x in data["lookups"]),
+        "provenance.data: malformed record",
+    )  # fmt: skip
+    _keys(models, "stopping_model_id_effective stopping_version stopping_spec_sha256 "
+          "evidence_at_run straggling_model mcs_model end_of_range_model delta_electrons "
+          "nuclear_table_id".split(), "provenance.models")  # fmt: skip
+    _need(
+        all(_opt_str(models[k]) for k in ("stopping_model_id_effective", "stopping_version",
+            "stopping_spec_sha256", "straggling_model", "mcs_model", "end_of_range_model",
+            "delta_electrons", "nuclear_table_id"))
+        and _is_none_or_container(models["evidence_at_run"]),
+        "provenance.models: malformed record",
+    )  # fmt: skip
+
+
+def _check_run_binding(doc: dict[str, Any]) -> None:
+    """Bind run, provenance and statistics scalars to ``effective`` (and ``requested``)."""
+    eff, run = doc["effective"], doc["run"]
+    for k in ("backend", "precision", "production", "n_histories", "n_batches", "cpu_workers",
+              "chunk_histories"):  # fmt: skip
+        _need(run[k] == eff[k], f"run.{k} disagrees with effective.{k}")
+    _need(run["seed"] == eff["seed"], "run.seed disagrees with effective.seed")
+    _need(run["rng"] == eff["rng"], "run.rng disagrees with effective.rng")
+    _need(run["n_histories"] % run["n_batches"] == 0, "n_histories is not a multiple of n_batches")
+    _need(run["histories_per_batch"] == run["n_histories"] // run["n_batches"],
+          "run.histories_per_batch disagrees with n_histories / n_batches")  # fmt: skip
+    _need(run["seed"] == doc["requested"]["run"]["seed"], "run.seed disagrees with requested")
+    st = eff.get("stopping") or {}
+    p = doc["provenance"]
+    _need(p["models"]["stopping_model_id_effective"] == st.get("model_id_effective"),
+          "provenance.models disagrees with effective.stopping")  # fmt: skip
+    _need(p["data"]["table_sha256"] == eff["tables"]["sha256"],
+          "provenance.data.table_sha256 disagrees with effective.tables")  # fmt: skip
+    _need(len(p["data"]["lookups"]) == len(doc["requested"].get("lookups", [])),
+          "provenance.data.lookups disagrees with requested.lookups")  # fmt: skip
+    _need(doc["effective_extra"]["profile_axis"] == _profile_axis(eff["unit_direction"]),
+          "effective_extra.profile_axis disagrees with the source direction")  # fmt: skip
+    _need(doc["accounting"]["valid"] == doc["valid"], "accounting.valid disagrees with valid")
+
+
 def _check_structure(doc: Any) -> None:
     _keys(doc, _TOP, "result.json")
     if doc["schema"] != SCHEMA:
@@ -1094,17 +1199,15 @@ def _check_structure(doc: Any) -> None:
         if not isinstance(doc[k], dict):
             raise _fail(f"{k}: expected an object")
     _keys(doc["provenance"], _PROV, "provenance")
-    for k in _PROV:  # free-form until S3 defines them
-        _need(isinstance(doc["provenance"][k], dict), f"provenance.{k}: expected an object")
     _need(doc["units"] == UNITS_TABLE, "units: differs from the unit table")
     _check_extra(_keys(doc["effective_extra"], _EXTRA, "effective_extra"))
     try:
         validate_dict_structure(doc["requested"])
     except ConfigError as exc:
         raise _fail(f"requested: {exc}") from exc
-    unknown = sorted(set(doc["effective"]) - set(EFFECTIVE_TOP_KEYS))
-    if unknown:
-        raise _fail(f"effective: unknown field(s) {unknown}")
+    _check_effective(doc["effective"])
+    _check_provenance(doc["provenance"])
+    _check_run_binding(doc)
     src = doc["effective"].get("source")
     _need(isinstance(src, dict) and _is_int(src.get("z")), "effective.source.z: expected integer")
     _check_accounting(doc)
@@ -1141,46 +1244,61 @@ def _check_structure(doc: Any) -> None:
     _check_manifest_binding(doc)
 
 
-def _check_manifest_binding(doc: dict[str, Any]) -> None:
-    """Bind ``input_manifest`` to the persisted ``requested`` document (no file is opened)."""
-    req, m = doc["requested"], doc["input_manifest"]
-    if sha256_canonical(req) != m["config_sha256"]:
-        raise _fail("input_manifest.config_sha256 does not match the requested document")
+def _array_positions(doc: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """(role, requested record) of every array position of ``requested``, in position order."""
+    req = doc["requested"]
     g = req["geometry"]
-    recs: list[tuple[str | None, dict[str, Any]]] = []
+    recs: list[tuple[str, dict[str, Any]]] = []
     if g["type"] == "voxel":
         recs.append(("material_index", g["material_index"]))
         if g.get("density") is not None:
             recs.append(("density", g["density"]))
-    recs += [(None, r) for r in req.get("lookups", [])]
+    names = [x["name"] for x in doc["provenance"]["data"]["lookups"]]
+    for n, r in zip(names, req.get("lookups", []), strict=True):
+        recs.append((f"lookup:{n}", r))
+    return recs
+
+
+def _check_manifest_binding(doc: dict[str, Any]) -> None:
+    """Bind ``input_manifest`` to the persisted ``requested`` document (no file is opened):
+    config digest, exact unique roles for every array position (whatever the record kind),
+    reference and content digests per role."""
+    req, m = doc["requested"], doc["input_manifest"]
+    if sha256_canonical(req) != m["config_sha256"]:
+        raise _fail("input_manifest.config_sha256 does not match the requested document")
+    _need(
+        len(doc["provenance"]["data"]["lookups"]) == len(req.get("lookups", [])),
+        "provenance.data.lookups disagrees with requested.lookups",
+    )
+    recs = _array_positions(doc)
     files = m["files"]
+    roles = [f["role"] for f in files]
+    _need(len(set(roles)) == len(roles), "input_manifest.files repeats a role")
+    _need(
+        sorted(roles) == sorted(r for r, _ in recs),
+        f"input_manifest roles {sorted(roles)} differ from the roles implied by requested",
+    )
     by_role = {f["role"]: f for f in files}
-    refs = []
-    for want_role, r in recs:
-        if "ref" not in r:
-            continue
-        role = r["ref"]
-        ok = (
-            role == want_role if want_role else isinstance(role, str) and role.startswith("lookup:")
-        )
-        _need(ok, f"requested reference {role!r} has the wrong role for its position")
-        f = by_role.get(role)
-        _need(f is not None, f"requested reference {role!r} has no manifest entry")
-        assert f is not None
+    for role, r in recs:
+        f = by_role[role]
         _need(
-            f["sha256"] == r["sha256"] and f["content_sha256"] == r["content_sha256"],
-            f"requested reference {role!r} disagrees with the manifest entry",
+            f["content_sha256"] == r.get("content_sha256"), f"role {role!r}: content digests differ"
         )
-        refs.append(role)
-    _need(len(set(refs)) == len(refs), "requested references repeat a manifest role")
+        if "ref" in r:
+            _need(r["ref"] == role, f"requested reference {r['ref']!r} has the wrong role {role!r}")
+            _need(
+                f["sha256"] == r["sha256"],
+                f"requested reference {role!r} disagrees with the manifest entry",
+            )
+        else:
+            _need(
+                not isinstance(f["sha256"], str),
+                f"role {role!r}: expected a reference",
+            )
+    refs = [r["ref"] for _, r in recs if "ref" in r]
     for f in files:
         if isinstance(f["sha256"], str):
             _need(f["role"] in refs, f"manifest file {f['role']!r} is not referenced")
-    _need(len(recs) == len(files), "requested array positions and manifest files differ in number")
-    _need(
-        sorted(r["content_sha256"] for _, r in recs) == sorted(f["content_sha256"] for f in files),
-        "requested array digests and manifest content digests differ",
-    )
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1306,15 +1424,16 @@ def _read_member(
 # load: cross-field invariants
 
 
-_LINEAR_UNITS = {
-    "edep": "MeV",
-    "dose": "Gy",
-    "fluence": "mm^-2",
-    "fluence_spectrum": "mm^-2",
-    "let_t": "keV/um",
-    "let_d": "keV/um",
-    "let_d_eps": "keV/um",
+_UNIT_OVERRIDE = {"dose": "Gy", "fluence": "mm^-2", "fluence_spectrum": "mm^-2"}
+_PER_VOLUME = ("fluence", "fluence_spectrum")
+_EXCLUDED_DEFINITION = "energy of cutoff and zero-length deposits, excluded from LET and lookups"
+_PIECE_DEFINITIONS = {
+    "scoring_pieces": "scoring pieces of class step per primary",
+    "scoring_pieces_local": "scoring pieces of class local (point deposits) per primary",
 }
+_CLASS_LOCAL = 2  # transport.channels.CLASS_LOCAL
+
+
 _F8, _B1, _I4 = {"<f8"}, {"|b1"}, {"<i4", "<i8"}
 _GRID_DTYPES = {
     "defined_mask": _B1, "sparse_mask": _B1, "n_nonzero_batches": _I4,
@@ -1328,25 +1447,45 @@ class _Expect:
     dtypes: set[str]
     shape: list[int] | None
     axes: list[str] | None
-    units: str | None  # None: any lookup unit
+    units: str
     quantity: str | None = None
     index: int | None = None
+    definition: str | None = None
+
+
+_QPlan = tuple[str, str, str, list[int], str]  # name, quantity, units, shape, definition
 
 
 def _quantity_plan(
-    req: Mapping[str, Any], grid: str, shape: list[int]
-) -> list[tuple[str, str, str | None, list[int]]]:
-    """Ordered (name, quantity, units, shape) of the quantities of ``grid`` the run must have:
-    the requested tallies, then the optional excluded-energy channel and the two piece counts."""
-    out: list[tuple[str, str, str | None, list[int]]] = []
+    eff: Mapping[str, Any], req: Mapping[str, Any], gi: int, shape: list[int]
+) -> list[_QPlan]:
+    """Ordered quantities of grid ``gi`` the run must have, from the compiled channel plan
+    (``effective.tallies``): the requested tallies, the excluded-energy channel when the plan has
+    a local-class energy channel on the grid, then the two piece counts."""
+    plan = eff.get("tallies") or {}
+    grid = req["scoring"][gi]["name"]
+    qd = {q["name"]: q for q in plan.get("quantities", [])}
+    out: list[_QPlan] = []
     for t in req.get("tallies", []):
         if t["grid"] != grid:
             continue
+        if t["name"] not in qd:
+            raise _fail(f"requested tally {t['name']!r} has no quantity in effective.tallies")
         q = t["quantity"]
         shp = list(shape)
         if q == "fluence_spectrum":
             shp.append(len(t["energy_edges_mev_per_u"]) + 1)
-        out.append((t["name"], q, _LINEAR_UNITS.get(q), shp))
+        defn = qd[t["name"]]["definition"] + (" per volume" if q in _PER_VOLUME else "")
+        out.append((t["name"], q, _UNIT_OVERRIDE.get(q, qd[t["name"]]["units"]), shp, defn))
+    if not out:
+        return out
+    if any(
+        c["kind"] == "E" and c["grid"] == gi and c["class_mask"] == _CLASS_LOCAL
+        for c in plan.get("channels", [])
+    ):
+        out.append(("edep_excluded_from_let", "edep", "MeV", list(shape), _EXCLUDED_DEFINITION))
+    for n, d in _PIECE_DEFINITIONS.items():
+        out.append((n, "count", "1", list(shape), d))
     return out
 
 
@@ -1356,7 +1495,7 @@ def _expected_catalogue(doc: dict[str, Any], gs: dict[str, str]) -> dict[tuple[A
     nb = doc["run"]["n_batches"]
     persisted = doc["statistics"]["batch_arrays"]["status"] == "persisted"
     exp: dict[tuple[Any, ...], _Expect] = {}
-    for g in eff["scoring"]:
+    for gi, g in enumerate(eff["scoring"]):
         n, shape = g["name"], list(g["shape"])
         for base, (units, _d) in GRID_ARRAYS.items():
             if base == "batch_energy_mev" and not persisted:
@@ -1369,26 +1508,16 @@ def _expected_catalogue(doc: dict[str, Any], gs: dict[str, str]) -> dict[tuple[A
                 (["batch"] if batch else []) + list(_SPATIAL),
                 units,
             )
-        plan = _quantity_plan(req, n, shape)
-        if plan:
-            tail = [
-                ("scoring_pieces", "count", "1", shape),
-                ("scoring_pieces_local", "count", "1", shape),
-            ]
-            excl: tuple[str, str, str | None, list[int]] = (
-                "edep_excluded_from_let", "edep", "MeV", shape,
-            )  # fmt: skip
-            actual = _actual_quantity_names(doc, n)
-            plan = [*plan, *([excl] if excl[0] in actual else []), *tail]
+        plan = _quantity_plan(eff, req, gi, shape)
         used: set[str] = set()
-        for qi, (qn, q, qunits, shp) in enumerate(plan):
+        for qi, (qn, q, qunits, shp, qdef) in enumerate(plan):
             qs = safe_name(qn, used)
             axes = list(_SPATIAL) + (["energy_bin"] if len(shp) == 4 else [])
             for base in QUANTITY_ARRAYS:
-                qu: str | None = {"defined_mask": "bool", "n_nonzero": "count"}.get(base, qunits)
+                qu: str = {"defined_mask": "bool", "n_nonzero": "count"}.get(base, qunits)
                 dt = _I4 if base == "n_nonzero" else _QUANTITY_DTYPES[base]
                 exp[("quantity", n, qn, base)] = _Expect(
-                    f"grid__{gs[n]}__q__{qs}__{base}", dt, shp, axes, qu, q, qi
+                    f"grid__{gs[n]}__q__{qs}__{base}", dt, shp, axes, qu, q, qi, f"{qdef} [{base}]"
                 )
     geom = eff["geometry"]
     gshape = list(geom["shape"])
@@ -1415,12 +1544,8 @@ def _expected_catalogue(doc: dict[str, Any], gs: dict[str, str]) -> dict[tuple[A
     return exp
 
 
-def _actual_quantity_names(doc: dict[str, Any], grid: str) -> set[str]:
-    return {
-        e["origin"].get("name")
-        for e in doc["arrays"]
-        if e["origin"].get("kind") == "quantity" and e["origin"].get("grid") == grid
-    }
+def _grid_meta(g: Mapping[str, Any]) -> tuple[Any, ...]:
+    return (g.get("name"), g.get("origin_mm"), g.get("spacing_mm"), g.get("shape"))
 
 
 def _check_catalogue(doc: dict[str, Any]) -> dict[tuple[Any, Any, Any, Any], str]:
@@ -1437,9 +1562,7 @@ def _check_catalogue(doc: dict[str, Any]) -> dict[tuple[Any, Any, Any, Any], str
     gnames = [g["name"] for g in sc]
     if len(set(gnames)) != len(gnames):
         raise _fail("effective.scoring: duplicate grid names")
-    if [g["name"] for g in rsc] != gnames or [list(g["shape"]) for g in rsc] != [
-        g["shape"] for g in sc
-    ]:
+    if [_grid_meta(g) for g in rsc] != [_grid_meta(g) for g in sc]:
         raise _fail("effective.scoring disagrees with requested.scoring")
     geo = doc["effective"]["geometry"]
     if not (
@@ -1488,6 +1611,7 @@ def _check_catalogue(doc: dict[str, Any]) -> dict[tuple[Any, Any, Any, Any], str
             or (x.units is not None and e["units"] != x.units)
             or (x.quantity is not None and o.get("quantity") != x.quantity)
             or (x.index is not None and o.get("index") != x.index)
+            or (x.definition is not None and e["definition"] != x.definition)
         )
         if bad:
             raise _fail(f"array {e['name']!r} does not match its semantic origin and the request")
@@ -1561,6 +1685,31 @@ def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any
                 m = arrays[by[("quantity", gname, qname, "defined_mask")]].astype(bool)
                 if (~m & ~np.isnan(arrays[name])).any():
                     raise _fail(f"quantity {qname!r}: ratio values must be NaN where undefined")
+    for g, st in zip(doc["effective"]["scoring"], doc["statistics"]["grids"], strict=True):
+        n = g["name"]
+        _need(
+            st["name"] == n and st["shape"] == g["shape"],
+            f"statistics.grids[{n!r}] shape or name differs",
+        )
+        en = arrays[by[("grid", n, None, "energy_mev")]]
+        _need(st["energy_total_mev"].get("value") == float(np.sum(en)),
+              f"statistics.grids[{n!r}].energy_total_mev disagrees with the array")  # fmt: skip
+        sp = arrays[by[("grid", n, None, "sparse_mask")]]
+        _need(
+            st["n_sparse_voxels"] == int(sp.sum()),
+            f"statistics.grids[{n!r}].n_sparse_voxels differs",
+        )
+    geo = {
+        role: arrays[by[("geometry", None, None, base)]]
+        for role, base in (("material_index", "material_index"), ("density", "density_g_cm3"))
+        if ("geometry", None, None, base) in by
+    }
+    items = reader_item_sha256s(doc["requested"], geo, doc["provenance"]["data"]["lookups"])
+    for f in doc["input_manifest"]["files"]:
+        _need(
+            items.get(f["role"]) == f["item_sha256"],
+            f"manifest item_sha256 of {f['role']!r} differs",
+        )
     acc = doc["accounting"]
     nonzero = _invalidating(acc["counters"], acc["channel_counters"])
     if doc["valid"] != (not nonzero) or acc["valid"] != doc["valid"]:
