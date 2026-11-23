@@ -155,6 +155,8 @@ def code_identity(package_dir: str | os.PathLike[str] | None = None) -> dict[str
         commit, stamped = stamp.get("git_commit"), stamp.get("package_tree_oid")
         commit = commit if isinstance(commit, str) and _HEX40.match(commit) else None
         dirty = (oid != stamped) if isinstance(stamped, str) and _HEX40.match(stamped) else None
+        if stamp.get("status") == "dirty" and dirty is not None:
+            dirty = True  # built from a tree that differs from the commit's package tree
         return _code(
             __version__, oid, commit, dirty, "stamp",
             "the build stamp carries no commit or no tree id",

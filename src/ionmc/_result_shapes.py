@@ -389,7 +389,9 @@ PROVENANCE_CODE = rec(
         "source": "str",
         "status": "str",
         "reason": "str",
-    }
+        "saved_with": opt("str"),  # save-time tree oid, only if it differs
+    },
+    optional=("saved_with",),
 )
 PROVENANCE_ENVIRONMENT = rec(
     {

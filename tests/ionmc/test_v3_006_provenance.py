@@ -57,14 +57,29 @@ def _config(model: str) -> SimulationConfig:
     )
 
 
+def _require_datasets(*dataset_ids: str) -> None:
+    """Skip a cache-backed case without the dataset; fail under IONMC_REQUIRE_DATA=1."""
+    from ionmc.data import cache
+
+    cdir = cache.resolve_cache_dir(None)
+    for dataset_id in dataset_ids:
+        try:
+            cache.verify(dataset_id, cdir)
+        except (FileNotFoundError, cache.IntegrityError) as exc:
+            if os.environ.get("IONMC_REQUIRE_DATA") == "1":
+                pytest.fail(f"IONMC_REQUIRE_DATA=1 but {dataset_id} is not cached: {exc}")
+            pytest.skip(f"{dataset_id} is not in the cache (IONMC_CACHE_DIR)")
+
+
+_MODEL_DATASETS = {
+    "nist-pstar-astar-water-2005": ("nist-pstar-water-2005",),
+    "icru90-water-v1": ("geant4-icru90-stopping-11.4.2",),
+}
+
+
 def _bundle(tmp: Path, model: str, name: str = "b") -> Path:
-    try:
-        result = Simulation(_config(model)).run()
-    except Exception as exc:  # noqa: BLE001 - tabulated data cache absent
-        if model == "bethe-ionmc-v1":
-            raise
-        pytest.skip(f"{model}: data cache not available ({type(exc).__name__}: {exc})")
-    return save(result, tmp / name)
+    _require_datasets(*_MODEL_DATASETS.get(model, ()))
+    return save(Simulation(_config(model)).run(), tmp / name)  # failures propagate
 
 
 def _doc(bundle: Path) -> dict[str, Any]:
@@ -285,9 +300,9 @@ def test_prov6_real_bundle_and_save_guard(tmp_path: Path, monkeypatch: pytest.Mo
     assert str(tmp_path) not in report and doc["run"]["output_path"] not in report
     assert doc["provenance"]["code"]["package_tree_oid"] and doc["run"]["cache_dir_source"]
     result = Simulation(_config("bethe-ionmc-v1")).run()
-    leak = prov.environment_block()
-    leak["platform"] = f"/srv/{socket.gethostname()}/x"
-    monkeypatch.setattr(prov, "environment_block", lambda: leak)
+    result.environment["provenance_snapshot"]["environment"]["platform"] = (
+        f"/srv/{socket.gethostname()}/x"
+    )
     with pytest.raises(ResultFormatError):
         save(result, tmp_path / "leak")
     assert not (tmp_path / "leak").exists()
@@ -312,6 +327,13 @@ def test_prov7_expectation_helper() -> None:
 # ------------------------------------------------------------------------------------- PROV-5
 
 
+# stderr texts of an offline build environment that cannot obtain hatchling (never a hook error)
+_ENV_BUILD_ERRORS = (
+    "failed to resolve", "no solution found", "network", "offline", "failed to fetch",
+    "failed to download", "dns error", "connection",
+)  # fmt: skip
+
+
 def _uv_build(src: Path, out: Path) -> Path:
     uv = shutil.which("uv")
     if uv is None:
@@ -325,7 +347,12 @@ def _uv_build(src: Path, out: Path) -> Path:
         cwd=src, env=env, capture_output=True, text=True, timeout=300, check=False,
     )  # fmt: skip
     if proc.returncode != 0:
-        pytest.skip(f"uv build --wheel --offline cannot run here: {proc.stderr.strip()[-400:]}")
+        msg = f"uv build --wheel --offline failed: {proc.stderr.strip()[-600:]}"
+        low = proc.stderr.lower()
+        environmental = any(k in low for k in _ENV_BUILD_ERRORS)
+        if environmental and os.environ.get("IONMC_REQUIRE_DATA") != "1":
+            pytest.skip(msg)
+        pytest.fail(msg)
     (wheel,) = out.glob("ionmc-*.whl")
     return wheel
 
@@ -342,12 +369,14 @@ def test_prov5_wheel_build_stamp(tmp_path: Path) -> None:
         zf.extractall(unpacked)
     stamp = json.loads((unpacked / "ionmc" / prov.BUILD_STAMP_NAME).read_text(encoding="utf-8"))
     assert set(stamp) == {"git_commit", "package_tree_oid", "status"}
-    assert stamp["git_commit"] == _git(["rev-parse", "HEAD"], ROOT) and stamp["status"] == "ok"
+    assert stamp["git_commit"] == _git(["rev-parse", "HEAD"], ROOT)
+    clean = prov.package_tree_oid(PKG) == _git(["rev-parse", "HEAD:src/ionmc"], ROOT)
+    assert stamp["status"] == ("ok" if clean else "dirty")
     assert stamp["package_tree_oid"] == prov.package_tree_oid(unpacked / "ionmc")
     code = prov.code_identity(unpacked / "ionmc")
     assert (code["source"], code["git_dirty"], code["git_commit"]) == (
         "stamp",
-        False,
+        not clean,
         stamp["git_commit"],
     )
 
@@ -373,3 +402,44 @@ def test_prov5_pyproject_and_lock_unchanged() -> None:
     assert '[tool.hatch.build.hooks.custom]\npath = "hatch_build.py"' in text
     assert _git(["diff", "--stat", "HEAD", "--", "uv.lock"], ROOT) == ""
     assert "src/ionmc/_build_info.json" in (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+
+def test_prov5_dirty_build_is_stamped_dirty(tmp_path: Path) -> None:
+    if GIT is None:
+        pytest.skip("git is not available")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for name in ("pyproject.toml", "hatch_build.py", "README.md", ".gitignore"):
+        shutil.copy2(ROOT / name, repo / name)
+    _copy_pkg(repo / "src" / "ionmc")
+    _git(["init", "-q"], repo)
+    _git(["add", "-A"], repo)
+    _git(["commit", "-qm", "x"], repo)
+    commit = _git(["rev-parse", "HEAD"], repo)
+    with open(repo / "src" / "ionmc" / "results.py", "ab") as fh:
+        fh.write(b"#")  # the build tree differs from the commit's package tree
+    wheel = _uv_build(repo, tmp_path / "out")
+    unpacked = tmp_path / "unpacked"
+    with zipfile.ZipFile(wheel) as zf:
+        zf.extractall(unpacked)
+    stamp = json.loads((unpacked / "ionmc" / prov.BUILD_STAMP_NAME).read_text(encoding="utf-8"))
+    assert stamp["status"] == "dirty" and stamp["git_commit"] == commit
+    assert stamp["package_tree_oid"] == prov.package_tree_oid(unpacked / "ionmc")
+    assert stamp["package_tree_oid"] != _git(["rev-parse", "HEAD:src/ionmc"], repo)
+    code = prov.code_identity(unpacked / "ionmc")
+    assert (code["source"], code["git_commit"], code["git_dirty"]) == ("stamp", commit, True)
+
+
+def test_prov_run_time_identity_survives_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = Simulation(_config("bethe-ionmc-v1")).run()
+    snap = result.environment["provenance_snapshot"]
+    run_oid = snap["code"]["package_tree_oid"]
+    monkeypatch.setattr(prov, "package_tree_oid", lambda *a, **k: "f" * 40)
+    code = _doc(save(result, tmp_path / "b"))["provenance"]["code"]
+    assert code["package_tree_oid"] == run_oid and code["saved_with"] == "f" * 40
+    monkeypatch.undo()
+    same = _doc(save(result, tmp_path / "c"))["provenance"]
+    assert "saved_with" not in same["code"] and same["environment"] == snap["environment"]
+    load(tmp_path / "b")

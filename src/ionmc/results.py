@@ -646,6 +646,27 @@ def _quantity_batch_status(
     return {"status": "not-persisted", "reason": reason}
 
 
+def _snapshot(result: Result) -> Mapping[str, Any]:
+    snap = result.environment.get("provenance_snapshot")
+    return snap if isinstance(snap, Mapping) else {}
+
+
+def _code_at_run(result: Result) -> dict[str, Any]:
+    """The code identity captured when the run was made; the save-time package tree oid is
+    recorded as ``saved_with`` only when it differs (never overwriting the run-time identity)."""
+    snap = _snapshot(result).get("code")
+    code = dict(snap) if isinstance(snap, Mapping) else prov.code_identity()
+    now = prov.package_tree_oid()
+    if now != code.get("package_tree_oid"):
+        code["saved_with"] = now
+    return code
+
+
+def _environment_at_run(result: Result) -> dict[str, Any]:
+    snap = _snapshot(result).get("environment")
+    return dict(snap) if isinstance(snap, Mapping) else prov.environment_block()
+
+
 def build_document(
     result: Result,
     manifest: InputManifest | None,
@@ -693,8 +714,8 @@ def build_document(
             "lookup_plan": _lookup_plan(result),
         },
         "provenance": {
-            "code": prov.code_identity(),
-            "environment": prov.environment_block(),
+            "code": _code_at_run(result),
+            "environment": _environment_at_run(result),
             "data": prov.data_block(summary, result.lookups),
             "models": prov.models_block(summary),
         },
@@ -1203,8 +1224,10 @@ def _check_provenance(p: dict[str, Any]) -> None:
     c = p["code"]
     _need(c["source"] in ("stamp", "git", "unavailable"), "provenance.code.source")
     _need(c["status"] in ("ok", "unknown"), "provenance.code.status")
-    for k in ("git_commit", "package_tree_oid"):
-        _need(c[k] is None or _HEX40.match(c[k]) is not None, f"provenance.code.{k}: not 40 hex")
+    for k in ("git_commit", "package_tree_oid", "saved_with"):
+        _need(
+            c.get(k) is None or _HEX40.match(c[k]) is not None, f"provenance.code.{k}: not 40 hex"
+        )
     known = c["git_commit"] is not None and c["git_dirty"] is not None
     _need((c["status"] == "ok") == known, "provenance.code.status disagrees with commit/dirty")
     _need((c["reason"] == "") == known, "provenance.code.reason")

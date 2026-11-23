@@ -8,7 +8,7 @@ from typing import Any
 import numpy
 
 from ionmc._version import __version__
-from ionmc.provenance import code_identity
+from ionmc.provenance import code_identity, environment_block
 
 
 def _describe_warp() -> dict[str, Any]:
@@ -52,4 +52,6 @@ def describe_environment() -> dict[str, Any]:
         "warp_devices": warp_info["devices"],
         "git_sha": code["git_commit"],
         "git_dirty": code["git_dirty"],
+        # the complete provenance snapshot of this run; persisted unchanged by results.save
+        "provenance_snapshot": {"code": code, "environment": environment_block()},
     }
