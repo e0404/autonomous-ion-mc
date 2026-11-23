@@ -702,9 +702,10 @@ def build_document(
         if a.origin["kind"] == "geometry"
     }
     evidence = contract.evidence_from_origins(
-        (a.origin, array_content_sha256(a.data) if a.origin["kind"] == "geometry" else None)
+        (a.origin, array_content_sha256(a.data) if a.origin["kind"] == "geometry" else None,
+         tuple(int(n) for n in a.data.shape))
         for a in arrays
-    )
+    )  # fmt: skip
     return {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -863,6 +864,11 @@ def _honoured(result: Result, arrays: list[_Arr]) -> None:
         if flag and key not in diag:
             raise _fail(f"requested diagnostic {key!r} left no array")
     _honoured_trace(d.trace_histories > 0, diag)
+    if d.trace_histories > 0:
+        ends = [a for a in arrays if a.origin["kind"] == "diagnostic"
+                and a.origin["array"] == "trace_end_history"]  # fmt: skip
+        _honoured_trace_count(d.trace_histories, cfg.run.n_histories,
+                              [int(a.data.shape[0]) for a in ends])  # fmt: skip
     nuclear = cfg.physics.nuclear
     if nuclear != isinstance(result.energy_balance, NuclearEnergyBalance):
         raise _fail("nuclear request and nuclear energy balance disagree")
@@ -882,6 +888,15 @@ def _honoured_trace(requested: bool, diag: set[Any]) -> None:
         raise _fail("trace arrays present although no trace was requested")
 
 
+def _honoured_trace_count(requested: int, n_histories: int, realised: list[int]) -> None:
+    """The exact trace count: ``trace_end_history`` holds ``min(trace_histories, n_histories)``
+    traced primaries (transport.tally.build_diagnostics), one array, no more and no fewer."""
+    want = min(int(requested), int(n_histories))
+    if realised != [want]:
+        raise _fail(f"trace count: requested {requested} ({want} realisable of {n_histories} "
+                    f"histories), trace_end_history holds {realised}")  # fmt: skip
+
+
 def _check_honoured(doc: dict[str, Any]) -> None:
     """The reader's half of the honoured check, from ``result.json`` alone."""
     rq, eff = doc["requested"], doc["effective"]
@@ -896,6 +911,11 @@ def _check_honoured(doc: dict[str, Any]) -> None:
         _need(bool(flag) == (key in diag), f"diagnostic {key!r} presence disagrees with requested")
     try:
         _honoured_trace(d["trace_histories"] > 0, diag)
+        if d["trace_histories"] > 0:
+            ends = [int(e["shape"][0]) for e in doc["arrays"]
+                    if e["origin"]["kind"] == "diagnostic"
+                    and e["origin"]["array"] == "trace_end_history"]  # fmt: skip
+            _honoured_trace_count(d["trace_histories"], rq["run"]["n_histories"], ends)
     except ResultFormatError as exc:
         raise _fail(str(exc)) from exc
     nuc = bool(rq["physics"]["nuclear"])
@@ -1645,9 +1665,13 @@ def _check_reconciliation(doc: dict[str, Any]) -> None:
             rq,
             eff,
             contract.evidence_from_origins(
-                (e["origin"], e["content_sha256"] if e["origin"]["kind"] == "geometry" else None)
+                (
+                    e["origin"],
+                    e["content_sha256"] if e["origin"]["kind"] == "geometry" else None,
+                    tuple(int(n) for n in e["shape"]),
+                )
                 for e in doc["arrays"]
-            ),
+            ),  # fmt: skip
         )
     except UnsupportedCombinationError as exc:
         head = (
@@ -1758,6 +1782,14 @@ def derive_channel_plan(
     for t in rq.get("tallies", []):
         gi = gi_of[t["grid"]]
         used.add(gi)
+        if t.get("let_medium") not in frozen.TALLY_LET_MEDIUM:
+            raise _fail(f"requested tally {t['name']!r}: let_medium {t.get('let_medium')!r} is "
+                        f"not realised by any channel kind "
+                        f"({list(frozen.TALLY_LET_MEDIUM)})")  # fmt: skip
+        if t.get("dose_reference") not in frozen.TALLY_DOSE_REFERENCE:
+            raise _fail(f"requested tally {t['name']!r}: dose_reference "
+                        f"{t.get('dose_reference')!r} is not realised by any channel kind "
+                        f"({list(frozen.TALLY_DOSE_REFERENCE)})")  # fmt: skip
         gen, q, sps = _generation_range(t["generation"]), t["quantity"], t["species"]
         li, lu, sp = -1, "", None
         if t["lookup"] is not None:

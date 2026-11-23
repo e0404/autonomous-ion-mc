@@ -1185,6 +1185,13 @@ def _mutations() -> list[
         ("diagnostics escape records",
          lambda rq, eff, ev: rq["diagnostics"].update(escape_records=True)),
         ("diagnostics trace", lambda rq, eff, ev: rq["diagnostics"].update(trace_histories=2)),
+        ("realised trace count (evidence)",
+         lambda rq, eff, ev: ev["diagnostics"].update(trace_count=1)),
+        ("tally let_medium", lambda rq, eff, ev: rq["tallies"][0].update(let_medium="bone")),
+        ("tally dose_reference",
+         lambda rq, eff, ev: rq["tallies"][0].update(dose_reference="water")),
+        ("effective LET water row medium",
+         lambda rq, eff, ev: eff["tables"]["water_row"].update(material="pmma")),
         ("realised diagnostics (evidence)",
          lambda rq, eff, ev: ev["diagnostics"].update(escape_records=True)),
         ("material definition",
@@ -1205,6 +1212,76 @@ def test_cap3c_reconcile_compares_every_request_field_class() -> None:
         with pytest.raises(UnsupportedCombinationError):
             contract.reconcile(rq, eff, ev)
         print("CAP-3c refused:", label)
+
+
+def test_cap3c_trace_count_is_reconciled_exactly() -> None:
+    """A request between positive trace counts (1 -> 2) is detected: the evidence carries the
+    realised count min(trace_histories, n_histories), compared exactly, never as a Boolean."""
+    cfg = _cfg(diagnostics=DiagnosticsOptions(trace_histories=1), run={"n_histories": 40})
+    eff = validate(cfg)
+    rq, summary, ev = to_dict(cfg), eff.summary(), contract.evidence_from_effective(eff)
+    assert ev["diagnostics"]["trace_count"] == 1
+    contract.reconcile(rq, summary, ev)
+    rq2 = copy.deepcopy(rq)
+    rq2["diagnostics"]["trace_histories"] = 2
+    with pytest.raises(UnsupportedCombinationError, match="trace_count: requested 2, effective 1"):
+        contract.reconcile(rq2, summary, ev)
+    ev2 = copy.deepcopy(ev)
+    ev2["diagnostics"]["trace_count"] = 2
+    with pytest.raises(UnsupportedCombinationError, match="trace_count: requested 1, effective 2"):
+        contract.reconcile(rq, summary, ev2)
+    # more traces than histories: validate refuses the request; the realisable count of the
+    # persisted-array path is bounded by the history count all the same
+    cfg3 = _cfg(diagnostics=DiagnosticsOptions(trace_histories=100), run={"n_histories": 40})
+    with pytest.raises(UnsupportedCombinationError, match="exceeds n_histories"):
+        validate(cfg3)
+    assert contract.realisable_trace_count(100, 40) == 40
+    assert contract.realisable_trace_count(0, 40) is None
+    # from persisted origins: the length of trace_end_history
+    ev3 = contract.evidence_from_origins(
+        [
+            ({"kind": "diagnostic", "array": "trace_end_history"}, None, (7,)),
+            ({"kind": "diagnostic", "array": "trace_end_code"}, None, (7,)),
+        ]
+    )
+    assert ev3["diagnostics"] == {"track_end_positions": False, "escape_records": False,
+                                  "trace_histories": True, "trace_count": 7}  # fmt: skip
+
+
+def test_cap5_writer_and_reader_refuse_a_changed_trace_count_and_tally_semantics(
+    tmp_path: Path, tally_result: Any, trace_result: Any
+) -> None:
+    """Regression mutations for REVIEW-d77d34e0: the exact trace count and the let_medium /
+    dose_reference semantics are checked by the writer (save) and the reader (load)."""
+    t = trace_result  # trace_histories=2 of 12 histories
+    more = dataclasses.replace(
+        t.requested_config, diagnostics=DiagnosticsOptions(trace_histories=3)
+    )
+    with pytest.raises((ResultFormatError, UnsupportedCombinationError), match="trace"):
+        save(dataclasses.replace(t, requested_config=more), tmp_path / "trace3")
+    assert not (tmp_path / "trace3").exists()
+    b = save(t, tmp_path / "trace_ok")
+    _mutate(b, lambda d: d["requested"]["diagnostics"].update(trace_histories=3))
+    with pytest.raises(ResultFormatError, match="trace"):
+        load(b)
+    _mutate(b, lambda d: d["requested"]["diagnostics"].update(trace_histories=1))
+    with pytest.raises(ResultFormatError, match="trace"):
+        load(b)
+    r = tally_result
+    for field, value in (("let_medium", "bone"), ("dose_reference", "water")):
+        req = dataclasses.replace(
+            r.requested_config,
+            tallies=tuple(
+                dataclasses.replace(q, **{field: value}) for q in r.requested_config.tallies
+            ),
+        )
+        with pytest.raises((ResultFormatError, UnsupportedCombinationError), match=field):
+            save(dataclasses.replace(r, requested_config=req), tmp_path / f"bad_{field}")
+        assert not (tmp_path / f"bad_{field}").exists()
+        b2 = save(r, tmp_path / f"ok_{field}")
+        _mutate(b2, lambda d, f=field, v=value: d["requested"]["tallies"][0].update({f: v}))
+        with pytest.raises(ResultFormatError, match=field):
+            load(b2)
 
 
 def test_cap3c_voxel_array_digests_are_compared() -> None:

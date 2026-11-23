@@ -41,6 +41,7 @@ from ionmc.sources import PencilBeamSource
 
 EQUAL, DERIVED, UNUSED, REQUESTED_ONLY = "equal", "derived", "unused", "requested-only"
 CLASSES = (EQUAL, DERIVED, UNUSED, REQUESTED_ONLY)
+LET_QUANTITIES = ("let_t", "let_d", "let_d_eps")  # realised by the LET water row
 
 
 # ---------------------------------------------------------------------------------------------
@@ -530,8 +531,20 @@ def _row_requests(c: _Ctx) -> None:
                       ("trace_histories", rd["trace_histories"] > 0)):  # fmt: skip
         if bool(ev.get(k)) != want_d:
             raise _differ(f"diagnostics.{k}", want_d, ev.get(k))
+    want_n = realisable_trace_count(rd["trace_histories"], c.rq["run"]["n_histories"])
+    if ev.get("trace_count") != want_n:  # the exact count, not its sign
+        raise _differ("diagnostics.trace_count", want_n, ev.get("trace_count"))
     c.add("diagnostics", EQUAL, "arrays-present", [])
     tallies, lookups = c.rq.get("tallies") or [], c.rq.get("lookups") or []
+    for i, t in enumerate(tallies):  # the two semantics every channel kind fixes
+        lm, dr = t.get("let_medium"), t.get("dose_reference")
+        if lm not in frozen.TALLY_LET_MEDIUM:
+            raise _differ(f"tallies[{i}].let_medium", lm, f"one of {list(frozen.TALLY_LET_MEDIUM)}")
+        if dr not in frozen.TALLY_DOSE_REFERENCE:
+            raise _differ(f"tallies[{i}].dose_reference", dr,
+                          f"one of {list(frozen.TALLY_DOSE_REFERENCE)}")  # fmt: skip
+        if t.get("quantity") in LET_QUANTITIES:  # realised by the LET water row
+            c.equal(f"tallies[{i}].let_medium", lm, "/tables/water_row/material")
     plan = c.eff.get("tallies")
     if tallies or lookups:
         if not isinstance(plan, Mapping):
@@ -578,14 +591,16 @@ def _row_requests(c: _Ctx) -> None:
 
 
 def evidence_from_origins(
-    entries: Iterable[tuple[Mapping[str, Any], str | None]],
+    entries: Iterable[tuple[Mapping[str, Any], str | None, Sequence[int]]],
 ) -> dict[str, Any]:
     """The independent evidence ``reconcile`` compares with the request, from persisted arrays:
-    ``(origin, content_sha256)`` of the geometry arrays (the digest is only read for them) and the
-    presence of the diagnostic arrays (end positions, escape history, trace)."""
+    ``(origin, content_sha256, shape)`` per array; the digest is read for the geometry arrays,
+    the presence of the diagnostic arrays (end positions, escape history, trace) and the exact
+    trace count (the length of ``trace_end_history``; None without a trace) for the rest."""
     digests: dict[str, str | None] = {"material_index": None, "density": None}
-    diag = {"track_end_positions": False, "escape_records": False, "trace_histories": False}
-    for origin, digest in entries:
+    diag: dict[str, Any] = {"track_end_positions": False, "escape_records": False,
+                            "trace_histories": False, "trace_count": None}  # fmt: skip
+    for origin, digest, shape in entries:
         if origin["kind"] == "geometry":
             digests[{"density_g_cm3": "density"}.get(origin["array"], origin["array"])] = digest
         elif origin["kind"] == "diagnostic":
@@ -593,7 +608,15 @@ def evidence_from_origins(
             diag["track_end_positions"] |= a == "end_position_mm"
             diag["escape_records"] |= a == "escape_history"
             diag["trace_histories"] |= a.startswith("trace_")
+            if a == "trace_end_history":
+                diag["trace_count"] = int(shape[0]) if len(shape) else -1
     return {"geometry_digests": digests, "diagnostics": diag}
+
+
+def realisable_trace_count(trace_histories: int, n_histories: int) -> int | None:
+    """Traced primaries a run realises: ``min(trace_histories, n_histories)``
+    (transport.tally.build_diagnostics), None when no trace is requested."""
+    return min(int(trace_histories), int(n_histories)) if trace_histories > 0 else None
 
 
 def evidence_from_effective(effective: _cfg.EffectiveConfig) -> dict[str, Any]:
@@ -610,7 +633,9 @@ def evidence_from_effective(effective: _cfg.EffectiveConfig) -> dict[str, Any]:
         },
         "diagnostics": {"track_end_positions": d.track_end_positions,
                         "escape_records": d.escape_records,
-                        "trace_histories": d.trace_histories > 0},
+                        "trace_histories": d.trace_histories > 0,
+                        "trace_count": realisable_trace_count(
+                            d.trace_histories, effective.requested.run.n_histories)},
     }  # fmt: skip
 
 
@@ -642,7 +667,10 @@ def reconcile(
                                  for r in ("material_index", "density")},
             "diagnostics": {"track_end_positions": requested["diagnostics"]["track_end_positions"],
                             "escape_records": requested["diagnostics"]["escape_records"],
-                            "trace_histories": requested["diagnostics"]["trace_histories"] > 0},
+                            "trace_histories": requested["diagnostics"]["trace_histories"] > 0,
+                            "trace_count": realisable_trace_count(
+                                requested["diagnostics"]["trace_histories"],
+                                requested["run"]["n_histories"])},
         }  # fmt: skip
     c = _Ctx(requested, effective, evidence)
     try:

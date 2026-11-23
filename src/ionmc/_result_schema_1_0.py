@@ -42,6 +42,11 @@ FE_F_MAX_EXPONENT = 60
 GEN_MAX = 2**31 - 1
 NUCLEAR_MAX_PARTICLES = 32  # particles of one nuclear history (channels.MAX_PARTICLES)
 RANGE_CONSTRUCTION = "exact-loglog-quadrature-v1"
+# Tally semantics every registered channel kind realises (transport.channels.compile_channels):
+# the LET medium is water, dose is dose-to-medium. A request outside these sets has no effective
+# object, so the writer, the reader and the reconciliation refuse it (decision 0045 section 4).
+TALLY_LET_MEDIUM = ("water",)
+TALLY_DOSE_REFERENCE = ("medium",)
 # source class of every registered stopping model id (``options.class`` of the identity block)
 REGISTERED_SOURCE_CLASS = {
     "bethe-ionmc-v1": "BetheStoppingSource",
