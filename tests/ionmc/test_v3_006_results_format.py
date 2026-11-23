@@ -2468,3 +2468,48 @@ def test_out10_false_recorded_size_is_refused_before_any_hashing(
     _never_hash(monkeypatch)
     with pytest.raises(ResultFormatError, match="recorded size"):
         load(bundle)
+
+
+# ---- overwrite replaces only an owned result bundle (REVIEW-3a75af27 finding 1) ---------------
+
+
+def test_out11_overwrite_refuses_anything_but_an_owned_bundle(tmp_path: Path) -> None:
+    r = make_result()
+    real = save(r, tmp_path / "real")
+    # an unrelated directory that happens to hold a result.json: refused, every file survives
+    stranger = tmp_path / "stranger"
+    stranger.mkdir()
+    (stranger / "result.json").write_text("{}", encoding="utf-8")
+    (stranger / "keep.txt").write_text("sentinel", encoding="utf-8")
+    with pytest.raises(ResultFormatError, match="refusing to overwrite"):
+        save(r, stranger, overwrite=True)
+    assert sorted(p.name for p in stranger.iterdir()) == ["keep.txt", "result.json"]
+    assert (stranger / "keep.txt").read_text(encoding="utf-8") == "sentinel"
+    # a directory whose result.json is a symlink into a real bundle
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    os.symlink(real / "result.json", linked / "result.json")
+    with pytest.raises(ResultFormatError, match="not a regular file"):
+        save(r, linked, overwrite=True)
+    assert (linked / "result.json").is_symlink() and (real / "result.json").is_file()
+    # a real bundle with a foreign file inside: refused, the file survives
+    b = save(r, tmp_path / "b")
+    (b / "notes.txt").write_text("mine", encoding="utf-8")
+    with pytest.raises(ResultFormatError, match="not listed"):
+        save(r, b, overwrite=True)
+    assert (b / "notes.txt").read_text(encoding="utf-8") == "mine"
+    # a plain file, and a symlink to a real bundle
+    f = tmp_path / "file"
+    f.write_text("x", encoding="utf-8")
+    with pytest.raises(ResultFormatError, match="not a directory"):
+        save(r, f, overwrite=True)
+    assert f.read_text(encoding="utf-8") == "x"
+    ln = tmp_path / "ln"
+    os.symlink(real, ln)
+    with pytest.raises(ResultFormatError, match="symbolic link"):
+        save(r, ln, overwrite=True)
+    assert ln.is_symlink() and (real / "result.json").is_file()
+    # the control: an owned bundle is replaced, nothing is left behind
+    save(r, real, overwrite=True)
+    load(real)
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]

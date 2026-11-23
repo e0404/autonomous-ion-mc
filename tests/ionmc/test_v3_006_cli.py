@@ -801,8 +801,46 @@ def test_cap7_warp_plus_nuclear_exits_4_until_v3_005b(tmp_path: Path) -> None:
 def test_reg5_cli_runs_single_process() -> None:
     """Every example configuration has cpu_workers = 1 (the default), the CLI never raises it and
     imports no process machinery, and the tests set IONMC_SINGLE_PROCESS for their children."""
-    for path in EXAMPLES:
-        assert load_toml_full(path).config.run.cpu_workers == 1, path.name
+    import tomllib
+
+    for path in EXAMPLES:  # raw TOML: no cache object is needed to read the run table
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+        assert raw.get("run", {}).get("cpu_workers", 1) == 1, path.name
     src = Path(cli.__file__).read_text(encoding="utf-8")
     assert "multiprocessing" not in src and "cpu_workers" not in src and "ProcessPool" not in src
     assert CLEAN_ENV["IONMC_SINGLE_PROCESS"] == "1" and CLEAN_ENV["OMP_NUM_THREADS"] == "1"
+
+
+# ---- the reader budgets are CLI options of verify and report (REVIEW-3a75af27 finding 2) ------
+
+
+def test_cli2_reader_budgets_are_options_of_verify_and_report(
+    carbon_bundle: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import inspect
+
+    from ionmc.results import load
+
+    keyword_only = {
+        n for n, p in inspect.signature(load).parameters.items() if p.kind == p.KEYWORD_ONLY
+    }
+    assert {dest for _flag, dest, _what in cli.BUDGET_OPTIONS} == keyword_only  # every budget
+    b = str(carbon_bundle)
+    code, _out, err = _main(["verify", b, "--max-json-bytes", "16"], capsys)
+    assert code == 6 and "max_json_bytes" in err
+    code, _out, err = _main(["report", b, "--check", "--max-derived-bytes", "1"], capsys)
+    assert code == 6 and "max_derived_bytes" in err
+    code, _out, err = _main(["report", b, "--max-total-bytes", "1"], capsys)
+    assert code == 6 and "max_total_bytes" in err
+    code, _out, _err = _main(["verify", b, "--max-json-tokens", "10"], capsys)
+    assert code == 6
+    code, _out, _err = _main(["verify", b, "--max-json-depth", "2"], capsys)
+    assert code == 6
+    for bad in ("0", "-5", "x", "1.5"):
+        try:
+            code = main(["verify", b, "--max-array-bytes", bad])
+        except SystemExit as exc:  # argparse
+            code = int(exc.code or 0)
+        assert code == 2, bad
+    code, out, _err = _main(["verify", b, "--max-json-bytes", str(2**24)], capsys)
+    assert code == 0 and json.loads(out)["tier1"] == "ok"

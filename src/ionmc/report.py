@@ -593,10 +593,11 @@ def render_all(doc: Doc, arrays: Arrays) -> dict[str, str]:
     return {"report.md": render_report(doc, arrays), **render_plots(doc, arrays)}
 
 
-def regenerate_report(bundle: str | Path) -> dict[str, bytes]:
-    """Load ``bundle`` (tier 1: every hash and invariant checked) and return the bytes of
-    ``report.md`` and every ``plots/*.svg`` as the writer produces them."""
+def regenerate_report(bundle: str | Path, **budgets: int) -> dict[str, bytes]:
+    """Load ``bundle`` (tier 1: every hash and invariant checked; ``budgets`` are the keyword
+    budgets of :func:`ionmc.results.load`) and return the bytes of ``report.md`` and every
+    ``plots/*.svg`` as the writer produces them."""
     from ionmc.results import load
 
-    loaded = load(bundle)
+    loaded = load(bundle, **budgets)
     return {n: t.encode("utf-8") for n, t in render_all(loaded.doc, loaded.arrays).items()}

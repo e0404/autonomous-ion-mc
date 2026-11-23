@@ -903,6 +903,59 @@ def _check_honoured(doc: dict[str, Any]) -> None:
           "nuclear energy balance presence disagrees with requested")  # fmt: skip
 
 
+def not_a_result_bundle(dest: Path) -> str | None:
+    """Why ``dest`` is NOT an ionmc result bundle this writer may replace (None when it is one):
+    a real directory (no symlink) holding a regular ``result.json`` (no symlink, at most
+    MAX_JSON_BYTES) that parses as JSON with ``schema == SCHEMA`` and a ``files`` map, whose every
+    other entry is a regular file named in ``files`` or the ``plots`` directory holding only such
+    files. Anything else (an unrelated directory, a sentinel file, a planted link) is never
+    renamed or deleted (REVIEW-3a75af27 finding 1)."""
+    import stat as _stat
+
+    st = os.lstat(dest)
+    if _stat.S_ISLNK(st.st_mode):
+        return "it is a symbolic link"
+    if not _stat.S_ISDIR(st.st_mode):
+        return "it is not a directory"
+    rj = dest / "result.json"
+    try:
+        rst = os.lstat(rj)
+    except FileNotFoundError:
+        return "it holds no result.json"
+    if _stat.S_ISLNK(rst.st_mode) or not _stat.S_ISREG(rst.st_mode):
+        return "result.json is not a regular file"
+    if rst.st_size > MAX_JSON_BYTES:
+        return "result.json exceeds max_json_bytes"
+    try:
+        doc = json.loads(rj.read_bytes().decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return "result.json is not JSON"
+    if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
+        return f"result.json does not declare schema {SCHEMA!r}"
+    files = doc.get("files")
+    if not isinstance(files, dict) or not all(isinstance(k, str) for k in files):
+        return "result.json has no files map"
+    for de in os.scandir(dest):
+        dst = de.stat(follow_symlinks=False)
+        if de.name == "result.json":
+            continue
+        if _stat.S_ISLNK(dst.st_mode):
+            return f"{de.name!r} is a symbolic link"
+        if de.name == "plots" and _stat.S_ISDIR(dst.st_mode):
+            for pe in os.scandir(dest / "plots"):
+                pst = pe.stat(follow_symlinks=False)
+                if _stat.S_ISLNK(pst.st_mode) or not _stat.S_ISREG(pst.st_mode):
+                    return f"plots/{pe.name!r} is not a regular file"
+                if f"plots/{pe.name}" not in files:
+                    return f"plots/{pe.name!r} is not listed in the bundle's files"
+            continue
+        if not _stat.S_ISREG(dst.st_mode):
+            return f"{de.name!r} is not a regular file"
+        if de.name not in files:
+            return f"{de.name!r} is not listed in the bundle's files"
+    return None
+
+
 def save(
     result: Result,
     path: str | os.PathLike[str],
@@ -920,8 +973,9 @@ def save(
     if os.path.lexists(dest):
         if not overwrite:
             raise FileExistsError(f"{dest.name!r} exists (pass overwrite=True)")
-        if dest.is_symlink() or not (dest / "result.json").is_file():
-            raise _fail("refusing to overwrite something that is not a result bundle")
+        why = not_a_result_bundle(dest)
+        if why is not None:
+            raise _fail(f"refusing to overwrite {dest.name!r}: {why}")
     if not result.valid and not result.requested_config.run.allow_invalid_result:
         raise _fail("invalid result: the run did not set allow_invalid_result")
     if manifest is not None:

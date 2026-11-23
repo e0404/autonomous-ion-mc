@@ -60,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     cap.add_argument("--nuclear", action="store_true", help="the report for physics.nuclear = true")
     ver = sub.add_parser("verify", help="verify a result bundle (tier 1; --rederive adds tier 2)")
     ver.add_argument("bundle", metavar="DIR")
+    _add_budget_options(ver)
     ver.add_argument(
         "--rederive", action="store_true", help="tier 2: re-derive the effective block"
     )
@@ -69,10 +70,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rep = sub.add_parser("report", help="print the regenerated report of a bundle")
     rep.add_argument("bundle", metavar="DIR")
+    _add_budget_options(rep)
     rep.add_argument(
         "--check", action="store_true", help="compare the bytes on disk, write nothing"
     )
     return parser
+
+
+# The configurable budgets of the untrusted-bundle reader (decision 0045 section 1 and amendment
+# A-4): one option per keyword of ``results.load``; absent options keep the module defaults.
+BUDGET_OPTIONS = (
+    ("--max-total-bytes", "max_total_bytes", "arrays.npz and all arrays together"),
+    ("--max-array-bytes", "max_array_bytes", "one array"),
+    ("--max-json-bytes", "max_json_bytes", "result.json"),
+    ("--max-central-directory-bytes", "max_central_directory_bytes", "the npz central directory"),
+    ("--max-json-tokens", "max_json_tokens", "JSON tokens of result.json"),
+    ("--max-json-depth", "max_json_depth", "JSON nesting depth of result.json"),
+    ("--max-derived-bytes", "max_derived_bytes", "report.md and plots/*.svg, each and together"),
+)
+
+
+def _positive_int(text: str) -> int:
+    try:
+        value = int(text, 10)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {text!r}") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {text!r}")
+    return value
+
+
+def _add_budget_options(parser: argparse.ArgumentParser) -> None:
+    for flag, dest, what in BUDGET_OPTIONS:
+        parser.add_argument(
+            flag, dest=dest, type=_positive_int, default=None, metavar="N",
+            help=f"reader budget for {what} (default: the ionmc.results value)",
+        )  # fmt: skip
+
+
+def _budgets(args: argparse.Namespace) -> dict[str, int]:
+    return {d: getattr(args, d) for _f, d, _w in BUDGET_OPTIONS if getattr(args, d) is not None}
 
 
 def _build_nuclear(args: argparse.Namespace) -> int:
@@ -275,7 +312,7 @@ def _cmd_verify(args: argparse.Namespace, out_stream: TextIO) -> int:
         if not sep or not role or not path:
             raise _UsageError(f"--inputs expects ROLE=PATH, got {item!r}")
         files[role] = path
-    loaded = load(args.bundle)
+    loaded = load(args.bundle, **_budgets(args))
     out: dict[str, Any] = {"tier1": "ok", "binding_limits": list(loaded.binding_limits)}
     code = 0
     if args.rederive:
@@ -292,7 +329,7 @@ def _cmd_report(args: argparse.Namespace, out_stream: TextIO) -> int:
     from ionmc.report import regenerate_report
     from ionmc.results import ResultFormatError
 
-    files = regenerate_report(args.bundle)
+    files = regenerate_report(args.bundle, **_budgets(args))
     if not args.check:
         out_stream.write(files["report.md"].decode("utf-8"))
         return 0

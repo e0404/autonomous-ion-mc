@@ -199,18 +199,53 @@ def test_rep2_generator_reproduces_the_committed_fixture(tmp_path: Path) -> None
     theirs = sorted(p.relative_to(GOLDEN) for p in GOLDEN.rglob("*") if p.is_file())
     assert mine == theirs
     # Byte identity holds in the local-validation tier (IONMC_LV_TIER=1). Elsewhere (the hosted CI
-    # runner) the stopping tables built by `validate` differ in their last bits, so their sha256
-    # digests in result.json and report.md differ (plan v3-006, REG-2 clarification); every array
-    # and SVG is compared byte for byte there, the two documents with 64-hex digests masked.
+    # runner) the stopping tables built by `validate` differ in their last bits (plan v3-006, REG-2
+    # clarification), so only the table-derived pointers of result.json and the report lines that
+    # print them may differ; every other pointer, line, array and SVG is compared exactly.
     lv = os.environ.get("IONMC_LV_TIER") == "1"
-    digest = re.compile(rb"[0-9a-f]{64}")
     for rel in theirs:
         a, b = (out / rel).read_bytes(), (GOLDEN / rel).read_bytes()
         if lv or rel.suffix not in (".json", ".md"):
             assert a == b, rel
+        elif rel.suffix == ".json":
+            diffs = _diff_pointers(json.loads(a), json.loads(b))
+            foreign = [d for d in diffs if not d.startswith(TABLE_DERIVED_POINTERS)]
+            assert not foreign, f"{rel}: platform-independent pointers differ: {foreign}"
         else:
-            assert digest.sub(b"<sha256>", a) == digest.sub(b"<sha256>", b), rel
-            assert len(digest.findall(a)) == len(digest.findall(b)), rel
+            keep_a = [ln for ln in a.decode("utf-8").splitlines() if not _table_derived_line(ln)]
+            keep_b = [ln for ln in b.decode("utf-8").splitlines() if not _table_derived_line(ln)]
+            assert keep_a == keep_b, rel
+
+
+# result.json pointers whose values derive from the stopping tables (digests, ranges, step and
+# accumulator bounds computed from them) and the report lines that print such values
+TABLE_DERIVED_POINTERS = (
+    "/effective/tables", "/effective/max_steps", "/effective/tallies/channels",
+    "/provenance/data/table_sha256", "/provenance/data/table_materials",
+    "/files/report.md/sha256",
+)  # fmt: skip
+_TABLE_DERIVED_LINE = re.compile(
+    r"table sha256:|^\| max-steps \||^\| tallies \||^\| stopping-identity \|"
+)
+
+
+def _table_derived_line(line: str) -> bool:
+    return _TABLE_DERIVED_LINE.search(line) is not None
+
+
+def _diff_pointers(a: Any, b: Any, path: str = "") -> list[str]:
+    """Every JSON pointer at which ``a`` and ``b`` differ (a differing container is reported once
+    per differing leaf; a length or key-set difference as the container's pointer)."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        if a.keys() != b.keys():
+            return [path or "/"]
+        return [d for k in a for d in _diff_pointers(a[k], b[k], f"{path}/{k}")]
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return [path or "/"]
+        return [d for i, (x, y) in enumerate(zip(a, b, strict=True))
+                for d in _diff_pointers(x, y, f"{path}/{i}")]  # fmt: skip
+    return [] if a == b else [path or "/"]
 
 
 # ---- REP-3 ------------------------------------------------------------------------------------
