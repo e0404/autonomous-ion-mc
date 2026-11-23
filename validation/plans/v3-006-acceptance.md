@@ -468,3 +468,8 @@ option explicitly.
   1e-9 on floats and digest fields of table-derived blocks compared by presence only. Rows that need the data cache
   skip in CI (no cache there) and fail in the LV tier. The V3-013 tree-pin test is pinned to its derivation commit
   (note in plan v3-013). Not a clinical claim.
+- 2026-11-23 (S7 note): step S7 added the documentation pages `docs/results/index.md`, `docs/results/format.md`,
+  `docs/configuration/index.md`, `docs/cli.md` and `docs/workflow.md` (navigation in `zensical.toml`; a pointer
+  paragraph in `docs/getting-started/index.md`). Row DOC-1 is implemented by `tests/ionmc/test_v3_006_docs.py`,
+  which derives its expectations from `ionmc.results`, `ionmc.configio`, `ionmc.contract` and `ionmc.cli`; the
+  docs build is run once with `--strict`. No row is marked passed here. Not a clinical claim.

@@ -98,3 +98,10 @@ where the energy went and whether any transport limit was hit (a nonzero counter
 `TransportLimitError`). `nuclear` has no default and `nuclear=True` is rejected until nuclear
 interactions are implemented. See [transport engine](../architecture/transport.md) and
 [EM transport](../physics/em-transport.md).
+
+## Configuration files, results and the workflow
+
+Runs can also be described by a TOML file and run with `ionmc run`; the bundle that is written (data,
+report, plots and provenance) can be checked with `ionmc verify`. See the
+[configuration reference](../configuration/index.md), the [CLI](../cli.md), the
+[workflow](../workflow.md) and the [results format](../results/index.md).

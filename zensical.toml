@@ -9,6 +9,9 @@ nav = [
 
   { "Getting started" = [
     "getting-started/index.md",
+    { "Configuration" = "configuration/index.md" },
+    { "CLI" = "cli.md" },
+    { "Workflow" = "workflow.md" },
   ] },
 
   { "Architecture" = [
@@ -21,6 +24,11 @@ nav = [
     "physics/index.md",
     { "Stopping power" = "physics/stopping-power.md" },
     { "EM transport" = "physics/em-transport.md" },
+  ] },
+
+  { "Results" = [
+    "results/index.md",
+    { "Format reference" = "results/format.md" },
   ] },
 
   { "Validation" = [
