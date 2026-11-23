@@ -1,12 +1,12 @@
 # V3-006 acceptance plan — self-describing persisted results, reports, configuration files, `ionmc run`, requested/effective capability contract
 
-> **Status: freeze candidate, revised 2026-11-23 after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
-> (changes_required; findings 11–15 of the pre-freeze review log, resolved in place). The revised S0 commit is
-> re-reviewed; the freeze is the first S0 commit whose Codex review passes (planner, 2026-11-23, base `v3/develop`
-> 95937553 = the V3-013 squash merge, PR #92).** Frozen together with decision 0045
-> (`decisions/0045-persisted-results-and-capability-contract.md`) by that commit, after an independent
-> architecture/scientific review, before any V3-006 code exists. Later changes are dated amendments; earlier text is
-> kept. Not a clinical claim.
+> **Status: freeze candidate, second revision 2026-11-23: revised after Codex REVIEW-bd983b92 of the S0 commit
+> 00b5e3de (findings 11–15) and after Codex REVIEW-0f7aad46 of the revised S0 commit 00989a8b (findings 16–19;
+> changes_required, resolved in place). The revised S0 commit is re-reviewed; the freeze is the first S0 commit whose
+> Codex review passes (planner, 2026-11-23, base `v3/develop` 95937553 = the V3-013 squash merge, PR #92).** Frozen
+> together with decision 0045 (`decisions/0045-persisted-results-and-capability-contract.md`) by that commit, after an
+> independent architecture/scientific review, before any V3-006 code exists. Later changes are dated amendments;
+> earlier text is kept. Not a clinical claim.
 
 Markers: **FACT** (read at 95937553; file:line in decision 0045, Context), **ESTIMATE**, **TO VERIFY**. Row classes:
 *regression*, *contract* (fail closed), *round-trip*, *determinism*, *self-consistency*, *workflow*. Tiers: CI
@@ -66,11 +66,14 @@ V2-RELEASE, any physics row, any evidence record.
    source direction, recorded (O9). **Golden fixture**: one synthetic KB-scale bundle (O10).
 
 
-8. **Input manifest**: immutable `InputManifest` from the loader, passed to `save`; API runs record `source = "api"`
-   with `unavailable` file pointers; `save` refuses changed files. **Round trip**: canonical semantic comparison over
-   the reconstructible subset; the rest is recorded `not-reconstructible` (decision 0045 §6).
-9. **Untrusted bundles**: `load` validates ZIP directory, catalogue and NPY headers before allocation and streams
-   decompression under configurable byte budgets with safe defaults (decision 0045 §1).
+8. **Input manifest**: immutable `InputManifest` from the loader (with `config_sha256` binding it to the complete
+   configuration), passed to `save` and to `from_dict(d, manifest=m)` for file-backed arrays; API runs record `source
+   = "api"` with `unavailable` file pointers; `save` refuses changed files. **Round trip**: canonical semantic
+   comparison over the reconstructible subset; the rest is recorded `not-reconstructible` (decision 0045 §6).
+9. **Untrusted bundles**: a raw-byte preflight of the end-of-central-directory record bounds file size, entry count
+   and central-directory size before `zipfile` opens the archive; then `load` validates ZIP directory, catalogue and
+   NPY headers before allocation and streams decompression under configurable byte budgets with safe defaults
+   (decision 0045 §1).
 
 ## C. Seeds and determinism rules (declared before any run)
 
@@ -135,7 +138,7 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | OUT-7 | Undefined values: `defined_mask` False ⇒ NaN, never 0; JSON undefined scalars carry `status`; a writer patched to write 0 there is rejected by `load` | exact | CI |
 | OUT-8 | **No table values**: npz names ⊆ allowlist; no member equals bitwise any stopping/range/LET-water/nuclear table array of the run; injecting `tables.range_mm` is refused by `save` | exact | CI |
 | OUT-9 | Determinism: `save` twice → identical bytes; a different zlib level changes the file hash but not the content digests (documents which identity is authoritative) | exact | CI |
-| OUT-10 | **Untrusted-bundle budgets** (synthetic KB-scale adversarial fixtures): NPY header longer than the bound; header disagreeing with the catalogue; duplicate ZIP member; more members than catalogue entries; declared shape whose byte size exceeds the budget (e.g. 2**40 elements); member whose declared uncompressed size exceeds the budget; compressed member that inflates beyond its declared size; oversized `result.json`; plus a positive control at the default budgets | each raises `ResultFormatError` before allocating the declared size (peak RSS increase bounded by 64 MiB, measured with `resource.getrusage`); the positive control loads | CI |
+| OUT-10 | **Untrusted-bundle budgets** (synthetic KB-scale adversarial fixtures): NPY header longer than the bound; header disagreeing with the catalogue; duplicate ZIP member; more members than catalogue entries; declared shape whose byte size exceeds the budget (e.g. 2**40 elements); member whose declared uncompressed size exceeds the budget; compressed member that inflates beyond its declared size; oversized `result.json`; an archive built programmatically in the test (never committed) whose end-of-central-directory record declares a huge entry count or an oversized central directory, also in ZIP64 form; plus a positive control at the default budgets | each raises `ResultFormatError` before allocating the declared size (peak RSS increase bounded by 64 MiB, measured with `resource.getrusage`); the oversized-directory archives are refused by the raw-byte preflight before `zipfile.ZipFile` is constructed (asserted by patching `zipfile.ZipFile` to fail if called) within the same RSS bound; the positive control loads | CI |
 
 **PROV — provenance**
 
@@ -148,14 +151,14 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | PROV-5 | Build stamp: `uv build --wheel` from a clean checkout in the LV environment (not the host runner) gives a wheel whose `ionmc/_build_info.json` carries the commit and a tree oid equal to the runtime oid of the installed wheel; the checkout stays clean (`git status --porcelain` empty, no stamp under `src/ionmc`); a build without a reachable repository stamps `commit = null`, `status = "unknown"`; `[build-system] requires` and `uv.lock` are unchanged by S3 | exact | LV (TO VERIFY: offline build environment from the uv cache) |
 | PROV-6 | Privacy: absolute paths only at the pointers of the path set P (decision 0045 §2); outside P no string contains `Path.home()`, and no path component (split at `/` and `\`) and no whole non-path string equals `getpass.getuser()` or `os.uname().nodename` (no substring matching; a user named `root` does not hit `mcs_mapping.evaluation = "root"`, which is not a path); `cache_dir_source` recorded; reports print no P value | exact | CI |
 | PROV-7 | Host runner: an `out6` r_index 2 bundle written under the controlled host runner (read-only snapshot at `/workspace`, `GIT_WORK_TREE` set, `HOME=/tmp/home`) at a clean committed SHA has `code.source = "git"`, `git_dirty = false`, `git_commit` = the run's code SHA and a tree oid equal to `git rev-parse <sha>:src/ionmc`; any other outcome is a FAIL handled by prospective amendment | exact | HR |
-| PROV-8 | Input manifest: a TOML run records `source = "toml"`, `base_dir`, the config file and every referenced file with path and sha256; an API run records `source = "api"` and `unavailable` file pointers; editing a referenced file between load and `save` makes `save` raise `ConfigError` (CLI exit 2, no bundle); a manifest `content_sha256` that disagrees with the config arrays is refused | exact | CI |
+| PROV-8 | Input manifest: a TOML run records `source = "toml"`, `base_dir`, the config file and every referenced file with path and sha256; an API run records `source = "api"` and `unavailable` file pointers; editing a referenced file between load and `save` makes `save` raise `ConfigError` (CLI exit 2, no bundle); a manifest `content_sha256` that disagrees with the config arrays is refused; binding: (i) the manifest of config A passed to `save` for config B with the same arrays and (ii) a config mutated in one scalar after loading are each refused through `config_sha256` (`ConfigError`, exit 2, no bundle); `InputManifest.verify` gives the same verdicts | exact | CI |
 
 **CAP — capability contract**
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | CAP-1a | Cache-independent sweep: species × energy-domain class {below, inside, upper edge, above} × backend × precision × nuclear × tallies × trace, for `bethe-ionmc-v1` and its LS variants against `validate`; tabulated models only through their declared domains (no cache) | declared == enforced over these dimensions: supported ⇔ `validate` passes, unsupported ⇔ raises before transport; zero third outcomes | CI (CUDA cases as `BackendUnavailableError` when absent) |
-| CAP-1b | Cache-backed sweep of `nist-pstar-astar-water-2005` and `icru90-water-v1` (species × energy-domain class × backend × precision × nuclear × {water, PMMA}) against `validate` | as CAP-1a; a missing cache object is a FAIL, never a skip | LV; HR (CUDA cases) |
+| CAP-1b | Cache-backed sweep of `nist-pstar-astar-water-2005` and `icru90-water-v1` against `validate`; enumerated dimensions: species × energy-domain class × backend × precision × nuclear × {water, PMMA} × tallies {none, LET, full set incl. a synthetic lookup} × trace {off, on}; plus cross-model cases of the LET water-row path (`config.py:594–598`): tallies with a non-water geometry (water row added) and with water geometry, for each tabulated model and the default, asserting the water row names the selected model | as CAP-1a; a missing cache object is a FAIL, never a skip | LV; HR (CUDA cases) |
 | CAP-1c | Targeted rule pairs: one positive and one negative case for every other `validate` rule (geometry kind and voxel constraints, scoring-grid count and shape, source sigmas, cutoffs, end-of-range and MCS modes, `mcs_mapping_eval`, worker and chunk limits, memory budget, diagnostics incl. trace); a checklist of the rules (`validate` source order) is part of the test module and reviewed | each positive passes, each negative raises before transport | CI |
 | CAP-2 | Declaration is derived: monkeypatching an enforcing constant changes `capabilities()` identically | exact | CI |
 | CAP-3 | Reconciliation: (a) every row of the frozen table of decision 0045 §4 item 3 is exercised and recorded with its class and rule; (b) `reconcile` over the CFG-1 generated config set yields zero differences outside the table for every config that passes `validate`, and every effective pointer of the table resolves; (c) a synthetic unlisted difference (patched effective field) raises `UnsupportedCombinationError`; (d) the API behaviour of decision 0044 is preserved: neither or both of `stopping`/`stopping_model` still fail at `PhysicsOptions` construction | exact | CI |
@@ -168,13 +171,13 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
-| CFG-1 | Round trip over the reconstructible subset (decision 0045 §6): for generated configs covering every field of every config dataclass except user `stopping` objects and in-memory arrays, `to_dict(from_dict(to_dict(c))) == to_dict(c)` with arrays compared by `content_sha256`, and `validate(...).summary()` equal | exact | CI |
+| CFG-1 | Round trip over the reconstructible subset (decision 0045 §6): for TOML-loaded configs covering every field of every config dataclass (voxel geometry with `material_index` and density files, lookup files), `to_dict(from_dict(to_dict(c), manifest=m)) == to_dict(c)` with `m` the loader's manifest and arrays compared by `content_sha256`; for API configs without file-backed arrays, `to_dict(from_dict(to_dict(c))) == to_dict(c)`; in both cases `validate(...).summary()` equal | exact | CI |
 | CFG-2 | Documented TOML examples give the same `validate(...).summary()` as the equivalent API constructions | equal | CI |
 | CFG-3 | Unknown key, misspelt table, wrong type, missing `nuclear`, missing `physics.stopping_model` (error names that key), missing sha256, sha256 mismatch: `ConfigError` with the key path; `..` paths resolve and are recorded absolute with sha256 | exact | CI |
 | CFG-4 | Stopping by `stopping_model` id only; a `stopping` table is rejected; unknown id raises | exact | CI |
 | CFG-5 | Built-in material names resolve to the identical `Material`; inline definitions checked as by the API | exact | CI |
 | CFG-6 | No environment variable overrides a physics/run field (`IONMC_*` set in the test) | exact | CI |
-| CFG-7 | Not-reconstructible records: a config with a user `stopping` object and one with an API-created lookup table serialise to `{"status": "not-reconstructible", "reason": ...}` at the affected pointer; `from_dict` of either raises `ConfigError` naming it; no default is substituted | exact | CI |
+| CFG-7 | Not-reconstructible and reference failures: a config with a user `stopping` object and one with an API-created lookup table serialise to `{"status": "not-reconstructible", "reason": ...}` at the affected pointer and `from_dict` of either raises `ConfigError` naming it; a TOML-loaded config with file-backed arrays passed to `from_dict` without a manifest, with a manifest lacking the role, or with a file whose sha256 or content digest changed raises `ConfigError` naming the pointer; no default is substituted | exact | CI |
 
 **REP — reports and plots**
 
@@ -284,9 +287,32 @@ changes_required, five important findings, resolved in place:
     validation of the ZIP directory, catalogue and NPY headers, streamed decompression under configurable byte
     budgets with safe defaults (decision 0045 §1); row OUT-10 with synthetic KB-scale adversarial fixtures in S2.
 
+Codex REVIEW-0f7aad46 (REVIEW-0f7aad4697ae4f6b9679d724571922d2, 2026-11-23) of the revised S0 commit 00989a8b:
+changes_required, four important findings, resolved in place:
+
+16. **Important.** File-backed arrays could not be rebuilt by `from_dict(to_dict(c))` (the manifest is a side
+    carrier; `VoxelGeometry` keeps no path, `LookupTable` only its file hash) → explicit reconstruction API
+    `from_dict(d, *, manifest=None)`: file-backed arrays serialise as references (`ref`, `sha256`, `content_sha256`)
+    and are reloaded through the manifest's file entries with both digests checked; a missing manifest or role raises
+    `ConfigError` naming the pointer; in-memory arrays stay not-reconstructible (decision 0045 §6; rows CFG-1, CFG-7).
+17. **Important.** Nothing bound the manifest to the complete configuration → `config_sha256` (canonical JSON of
+    `to_dict(config)`) in the manifest, recomputed by `InputManifest.verify(config)` and `save`; a mismatch raises
+    `ConfigError` (exit 2, no bundle) (decision 0045 §6; row PROV-8 with a swapped-manifest and a post-load-mutation
+    negative test).
+18. **Important.** CAP-1b omitted tallies and trace for the tabulated models → CAP-1b varies tallies (none / LET /
+    full set with a synthetic lookup) and trace per model, backend and precision, plus cross-model cases of the
+    water-row path (`config.py:594–598`); the enumerated dimensions are stated (row CAP-1b).
+19. **Important.** `zipfile.ZipFile` builds one `ZipInfo` per member on open, before any member-count check → a
+    raw-byte preflight of the end-of-central-directory record bounds file size, entry count and central-directory
+    size (ZIP64 included) before the archive is opened (decision 0045 §1; row OUT-10 with a programmatically built
+    oversized archive).
+
 ## Status
 
 - 2026-11-23 (planner, S0): freeze candidate; no code. Base 95937553 (V3-013 integrated). Freeze note:
   `<placeholder: S0 commit SHA, Codex review id, architecture review>`. Not a clinical claim.
 - 2026-11-23 (planner): revised after Codex REVIEW-bd983b92 of 00b5e3de (findings 11–15, resolved in place); the
   revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes. Not a clinical claim.
+- 2026-11-23 (planner): second revision after Codex REVIEW-0f7aad46 of 00989a8b (findings 16–19, resolved in place);
+  the revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes. Not a clinical
+  claim.

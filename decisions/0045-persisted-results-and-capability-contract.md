@@ -1,10 +1,11 @@
 # 0045 — Persisted result bundle, configuration files, `ionmc run` and the requested/effective capability contract
 
-- Status: freeze candidate, revised 2026-11-23 after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
-  (changes_required; findings 11–15 of the pre-freeze review log, resolved in place). The revised S0 commit is
-  re-reviewed; the freeze is the first S0 commit whose Codex review passes (together with
-  `validation/plans/v3-006-acceptance.md`, after an independent architecture/scientific review), before any V3-006
-  code exists (planner). Later changes are dated amendments; earlier text is kept.
+- Status: freeze candidate, second revision 2026-11-23: revised after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
+  (findings 11–15) and after Codex REVIEW-0f7aad46 of the revised S0 commit 00989a8b (findings 16–19;
+  changes_required, resolved in place). The revised S0 commit is re-reviewed; the freeze is the first S0 commit whose
+  Codex review passes (together with `validation/plans/v3-006-acceptance.md`, after an independent
+  architecture/scientific review), before any V3-006 code exists (planner). Later changes are dated amendments;
+  earlier text is kept.
 - Task: V3-006 (program plan task table: self-describing persisted results, human-readable reports and SVG plots,
   configuration files, `ionmc run` CLI, fail-closed capability contract with requested/effective configuration).
 - Base: `v3/develop` 95937553 (the V3-013 squash merge, PR #92). V3-006 is implemented on its task branch from this
@@ -126,6 +127,12 @@ A directory `<name>/`:
   unknown version, a hash mismatch, a NaN in a JSON number position, an array whose shape disagrees with its grid, or
   an npz member outside the catalogue. It never reconstructs transport internals and never recomputes
   `evidence_at_run`.
+- **ZIP preflight on raw bytes (before `zipfile.ZipFile` is constructed, which builds one `ZipInfo` per member).**
+  `load` checks the file size of `arrays.npz` against `max_total_bytes`, locates the end-of-central-directory record
+  within the last 65 557 bytes, reads the entry count and central-directory size and offset from it (and from the
+  ZIP64 end record if present), and refuses the archive unless entry count ≤ catalogue size, central-directory size ≤
+  `max_central_directory_bytes` (default 1 MiB), offsets lie inside the file and ZIP64 values respect the same
+  budgets; only then is the archive opened.
 - **Untrusted bundles (resource budgets).** Before any array is read, `load` validates the ZIP central directory and
   the catalogue: member count ≤ catalogue size, no duplicate or unexpected member names, every member's declared
   uncompressed size and the catalogue's `shape` × `dtype.itemsize` within a byte budget derived from the catalogue and
@@ -284,16 +291,25 @@ A directory `<name>/`:
   physics or run field (decision 0044 §5).
 - **`InputManifest`** (immutable; produced by the loader): `source = "toml" | "api"`, `base_dir`, `config_file` (path,
   sha256) and `files` (one entry per referenced file: role `material_index | density | lookup:<name>`, resolved
-  absolute path, file sha256 and, for arrays, `content_sha256`). It is a side carrier: `Simulation` and
-  `SimulationConfig` are unchanged; the CLI passes it to `save(..., manifest=...)`. `save` re-hashes every listed file
-  and checks every `content_sha256` against the arrays of the requested config; a mismatch raises `ConfigError` (exit
-  2, no bundle). Without a manifest `save` records `source = "api"` with `unavailable` file pointers.
+  absolute path, file sha256 and, for arrays, `content_sha256`). It also carries `config_sha256`, the sha256 of the
+  canonical JSON of `to_dict(config)` computed by the loader, which binds it to the complete configuration. It is a
+  side carrier: `Simulation` and `SimulationConfig` are unchanged; the CLI passes it to `save(..., manifest=...)`.
+  `InputManifest.verify(config)` and `save` recompute `config_sha256` from `result.requested_config` and refuse any
+  mismatch (`ConfigError`, exit 2, no bundle): a manifest of another configuration or a configuration mutated after
+  loading is never attributed to these files. `save` re-hashes every listed file and checks every `content_sha256`
+  against the arrays of the requested config; a mismatch raises `ConfigError` (exit 2, no bundle). Without a manifest
+  `save` records `source = "api"` with `unavailable` file pointers.
 - **Round-trip semantics.** Equality of configurations is canonical and semantic: `to_dict` equality, arrays compared
-  by `content_sha256` (`VoxelGeometry` and `LookupTable` use identity equality, `eq=False`). The exact round trip
-  `from_dict(to_dict(c))` is guaranteed for the reconstructible subset: every field except user `stopping` objects and
-  arrays that exist only in memory (API-created lookup tables, geometry arrays without a file); those serialise to
-  `{"status": "not-reconstructible", "reason": ...}` and `from_dict` refuses them (`ConfigError`), never substituting
-  a default.
+  by `content_sha256` (`VoxelGeometry` and `LookupTable` use identity equality, `eq=False`). Reconstruction API:
+  `from_dict(d, *, manifest: InputManifest | None = None)`. `to_dict` serialises every file-backed array (voxel
+  `material_index`, density, lookup table) as a reference `{"ref": "<role>", "sha256": ..., "content_sha256": ...}`;
+  `from_dict` reloads it through the manifest entry of that role (path from the manifest, file re-hashed, content
+  digest checked); without a manifest, or with a manifest lacking the role or with a different digest, it raises
+  `ConfigError` naming the pointer. The exact round trip `to_dict(from_dict(to_dict(c), manifest=m)) == to_dict(c)` is
+  guaranteed for the reconstructible subset: every field except user `stopping` objects and arrays that exist only in
+  memory (API-created lookup tables, geometry arrays without a file); API configs without file-backed arrays need no
+  manifest. The excluded fields serialise to `{"status": "not-reconstructible", "reason": ...}` and `from_dict`
+  refuses them (`ConfigError`), never substituting a default.
 
 
 ### 7. CLI
@@ -438,6 +454,26 @@ changes_required, five important findings, resolved in place:
 15. **Important.** `load`/`ionmc verify` lacked resource-exhaustion defences for untrusted bundles → pre-allocation
     validation of the ZIP directory, catalogue and NPY headers, streamed decompression under configurable byte
     budgets with safe defaults (decision 0045 §1); row OUT-10 with synthetic KB-scale adversarial fixtures in S2.
+
+Codex REVIEW-0f7aad46 (REVIEW-0f7aad4697ae4f6b9679d724571922d2, 2026-11-23) of the revised S0 commit 00989a8b:
+changes_required, four important findings, resolved in place:
+
+16. **Important.** File-backed arrays could not be rebuilt by `from_dict(to_dict(c))` (the manifest is a side
+    carrier; `VoxelGeometry` keeps no path, `LookupTable` only its file hash) → explicit reconstruction API
+    `from_dict(d, *, manifest=None)`: file-backed arrays serialise as references (`ref`, `sha256`, `content_sha256`)
+    and are reloaded through the manifest's file entries with both digests checked; a missing manifest or role raises
+    `ConfigError` naming the pointer; in-memory arrays stay not-reconstructible (decision 0045 §6; rows CFG-1, CFG-7).
+17. **Important.** Nothing bound the manifest to the complete configuration → `config_sha256` (canonical JSON of
+    `to_dict(config)`) in the manifest, recomputed by `InputManifest.verify(config)` and `save`; a mismatch raises
+    `ConfigError` (exit 2, no bundle) (decision 0045 §6; row PROV-8 with a swapped-manifest and a post-load-mutation
+    negative test).
+18. **Important.** CAP-1b omitted tallies and trace for the tabulated models → CAP-1b varies tallies (none / LET /
+    full set with a synthetic lookup) and trace per model, backend and precision, plus cross-model cases of the
+    water-row path (`config.py:594–598`); the enumerated dimensions are stated (row CAP-1b).
+19. **Important.** `zipfile.ZipFile` builds one `ZipInfo` per member on open, before any member-count check → a
+    raw-byte preflight of the end-of-central-directory record bounds file size, entry count and central-directory
+    size (ZIP64 included) before the archive is opened (decision 0045 §1; row OUT-10 with a programmatically built
+    oversized archive).
 
 ## Later validation outcome
 
