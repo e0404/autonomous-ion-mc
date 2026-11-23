@@ -93,8 +93,9 @@ results.save(again, "results/proton_box_again")
 ```
 
 Every array `content_sha256` of the second bundle equals the first (the same random streams
-produce the same deposits) and the `effective` blocks are equal apart from nothing; only the
-timings differ. Limits of the reconstruction:
+produce the same deposits) and the `requested` and `effective` blocks are equal; the two
+bundles differ only in their non-scientific records: the output path, the timings and the
+hashes of the files that print them. Limits of the reconstruction:
 
 - A geometry array or a lookup table given as a **file** is stored as a reference (`ref`,
   `sha256`, `content_sha256`), not by value. `from_dict` reloads it through an `InputManifest`

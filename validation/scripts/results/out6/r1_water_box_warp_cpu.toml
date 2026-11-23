@@ -1,0 +1,36 @@
+# out6 case r_index 1 (V3-006 step S8): a 20 MeV proton pencil beam on a water box, warp-cpu float32.
+# Tiny synthetic run; the seed is the out6 family value for k = 0 (write_config sets other k).
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[source]
+projectile = "proton"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 20.0
+energy_sigma_mev = 0.1
+lateral_sigma_mm = 1.0
+
+[geometry]
+type = "box"
+lower_mm = [-10.0, -10.0, 0.0]
+size_mm = [20.0, 20.0, 20.0]
+material = "water"
+
+[[scoring]]
+name = "dose"
+origin_mm = [-10.0, -10.0, 0.0]
+spacing_mm = [5.0, 5.0, 2.5]
+shape = [4, 4, 8]
+
+[physics]
+nuclear = false
+stopping_model = "bethe-ionmc-v1"
+multiple_scattering = false
+
+[run]
+backend = "warp-cpu"
+precision = "float32"
+seed = 20700104
+n_histories = 64
+n_batches = 4

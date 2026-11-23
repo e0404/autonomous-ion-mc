@@ -1,0 +1,35 @@
+# out6 case r_index 7 (V3-006 step S8): a 300 MeV alpha beam (75 MeV/u, inside the 50-250 MeV/u alpha domain) on a water box with the
+# tabulated ICRU 90 stopping model icru90-water-v1 (warp-cpu float64; needs the cached dataset
+# geant4-icru90-stopping-11.4.2).
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[source]
+projectile = "alpha"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 300.0
+
+[geometry]
+type = "box"
+lower_mm = [-10.0, -10.0, 0.0]
+size_mm = [20.0, 20.0, 60.0]
+material = "water"
+
+[[scoring]]
+name = "dose"
+origin_mm = [-10.0, -10.0, 0.0]
+spacing_mm = [5.0, 5.0, 5.0]
+shape = [4, 4, 12]
+
+[physics]
+nuclear = false
+stopping_model = "icru90-water-v1"
+multiple_scattering = false
+
+[run]
+backend = "warp-cpu"
+precision = "float64"
+seed = 20700704
+n_histories = 32
+n_batches = 4

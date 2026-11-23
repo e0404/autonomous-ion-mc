@@ -1,0 +1,52 @@
+# out6 case r_index 3 (V3-006 step S8): a heterogeneous voxel slab (water, then PMMA) with a LET
+# tally and a synthetic lookup tally (f = 1 + 0.1 L, no biological meaning), warp-cpu float64.
+# write_config copies the two .npy files and the lookup file beside the written TOML.
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[source]
+projectile = "proton"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 30.0
+
+[geometry]
+type = "voxel"
+origin_mm = [-6.0, -6.0, 0.0]
+spacing_mm = [4.0, 4.0, 4.0]
+shape = [3, 3, 8]
+materials = ["water", "pmma"]
+material_index = { file = "slab_material_index.npy", sha256 = "03b5e8167ae66f9d42f7c4fb9df27487fa990c61e8ad3d4a312e13de91afddff" }
+density = { file = "slab_density.npy", sha256 = "56b84d9b993807d13c933844b25c735bbd67cec855f847b5909cc8c6d6c12fc3" }
+
+[[scoring]]
+name = "dose"
+origin_mm = [-6.0, -6.0, 0.0]
+spacing_mm = [4.0, 4.0, 4.0]
+shape = [3, 3, 8]
+
+[physics]
+nuclear = false
+stopping_model = "bethe-ionmc-v1"
+
+[run]
+backend = "warp-cpu"
+precision = "float64"
+seed = 20700304
+n_histories = 64
+n_batches = 4
+
+[[tallies]]
+name = "let"
+grid = "dose"
+quantity = "let_d"
+
+[[tallies]]
+name = "weighted"
+grid = "dose"
+quantity = "lookup_sum"
+lookup = "synthetic_let_linear"
+
+[[lookups]]
+file = "synthetic_lookup.json"
+sha256 = "626b09d6db8e98c736bdcbb53747d4c9b5bd88886d4265e31028c7f2473eae71"
