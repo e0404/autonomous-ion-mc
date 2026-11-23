@@ -1258,3 +1258,56 @@ def test_datasets_verify_datasets_names_the_pinned_objects() -> None:
 def test_datasets_loader_reads_no_physics_or_run_field_from_the_environment() -> None:
     src = (Path(configio.__file__)).read_text("utf-8")
     assert "os.environ" not in src and "getenv" not in src
+
+
+def _lookup_doc_with(tmp_path: Path, **change: Any) -> Path:
+    doc = json.loads((tmp_path / "inputs" / "lookup.json").read_text("utf-8"))
+    doc.update(change)
+    path = tmp_path / "inputs" / "lookup.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return path
+
+
+def test_cfg7_self_consistent_lookup_tampering_is_refused(tmp_path: Path) -> None:
+    """A numerically identical lookup file with another citation, with the manifest entry's
+    item_sha256 rewritten and config_sha256 recomputed, is refused by verify() and from_dict()."""
+    p = _slab_toml(tmp_path)
+    c, m = load_toml(p)
+    d = to_dict(c, manifest=m)
+    path = _lookup_doc_with(tmp_path, citation="a forged citation")
+    forged = LookupTable.from_file(path)
+    assert forged.content_sha256 == c.lookups[0].content_sha256
+    entry = m.file("lookup:synthetic_let_linear")
+    assert entry is not None
+    new_entry = replace(
+        entry,
+        sha256=_sha(path),
+        item_sha256=configio.sha256_canonical(forged.provenance()),
+    )
+    files = tuple(new_entry if f.role == entry.role else f for f in m.files)
+    m2 = replace(m, files=files)
+    m2 = replace(m2, config_sha256=configio.config_sha256(c, m2))
+    with pytest.raises(ConfigError) as info:
+        m2.verify(c)
+    assert "input_manifest.files" in info.value.key_path and "lookup:" in info.value.key_path
+    with pytest.raises(ConfigError) as info2:  # the dict still records the original file hash
+        from_dict(d, manifest=m2)
+    assert info2.value.key_path.startswith("lookups[0]")
+
+
+def test_cfg3_malformed_lookup_files_are_config_errors(tmp_path: Path) -> None:
+    counter = iter(range(100))
+    for change in (
+        {"axis_values": {"a": 1}},
+        {"species": {"proton": 3}},
+        {"axis_values": "text"},
+        {"name": 7},
+    ):
+        base = tmp_path / f"m{next(counter)}"
+        base.mkdir()
+        _copy_inputs(base)
+        _lookup_doc_with(base, **change)
+        p = _slab_toml(base)
+        with pytest.raises(ConfigError) as info:
+            load_toml(p)
+        assert info.value.key_path == "lookups[0]", change

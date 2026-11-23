@@ -694,6 +694,29 @@ class InputManifest:
                     f"content digest {cur[0]} of the configuration differs from the "
                     f"manifest's {f.content_sha256}",
                 )
+            if cur[1] != f.item_sha256:
+                raise ConfigError(
+                    kp,
+                    "an item field of the configuration (provenance, geometry description) "
+                    "differs from the manifest entry's item digest",
+                )
+            if f.path is not None and f.role.startswith("lookup:"):
+                try:
+                    reloaded = LookupTable.from_file(f.path, expected_sha256=f.sha256)
+                except (
+                    UnsupportedCombinationError,
+                    OSError,
+                    ValueError,
+                    TypeError,
+                    KeyError,
+                ) as exc:
+                    raise ConfigError(kp, f"cannot reload the lookup file: {exc}") from exc
+                if sha256_canonical(reloaded.provenance()) != f.item_sha256:
+                    raise ConfigError(
+                        kp,
+                        f"the lookup file {Path(f.path).name!r} no longer yields the recorded "
+                        "item (a provenance field of the file changed)",
+                    )
         if config_sha256(config, self) != self.config_sha256:
             raise ConfigError(
                 "input_manifest.config_sha256",
@@ -901,16 +924,21 @@ def _read_source(
     return _Source(path, got, raw, info[0], info[1])
 
 
-def _check_ref_content(src: _Source, content: str, kp: str) -> None:
-    if (
-        src.ref is not None
-        and src.entry is not None
-        and (content != src.ref["content_sha256"] or content != src.entry.content_sha256)
-    ):
+def _check_ref_content(src: _Source, content: str, item_sha: str, kp: str) -> None:
+    """Bind a reloaded item to its manifest entry: content digest and complete item digest."""
+    if src.ref is None or src.entry is None:
+        return
+    if content != src.ref["content_sha256"] or content != src.entry.content_sha256:
         raise ConfigError(
             f"{kp}.content_sha256",
             f"the array of file {Path(src.path).name!r} has content digest {content}, "
             "which differs from the recorded one",
+        )
+    if item_sha != src.entry.item_sha256:
+        raise ConfigError(
+            kp,
+            f"the item reloaded from {Path(src.path).name!r} differs in a serialised field "
+            f"(item digest {item_sha}) from the manifest entry's {src.entry.item_sha256}",
         )
 
 
@@ -967,10 +995,16 @@ def _geometry_from(
         kw["density_g_cm3"] = _load_npy(src_d, f"{kp}.density")
     geom = _construct(VoxelGeometry, kp, kw)
     items = _geometry_items(geom)
-    _check_ref_content(src_mi, items["material_index"]["content_sha256"], f"{kp}.material_index")
+    mi = items["material_index"]
+    _check_ref_content(src_mi, mi["content_sha256"], sha256_canonical(mi), f"{kp}.material_index")
     built.files.append(("material_index", src_mi.path, src_mi.sha256))
     if src_d is not None:
-        _check_ref_content(src_d, items["density"]["content_sha256"], f"{kp}.density")
+        _check_ref_content(
+            src_d,
+            items["density"]["content_sha256"],
+            sha256_canonical(items["density"]),
+            f"{kp}.density",
+        )
         built.files.append(("density", src_d.path, src_d.sha256))
     return geom  # type: ignore[no-any-return]
 
@@ -993,8 +1027,8 @@ def _lookups_from(
         src = _read_source(item, kp, manifest, base_dir, None)
         try:
             table = LookupTable.from_file(src.path, expected_sha256=src.sha256)
-        except (UnsupportedCombinationError, OSError, ValueError) as exc:
-            raise ConfigError(kp, str(exc)) from exc
+        except (UnsupportedCombinationError, OSError, ValueError, TypeError, KeyError) as exc:
+            raise ConfigError(kp, f"{type(exc).__name__}: {exc}") from exc
         role = f"lookup:{table.name}"
         if src.ref is not None and src.ref["ref"] != role:
             raise ConfigError(
@@ -1002,7 +1036,7 @@ def _lookups_from(
             )
         if any(f[0] == role for f in built.files):
             raise ConfigError(kp, f"duplicate lookup table name {table.name!r}")
-        _check_ref_content(src, table.content_sha256, kp)
+        _check_ref_content(src, table.content_sha256, sha256_canonical(table.provenance()), kp)
         built.files.append((role, src.path, src.sha256))
         out.append(table)
     return tuple(out)

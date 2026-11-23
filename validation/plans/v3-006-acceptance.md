@@ -360,3 +360,11 @@ changes_required, two important findings, resolved in place (path safety and the
   changes_required verdicts (REVIEW-bd983b92, REVIEW-0f7aad46, REVIEW-c8397a61, REVIEW-34a0a3e8; findings 11–24,
   all resolved in the review logs), and the architecture/scientific pre-freeze review (reviewer agent, read-only)
   recorded findings 1–10. Later changes are dated amendments. Implementation starts with S1. Not a clinical claim.
+- 2026-11-23 (orchestrator, S1 review note; Codex REVIEW-8c7dc9a6 of b8acfab4, changes_required, resolved in the next
+  commit): (1) `InputManifest.verify` and `from_dict` now compare the complete reloaded item digest (`item_sha256`) of
+  every referenced lookup and geometry array with the manifest entry and with the in-memory item, and require every
+  reference role exactly once; (2) `TypeError`/`KeyError` from a malformed lookup file become `ConfigError` naming the
+  lookup pointer. Declared limit (not a defect of the frozen schema): a rewrite of a referenced file together with its
+  manifest entry, the reference record and `config_sha256` is self-consistent and therefore indistinguishable from a
+  legitimately different configuration; the manifest carries no secret-keyed binding and is integrity-protected only
+  through the bundle's file hashes once persisted (decision 0045 §1). Not a clinical claim.
