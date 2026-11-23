@@ -22,9 +22,10 @@ import pytest
 
 from ionmc import results
 from ionmc.config import PhysicsOptions, RunOptions, SimulationConfig, validate
+from ionmc.configio import array_content_sha256
 from ionmc.geometry import BoxPhantom
 from ionmc.materials import PMMA, WATER
-from ionmc.physics.projectiles import PROTON
+from ionmc.physics.projectiles import ALPHA, PROTON
 from ionmc.results import ResultFormatError, load, save
 from ionmc.scoring import QuantityResult, ScoringGrid, TallyRequest
 from ionmc.simulation import EnergyBalance, GridResult, Result, TransportCounters
@@ -37,7 +38,8 @@ NB = 4
 def _config(names: tuple[str, ...] = ("dose",), tally: bool = False) -> SimulationConfig:
     return SimulationConfig(
         PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 20.0),
-        BoxPhantom((-3.0, -2.0, 0.0), (6.0, 4.0, 8.0), WATER),
+        # the last z layer of the grid lies outside the box: its voxel mass is 0 (dose is NaN)
+        BoxPhantom((-3.0, -2.0, 0.0), (6.0, 4.0, 6.0), WATER),
         tuple(ScoringGrid((-3.0, -2.0, 0.0), (2.0, 2.0, 2.0), SHAPE, n) for n in names),
         PhysicsOptions(nuclear=False, stopping_model="bethe-ionmc-v1"),
         RunOptions("python", "float64", 11, 8, n_batches=NB),
@@ -45,23 +47,20 @@ def _config(names: tuple[str, ...] = ("dose",), tally: bool = False) -> Simulati
     )
 
 
-def _grid(name: str, shape: tuple[int, ...] = SHAPE, seed: int = 0) -> GridResult:
+def _batch_sums(seed: int = 0) -> np.ndarray[Any, Any]:
+    """Synthetic per-batch sums ``[NB, nvox]``; voxel 0 has no deposit in any batch."""
     rng = np.random.default_rng(seed)  # synthetic arrays only
-    en = rng.uniform(0.5, 2.0, shape)
-    en[0, 0, 0] = 0.0
-    std = 0.1 * en
-    mass = np.full(shape, 0.01)
-    mass[-1, -1, -1] = 0.0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        rel = np.where(en > 0, std / en, np.nan)
-        dose = np.where(mass > 0, en * 3.0, np.nan)
-        dstd = np.where(mass > 0, std * 3.0, np.nan)
-    mask = (en > 0) & (mass > 0)
-    return GridResult(
-        name, en, std, dose, dstd, rel, mask, mass,
-        np.full(shape, 3, dtype=np.int32), mask & False, NB < 10,
-        rng.uniform(0.5, 2.0, (NB, *shape)), True,
-    )  # fmt: skip
+    sums = rng.uniform(0.5, 2.0, (NB, int(np.prod(SHAPE)))) * 2.0
+    sums[:, 0] = 0.0
+    sums[0, 1] = 0.0  # one voxel with a zero batch
+    return sums
+
+
+def _grid(cfg: SimulationConfig, eff: Any, gi: int = 0) -> GridResult:
+    """A grid result built by the engine's own reduction (consistent derived arrays)."""
+    from ionmc.simulation import _grid_result
+
+    return _grid_result(cfg.scoring[gi], _batch_sums(gi), eff, True)
 
 
 def _quantity(shape: tuple[int, ...] = SHAPE) -> QuantityResult:
@@ -102,14 +101,18 @@ def make_result(
     cfg = cfg or _config(names, tally)
     eff = validate(cfg)
     grids = []
-    for i, n in enumerate(names):
-        g = _grid(n, seed=i)
+    for i, _n in enumerate(names):
+        g = _grid(cfg, eff, i)
         if tally and i == 0:
             g = GridResult(*[getattr(g, f) for f in g.__dataclass_fields__ if f != "quantities"],
                            quantities={"let": _quantity(), **_pieces()})  # fmt: skip
         grids.append(g)
     in_grid = tuple(float(np.sum(g.energy_mev)) * 8 for g in grids)  # bound to the arrays
-    bal = EnergyBalance(8.0, 7.0, 0.5, 0.25, 0.0, 0.0, in_grid, (6.0,) * len(names))
+    total = max(in_grid) + 1.0  # in_grid + outside = step_deposit + cutoff on every grid
+    bal = EnergyBalance(
+        total + 0.25, total - 0.5, 0.5, 0.25, 0.0, 0.0, in_grid,
+        tuple(total - x for x in in_grid),
+    )  # fmt: skip
     return Result(
         True, cfg, eff, "python", "cpu", "float64", 11, dict(eff.rng), 8, NB,
         tuple(grids), bal, TransportCounters(), {"total": 0.1},
@@ -317,10 +320,11 @@ def test_out7_undefined_is_nan_and_scalars_carry_status(tmp_path: Path) -> None:
     z = g.energy_mev * 0
     d0 = np.where(g.mass_g > 0, 0.0, np.nan)
     none = GridResult(
-        g.name, z, z, d0, d0, np.full(SHAPE, np.nan), mask & False, g.mass_g, g.n_nonzero_batches,
-        g.sparse_mask, NB < 10, g.batch_energy_mev, True,
+        g.name, z, z, d0, d0, np.full(SHAPE, np.nan), mask & False, g.mass_g,
+        np.zeros(SHAPE, dtype=np.int32), g.sparse_mask & False, NB < 10, g.batch_energy_mev * 0,
+        True,
     )  # fmt: skip
-    eb = EnergyBalance(8.0, 7.0, 0.5, 0.25, 0.0, 0.0, (0.0,), (6.0,))  # no energy in the grid
+    eb = EnergyBalance(8.0, 7.0, 0.5, 0.25, 0.0, 0.0, (0.0,), (7.5,))  # no energy in the grid
     doc = load(
         save(Result(**{**r.__dict__, "grids": (none,), "energy_balance": eb}), tmp_path / "c")
     ).doc
@@ -866,9 +870,10 @@ def _ion_config(backend: str = "warp-cpu") -> SimulationConfig:
 def test_item1_ion_run_round_trip(tmp_path: Path) -> None:
     r = Simulation(_ion_config()).run()
     assert isinstance(r.counters, IonTransportCounters)
-    doc = load(save(r, tmp_path / "b")).doc
+    got = load(save(r, tmp_path / "b"))
+    doc = got.doc
     assert set(doc["accounting"]["counters"]) == set(r.counters.as_dict())
-    assert doc["valid"] is True
+    assert doc["valid"] is True and got.effective_binding == "re-derived"
 
 
 def test_item1_bracket_miss_is_diagnostic_only(tmp_path: Path) -> None:
@@ -920,9 +925,24 @@ def test_item1_nuclear_run_round_trip(tmp_path: Path) -> None:
     )
     r = Simulation(cfg).run()
     assert isinstance(r.energy_balance, NuclearEnergyBalance)
-    doc = load(save(r, tmp_path / "b")).doc
+    got = load(save(r, tmp_path / "b"))
+    doc = got.doc
     assert "majorant_violation" in doc["accounting"]["counters"]
     assert "nuclear_mev" in doc["accounting"]["energy_balance"]
+    assert got.effective_binding == "re-derived"
+    # A-1 item 4: the exact nuclear key set and the signed nuclear terms in the closure
+    b = tmp_path / "b"
+    _mutate(
+        b, lambda d: d["accounting"]["energy_balance"]["nuclear_mev"].pop("nuclear_alpha_local")
+    )
+    with pytest.raises(ResultFormatError, match="nuclear_mev"):
+        load(b)
+    _put_doc(b, doc)
+    _mutate(b, lambda d: d["accounting"]["energy_balance"]["nuclear_mev"].update(
+        nuclear_binding=doc["accounting"]["energy_balance"]["nuclear_mev"]["nuclear_binding"] + 1.0
+    ))  # fmt: skip
+    with pytest.raises(ResultFormatError, match="closure_residual"):
+        load(b)
 
 
 def _put_members(b: Path, extra: dict[str, bytes]) -> None:
@@ -1324,7 +1344,7 @@ def test_nested_effective_fields_are_bound_and_typed(bundle: Path, fn: Any) -> N
         lambda d: d["statistics"].update(normalisation="per batch"),
         lambda d: d["statistics"]["grids"][0]["energy_total_mev"].update(units="Gy"),
         lambda d: d["accounting"]["energy_balance"]["in_grid_mev"].__setitem__(0, 2.0),
-        lambda d: d["accounting"]["energy_balance"].update(closure_residual_mev=0.0),
+        lambda d: d["accounting"]["energy_balance"].update(closure_residual_mev=0.5),
         lambda d: d["accounting"]["energy_balance"]["outside_mev"].append(1.0),
         lambda d: d["provenance"]["models"].update(mcs_model="other"),
         lambda d: d["provenance"]["data"].update(table_stopping_source="other"),
@@ -1404,3 +1424,192 @@ def test_derived_channel_plan_equals_the_engine_plan_for_every_quantity() -> Non
             plan["channels"]] == ch  # fmt: skip
     assert plan["quantities"] == qs
     assert (plan["total_size"], plan["n_residual_columns"]) == (total, n_res)
+
+
+# ---- amendment A-1: re-derivation of effective, accounting identities, array invariants -------
+
+
+def _copy(b: Path, tmp_path: Path, name: str = "c") -> Path:
+    dst = tmp_path / name
+    shutil.copytree(b, dst)
+    return dst
+
+
+def test_a1_default_box_and_voxel_round_trips_are_re_derived(tmp_path: Path) -> None:
+    for i, r in enumerate((make_result(tally=True), make_result(cfg=_voxel_config()),
+                           _voxel_result(30.0))):  # fmt: skip
+        got = load(save(r, tmp_path / f"b{i}"))
+        assert got.effective_binding == "re-derived" and got.binding_limits == ()
+
+
+def _bump_max_steps(d: dict[str, Any]) -> None:
+    d["effective"]["max_steps"] += 1
+
+
+def _bump_scattering(d: dict[str, Any]) -> None:
+    d["effective"]["scattering_length_g_cm2"][0] *= 1.01
+
+
+def _bump_table_n_e(d: dict[str, Any]) -> None:
+    d["effective"]["tables"]["n_e"] += 1
+
+
+@pytest.mark.parametrize("fn", [_bump_max_steps, _bump_scattering, _bump_table_n_e])
+def test_a1_effective_changed_alone_is_refused_unless_typed_only(bundle: Path, fn: Any) -> None:
+    _mutate(bundle, fn)
+    with pytest.raises(ResultFormatError, match="re-derived"):
+        load(bundle)
+    got = load(bundle, rederive=False)
+    assert got.effective_binding == "typed-only" and got.binding_limits
+
+
+def test_a1_missing_cache_fails_closed_and_typed_only_does_not_need_it(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    cfg = SimulationConfig(
+        PencilBeamSource(ALPHA, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 400.0),
+        BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), WATER),
+        (ScoringGrid((-10.0, -10.0, 0.0), (5.0, 5.0, 4.0), (4, 4, 10)),),
+        PhysicsOptions(nuclear=False, stopping_model="icru90-water-v1", multiple_scattering=False),
+        RunOptions("warp-cpu", "float64", 17, 16, n_batches=4),
+    )
+    b = save(Simulation(cfg).run(), tmp_path / "b")
+    got = load(b)  # cache present (IONMC_CACHE_DIR of the run)
+    assert got.effective_binding == "re-derived"
+    monkeypatch.setenv("IONMC_CACHE_DIR", str(tmp_path / "empty"))
+    with pytest.raises(ResultFormatError, match="effective not re-derivable"):
+        load(b)
+    assert load(b, rederive=False).effective_binding == "typed-only"
+
+
+def test_a1_lookup_configuration_binding_and_documented_exclusions(
+    lookup_bundle: Path, tmp_path: Path
+) -> None:
+    got = load(lookup_bundle)
+    assert got.effective_binding == "re-derived-except-lookup-plan"
+    assert got.binding_limits == results.LOOKUP_PLAN_EXCLUSIONS
+    ch = _doc(lookup_bundle)["effective"]["tallies"]["channels"]
+    fe = next(i for i, c in enumerate(ch) if c["kind"] == "FE")
+    other = next(i for i, c in enumerate(ch) if c["kind"] not in ("FE", "N"))
+
+    def edit(tag: str, fn: Any) -> Path:
+        b = _copy(lookup_bundle, tmp_path, tag)
+        _mutate(b, fn)
+        return b
+
+    # excluded: the lookup-dependent quantum and bound (also a negative exponent, which is legal)
+    ok = edit("k", lambda d: d["effective"]["tallies"]["channels"][fe].update(k=-3))
+    assert load(ok).effective_binding == "re-derived-except-lookup-plan"
+    # everything else of the plan is bound exactly
+    for tag, fn in (
+        ("k2", lambda d: d["effective"]["tallies"]["channels"][other].update(
+            k=d["effective"]["tallies"]["channels"][other]["k"] + 1)),
+        ("bl", lambda d: d["effective"]["tallies"]["bounds"].update(
+            B_L_mm=d["effective"]["tallies"]["bounds"]["B_L_mm"] * 1.01)),
+        ("ms", _bump_max_steps),
+    ):  # fmt: skip
+        with pytest.raises(ResultFormatError):
+            load(edit(tag, fn))
+    bad_f = edit("f", lambda d: d["effective"]["tallies"]["bounds"].update(f_max=0.0))
+    with pytest.raises(ResultFormatError, match="f_max"):
+        load(bad_f)
+
+
+def test_a1_stopping_identity_block_is_validated(bundle: Path, monkeypatch: Any) -> None:
+    def refuse(block: Any, transported: Any = None) -> None:
+        raise ValueError("planted")
+
+    monkeypatch.setattr(results, "validate_identity_block", refuse)
+    with pytest.raises(ResultFormatError, match="identity block"):
+        load(bundle)
+
+
+def _eb(key: str, fn: Any) -> Any:
+    return lambda d: d["accounting"]["energy_balance"].__setitem__(
+        key, fn(d["accounting"]["energy_balance"][key])
+    )
+
+
+@pytest.mark.parametrize(
+    ("fn", "match"),
+    [
+        (_eb("closure_residual_mev", lambda v: v + 1.0), "closure_residual"),
+        (_eb("initial_mev", lambda v: v + 1.0), "closure_residual"),
+        (_eb("escaped_mev", lambda v: v + 1.0), "closure_residual"),
+        (_eb("outside_mev", lambda v: [v[0] + 1.0]), "deposits"),
+        (_eb("quantization_mev", lambda v: [0.5]), "deposits"),
+        (_eb("step_deposit_mev", lambda v: v + 1.0), "closure_residual|deposits"),
+        (_eb("in_grid_mev", lambda v: [v[0] * 1.5]), "deposits|in_grid"),
+        (_eb("in_grid_mev", lambda v: [-v[0]]), "negative|deposits"),
+    ],
+)
+def test_a1_accounting_identities_negative_controls(bundle: Path, fn: Any, match: str) -> None:
+    _mutate(bundle, fn)
+    with pytest.raises(ResultFormatError, match=match):
+        load(bundle)
+
+
+def _alter(b: Path, member: str, fn: Any) -> None:
+    """Change one array in place and fix the catalogue digest and the file hashes (an adversary)."""
+    m = _members(b)
+    arr = np.load(io.BytesIO(m[member + ".npy"]), allow_pickle=False).copy()
+    fn(arr)
+    m[member + ".npy"] = _npy(arr)
+    _write_zip(b, sorted(m.items()))
+    d = _doc(b)
+    for e in d["arrays"]:
+        if e["name"] == member:
+            e["content_sha256"] = array_content_sha256(arr)
+    _put_doc(b, d)
+    _refile(b)
+
+
+def _set(idx: tuple[int, ...], value: Any) -> Any:
+    def f(a: np.ndarray[Any, Any]) -> None:
+        a[idx] = value
+
+    return f
+
+
+def _scale(idx: Any, factor: float) -> Any:
+    def f(a: np.ndarray[Any, Any]) -> None:
+        a[idx] *= factor
+
+    return f
+
+
+_G, _Q = "grid__dose__", "grid__dose__q__let__"
+
+
+@pytest.mark.parametrize(
+    ("member", "fn"),
+    [
+        (_G + "dose_gy", _scale((1, 1, 1), 1.01)),
+        (_G + "dose_std_gy", _scale((1, 1, 1), 1.01)),
+        (_G + "relative_uncertainty", _scale((1, 1, 1), 1.1)),
+        (_G + "energy_std_mev", _set((1, 1, 1), -1.0)),
+        (_G + "energy_std_mev", _set((1, 1, 1), np.inf)),
+        (_G + "mass_g", _scale((1, 1, 1), 2.0)),
+        (_G + "defined_mask", _set((1, 1, 1), False)),
+        (_G + "n_nonzero_batches", _set((1, 1, 1), 0)),
+        (_G + "n_nonzero_batches", _set((1, 1, 1), 99)),
+        (_G + "sparse_mask", _set((1, 1, 1), True)),
+        (_G + "batch_energy_mev", _scale(Ellipsis, 1.01)),
+        (_G + "batch_energy_mev", _scale((0,), 1.5)),
+        (_Q + "std", _set((1, 1, 1), -1.0)),
+        (_Q + "n_nonzero", _set((1, 1, 1), 1)),
+        (_Q + "mean", _set((0, 0, 0), 0.0)),
+        (_Q + "rounding_bound", _set((0, 0, 0), 0.0)),
+        (_Q + "rounding_bound", _set((1, 1, 1), -1.0)),
+        ("grid__dose__q__scoring_pieces__defined_mask", _set((1, 1, 1), False)),
+    ],
+)
+def test_a1_array_invariants_negative_controls(bundle: Path, member: str, fn: Any) -> None:
+    _alter(bundle, member, fn)
+    with pytest.raises(ResultFormatError):
+        load(bundle)
+
+
+def test_a1_array_invariants_positive_control_unchanged_arrays(bundle: Path) -> None:
+    _alter(bundle, _G + "dose_gy", lambda a: None)  # re-written identically: still accepted
+    assert load(bundle).effective_binding == "re-derived"

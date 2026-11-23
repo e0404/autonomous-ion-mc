@@ -41,25 +41,32 @@ import tempfile
 import zipfile
 import zlib
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from ionmc import _result_shapes as shapes
+from ionmc.config import validate
 from ionmc.configio import (
     ConfigError,
+    DatasetError,
     InputManifest,
     array_content_sha256,
+    from_dict,
     manifest_for_api_config,
     reader_item_sha256s,
     sha256_canonical,
     to_dict,
     validate_dict_structure,
 )
+from ionmc.errors import UnsupportedCombinationError
 from ionmc.geometry import VoxelGeometry
+from ionmc.lookup import LookupTable
 from ionmc.physics.projectiles import PROJECTILES
+from ionmc.physics.stopping_selection import validate_identity_block
+from ionmc.scoring import MEV_PER_G_TO_GY, min_defined_batches
 from ionmc.simulation import (
     IonTransportCounters,
     NuclearEnergyBalance,
@@ -75,6 +82,7 @@ from ionmc.transport.channels import (
     _species_row,
     _spectrum_spec,
 )
+from ionmc.transport.tally import NUCLEAR_TALLY_NAMES
 
 SCHEMA = "ionmc.result"
 SCHEMA_VERSION = "1.0"
@@ -1244,6 +1252,10 @@ def _check_effective_binding(doc: dict[str, Any]) -> None:
         _need(all(x > 0 for x in g["spacing_mm"]) and all(n >= 1 for n in g["shape"]),
               "effective.scoring: spacing and shape must be positive")  # fmt: skip
     _check_channel_plan(doc)
+    try:
+        validate_identity_block(eff["stopping"])
+    except (ValueError, KeyError, TypeError, IndexError) as exc:
+        raise _fail(f"effective.stopping identity block is inconsistent: {exc}") from exc
     # statistics definitions and units
     st = doc["statistics"]
     for k, v in STAT_TEXT.items():
@@ -1259,16 +1271,42 @@ def _check_effective_binding(doc: dict[str, Any]) -> None:
 
 
 def _check_energy_structure(doc: dict[str, Any]) -> None:
+    """Accounting identities that need no array (decision 0045 amendment A-1, item 4): per grid
+    ``in_grid + quantization + outside = step_deposit + cutoff + nuclear_local`` and the closure
+    ``initial - (step + cutoff + escaped + truncated + unaccounted + signed nuclear terms) =
+    closure_residual_mev``; tolerance ``1e-9 max(1, |reference|)`` (sums in different float
+    order); a nuclear result persists exactly the engine's nuclear key set."""
     eb, n = doc["accounting"]["energy_balance"], len(doc["effective"]["scoring"])
     for k in ("in_grid_mev", "outside_mev"):
         _need(len(eb[k]) == n, f"accounting.energy_balance.{k}: one entry per scoring grid")
     _need(len(eb["quantization_mev"]) in (0, n), "energy_balance.quantization_mev length")
-    if "nuclear_mev" not in eb:
-        total = sum(eb[k] for k in ("step_deposit_mev", "cutoff_mev", "escaped_mev",
-                                    "truncated_mev", "unaccounted_mev"))  # fmt: skip
-        tol = 1e-9 * max(1.0, abs(eb["initial_mev"]))
-        resid = eb["initial_mev"] - total - eb["closure_residual_mev"]
-        _need(abs(resid) <= tol, "energy_balance: closure_residual_mev disagrees with identity")
+    nuc = eb.get("nuclear_mev")
+    nuc_dest = local = 0.0
+    if "nuclear_mev" in eb:
+        _need(
+            isinstance(nuc, dict) and set(nuc) == set(NUCLEAR_TALLY_NAMES)
+            and all(_is_num(v) for v in nuc.values()),
+            f"energy_balance.nuclear_mev: keys must be exactly {sorted(NUCLEAR_TALLY_NAMES)}",
+        )  # fmt: skip
+        assert nuc is not None
+        local = nuc["nuclear_local"]
+        nuc_dest = (nuc["nuclear_local"] + nuc["nuclear_escaped_neutron"]
+                    + nuc["nuclear_escaped_gamma"] + nuc["nuclear_binding"]
+                    + nuc["nuclear_imbalance"])  # fmt: skip
+    total = sum(eb[k] for k in ("step_deposit_mev", "cutoff_mev", "escaped_mev", "truncated_mev",
+                                "unaccounted_mev")) + nuc_dest  # fmt: skip
+    tol = 1e-9 * max(1.0, abs(eb["initial_mev"]))
+    resid = eb["initial_mev"] - total - eb["closure_residual_mev"]
+    _need(abs(resid) <= tol, "energy_balance: closure_residual_mev disagrees with identity")
+    grid_total = eb["step_deposit_mev"] + eb["cutoff_mev"] + local
+    gtol = 1e-9 * max(1.0, abs(grid_total))
+    for i in range(n):
+        quant = eb["quantization_mev"][i] if eb["quantization_mev"] else 0.0
+        _need(eb["in_grid_mev"][i] >= 0 and eb["outside_mev"][i] >= 0,
+              f"energy_balance: negative in-grid or outside energy of grid {i}")  # fmt: skip
+        _need(abs(eb["in_grid_mev"][i] + quant + eb["outside_mev"][i] - grid_total) <= gtol,
+              f"energy_balance: in_grid + quantization + outside != deposits, grid {i}"
+              )  # fmt: skip
 
 
 # ---- the channel plan derived from the REQUESTED tallies (no value of effective.tallies is used)
@@ -1390,7 +1428,8 @@ def _check_channel_plan(doc: dict[str, Any]) -> None:
     for c, w in zip(got, channels, strict=True):
         core = {k: v for k, v in c.items() if k not in ("k", "bound_per_history")}
         _need(core == w, "effective.tallies.channels differ from the plan from requested.tallies")
-        _need(c["k"] >= 0 and c["bound_per_history"] >= 0, "channel quantum or bound is negative")
+        # k may be negative (a coarse quantum is legal): only the bound is signed
+        _need(c["bound_per_history"] >= 0, "channel bound is negative")
     _need(
         tl["quantities"] == quantities,
         "effective.tallies.quantities differ from the plan from requested.tallies",
@@ -1847,7 +1886,201 @@ def _check_catalogue(doc: dict[str, Any]) -> dict[tuple[Any, Any, Any, Any], str
     return by
 
 
-def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]]) -> None:
+_RTOL_DERIVED = 1e-12  # arrays that are the engine's own elementwise transform of another
+_RTOL_BATCH = 1e-9  # mean and batch standard error of the persisted batch arrays
+_RATIO_QUANTITIES = ("let_t", "let_d", "let_d_eps", "lookup_dose_avg")
+
+
+def _close(a: np.ndarray[Any, Any], b: np.ndarray[Any, Any], rtol: float, what: str) -> None:
+    """Equal NaN pattern and equal values to ``rtol`` (relative to the largest finite value)."""
+    nan_a, nan_b = np.isnan(a), np.isnan(b)
+    ok = a.shape == b.shape and bool(np.array_equal(nan_a, nan_b))
+    if ok:
+        x, y = a[~nan_a], b[~nan_b]
+        scale = float(np.max(np.abs(y))) if y.size else 0.0
+        ok = bool(np.all(np.abs(x - y) <= rtol * np.maximum(np.abs(y), 1e-3 * scale)))
+    _need(ok, f"{what} disagrees with the arrays it is derived from")
+
+
+def _check_array_invariants(
+    doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]], by: Mapping[Any, str]
+) -> None:
+    """Array invariants of decision 0045 amendment A-1, item 5 (tolerances: derived arrays
+    ``1e-12``, batch statistics ``1e-9``, in-grid energy ``1e-9`` relative): standard errors finite
+    and non-negative; dose, dose standard error and relative uncertainty are the engine's
+    transforms of ``energy_mev``/``energy_std_mev``/``mass_g``; ``defined_mask``,
+    ``n_nonzero_batches`` and ``sparse_mask`` agree with the energy and the batch count; the batch
+    arrays reproduce mean and batch standard error; quantity companions follow the decision-0040
+    rules; ``in_grid_mev`` equals the energy array times the number of histories."""
+    nb, nh = doc["run"]["n_batches"], doc["run"]["n_histories"]
+    persisted = doc["statistics"]["batch_arrays"]["status"] == "persisted"
+    eb = doc["accounting"]["energy_balance"]
+    for i, g in enumerate(doc["effective"]["scoring"]):
+        n = g["name"]
+
+        def get(base: str, n: str = n) -> np.ndarray[Any, Any]:
+            return arrays[by[("grid", n, None, base)]]
+
+        en, std, mass = get("energy_mev"), get("energy_std_mev"), get("mass_g")
+        dose, dstd, rel = get("dose_gy"), get("dose_std_gy"), get("relative_uncertainty")
+        mask, nnz, sparse = (
+            get("defined_mask").astype(bool),
+            get("n_nonzero_batches"),
+            get("sparse_mask").astype(bool),
+        )
+        _need(bool(np.all(np.isfinite(en)) and np.all(en >= 0)), f"grid {n!r}: energy_mev")
+        _need(bool(np.all(np.isfinite(std)) and np.all(std >= 0)), f"grid {n!r}: energy_std_mev")
+        _need(bool(np.all(np.isfinite(mass)) and np.all(mass >= 0)), f"grid {n!r}: mass_g")
+        pos = mass > 0
+        with np.errstate(divide="ignore", invalid="ignore"):
+            scale = np.where(pos, MEV_PER_G_TO_GY / np.where(pos, mass, 1.0), np.nan)
+            _close(dose, np.where(pos, en * scale, np.nan), _RTOL_DERIVED, f"grid {n!r}: dose_gy")
+            _close(dstd, np.where(pos, std * scale, np.nan), _RTOL_DERIVED,
+                   f"grid {n!r}: dose_std_gy")  # fmt: skip
+            _close(rel, np.where(en > 0, std / np.where(en > 0, en, 1.0), np.nan),
+                   _RTOL_DERIVED, f"grid {n!r}: relative_uncertainty")  # fmt: skip
+        _need(bool(np.array_equal(mask, (en > 0) & pos)), f"grid {n!r}: defined_mask")
+        _need(bool(np.all((nnz >= 0) & (nnz <= nb))), f"grid {n!r}: n_nonzero_batches range")
+        _need(bool(np.array_equal(nnz > 0, en > 0)), f"grid {n!r}: n_nonzero_batches vs energy")
+        _need(bool(np.array_equal(sparse, mask & (nnz < 0.5 * nb))), f"grid {n!r}: sparse_mask")
+        if persisted:
+            x = get("batch_energy_mev").reshape(nb, -1)
+            mean = x.mean(axis=0)
+            sem = np.sqrt(((x - mean) ** 2).sum(axis=0) / (nb * (nb - 1)))
+            _close(mean, en.reshape(-1), _RTOL_BATCH, f"grid {n!r}: batch mean")
+            _close(sem, std.reshape(-1), _RTOL_BATCH, f"grid {n!r}: batch standard error")
+            _need(bool(np.array_equal((x > 0).sum(axis=0), nnz.reshape(-1))),
+                  f"grid {n!r}: n_nonzero_batches vs batch arrays")  # fmt: skip
+        dep = float(np.sum(en)) * nh
+        _need(abs(eb["in_grid_mev"][i] - dep) <= 1e-9 * max(1.0, abs(dep)),
+              f"accounting.energy_balance.in_grid_mev[{i}] disagrees with the energy array of "
+              f"grid {n!r}")  # fmt: skip
+    ent = {e["name"]: e for e in doc["arrays"]}
+    for (kind, gname, qname, base), name in by.items():
+        if kind != "quantity" or base != "mean":
+            continue
+        quant = ent[name]["origin"]["quantity"]
+        mean, qstd, qmask, qn, bound = (
+            arrays[by[("quantity", gname, qname, b)]]
+            for b in ("mean", "std", "defined_mask", "n_nonzero", "rounding_bound")
+        )
+        qmask = qmask.astype(bool)
+        w = f"quantity {qname!r} of grid {gname!r}"
+        _need(bool(np.all((qn >= 0) & (qn <= nb))), f"{w}: n_nonzero range")
+        if quant in _RATIO_QUANTITIES:
+            for a in (mean, qstd, bound):
+                _need(bool(np.all(np.isnan(a[~qmask]))), f"{w}: undefined ratio values are NaN")
+            _need(bool(np.all(qn[qmask] >= min_defined_batches(nb))),
+                  f"{w}: defined bins need max(2, ceil(B/2)) nonzero batches")  # fmt: skip
+        else:
+            _need(bool(np.array_equal(qmask, mean > 0)), f"{w}: defined_mask is mean > 0")
+        _need(bool(np.all(np.isfinite(mean[qmask])) and np.all(np.isfinite(qstd[qmask]))),
+              f"{w}: defined values must be finite")  # fmt: skip
+        _need(bool(np.all(qstd[qmask] >= 0) and np.all(bound[qmask] >= 0)),
+              f"{w}: standard error and rounding bound are non-negative")  # fmt: skip
+        _need(not bool(np.any(np.isinf(qstd))), f"{w}: infinite standard error")
+
+
+# ---- re-derivation of ``effective`` (decision 0045 amendment A-1, items 1 and 2)
+
+_F_MIN, _F_MAX = math.ldexp(1.0, -60), math.ldexp(1.0, 60)  # channels.FE_F_{MIN,MAX}_EXPONENT
+LOOKUP_PLAN_EXCLUSIONS = (
+    "effective.tallies.channels[kind == 'FE'].k",
+    "effective.tallies.channels[kind == 'FE'].bound_per_history",
+    "effective.tallies.bounds.f_max",
+    "effective.tallies.lookups[*].content_sha256",
+)
+REDERIVE_EXCLUSIONS = (
+    "effective.stopping.evidence_at_run (persisted verbatim, never recomputed)",
+    "every cache_dir (a path of the writing machine)",
+)
+
+
+def _placeholder_lookup(p: Mapping[str, Any], fmax: float) -> LookupTable:
+    lo, hi = p["axis_range"]
+    n = int(p["n_points"])
+    axis = np.geomspace(lo, hi, n) if p["axis_spacing"] == "log" else np.linspace(lo, hi, n)
+    return LookupTable(
+        name=p["name"], quantity=p["quantity"], units=p["units"], axis=p["axis"],
+        axis_spacing=p["axis_spacing"], axis_values=axis,
+        values={sp: np.full(n, fmax) for sp in p["species"]}, citation=p["citation"],
+        license=p["license"], source=p["source"], synthetic=p["synthetic"],
+        file_sha256=p["file_sha256"], resampling=p["resampling"],
+    )  # fmt: skip
+
+
+def _comparable(eff: Mapping[str, Any], lookup: bool) -> dict[str, Any]:
+    e = _strip(eff, frozenset({"cache_dir"}))
+    e["stopping"].pop("evidence_at_run", None)
+    if lookup and e["tallies"] is not None:
+        for c in e["tallies"]["channels"]:
+            if c["kind"] == "FE":
+                c.pop("k"), c.pop("bound_per_history")
+        e["tallies"]["bounds"].pop("f_max", None)
+        for lk in e["tallies"]["lookups"]:
+            lk.pop("content_sha256", None)
+    return e  # type: ignore[no-any-return]
+
+
+def _rederive(
+    doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]], by: Mapping[Any, str],
+    rederive: bool,
+) -> tuple[str, tuple[str, ...]]:  # fmt: skip
+    """Rebuild the configuration from ``requested`` (geometry arrays from the persisted members,
+    lookup tables as placeholders of the persisted provenance), ``validate`` it and compare its
+    ``summary()`` with the persisted ``effective`` (canonical JSON), except the documented
+    exclusions. Returns the binding level and the recorded limits."""
+    if not rederive:
+        return "typed-only", ("effective is typed and bound to requested, not re-derived",)
+    rq, eff = doc["requested"], doc["effective"]
+    user = rq["physics"].get("stopping")
+    if isinstance(user, dict) and "status" in user:  # a user stopping object cannot be rebuilt
+        return "typed-only", (
+            "requested.physics.stopping is a not-reconstructible user stopping object: effective "
+            "is typed and bound to requested, not re-derived",
+        )
+    lookups = doc["provenance"]["data"]["lookups"]
+    geo = {
+        role: arrays[by[("geometry", None, None, base)]]
+        for role, base in (("material_index", "material_index"), ("density", "density_g_cm3"))
+        if ("geometry", None, None, base) in by
+    }
+
+    def not_derivable(exc: BaseException) -> ResultFormatError:
+        cached = isinstance(exc, DatasetError) or isinstance(
+            exc.__cause__, FileNotFoundError | OSError
+        )
+        what = "dataset not cached" if cached else "the requested configuration is refused"
+        return _fail(f"effective not re-derivable: {what}: {exc}")
+
+    try:
+        cfg = from_dict({k: v for k, v in rq.items() if k != "lookups"}, arrays=geo)
+        if lookups:
+            fmax = (eff["tallies"] or {}).get("bounds", {}).get("f_max")
+            _need(
+                isinstance(fmax, float) and _F_MIN <= fmax <= _F_MAX,
+                "effective.tallies.bounds.f_max is outside the admissible lookup range",
+            )
+            cfg = replace(cfg, lookups=tuple(_placeholder_lookup(p, fmax) for p in lookups))
+            for pl, p in zip(cfg.lookups, lookups, strict=True):
+                got = {k: v for k, v in pl.provenance().items() if k != "content_sha256"}
+                _need(got == {k: v for k, v in p.items() if k != "content_sha256"},
+                      f"lookup {p['name']!r}: provenance is not a table description")  # fmt: skip
+        want = validate(cfg).summary()
+    except (DatasetError, UnsupportedCombinationError) as exc:
+        raise not_derivable(exc) from exc
+    if canonical_bytes(_comparable(want, bool(lookups))) != canonical_bytes(
+        _comparable(eff, bool(lookups))
+    ):
+        raise _fail("effective differs from the summary re-derived from requested")
+    if lookups:
+        return "re-derived-except-lookup-plan", LOOKUP_PLAN_EXCLUSIONS
+    return "re-derived", ()
+
+
+def _check_invariants(
+    doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any]], rederive: bool = True
+) -> tuple[str, tuple[str, ...]]:
     scoring = {g["name"]: tuple(g["shape"]) for g in doc["effective"].get("scoring", [])}
     nb = doc["run"]["n_batches"]
     by = _check_catalogue(doc)
@@ -1921,15 +2154,7 @@ def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any
             st["n_sparse_voxels"] == int(sp.sum()),
             f"statistics.grids[{n!r}].n_sparse_voxels differs",
         )
-    eb = doc["accounting"]["energy_balance"]
-    for i, g in enumerate(doc["effective"]["scoring"]):
-        en = arrays[by[("grid", g["name"], None, "energy_mev")]]
-        dep = float(np.sum(en)) * doc["run"]["n_histories"]
-        _need(
-            abs(eb["in_grid_mev"][i] - dep) <= 1e-9 * max(1.0, abs(dep)),
-            f"accounting.energy_balance.in_grid_mev[{i}] disagrees with the energy array of "
-            f"grid {g['name']!r}",
-        )
+    _check_array_invariants(doc, arrays, by)
     geo = {
         role: arrays[by[("geometry", None, None, base)]]
         for role, base in (("material_index", "material_index"), ("density", "density_g_cm3"))
@@ -1963,6 +2188,7 @@ def _check_invariants(doc: dict[str, Any], arrays: dict[str, np.ndarray[Any, Any
             raise _fail(f"diagnostic {key!r} presence disagrees with the request")
     if (d.get("trace_histories", 0) > 0) != ("trace_end_history" in present):
         raise _fail("trace diagnostics presence disagrees with the request")
+    return _rederive(doc, arrays, by, rederive)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1976,6 +2202,9 @@ class LoadedResult:
     path: Path
     doc: dict[str, Any]
     arrays: dict[str, np.ndarray[Any, Any]] = field(repr=False)
+    effective_binding: str = "typed-only"
+    binding_limits: tuple[str, ...] = ()
+    rederive_exclusions: tuple[str, ...] = REDERIVE_EXCLUSIONS
 
     def grid_array(self, grid: str, base: str) -> np.ndarray[Any, Any]:
         for e in self.doc["arrays"]:
@@ -2001,13 +2230,17 @@ def load(
     max_central_directory_bytes: int = MAX_CENTRAL_DIRECTORY_BYTES,
     max_json_tokens: int = MAX_JSON_TOKENS,
     max_json_depth: int = MAX_JSON_DEPTH,
+    rederive: bool = True,
 ) -> LoadedResult:
     """Read and verify a bundle; raises :class:`ResultFormatError` on any defect (a malformed
     bundle never surfaces as a bare ``TypeError``/``KeyError``). The keyword-only budgets are
-    documented in decision 0045 section 1."""
+    documented in decision 0045 section 1. ``rederive`` (default True) rebuilds ``effective``
+    from ``requested`` and compares (amendment A-1); ``False`` records ``effective_binding ==
+    "typed-only"`` (needs no data cache; never used by ``ionmc verify``)."""
     try:
         return _load(
             path,
+            rederive=rederive,
             max_total_bytes=max_total_bytes,
             max_array_bytes=max_array_bytes,
             max_json_bytes=max_json_bytes,
@@ -2033,6 +2266,7 @@ def _load(
     max_central_directory_bytes: int = MAX_CENTRAL_DIRECTORY_BYTES,
     max_json_tokens: int = MAX_JSON_TOKENS,
     max_json_depth: int = MAX_JSON_DEPTH,
+    rederive: bool = True,
 ) -> LoadedResult:
     root = Path(path)
     if root.is_symlink() or not root.is_dir():
@@ -2117,8 +2351,8 @@ def _load(
                 raise _fail(f"array {e['name']!r}: content_sha256 mismatch")
             a.flags.writeable = False
             arrays[e["name"]] = a
-    _check_invariants(doc, arrays)
-    return LoadedResult(root, doc, arrays)
+    binding, limits = _check_invariants(doc, arrays, rederive)
+    return LoadedResult(root, doc, arrays, binding, limits)
 
 
 def _bundle_file_json(root: Path) -> Path:

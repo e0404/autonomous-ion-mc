@@ -368,3 +368,41 @@ changes_required, two important findings, resolved in place (path safety and the
   manifest entry, the reference record and `config_sha256` is self-consistent and therefore indistinguishable from a
   legitimately different configuration; the manifest carries no secret-keyed binding and is integrity-protected only
   through the bundle's file hashes once persisted (decision 0045 §1). Not a clinical claim.
+
+## Amendment A-1 (2026-11-23; after Codex REVIEW-982a8c25 of 9e1eda65): the reader's binding contract, enumerated
+
+The clause "cross-field invariants" of §1 is replaced by the following enumerated contract (a prospective amendment:
+no row outcome has been observed; the S2a rows are implementation checks). `load` never opens a file outside the bundle
+and never runs transport; everything below is computed from `result.json`, `arrays.npz` and the library code.
+
+1. **Re-derivation of `effective`.** When `requested` contains no lookup-table reference, `load` rebuilds the
+   `SimulationConfig` from `requested` (file-backed geometry arrays are taken from the persisted `material_index` /
+   `density` members, whose content digests the manifest entries already bind) and calls `validate(config)`;
+   `effective` must equal `EffectiveConfig.summary()` of that configuration byte-for-byte (canonical JSON). The
+   re-derivation needs the data cache for tabulated stopping models (`IONMC_CACHE_DIR` or the bundle's recorded
+   `cache_dir_source` rule); when the needed cache object is absent, `load` fails closed (`ResultFormatError`
+   "effective not re-derivable: dataset … not cached") unless called with `rederive=False`, which records
+   `effective_binding = "typed-only"` in the `LoadedResult` and is never used by `ionmc verify`.
+2. **Lookup configurations.** When `requested` references lookup tables (values never persisted), `effective`
+   is bound field by field: every field that does not depend on lookup values is compared with the re-derived
+   configuration (built with the lookup tables replaced by placeholder tables of the persisted provenance, shape
+   and units), and the lookup-dependent channel-plan fields (`k`, `bound_per_history`, `bounds`) are bound through
+   the lookup `content_sha256`/`item_sha256` of the manifest only; this limit is recorded in `LoadedResult`.
+3. **Stopping identity.** The persisted `effective.stopping` block is checked with
+   `stopping_selection.validate_identity_block` against the registry at load time (spec and table identities; the
+   `evidence_at_run` list is persisted verbatim and never recomputed, as §1 says).
+4. **Accounting identities (relative tolerance 1e-9 on sums; clarified 2026-11-23 to match the implementation).** Per grid: `in_grid + quantization + outside
+   = deposits`; `in_grid_mev[i] = sum(energy_mev[i]) × n_histories`; closure: `source − deposited − escaped −
+   truncated − residual = 0` with the documented signed nuclear terms; nuclear results persist the exact key set
+   of the engine's nuclear energy balance; counters consistent with `valid`.
+5. **Array invariants (tolerances stated in the reader).** Standard errors finite and ≥ 0; `dose_gy = energy_mev ×
+   MeV→Gy / mass_g` where `mass_g > 0` (NaN where it is 0); `dose_std_gy` the same transform of `energy_std_mev`;
+   `relative_uncertainty = energy_std / energy` where defined (NaN otherwise); `defined_mask ⇔ n_nonzero_batches >
+   0`; `sparse_mask ⇔ n_nonzero_batches < low-batch threshold`; when batch arrays are persisted, their mean and
+   batch standard error reproduce `energy_mev` and `energy_std_mev` (relative tolerance 1e-9); quantity companion
+   arrays follow the decision-0040 ratio rules (NaN wherever their mask is False).
+6. Everything else in `effective` and `provenance` is bound by items 1–3; nothing in the bundle is "typed-only"
+   except what item 2 records for lookup configurations and (clarified 2026-11-23) a `requested` configuration
+   with a not-reconstructible user `stopping` object (§6; API only), which cannot be rebuilt and loads with
+   `effective_binding = "typed-only"` and a recorded limit; `ionmc verify` reports that limit. Rows OUT-4/OUT-7 gain the corresponding negative controls
+   (every identity and invariant above broken one at a time → `ResultFormatError`).

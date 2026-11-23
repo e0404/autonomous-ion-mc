@@ -1033,6 +1033,23 @@ def _load_npy(src: _Source, kp: str) -> np.ndarray[Any, Any]:
     return arr
 
 
+def _provided_array(
+    item: Any, kp: str, role: str, arrays: Mapping[str, Any]
+) -> np.ndarray[Any, Any]:
+    """The array of position ``role`` from the in-memory provider; its content digest must equal
+    the one the record (``ref`` or ``not-reconstructible`` form) states."""
+    t = _table(item, kp)
+    content = _normalise_sha(t.get("content_sha256"), f"{kp}.content_sha256")
+    arr = arrays.get(role)
+    if not isinstance(arr, np.ndarray):
+        raise ConfigError(kp, f"the array provider has no array for role {role!r}")
+    if array_content_sha256(arr) != content:
+        raise ConfigError(
+            f"{kp}.content_sha256", f"the provided array has a different content digest ({role})"
+        )
+    return np.array(arr)
+
+
 @dataclass
 class _Built:
     """Collected while reading: the files behind arrays and the output table."""
@@ -1047,6 +1064,7 @@ def _geometry_from(
     manifest: InputManifest | None,
     base_dir: Path | None,
     built: _Built,
+    arrays: Mapping[str, Any] | None = None,
 ) -> VoxelGeometry | BoxPhantom:
     kp = "geometry"
     t = _table(v, kp)
@@ -1063,6 +1081,14 @@ def _geometry_from(
     kw["materials"] = tuple(
         _resolve_material(n, mats, f"{kp}.materials[{i}]") for i, n in enumerate(kw["materials"])
     )
+    if arrays is not None:  # arrays from memory (a result bundle): no file is opened
+        kw["material_index"] = _provided_array(
+            kw.pop("material_index"), f"{kp}.material_index", "material_index", arrays
+        )
+        dens = kw.pop("density", None)
+        if dens is not None:
+            kw["density_g_cm3"] = _provided_array(dens, f"{kp}.density", "density", arrays)
+        return _construct(VoxelGeometry, kp, kw)  # type: ignore[no-any-return]
     src_mi = _read_source(
         kw.pop("material_index"), f"{kp}.material_index", manifest, base_dir, "material_index"
     )
@@ -1235,7 +1261,10 @@ def _output_from(v: Any, base_dir: Path | None) -> OutputOptions:
 
 
 def _from_dict(
-    d: Any, manifest: InputManifest | None, base_dir: Path | None
+    d: Any,
+    manifest: InputManifest | None,
+    base_dir: Path | None,
+    arrays: Mapping[str, Any] | None = None,
 ) -> tuple[SimulationConfig, _Built]:
     top = _table(d, "<root>")
     for k in top:
@@ -1260,7 +1289,7 @@ def _from_dict(
     sk = _read(_table(top["source"], "source"), "source", SOURCE_FIELDS)
     sk["projectile"] = _projectile_from(sk["projectile"], "source.projectile")
     source = _construct(PencilBeamSource, "source", sk)
-    geometry = _geometry_from(top["geometry"], mats, manifest, base_dir, built)
+    geometry = _geometry_from(top["geometry"], mats, manifest, base_dir, built, arrays)
     scoring = tuple(
         _construct(ScoringGrid, f"scoring[{i}]", _read(t, f"scoring[{i}]", SCORING_FIELDS))
         for i, t in enumerate(_table_list(top["scoring"], "scoring"))
@@ -1301,6 +1330,7 @@ def from_dict(
     *,
     manifest: InputManifest | None = None,
     base_dir: str | Path | None = None,
+    arrays: Mapping[str, Any] | None = None,
 ) -> SimulationConfig:
     """Strict inverse of :func:`to_dict`.
 
@@ -1311,9 +1341,15 @@ def from_dict(
     ``base_dir``. ``physics.stopping_model`` and ``physics.nuclear`` are required; an unknown
     model id raises ``ConfigError`` before ``PhysicsOptions`` is built and the cache objects of
     the selected model are verified first (``DatasetError``).
+
+    ``arrays`` (role -> numpy array, roles ``material_index`` and ``density``) resolves the
+    geometry array positions from memory instead of files (the result reader passes the persisted
+    ``.npy`` members): the content digest of each array must equal the record's
+    ``content_sha256``; no file is opened for the geometry. Lookup tables are never resolved from
+    ``arrays`` (their values are not persisted).
     """
     bd = None if base_dir is None else Path(base_dir).resolve()
-    return _from_dict(d, manifest, bd)[0]
+    return _from_dict(d, manifest, bd, arrays)[0]
 
 
 def _check_array_record(v: Any, kp: str, required: bool, units: bool = False) -> None:
