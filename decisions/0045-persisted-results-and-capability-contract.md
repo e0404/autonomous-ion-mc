@@ -1,11 +1,11 @@
 # 0045 — Persisted result bundle, configuration files, `ionmc run` and the requested/effective capability contract
 
-- Status: freeze candidate, third revision 2026-11-23: revised after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
-  (findings 11–15), Codex REVIEW-0f7aad46 of 00989a8b (findings 16–19) and Codex REVIEW-c8397a61 of 034e3fb8 (findings
-  20–22); each changes_required, resolved in place. The revised S0 commit is re-reviewed; the freeze is the first S0
-  commit whose Codex review passes (together with `validation/plans/v3-006-acceptance.md`, after an independent
-  architecture/scientific review), before any V3-006 code exists (planner). Later changes are dated amendments;
-  earlier text is kept.
+- Status: freeze candidate, fourth revision 2026-11-23: revised after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
+  (findings 11–15), Codex REVIEW-0f7aad46 of 00989a8b (findings 16–19), Codex REVIEW-c8397a61 of 034e3fb8 (findings
+  20–22) and Codex REVIEW-34a0a3e8 of 84662725 (findings 23–24); each changes_required, resolved in place. The revised
+  S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes (together with
+  `validation/plans/v3-006-acceptance.md`, after an independent architecture/scientific review), before any V3-006
+  code exists (planner). Later changes are dated amendments; earlier text is kept.
 - Task: V3-006 (program plan task table: self-describing persisted results, human-readable reports and SVG plots,
   configuration files, `ionmc run` CLI, fail-closed capability contract with requested/effective configuration).
 - Base: `v3/develop` 95937553 (the V3-013 squash merge, PR #92). V3-006 is implemented on its task branch from this
@@ -142,9 +142,9 @@ A directory `<name>/`:
   stops at the declared size; `result.json` is read with a size limit. Budgets are keyword arguments of `load` (and
   options of `ionmc verify`/`report`) with safe defaults (`max_total_bytes` = 8 GiB, `max_array_bytes` = 4 GiB,
   `max_json_bytes` = 16 MiB); before `json.loads`, a single pass over the raw bytes of `result.json` (no allocation
-  proportional to content) counts `{`, `[` and string tokens and tracks the nesting depth, each against a budget
-  derived from the schema (defaults ≤ 1 000 000 containers, ≤ 1 000 000 strings, depth ≤ 64); any violation raises
-  `ResultFormatError` before allocation.
+  proportional to content) counts every JSON token (objects, arrays, strings, numbers, `true`/`false`/`null`) and
+  every object member against one total-token budget derived from the schema (default ≤ 2 000 000) and tracks the
+  nesting depth (≤ 64); any violation raises `ResultFormatError` before allocation.
 - **Safe names and bundle-relative paths.** Every derived file and npz member name comes from a fixed safe-name
   mapping of the user's grid, tally and lookup names: characters `[a-z0-9_-]` after lower-casing, length ≤ 64,
   collisions resolved by an index suffix; the mapping (name → file/member) is recorded in the catalogue. Every `files`
@@ -301,30 +301,34 @@ A directory `<name>/`:
   physics or run field (decision 0044 §5).
 - **`InputManifest`** (immutable; produced by the loader): `source = "toml" | "api"`, `base_dir`, `config_file` (path,
   sha256) and `files` (one entry per referenced file: role `material_index | density | lookup:<name>`, resolved
-  absolute path, file sha256 and, for arrays, `content_sha256`). It also carries `config_sha256`, the sha256 of the
-  canonical JSON of `to_dict(config, manifest=m)` computed by the loader with its own manifest `m`, which binds it to
-  the complete configuration. It is a side carrier: `Simulation` and `SimulationConfig` are unchanged; the CLI passes
-  it to `save(..., manifest=...)`. `InputManifest.verify(config)` and `save` recompute `config_sha256` as the sha256
-  of `to_dict(result.requested_config, manifest=m)` with the same manifest (deterministic by construction) and refuse
-  any mismatch (`ConfigError`, exit 2, no bundle): a manifest of another configuration or a configuration mutated
-  after loading is never attributed to these files. `save` re-hashes every listed file and checks every
-  `content_sha256` against the arrays of the requested config; a mismatch raises `ConfigError` (exit 2, no bundle).
-  Without a manifest `save` records `source = "api"` with `unavailable` file pointers.
+  absolute path, file sha256, `content_sha256` of the array and `item_sha256` = sha256 of the canonical JSON of every
+  serialised field of the item: for a `LookupTable` all fields incl. `citation`, `license`, `source`, `resampling` and
+  the array content digest; for a geometry array its dtype, shape, content digest and the geometry fields that
+  describe it). It also carries `config_sha256`, the sha256 of the canonical JSON of `to_dict(config, manifest=m)`
+  computed by the loader with its own manifest `m`, which binds it to the complete configuration. It is a side
+  carrier: `Simulation` and `SimulationConfig` are unchanged; the CLI passes it to `save(..., manifest=...)`.
+  `InputManifest.verify(config)` and `save` recompute `config_sha256` as the sha256 of
+  `to_dict(result.requested_config, manifest=m)` with the same manifest (deterministic by construction) and refuse any
+  mismatch (`ConfigError`, exit 2, no bundle): a manifest of another configuration or a configuration mutated after
+  loading is never attributed to these files. `save` re-hashes every listed file and checks every `content_sha256`
+  against the arrays of the requested config; a mismatch raises `ConfigError` (exit 2, no bundle). Without a manifest
+  `save` records `source = "api"` with `unavailable` file pointers.
 - **Round-trip semantics.** Equality of configurations is canonical and semantic: `to_dict` equality, arrays compared
   by `content_sha256` (`VoxelGeometry` and `LookupTable` use identity equality, `eq=False`). Reconstruction API:
   `from_dict(d, *, manifest: InputManifest | None = None)`. Serialisation takes the manifest: `to_dict(config, *,
   manifest: InputManifest | None = None)`. With a manifest, every array (voxel `material_index`, density, lookup
-  table) whose `content_sha256` equals a manifest file entry is emitted as the reference `{"ref": "<role>", "sha256":
-  ..., "content_sha256": ...}` (matching by content digest; an in-process array with identical content matches the
-  same reference by construction); without a manifest, or for an array without a matching entry, it is emitted as
-  `{"status": "not-reconstructible", "content_sha256": ...}`. `from_dict` reloads it through the manifest entry of
-  that role (path from the manifest, file re-hashed, content digest checked); without a manifest, or with a manifest
-  lacking the role or with a different digest, it raises `ConfigError` naming the pointer. The exact round trip
-  `to_dict(from_dict(to_dict(c, manifest=m), manifest=m), manifest=m) == to_dict(c, manifest=m)` is guaranteed for the
-  reconstructible subset: every field except user `stopping` objects and arrays that exist only in memory (API-created
-  lookup tables, geometry arrays without a file); API configs without file-backed arrays need no manifest. The
-  excluded fields serialise to `{"status": "not-reconstructible", "reason": ...}` and `from_dict` refuses them
-  (`ConfigError`), never substituting a default.
+  table) whose `item_sha256` (computed from the in-memory object as above) equals that of a manifest file entry is
+  emitted as the reference `{"ref": "<role>", "sha256": ..., "content_sha256": ...}` (matching by item digest, so
+  numerically equal data with other provenance or resampling metadata never match; an in-process item identical in
+  every serialised field matches the same reference by construction); without a manifest, or for an array without a
+  matching entry, it is emitted as `{"status": "not-reconstructible", "content_sha256": ...}`. `from_dict` reloads it
+  through the manifest entry of that role (path from the manifest, file re-hashed, content digest checked); without a
+  manifest, or with a manifest lacking the role or with a different digest, it raises `ConfigError` naming the
+  pointer. The exact round trip `to_dict(from_dict(to_dict(c, manifest=m), manifest=m), manifest=m) == to_dict(c,
+  manifest=m)` is guaranteed for the reconstructible subset: every field except user `stopping` objects and arrays
+  that exist only in memory (API-created lookup tables, geometry arrays without a file); API configs without
+  file-backed arrays need no manifest. The excluded fields serialise to `{"status": "not-reconstructible", "reason":
+  ...}` and `from_dict` refuses them (`ConfigError`), never substituting a default.
 
 
 ### 7. CLI
@@ -505,6 +509,18 @@ changes_required, three important findings, resolved in place (CAP-1b and the ZI
     `files` catalogue → fixed safe-name mapping for every derived file and npz member, bundle-relative single-level
     or `plots/<safe>.svg` entries only, no symlinks, `realpath` containment and `lstat` checks in the reader, refusal
     in the writer (decision 0045 §1; new row OUT-11).
+
+Codex REVIEW-34a0a3e8 (REVIEW-34a0a3e812f549e5b50aea78e47ac571, 2026-11-23) of the revised S0 commit 84662725:
+changes_required, two important findings, resolved in place (path safety and the rest accepted):
+
+23. **Important.** Matching a lookup to a manifest entry by `content_sha256` ignored its provenance fields
+    (`citation`, `license`, `source`, `resampling`; `src/ionmc/lookup.py:133–145`) → every manifest file entry carries
+    `item_sha256` over every serialised field of the item, and a reference is emitted only when the in-memory item's
+    `item_sha256` equals the entry's; otherwise the item is not-reconstructible (decision 0045 §6; rows CFG-7,
+    PROV-8).
+24. **Important.** The JSON pre-scan did not count numbers, literals or object members → every JSON token and every
+    object member counts against one schema-derived total-token budget (default 2 000 000) besides the depth budget
+    (decision 0045 §1; row OUT-10 with a scalar-heavy fixture).
 
 ## Later validation outcome
 

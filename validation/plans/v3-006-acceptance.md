@@ -1,12 +1,13 @@
 # V3-006 acceptance plan — self-describing persisted results, reports, configuration files, `ionmc run`, requested/effective capability contract
 
-> **Status: freeze candidate, third revision 2026-11-23: revised after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
-> (findings 11–15), Codex REVIEW-0f7aad46 of 00989a8b (findings 16–19) and Codex REVIEW-c8397a61 of 034e3fb8 (findings
-> 20–22); each changes_required, resolved in place. The revised S0 commit is re-reviewed; the freeze is the first S0
-> commit whose Codex review passes (planner, 2026-11-23, base `v3/develop` 95937553 = the V3-013 squash merge, PR
-> #92).** Frozen together with decision 0045 (`decisions/0045-persisted-results-and-capability-contract.md`) by that
-> commit, after an independent architecture/scientific review, before any V3-006 code exists. Later changes are dated
-> amendments; earlier text is kept. Not a clinical claim.
+> **Status: freeze candidate, fourth revision 2026-11-23: revised after Codex REVIEW-bd983b92 of the S0 commit
+> 00b5e3de (findings 11–15), Codex REVIEW-0f7aad46 of 00989a8b (findings 16–19), Codex REVIEW-c8397a61 of 034e3fb8
+> (findings 20–22) and Codex REVIEW-34a0a3e8 of 84662725 (findings 23–24); each changes_required, resolved in place.
+> The revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes (planner,
+> 2026-11-23, base `v3/develop` 95937553 = the V3-013 squash merge, PR #92).** Frozen together with decision 0045
+> (`decisions/0045-persisted-results-and-capability-contract.md`) by that commit, after an independent
+> architecture/scientific review, before any V3-006 code exists. Later changes are dated amendments; earlier text is
+> kept. Not a clinical claim.
 
 Markers: **FACT** (read at 95937553; file:line in decision 0045, Context), **ESTIMATE**, **TO VERIFY**. Row classes:
 *regression*, *contract* (fail closed), *round-trip*, *determinism*, *self-consistency*, *workflow*. Tiers: CI
@@ -67,10 +68,10 @@ V2-RELEASE, any physics row, any evidence record.
 
 
 8. **Input manifest**: immutable `InputManifest` from the loader (with `config_sha256` binding it to the complete
-   configuration), passed to `to_dict(c, manifest=m)` (references for arrays matching a manifest entry), `from_dict(d,
-   manifest=m)` and `save`; API runs record `source = "api"` with `unavailable` file pointers; `save` refuses changed
-   files. **Round trip**: canonical semantic comparison over the reconstructible subset; the rest is recorded
-   `not-reconstructible` (decision 0045 §6).
+   configuration), passed to `to_dict(c, manifest=m)` (references only for items whose `item_sha256` matches a
+   manifest entry), `from_dict(d, manifest=m)` and `save`; API runs record `source = "api"` with `unavailable` file
+   pointers; `save` refuses changed files. **Round trip**: canonical semantic comparison over the reconstructible
+   subset; the rest is recorded `not-reconstructible` (decision 0045 §6).
 9. **Untrusted bundles**: a raw-byte preflight of the end-of-central-directory record bounds file size, entry count
    and central-directory size before `zipfile` opens the archive; then `load` validates ZIP directory, catalogue and
    NPY headers before allocation and streams decompression under configurable byte budgets with safe defaults; a
@@ -140,7 +141,7 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | OUT-7 | Undefined values: `defined_mask` False ⇒ NaN, never 0; JSON undefined scalars carry `status`; a writer patched to write 0 there is rejected by `load` | exact | CI |
 | OUT-8 | **No table values**: npz names ⊆ allowlist; no member equals bitwise any stopping/range/LET-water/nuclear table array of the run; injecting `tables.range_mm` is refused by `save` | exact | CI |
 | OUT-9 | Determinism: `save` twice → identical bytes; a different zlib level changes the file hash but not the content digests (documents which identity is authoritative) | exact | CI |
-| OUT-10 | **Untrusted-bundle budgets** (synthetic KB-scale adversarial fixtures): NPY header longer than the bound; header disagreeing with the catalogue; duplicate ZIP member; more members than catalogue entries; declared shape whose byte size exceeds the budget (e.g. 2**40 elements); member whose declared uncompressed size exceeds the budget; compressed member that inflates beyond its declared size; oversized `result.json`; an archive built programmatically in the test (never committed) whose end-of-central-directory record declares a huge entry count or an oversized central directory, also in ZIP64 form; a `result.json` below `max_json_bytes` built inside the test with millions of tiny objects or arrays and one with nesting depth 65; plus a positive control at the default budgets | each raises `ResultFormatError` before allocating the declared size (peak RSS increase bounded by 64 MiB, measured with `resource.getrusage`); the oversized-directory archives are refused by the raw-byte preflight before `zipfile.ZipFile` is constructed (asserted by patching `zipfile.ZipFile` to fail if called) within the same RSS bound; the JSON fixtures are refused by the structural pre-scan before `json.loads` is called (asserted by patching it to fail if called) within the same RSS bound; the positive control loads | CI |
+| OUT-10 | **Untrusted-bundle budgets** (synthetic KB-scale adversarial fixtures): NPY header longer than the bound; header disagreeing with the catalogue; duplicate ZIP member; more members than catalogue entries; declared shape whose byte size exceeds the budget (e.g. 2**40 elements); member whose declared uncompressed size exceeds the budget; compressed member that inflates beyond its declared size; oversized `result.json`; an archive built programmatically in the test (never committed) whose end-of-central-directory record declares a huge entry count or an oversized central directory, also in ZIP64 form; a `result.json` below `max_json_bytes` built inside the test with millions of tiny objects or arrays one with nesting depth 65, and a scalar-heavy one (a top-level array of millions of numbers, `true`/`false`/`null` literals and object members) exceeding the 2 000 000 total-token budget; plus a positive control at the default budgets | each raises `ResultFormatError` before allocating the declared size (peak RSS increase bounded by 64 MiB, measured with `resource.getrusage`); the oversized-directory archives are refused by the raw-byte preflight before `zipfile.ZipFile` is constructed (asserted by patching `zipfile.ZipFile` to fail if called) within the same RSS bound; the JSON fixtures are refused by the structural pre-scan before `json.loads` is called (asserted by patching it to fail if called) within the same RSS bound; the positive control loads | CI |
 | OUT-11 | **Bundle path safety**: writer: grid, tally and lookup names containing `../`, `/`, `\`, NUL, upper case, more than 64 characters or colliding after mapping produce safe, distinct names recorded in the catalogue, and no file is written outside the temporary bundle; reader (fixtures built inside the test): a `files` entry or npz member name with `../`, an absolute path, a `.` segment, an extra separator or NUL, and a symlink planted in a bundle (to a file outside and inside it) are each refused by `ResultFormatError` before any outside path is opened | exact | CI |
 
 **PROV — provenance**
@@ -154,7 +155,7 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | PROV-5 | Build stamp: `uv build --wheel` from a clean checkout in the LV environment (not the host runner) gives a wheel whose `ionmc/_build_info.json` carries the commit and a tree oid equal to the runtime oid of the installed wheel; the checkout stays clean (`git status --porcelain` empty, no stamp under `src/ionmc`); a build without a reachable repository stamps `commit = null`, `status = "unknown"`; `[build-system] requires` and `uv.lock` are unchanged by S3 | exact | LV (TO VERIFY: offline build environment from the uv cache) |
 | PROV-6 | Privacy: absolute paths only at the pointers of the path set P (decision 0045 §2); outside P no string contains `Path.home()`, and no path component (split at `/` and `\`) and no whole non-path string equals `getpass.getuser()` or `os.uname().nodename` (no substring matching; a user named `root` does not hit `mcs_mapping.evaluation = "root"`, which is not a path); `cache_dir_source` recorded; reports print no P value | exact | CI |
 | PROV-7 | Host runner: an `out6` r_index 2 bundle written under the controlled host runner (read-only snapshot at `/workspace`, `GIT_WORK_TREE` set, `HOME=/tmp/home`) at a clean committed SHA has `code.source = "git"`, `git_dirty = false`, `git_commit` = the run's code SHA and a tree oid equal to `git rev-parse <sha>:src/ionmc`; any other outcome is a FAIL handled by prospective amendment | exact | HR |
-| PROV-8 | Input manifest: a TOML run records `source = "toml"`, `base_dir`, the config file and every referenced file with path and sha256; an API run records `source = "api"` and `unavailable` file pointers; editing a referenced file between load and `save` makes `save` raise `ConfigError` (CLI exit 2, no bundle); a manifest `content_sha256` that disagrees with the config arrays is refused; binding: (i) the manifest of config A passed to `save` for config B with the same arrays and (ii) a config mutated in one scalar after loading are each refused through `config_sha256` (`ConfigError`, exit 2, no bundle); `InputManifest.verify` gives the same verdicts; `config_sha256` recomputed by the loader, `InputManifest.verify` and `save` with the same manifest is identical (determinism of `to_dict(c, manifest=m)`) | exact | CI |
+| PROV-8 | Input manifest: a TOML run records `source = "toml"`, `base_dir`, the config file and every referenced file with path and sha256; an API run records `source = "api"` and `unavailable` file pointers; editing a referenced file between load and `save` makes `save` raise `ConfigError` (CLI exit 2, no bundle); a manifest `content_sha256` that disagrees with the config arrays is refused; binding: (i) the manifest of config A passed to `save` for config B with the same arrays and (ii) a config mutated in one scalar after loading are each refused through `config_sha256` (`ConfigError`, exit 2, no bundle); `InputManifest.verify` gives the same verdicts; `config_sha256` recomputed by the loader, `InputManifest.verify` and `save` with the same manifest is identical (determinism of `to_dict(c, manifest=m)`); two configs whose lookup arrays are numerically equal but whose provenance or resampling metadata differ give different `config_sha256` values and only the loader's own table is referenced | exact | CI |
 
 **CAP — capability contract**
 
@@ -180,7 +181,7 @@ for re-runs and narrowing apply. The worktree stays clean while a Codex review r
 | CFG-4 | Stopping by `stopping_model` id only; a `stopping` table is rejected; unknown id raises | exact | CI |
 | CFG-5 | Built-in material names resolve to the identical `Material`; inline definitions checked as by the API | exact | CI |
 | CFG-6 | No environment variable overrides a physics/run field (`IONMC_*` set in the test) | exact | CI |
-| CFG-7 | Not-reconstructible and reference failures: a user `stopping` object, an in-process lookup table and any array serialised without a manifest (or without a matching entry) give `{"status": "not-reconstructible", ...}` (arrays with `content_sha256`) and `from_dict` of each raises `ConfigError` naming the pointer; a reference passed to `from_dict` without a manifest, with a manifest lacking the role, or with a file whose sha256 or content digest changed raises `ConfigError` naming the pointer; no default is substituted | exact | CI |
+| CFG-7 | Not-reconstructible and reference failures: a user `stopping` object, an in-process lookup table and any array serialised without a manifest (or without a matching entry) give `{"status": "not-reconstructible", ...}` (arrays with `content_sha256`) and `from_dict` of each raises `ConfigError` naming the pointer; a reference passed to `from_dict` without a manifest, with a manifest lacking the role, or with a file whose sha256 or content digest changed raises `ConfigError` naming the pointer; a lookup table numerically equal to a manifest lookup file but with a different `citation`, `license`, `source` or `resampling` emits no reference (not-reconstructible); no default is substituted | exact | CI |
 
 **REP — reports and plots**
 
@@ -326,6 +327,18 @@ changes_required, three important findings, resolved in place (CAP-1b and the ZI
     or `plots/<safe>.svg` entries only, no symlinks, `realpath` containment and `lstat` checks in the reader, refusal
     in the writer (decision 0045 §1; new row OUT-11).
 
+Codex REVIEW-34a0a3e8 (REVIEW-34a0a3e812f549e5b50aea78e47ac571, 2026-11-23) of the revised S0 commit 84662725:
+changes_required, two important findings, resolved in place (path safety and the rest accepted):
+
+23. **Important.** Matching a lookup to a manifest entry by `content_sha256` ignored its provenance fields
+    (`citation`, `license`, `source`, `resampling`; `src/ionmc/lookup.py:133–145`) → every manifest file entry carries
+    `item_sha256` over every serialised field of the item, and a reference is emitted only when the in-memory item's
+    `item_sha256` equals the entry's; otherwise the item is not-reconstructible (decision 0045 §6; rows CFG-7,
+    PROV-8).
+24. **Important.** The JSON pre-scan did not count numbers, literals or object members → every JSON token and every
+    object member counts against one schema-derived total-token budget (default 2 000 000) besides the depth budget
+    (decision 0045 §1; row OUT-10 with a scalar-heavy fixture).
+
 ## Status
 
 - 2026-11-23 (planner, S0): freeze candidate; no code. Base 95937553 (V3-013 integrated). Freeze note:
@@ -336,5 +349,8 @@ changes_required, three important findings, resolved in place (CAP-1b and the ZI
   the revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes. Not a clinical
   claim.
 - 2026-11-23 (planner): third revision after Codex REVIEW-c8397a61 of 034e3fb8 (findings 20–22, resolved in place);
+  the revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes. Not a clinical
+  claim.
+- 2026-11-23 (planner): fourth revision after Codex REVIEW-34a0a3e8 of 84662725 (findings 23–24, resolved in place);
   the revised S0 commit is re-reviewed; the freeze is the first S0 commit whose Codex review passes. Not a clinical
   claim.
