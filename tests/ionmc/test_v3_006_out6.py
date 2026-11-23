@@ -140,6 +140,12 @@ def wp_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
     )  # fmt: skip
 
 
+@pytest.fixture(scope="module")
+def r1_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    out = tmp_path_factory.mktemp("r1")
+    return out, RUN.run_case(1, K_TEST, out, out / "cache")
+
+
 def _summary(p: Path) -> dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
 
@@ -182,7 +188,10 @@ def test_run_refuses_an_existing_path(py_run: tuple[Path, Path]) -> None:
 
 
 def test_cli5_compare_passes_on_backends_only_and_fails_on_a_mutated_pointer(
-    py_run: tuple[Path, Path], wp_run: tuple[Path, Path], tmp_path: Path
+    py_run: tuple[Path, Path],
+    wp_run: tuple[Path, Path],
+    r1_run: tuple[Path, Path],
+    tmp_path: Path,
 ) -> None:
     (_, spy), (_, swp) = py_run, wp_run
     docs = [json.loads((p.parent / f"r0k{K_TEST}" / "result.json").read_text()) for p in (spy, swp)]
@@ -192,8 +201,23 @@ def test_cli5_compare_passes_on_backends_only_and_fails_on_a_mutated_pointer(
     diff = set(verdict["pairs"][0]["differing_pointers"])
     assert {"/run/backend", "/requested/run/backend", "/run/device"} <= diff
     assert not any(p.startswith(("/requested/source", "/effective/geometry")) for p in diff)
-    path = RUN.cmd_compare([spy, swp, swp], tmp_path / "compare.json")
-    assert json.loads(path.read_text())["verdict"] == "PASS"
+    s1 = r1_run[1]
+    path = RUN.cmd_compare([spy, s1], tmp_path / "compare.json", tier="lv")  # r0 and r1, k = 99
+    assert json.loads(path.read_text())["verdict"] == "PASS", path.read_text()
+    # the case identity binds: three r0 summaries, the wrong tier, a wrong precision all FAIL
+    sms = [_summary(spy), _summary(s1)]
+    assert RUN.compare_identity_failures(sms, "lv") == []
+    three = RUN.compare_identity_failures([sms[0]] * 3, "hr")
+    assert any("r_index set" in f for f in three) and any("pairwise" in f for f in three)
+    assert RUN.compare_identity_failures(sms, "hr")  # {0, 1} is not the HR set
+    wrong = copy.deepcopy(sms)
+    wrong[1]["precision"] = "float64"
+    assert any("r1" in f and "precision" in f for f in RUN.compare_identity_failures(wrong, "lv"))
+    other_k = copy.deepcopy(sms)
+    other_k[1]["k"] = 0
+    assert any("one k" in f for f in RUN.compare_identity_failures(other_k, "lv"))
+    f3 = RUN.cmd_compare([spy, spy, spy], tmp_path / "three.json")
+    assert json.loads(f3.read_text())["verdict"] == "FAIL"
     mutated = copy.deepcopy(docs[1])
     mutated["effective"]["source"]["kinetic_energy_mev"] += 1.0
     bad = RUN.compare_docs([docs[0], mutated], seeds)
@@ -280,3 +304,16 @@ def test_prov7_fails_on_a_non_git_code_block() -> None:
     assert RUN.prov7_failures({**good, "git_commit": "c" * 40}, sha, oid)
     assert RUN.prov7_failures({**good, "package_tree_oid": "d" * 40}, sha, oid)
     assert RUN.prov7_failures({**good, "git_dirty": None}, sha, oid)
+    assert RUN.prov7_failures(good, sha, None) and RUN.prov7_failures(
+        good, sha, ""
+    )  # never skipped
+
+
+def test_host_pytest_rows_require_a_summary_and_zero_skips() -> None:
+    ok = RUN.parse_pytest_summary("..\n==== 3 passed in 1.20s ====\n")
+    assert ok == {"passed": 3} and RUN.pytest_ok(0, ok)
+    skipped = RUN.parse_pytest_summary("3 passed, 1 skipped in 2.00s\n")
+    assert skipped == {"passed": 3, "skipped": 1} and not RUN.pytest_ok(0, skipped)
+    assert RUN.parse_pytest_summary("no summary here") is None
+    assert not RUN.pytest_ok(0, None) and not RUN.pytest_ok(1, ok)
+    assert not RUN.pytest_ok(0, {"passed": 2, "failed": 1}) and not RUN.pytest_ok(0, {"skipped": 1})

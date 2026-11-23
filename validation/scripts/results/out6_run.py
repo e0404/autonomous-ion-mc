@@ -58,11 +58,16 @@ TRACE_TEST = "tests/ionmc/test_transport_diagnostic.py::test_default_trace_is_un
 # helpers
 
 
+#: set by ``cmd_host``: the cache-backed tests must run, never skip (IONMC_REQUIRE_DATA, LV tier)
+_EXTRA_ENV: dict[str, str] = {}
+
+
 def _env(cache_dir: str | Path) -> dict[str, str]:
     env = dict(os.environ)
     env.update(THREADS)
     env["IONMC_CACHE_DIR"] = str(cache_dir)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env.update(_EXTRA_ENV)
     return env
 
 
@@ -73,14 +78,14 @@ def _package_parent() -> str:
 
 
 def _child(
-    argv: Sequence[str], cwd: Path, cache_dir: str | Path, timeout: float
+    argv: Sequence[str], cwd: Path, cache_dir: str | Path, timeout: float, log: str | None = None
 ) -> tuple[int, float]:
     """Run one child to completion (one at a time); its output goes to ``cwd/logs``."""
     logs = cwd / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     label = re.sub(r"[^\w.-]+", "_", "_".join(str(a) for a in argv[3:6]))[:60]
     t0 = time.monotonic()
-    with open(logs / f"{label}.log", "ab") as fh:
+    with open(logs / (log or f"{label}.log"), "ab") as fh:
         proc = subprocess.run(  # noqa: S603 - argv, no shell
             list(argv), cwd=cwd, env=_env(cache_dir), stdout=fh, stderr=subprocess.STDOUT,
             timeout=timeout, check=False,
@@ -323,20 +328,49 @@ def compare_docs(
     return {"verdict": "FAIL" if bad_total else "PASS", "pairs": pairs}
 
 
-def cmd_compare(summaries: Sequence[Path], out: Path | None = None) -> Path:
-    docs, seeds = [], []
-    for s in summaries:
-        sm = json.loads(s.read_text(encoding="utf-8"))
-        docs.append(_load_doc(_bundle_of(s)))
-        seeds.append((sm["r_index"], sm["k"], sm["seed"]))
-    verdict = compare_docs(docs, seeds)
+#: the case identity of CLI-5: r_index -> (backend, precision)
+CLI5_CASES = {0: ("python", "float64"), 1: ("warp-cpu", "float32"), 2: ("warp-cuda", "float32")}
+
+
+def compare_identity_failures(sms: Sequence[Mapping[str, Any]], tier: str) -> list[str]:
+    """The violated conditions of the case identity (empty when the summaries are the cases)."""
+    want = [0, 1, 2] if tier == "hr" else [0, 1]
+    bad: list[str] = []
+    got = sorted(int(sm["r_index"]) for sm in sms)
+    if tier not in ("hr", "lv"):
+        return [f"unknown tier {tier!r}"]
+    if got != want:
+        bad.append(f"r_index set {got} is not exactly {want} for tier {tier}")
+    if len({sm["k"] for sm in sms}) != 1:
+        bad.append("the summaries do not share one k")
+    if len({sm["result_json_sha256"] for sm in sms}) != len(sms):
+        bad.append("result.json digests are not pairwise different")
+    for sm in sms:
+        exp = CLI5_CASES.get(int(sm["r_index"]))
+        if exp is not None and (sm["backend"], sm["precision"]) != exp:
+            bad.append(
+                f"r{sm['r_index']}: backend/precision {(sm['backend'], sm['precision'])} "
+                f"is not {exp}"
+            )
+    return bad
+
+
+def cmd_compare(summaries: Sequence[Path], out: Path | None = None, tier: str = "hr") -> Path:
+    sms = [json.loads(s.read_text(encoding="utf-8")) for s in summaries]
+    ident = compare_identity_failures(sms, tier)
+    docs = [_load_doc(_bundle_of(s)) for s in summaries]
+    seeds = [(sm["r_index"], sm["k"], sm["seed"]) for sm in sms]
+    if ident:
+        verdict: dict[str, Any] = {"verdict": "FAIL", "identity_failures": ident}
+    else:
+        verdict = compare_docs(docs, seeds)
     for pair in verdict.get("pairs", []):
         print("differing pointers", pair["pair"], len(pair["differing_pointers"]))
         for p in pair["differing_pointers"]:
             print("  ", p)
     path = out or summaries[0].with_name("compare.json")
     _dump(path, verdict)
-    _result("CLI-5", verdict["verdict"] == "PASS", path)
+    _result("CLI-5-LV" if tier == "lv" else "CLI-5", verdict["verdict"] == "PASS", path)
     return path
 
 
@@ -475,6 +509,8 @@ def cmd_reproduce(bundle: Path, out: Path, cache_dir: Path, timeout: float = 180
 def prov7_failures(code: Mapping[str, Any], sha: str, tree_oid: str | None) -> list[str]:
     from ionmc import provenance
 
+    if not tree_oid:
+        return ["no tree oid given: the package_tree_oid cannot be checked"]
     exp = provenance.host_runner_identity_expectation(sha, tree_oid)
     bad = provenance.host_runner_identity_mismatches(code, exp)
     if code.get("source") != "git":
@@ -488,8 +524,7 @@ def cmd_prov7(summary: Path, sha: str, tree_oid: str | None, out: Path | None = 
     sm = json.loads(summary.read_text(encoding="utf-8"))
     bad = prov7_failures(sm["code"], sha, tree_oid)
     path = out or summary.with_name("prov7.json")
-    _dump(path, {"verdict": "FAIL" if bad else "PASS", "failures": bad,
-                 "tree_oid_checked": tree_oid is not None})  # fmt: skip
+    _dump(path, {"verdict": "FAIL" if bad else "PASS", "failures": bad})
     _result("PROV-7", not bad, path)
     return path
 
@@ -498,16 +533,51 @@ def cmd_prov7(summary: Path, sha: str, tree_oid: str | None, out: Path | None = 
 # host
 
 
-def _pytest(targets: Sequence[str], label: str, out: Path, cache_dir: Path, timeout: float) -> int:
+_SUMMARY = re.compile(r"^=*\s*(\d+ \w+(?:, \d+ \w+)*) in [\d.]+s", re.MULTILINE)
+_COUNT = re.compile(r"(\d+) (\w+)")
+
+
+def parse_pytest_summary(text: str) -> dict[str, int] | None:
+    """Counts of the final pytest summary line (``None`` when it is missing)."""
+    found = _SUMMARY.findall(text)
+    if not found:
+        return None
+    counts: dict[str, int] = {}
+    for n, word in _COUNT.findall(found[-1]):
+        counts[word] = counts.get(word, 0) + int(n)
+    return counts
+
+
+def pytest_ok(code: int, counts: dict[str, int] | None) -> bool:
+    """Exit 0, a summary line, at least one pass and no skip, failure or error."""
+    if code != 0 or counts is None:
+        return False
+    bad = ("skipped", "failed", "error", "errors", "xfailed", "xpassed")
+    return counts.get("passed", 0) > 0 and not any(counts.get(w, 0) for w in bad)
+
+
+def _pytest(
+    targets: Sequence[str], label: str, out: Path, cache_dir: Path, timeout: float
+) -> tuple[int, bool, dict[str, int] | None]:
+    log = f"pytest-{re.sub(r'[^A-Za-z0-9]+', '_', label)}.log"
     code, _dur = _child(
-        [sys.executable, "-m", "pytest", *targets, "-p", "no:cacheprovider", "-q"],
-        HERE.parents[2], cache_dir, timeout,
+        [sys.executable, "-m", "pytest", *targets, "-p", "no:cacheprovider", "-rs", "-q"],
+        HERE.parents[2], cache_dir, timeout, log,
     )  # fmt: skip
-    print(f"PYTEST {label} {code}", flush=True)
-    return code
+    try:
+        text = (out / "logs" / log).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    counts = parse_pytest_summary(text)
+    ok = pytest_ok(code, counts)
+    print(f"PYTEST {label} {code} {'ok' if ok else 'NOT-OK'} {counts}", flush=True)
+    return code, ok, counts
 
 
 def cmd_host(out: Path, cache_dir: Path, sha: str, tree_oid: str | None) -> Path:
+    if not tree_oid:
+        raise SystemExit("host needs a non-empty --tree-oid")
+    _EXTRA_ENV.update({"IONMC_REQUIRE_DATA": "1", "IONMC_LV_TIER": "1"})
     out.mkdir(parents=True, exist_ok=True)
     s2 = run_case(2, 0, out, cache_dir)
     s0 = run_case(0, 0, out, cache_dir)
@@ -515,27 +585,25 @@ def cmd_host(out: Path, cache_dir: Path, sha: str, tree_oid: str | None) -> Path
     summaries = [json.loads(p.read_text(encoding="utf-8")) for p in (s2, s0, s1)]
     cmp_path = cmd_compare([s0, s1, s2], out / "compare.json")
     prov_path = cmd_prov7(s2, sha, tree_oid, out / "prov7.json")
-    pytest_codes = {
-        "test_v3_006_results.py::test_out2_clean_process_round_trip": _pytest(
-            ["tests/ionmc/test_v3_006_results.py::test_out2_clean_process_round_trip"],
-            "tests/ionmc/test_v3_006_results.py", out, cache_dir, 1500),
-        "test_v3_006_contract.py": _pytest(
-            ["tests/ionmc/test_v3_006_contract.py"], "tests/ionmc/test_v3_006_contract.py",
-            out, cache_dir, 1500),
-        "test_transport_diagnostic.py::trace": _pytest(
-            [TRACE_TEST], "tests/ionmc/test_transport_diagnostic.py", out, cache_dir, 1500),
-        "a16_identity_tests": _pytest(
-            list(REG1_TESTS), "a16_identity_tests", out, cache_dir, 1500),
-    }  # fmt: skip
+    T_OUT2 = "tests/ionmc/test_v3_006_results.py::test_out2_clean_process_round_trip"
+    T_CAP = "tests/ionmc/test_v3_006_contract.py"
+    pt = {
+        "out2": _pytest([T_OUT2], "out2", out, cache_dir, 1500),
+        "cap1": _pytest([T_CAP], "contract", out, cache_dir, 1500),
+        "trace": _pytest([TRACE_TEST], "trace", out, cache_dir, 1500),
+        "a16": _pytest(list(REG1_TESTS), "a16", out, cache_dir, 1500),
+    }
+    pytest_codes = {n: v[0] for n, v in pt.items()}
     host = {
         "schema": "ionmc.out6-host-summary/1",
         "sha": sha,
-        "tree_oid_given": tree_oid is not None,
         "cases": {f"r{s['r_index']}k{s['k']}": {"device": s["device"], "backend": s["backend"],
                   "precision": s["precision"], "exit_codes": s["exit_codes"]} for s in summaries},
         "compare": json.loads(cmp_path.read_text(encoding="utf-8"))["verdict"],
         "prov7": json.loads(prov_path.read_text(encoding="utf-8"))["verdict"],
         "pytest_exit_codes": pytest_codes,
+        "pytest_counts": {n: v[2] for n, v in pt.items()},
+        "pytest_zero_skip_ok": {n: v[1] for n, v in pt.items()},
         "no_network": "every run is a child of the controlled host runner (network denied)",
     }  # fmt: skip
     path = out / "host-summary.json"
@@ -543,16 +611,10 @@ def cmd_host(out: Path, cache_dir: Path, sha: str, tree_oid: str | None) -> Path
     check_summary_text(text, [str(out), str(cache_dir), str(Path.home()), _package_parent()])
     path.write_text(text, encoding="utf-8")
     runs_ok = all(c == 0 for s in summaries for c in s["exit_codes"].values())
-    _result("OUT-2-HR", runs_ok, path)
+    _result("OUT-2-HR", runs_ok and pt["out2"][1], path)
     _result("CLI-4-HR", runs_ok, path)
-    _result("REG-1-HR", pytest_codes["test_transport_diagnostic.py::trace"] == 0
-            and pytest_codes["a16_identity_tests"] == 0, path)  # fmt: skip
-    _result("CAP-1b-HR", pytest_codes["test_v3_006_contract.py"] == 0, path)
-    _result(
-        "OUT-2-test-HR",
-        pytest_codes["test_v3_006_results.py::test_out2_clean_process_round_trip"] == 0,
-        path,
-    )  # noqa: E501
+    _result("REG-1-HR", pt["trace"][1] and pt["a16"][1], path)
+    _result("CAP-1b-HR", pt["cap1"][1], path)
     return path
 
 
@@ -570,7 +632,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--backend-override")
     r.add_argument("--precision-override")
     c = sub.add_parser("compare")
-    c.add_argument("--summaries", nargs=3, required=True)
+    c.add_argument("--summaries", nargs="+", required=True)
+    c.add_argument("--tier", choices=["hr", "lv"], default="hr")
     i = sub.add_parser("identities")
     i.add_argument("--summary", required=True)
     i.add_argument("--expect", choices=["carbon", "nuclear", "icru90"], required=True)
@@ -587,7 +650,7 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--out", required=True)
     h.add_argument("--cache-dir", required=True)
     h.add_argument("--sha", required=True)
-    h.add_argument("--tree-oid")
+    h.add_argument("--tree-oid", required=True)
     rc = sub.add_parser("_reproduce-child")
     rc.add_argument("--bundle", required=True)
     rc.add_argument("--out", required=True)
@@ -601,7 +664,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_case(a.r, a.k, Path(a.out), Path(a.cache_dir),
                  backend=a.backend_override, precision=a.precision_override)  # fmt: skip
     elif a.command == "compare":
-        cmd_compare([Path(s) for s in a.summaries])
+        cmd_compare([Path(s) for s in a.summaries], tier=a.tier)
     elif a.command == "identities":
         cmd_identities(Path(a.summary), a.expect, Path(a.cache_dir) if a.cache_dir else None)
     elif a.command == "reproduce":
