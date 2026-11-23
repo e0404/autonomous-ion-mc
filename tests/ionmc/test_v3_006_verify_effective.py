@@ -7,6 +7,7 @@ of a saved bundle and compares ``EffectiveConfig.summary()`` with the persisted 
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -45,8 +46,23 @@ def _tree_digest(b: Path) -> dict[str, str]:
     }
 
 
+def _require_datasets(*dataset_ids: str) -> None:
+    """Skip a cache-backed case without the dataset; fail under IONMC_REQUIRE_DATA=1."""
+    from ionmc.data import cache
+
+    cdir = cache.resolve_cache_dir(None)
+    for dataset_id in dataset_ids:
+        try:
+            cache.verify(dataset_id, cdir)
+        except (FileNotFoundError, cache.IntegrityError) as exc:
+            if os.environ.get("IONMC_REQUIRE_DATA") == "1":
+                pytest.fail(f"IONMC_REQUIRE_DATA=1 but {dataset_id} is not cached: {exc}")
+            pytest.skip(f"{dataset_id} is not in the cache (IONMC_CACHE_DIR)")
+
+
 @pytest.fixture(scope="module")
 def alpha_bundle(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    _require_datasets("geant4-icru90-stopping-11.4.2")
     cfg = SimulationConfig(
         PencilBeamSource(ALPHA, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 400.0),
         BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), WATER),

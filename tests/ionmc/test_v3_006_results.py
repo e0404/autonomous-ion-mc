@@ -474,7 +474,22 @@ def test_out8_no_table_value_equals_a_persisted_member(case_d: Case, case_a: Cas
         assert not any(banned in n for n in names)
 
 
+def _require_datasets(*dataset_ids: str) -> None:
+    """Skip a cache-backed case without the dataset; fail under IONMC_REQUIRE_DATA=1."""
+    from ionmc.data import cache
+
+    cdir = cache.resolve_cache_dir(None)
+    for dataset_id in dataset_ids:
+        try:
+            cache.verify(dataset_id, cdir)
+        except (FileNotFoundError, cache.IntegrityError) as exc:
+            if os.environ.get("IONMC_REQUIRE_DATA") == "1":
+                pytest.fail(f"IONMC_REQUIRE_DATA=1 but {dataset_id} is not cached: {exc}")
+            pytest.skip(f"{dataset_id} is not in the cache (IONMC_CACHE_DIR)")
+
+
 def test_out8_cache_backed_icru90_alpha_and_nuclear_tables(tmp_path: Path) -> None:
+    _require_datasets("geant4-icru90-stopping-11.4.2")
     cfg = SimulationConfig(
         PencilBeamSource(ALPHA, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 400.0),
         BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), WATER),
@@ -649,8 +664,9 @@ def test_reg4_no_table_values_in_files_added_by_this_task(case_d: Case, case_a: 
 
 
 def test_reg5_single_process_only() -> None:
-    assert os.environ.get("IONMC_SINGLE_PROCESS") == "1", (
-        "run V3-006 tests with IONMC_SINGLE_PROCESS=1"
+    # The LV/HR runs set IONMC_SINGLE_PROCESS=1 (logged runner); CI runs without the variable.
+    assert os.environ.get("IONMC_SINGLE_PROCESS", "1") == "1", (
+        "V3-006 tests must not run with IONMC_SINGLE_PROCESS disabled"
     )
     assert _RAN and all(c.run.cpu_workers == 1 for c in _RAN)
     for p in sorted(DATA.glob("*.toml")):
