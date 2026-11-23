@@ -603,3 +603,26 @@ OPEN. Not a clinical claim."
   commit descends from the seal and this pin commit descends from it. Next, in order (§D steps 5–6): this pin
   commit's own Codex review; the three TOPAS smokes (part 19, one at a time); the evidence parts 0–3 × 3 cases;
   the sealed evaluator through `sealed_launch.py`. Not a clinical claim.
+- 2026-11-23 (orchestrator, §D step 5 — TOPAS smokes and evidence runs at 1acfb082): 15 controlled reference runs
+  (`run_reference_calculation`, engine `topas`, OpenTOPAS 4.3 / Geant4 11.4.2, schema 3, signer reference-runner),
+  one at a time, every `started_at` after the seal review REVIEW-42e8dbb1 finished (2026-11-22T13:39:50Z) and the
+  samples review REVIEW-47ccbb24 finished (2026-11-23T01:19:19Z), code_sha 1acfb082 (both pins an ancestor; sealed
+  blobs identical). Smokes (part 19, 2 000 primaries, execution only, never evidence): case 1 part 19
+  `REF-4c16b494ab8e3ba03186-d7c6667d` (4 s); case 2 part 19 `REF-5b1e4c50dcd7ffe792d9-1ab18d43` (9 s); case 3 part
+  19 `REF-5bfd62a51696cb6840bc-b298762b` (9 s).
+  Evidence parts 0–3 (2.5e4 He primaries each): case 1 part 0 `REF-fbc6ac8df9ae443b0d56-095bd6ec` (41 s); case 1
+  part 1 `REF-713869be2fea993c33ac-4bc91d3e` (40 s); case 1 part 2 `REF-7032c79fd219a7f20779-ffa342b0` (40 s); case
+  1 part 3 `REF-734e8b52acaf554681fc-5f5b503b` (40 s); case 2 part 0 `REF-314ea7c7ef327c3f09ee-ada42bf8` (100 s);
+  case 2 part 1 `REF-c39afac132b627172ad9-77d2e36e` (97 s); case 2 part 2 `REF-f68fc3fad33d435c1cf1-f347f149` (99
+  s); case 2 part 3 `REF-9d8b8b0d22f9d6cfdeae-0b562280` (98 s); case 3 part 0 `REF-f0c50ad7df0b54a91ccc-4d58fb87`
+  (111 s); case 3 part 1 `REF-6cc404ad5c192fe6802b-37e13d55` (111 s); case 3 part 2
+  `REF-0202e306870f81bc4a24-118f7146` (111 s); case 3 part 3 `REF-3dfa10bacf7299ba9dda-c6c08c2f` (109 s).
+  Every run: exit 0, no missing outputs, executed `input.txt`/`case.json` hashes equal to the sealed bundle files;
+  signed records and artifact listings committed under `validation/results/stopping/v3-013/topas-runs/<run-id>/`
+  (evidence) and `topas-smokes/<run-id>/` (smokes); outputs are bound through the listed hashes and are not read
+  before the sealed evaluator. Sandbox replay of the evaluator's per-run TOPAS checks (`check_topas_run`,
+  seal loaded with the committed environment record): all 12 evidence runs valid, no problems; no repeat part (4–7)
+  was needed. Contrary evidence to §E: the TOPAS evidence compute was ≈ 20 min in total (≈ 40 / 98 / 110 s per
+  part for cases 1/2/3), below the estimate. No V-C statistic has been computed. Next (§D step 6): the sealed
+  evaluator once, through `sealed_launch.py` in a controlled host run at this commit; results commit; ledger.
+  Not a clinical claim.
