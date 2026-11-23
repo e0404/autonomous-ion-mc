@@ -214,11 +214,6 @@ class ResultFormatError(Exception):
     """A result bundle is malformed, tampered with, unsafe or over budget (fail closed)."""
 
 
-class BundleDisplacedError(ResultFormatError):
-    """The new bundle is in place, but the displaced old directory could not be proven to be the
-    one authorised for deletion and was left behind under a visible name (never deleted)."""
-
-
 def _fail(msg: str) -> ResultFormatError:
     return ResultFormatError(msg)
 
@@ -1085,13 +1080,27 @@ def _same_object(st: os.stat_result, st0: os.stat_result) -> bool:
     return (st.st_dev, st.st_ino) == (st0.st_dev, st0.st_ino)
 
 
+def _object_at(path: Path) -> os.stat_result | None:
+    try:
+        return os.lstat(path)
+    except OSError:
+        return None
+
+
+def _is_object(path: Path, st0: os.stat_result) -> bool:
+    st = _object_at(path)
+    return st is not None and _same_object(st, st0)
+
+
 def _discard_tmp(tmp: Path, st_tmp: os.stat_result) -> None:
-    """Remove the temporary bundle directory ``save`` created, and only that directory object:
-    the root is opened and proven (device and inode) to be ``st_tmp``; every child is unlinked
-    relative to that descriptor, the ``plots`` child only after its own descriptor is proven to
-    be the entry just listed; a mismatch anywhere stops the removal. The final ``rmdir`` of the
-    emptied root is the one name-bound step POSIX leaves (there is no descriptor-bound rmdir):
-    it can remove nothing but an empty directory entry, so no content can be lost through it."""
+    """Remove the temporary bundle directory ``save`` created (decision 0045 section 7: no partial
+    bundle is left behind), and only that directory object. Trust boundary (amendment A-5): the
+    temporary directory is created by ``mkdtemp`` with mode 0700, so only the writer's own user
+    can alter its entries; the removal opens the root and proves it (device and inode) to be
+    ``st_tmp``, proves the ``plots`` child to be the entry just listed before descending, checks
+    every leaf against its listing right before the unlink, and stops at any mismatch. The two
+    name-bound removals in the shared parent, ``rmdir`` of the emptied root and of the emptied
+    child, cannot remove anything but an empty directory entry."""
     try:
         fd = _open_dir(tmp)
     except OSError:
@@ -1100,19 +1109,22 @@ def _discard_tmp(tmp: Path, st_tmp: os.stat_result) -> None:
         if not _same_object(os.fstat(fd), st_tmp):
             return
         for entry in list(os.scandir(fd)):
+            want = entry.stat(follow_symlinks=False)
             if entry.is_dir(follow_symlinks=False):
-                want = entry.stat(follow_symlinks=False)
                 sub = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
                 try:
                     if not _same_object(os.fstat(sub), want):
                         return  # the child was swapped: nothing below it is ours
                     for leaf in list(os.scandir(sub)):
-                        if not leaf.is_dir(follow_symlinks=False):
+                        lw = leaf.stat(follow_symlinks=False)
+                        if leaf.is_dir(follow_symlinks=False):
+                            return
+                        if _same_object(os.stat(leaf.name, dir_fd=sub, follow_symlinks=False), lw):
                             os.unlink(leaf.name, dir_fd=sub)
                 finally:
                     os.close(sub)
                 os.rmdir(entry.name, dir_fd=fd)
-            else:
+            elif _same_object(os.stat(entry.name, dir_fd=fd, follow_symlinks=False), want):
                 os.unlink(entry.name, dir_fd=fd)
     except OSError:
         return
@@ -1132,28 +1144,37 @@ def _commit_bundle(
     on_replaced: Callable[[Path], None] | None,
 ) -> None:
     """Move the finished temporary bundle to ``dest``. Nothing is ever deleted (REVIEW-0003a8be,
-    REVIEW-afa2f91f, REVIEW-1f5c2754, REVIEW-b025d078): a destination that was absent takes the
-    bundle by an atomic no-replace rename (anything that appeared meanwhile makes the write
-    fail); an authorised destination is exchanged atomically with the finished bundle, the
-    displaced object is proven through its own descriptor to be the same directory object
-    (device and inode) with the same result.json and still a loadable bundle, and is then KEPT
-    under the visible sibling name ``<dest>.previous-<token>`` (decision 0045 amendment A-5;
-    ``on_replaced`` receives that path); a failed proof undoes the exchange and the write fails.
-    Without the atomic primitives the write fails closed."""
+    REVIEW-afa2f91f, REVIEW-1f5c2754, REVIEW-b025d078, REVIEW-dda2bd44). Every atomic
+    operation is verified AFTER it happened by the identity (device and inode) of the objects
+    it moved, so a swap of either side right before the call is detected: a destination that
+    was absent takes the bundle by an atomic no-replace rename, after which the entry at
+    ``dest`` must be the temporary directory object ``st_tmp`` (anything that appeared meanwhile
+    makes the rename fail; a swapped source is reported, never silently published); an
+    authorised destination is exchanged atomically with the finished bundle, after which
+    ``dest`` must be ``st_tmp`` and the displaced entry must be the validated bundle (same object
+    ``replaced[0]``, same result.json digest, still loadable) or the exchange is undone and the
+    write fails. The displaced bundle is then KEPT under ``<dest>.previous-<token>`` (amendment
+    A-5); if that rename is refused it stays at the temporary name. Both outcomes are reported
+    through ``on_replaced`` and neither fails the write: once ``dest`` holds the new bundle the
+    write has succeeded. Without the atomic primitives the write fails closed."""
     if replaced is None:
         try:
             _rename_noreplace(tmp, dest)
         except FileExistsError:
             raise _fail(f"{dest.name!r} appeared while the bundle was being written; nothing "
                         "was replaced") from None  # fmt: skip
+        if not _is_object(dest, st_tmp):
+            raise _fail(f"the entry published at {dest.name!r} is not the bundle that was "
+                        "written (the temporary directory was swapped); nothing was "
+                        "deleted")  # fmt: skip
         return
     st0, digest0 = replaced
     _exchange(tmp, dest)  # dest holds the new bundle, tmp the displaced object
-    same = False
+    same = _is_object(dest, st_tmp)
     try:
         fd = _open_dir(tmp)
         try:
-            same = _same_object(os.fstat(fd), st0)
+            same = same and _same_object(os.fstat(fd), st0)
             if same:
                 rfd = os.open("result.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
                 with os.fdopen(rfd, "rb") as fh:
@@ -1164,20 +1185,21 @@ def _commit_bundle(
     except (OSError, ResultFormatError):
         same = False
     if not same:
-        _exchange(tmp, dest)  # undo: dest holds the displaced object again, tmp our bundle
-        raise _fail(f"{dest.name!r} changed between its validation and its replacement; "
-                    "nothing was deleted")  # fmt: skip
+        _exchange(tmp, dest)  # undo: dest holds the displaced object again
+        raise _fail(f"{dest.name!r} or the bundle being written changed between validation and "
+                    "replacement; nothing was deleted")  # fmt: skip
     token = tmp.name[len(".ionmc-tmp-") :]
     keep = dest.parent / f"{dest.name}.previous-{token}"
     try:
         _rename_noreplace(tmp, keep)
-    except (FileExistsError, ResultFormatError) as exc:
-        raise BundleDisplacedError(
-            f"{dest.name!r} was written; the previous bundle could not be moved to "
-            f"{keep.name!r} and stays at {tmp.name!r} ({exc})"
-        ) from exc
+        kept = keep if _is_object(keep, st0) else tmp
+    except (FileExistsError, ResultFormatError, OSError):
+        kept = tmp  # the previous bundle stays at the temporary name; the write has succeeded
     if on_replaced is not None:
-        on_replaced(keep)
+        try:
+            on_replaced(kept)
+        except Exception:  # noqa: BLE001 - a reporting callback never fails a committed write
+            pass
 
 
 # ---------------------------------------------------------------------------------------------

@@ -631,4 +631,12 @@ closed), the displaced directory is proven through its own descriptor to be the 
 (same device and inode, same `result.json`, still loadable) and is then kept as the sibling `<path>.previous-<token>`,
 which `ionmc run --overwrite` reports on stderr; a failed proof undoes the exchange and the write fails. Removing the
 kept previous bundle is the user's decision. Every deletion race of a name-based `rmtree` is thereby out of the
-writer; its own temporary directory is removed only through a descriptor proven to be that directory object.
+writer. Every atomic rename is verified after the fact by the identity (device and inode) of the objects it moved,
+so a temporary directory swapped right before publication is reported, never published as a success. Once the new
+bundle is at its destination the write has succeeded: moving the previous bundle to its visible name is reported
+through `on_replaced` (at the visible name, or at the temporary name when that rename is refused) and never fails
+the write. Trust boundary of the one destructive step left, the removal of the writer's own temporary directory on a
+failed write (§7: no partial bundle is left behind): that directory is created by `mkdtemp` with mode 0700, so only
+the writer's user can alter its entries; the removal proves the root and the `plots` child by descriptor identity,
+checks every leaf against its listing right before the unlink, stops at any mismatch, and its only name-bound
+removals in the shared parent are `rmdir` calls, which cannot remove content.

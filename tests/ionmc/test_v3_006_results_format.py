@@ -2586,7 +2586,7 @@ def test_out11_destination_race_never_deletes_what_was_not_authorised(
         (dest / "keep.txt").write_text("sentinel", encoding="utf-8")
 
     _swap_during_write(monkeypatch, swap)
-    with pytest.raises(ResultFormatError, match="changed between its validation"):
+    with pytest.raises(ResultFormatError, match="changed between validation and replacement"):
         save(r, dest, overwrite=True)
     assert (dest / "keep.txt").read_text(encoding="utf-8") == "sentinel"  # put back, intact
     assert sorted(p.name for p in dest.iterdir()) == ["keep.txt"]
@@ -2601,7 +2601,7 @@ def test_out11_destination_race_never_deletes_what_was_not_authorised(
         (dest2 / "result.json").write_bytes(before + b"\n")
 
     _swap_during_write(monkeypatch, alter)
-    with pytest.raises(ResultFormatError, match="changed between its validation"):
+    with pytest.raises(ResultFormatError, match="changed between validation and replacement"):
         save(r, dest2, overwrite=True)
     assert (dest2 / "result.json").read_bytes() == before + b"\n"  # still there, unchanged by us
     _no_leftovers(tmp_path)
@@ -2662,7 +2662,7 @@ def test_out11_commit_time_races_never_delete_what_was_not_authorised(
         (dest / "keep.txt").write_text("sentinel", encoding="utf-8")
 
     _before(monkeypatch, "_exchange", swap)
-    with pytest.raises(ResultFormatError, match="changed between its validation"):
+    with pytest.raises(ResultFormatError, match="changed between validation and replacement"):
         save(r, dest, overwrite=True)
     assert (dest / "keep.txt").read_text(encoding="utf-8") == "sentinel"
     assert sorted(p.name for p in dest.iterdir()) == ["keep.txt"]
@@ -2679,7 +2679,8 @@ def test_out11_commit_time_races_never_delete_what_was_not_authorised(
     load(dest)
     load(kept_paths[0])
     assert (kept_paths[0] / "result.json").read_bytes() == original
-    # (4) when the previous bundle cannot be moved to its visible name, it stays where it is
+    # (4) when the previous bundle cannot be moved to its visible name it stays at the temporary
+    # name; the write has succeeded and the callback names where the previous bundle is
     dest = tmp_path / "stuck"
     save(r, dest)
 
@@ -2687,14 +2688,57 @@ def test_out11_commit_time_races_never_delete_what_was_not_authorised(
         raise FileExistsError(errno.EEXIST, "forced in the test", str(dst))
 
     monkeypatch.setattr(results, "_rename_noreplace", refuse)
-    with pytest.raises(results.BundleDisplacedError, match="stays at"):
-        save(r, dest, overwrite=True)
+    where: list[Path] = []
+    assert save(r, dest, overwrite=True, on_replaced=where.append) == dest
     monkeypatch.undo()
     load(dest)  # the new bundle is in place
-    stuck = [p for p in tmp_path.iterdir() if p.name.startswith(".ionmc-tmp-")]
-    assert len(stuck) == 1
-    load(stuck[0])  # the previous bundle, intact
-    os.rename(stuck[0], tmp_path / "stuck_previous")
+    assert len(where) == 1 and where[0].name.startswith(".ionmc-tmp-")
+    load(where[0])  # the previous bundle, intact, at the temporary name
+    os.rename(where[0], tmp_path / "stuck_previous")
+    # (5) a reporting callback that raises never fails the committed write
+    dest = tmp_path / "callback"
+    save(r, dest)
+
+    def boom(_p: Path) -> None:
+        raise RuntimeError("reporting failed")
+
+    assert save(r, dest, overwrite=True, on_replaced=boom) == dest
+    load(dest)
+    # (6) REVIEW-dda2bd44: the temporary SOURCE swapped right before publication is detected
+    dest = tmp_path / "source_swap_absent"
+    aside_src = tmp_path / "aside_src"
+
+    def swap_source(src: Path, dst: Path) -> None:
+        os.rename(src, aside_src)
+        src.mkdir()
+        (src / "keep.txt").write_text("stranger", encoding="utf-8")
+
+    _before(monkeypatch, "_rename_noreplace", swap_source)
+    with pytest.raises(ResultFormatError, match="not the bundle that was written"):
+        save(r, dest)
+    monkeypatch.undo()
+    assert (dest / "keep.txt").read_text(encoding="utf-8") == "stranger"  # moved, not deleted
+    load(aside_src)  # our finished bundle, untouched
+    dest = tmp_path / "source_swap_exchange"
+    save(r, dest)
+    first_doc = (dest / "result.json").read_bytes()
+    aside_src2 = tmp_path / "aside_src2"
+
+    def swap_source2(a: Path, b: Path) -> None:
+        os.rename(a, aside_src2)
+        a.mkdir()
+        (a / "keep.txt").write_text("stranger", encoding="utf-8")
+
+    _before(monkeypatch, "_exchange", swap_source2)
+    with pytest.raises(ResultFormatError, match="changed between validation and replacement"):
+        save(r, dest, overwrite=True)
+    monkeypatch.undo()
+    assert (dest / "result.json").read_bytes() == first_doc  # the previous bundle is back
+    load(aside_src2)
+    strangers = [p for p in tmp_path.iterdir() if p.name.startswith(".ionmc-tmp-")]
+    assert len(strangers) == 1  # the stranger was not deleted by the failure cleanup
+    assert (strangers[0] / "keep.txt").read_text(encoding="utf-8") == "stranger"
+    os.rename(strangers[0], tmp_path / "stranger_parked")
     # the control: an undisturbed authorised bundle is replaced with nothing left behind
     dest = tmp_path / "plain2"
     save(r, dest)
