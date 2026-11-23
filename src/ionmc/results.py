@@ -29,6 +29,8 @@ from __future__ import annotations
 import collections
 import contextlib
 import copy
+import ctypes
+import errno
 import hashlib
 import json
 import math
@@ -211,6 +213,11 @@ _TOKEN_RE = re.compile(
 
 class ResultFormatError(Exception):
     """A result bundle is malformed, tampered with, unsafe or over budget (fail closed)."""
+
+
+class BundleDisplacedError(ResultFormatError):
+    """The new bundle is in place, but the displaced old directory could not be proven to be the
+    one authorised for deletion and was left behind under a visible name (never deleted)."""
 
 
 def _fail(msg: str) -> ResultFormatError:
@@ -1019,35 +1026,128 @@ def save(
     return dest
 
 
+_RENAME_NOREPLACE = 1  # linux/fs.h
+_RENAME_EXCHANGE = 2
+_AT_FDCWD = -100
+
+
+def _renameat2(src: Path, dst: Path, flags: int) -> None:
+    """Linux ``renameat2`` through libc (atomic no-replace rename or exchange of two paths).
+    ``NotImplementedError`` where the call does not exist; ``OSError`` with the errno otherwise."""
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        fn = libc.renameat2
+    except (AttributeError, OSError) as exc:
+        raise NotImplementedError("renameat2 is not available") from exc
+    fn.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+    fn.restype = ctypes.c_int
+    rc = fn(_AT_FDCWD, os.fsencode(src), _AT_FDCWD, os.fsencode(dst), flags)
+    if rc != 0:
+        err = ctypes.get_errno()
+        if err in (errno.ENOSYS, errno.EINVAL, errno.ENOTSUP):
+            raise NotImplementedError(os.strerror(err))
+        raise OSError(err, os.strerror(err), str(src), None, str(dst))
+
+
+def _rename_noreplace(src: Path, dst: Path) -> None:
+    """Rename ``src`` to ``dst`` only if nothing exists at ``dst`` (atomic where renameat2 is
+    available; elsewhere an existence check precedes a plain rename, which still never deletes a
+    non-empty directory or a file)."""
+    try:
+        _renameat2(src, dst, _RENAME_NOREPLACE)
+    except NotImplementedError:
+        if os.path.lexists(dst):
+            raise FileExistsError(errno.EEXIST, "exists", str(dst)) from None
+        os.rename(src, dst)
+
+
+def _exchange(a: Path, b: Path) -> None:
+    """Atomically swap the directory entries ``a`` and ``b`` (renameat2 RENAME_EXCHANGE); without
+    renameat2 two renames through a third name (never onto a non-empty directory or a file)."""
+    try:
+        _renameat2(a, b, _RENAME_EXCHANGE)
+    except NotImplementedError:
+        hold = a.parent / f"{a.name}.hold"
+        os.rename(b, hold)
+        try:
+            os.rename(a, b)
+        except OSError:
+            os.rename(hold, b)
+            raise
+        os.rename(hold, a)
+
+
+def _delete_validated_dir(path: Path, st0: os.stat_result) -> None:
+    """Delete the bundle directory at ``path`` through a descriptor of the directory object
+    validated earlier (same device and inode as ``st0``); every unlink is relative to that
+    descriptor, so a swap of the path after validation can never redirect the deletion. The
+    bundle tree is one level deep (files and the plots directory)."""
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        st = os.fstat(fd)
+        if (st.st_dev, st.st_ino) != (st0.st_dev, st0.st_ino):
+            raise _fail("the displaced directory is not the one validated for deletion")
+        for entry in list(os.scandir(fd)):
+            if entry.is_dir(follow_symlinks=False):
+                sub = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                try:
+                    for leaf in list(os.scandir(sub)):
+                        if leaf.is_dir(follow_symlinks=False):
+                            raise _fail("unexpected nested directory in the displaced bundle")
+                        os.unlink(leaf.name, dir_fd=sub)
+                finally:
+                    os.close(sub)
+                os.rmdir(entry.name, dir_fd=fd)
+            else:
+                os.unlink(entry.name, dir_fd=fd)
+    finally:
+        os.close(fd)
+    st = os.lstat(path)
+    if (st.st_dev, st.st_ino) == (st0.st_dev, st0.st_ino):
+        os.rmdir(path)  # the emptied directory object itself (rmdir never follows or recurses)
+
+
 def _commit_bundle(tmp: Path, dest: Path, replaced: tuple[os.stat_result, str] | None) -> None:
     """Move the finished temporary bundle to ``dest``. Nothing that was not authorised at the
-    start of ``save`` is ever deleted (REVIEW-0003a8be): a destination that was absent and
-    appeared meanwhile is refused; an authorised destination is displaced atomically, proven to
-    be the same directory object with the same result.json and still a loadable bundle, and
-    only then deleted; otherwise it is put back and the write fails."""
+    start of ``save`` is ever deleted (REVIEW-0003a8be, REVIEW-afa2f91f): a destination that
+    was absent takes the bundle by an atomic no-replace rename (anything that appeared meanwhile
+    makes the write fail); an authorised destination is exchanged atomically with the finished
+    bundle, the displaced object is proven to be the same directory object (device and inode)
+    with the same result.json and still a loadable bundle, and only then deleted through its
+    own descriptor; otherwise the exchange is undone and the write fails, or, when the proof
+    fails only at deletion time, the displaced object is left under a visible name."""
     if replaced is None:
-        if os.path.lexists(dest):
+        try:
+            _rename_noreplace(tmp, dest)
+        except FileExistsError:
             raise _fail(f"{dest.name!r} appeared while the bundle was being written; nothing "
-                        "was replaced")  # fmt: skip
-        os.rename(tmp, dest)  # onto a non-empty directory or a file this raises, never deletes
+                        "was replaced") from None  # fmt: skip
         return
     st0, digest0 = replaced
-    old = dest.parent / f".ionmc-old-{os.getpid()}-{tmp.name[len('.ionmc-tmp-') :]}"
-    os.rename(dest, old)  # atomic displacement of whatever is at dest now
+    _exchange(tmp, dest)  # dest holds the new bundle, tmp the displaced object
     try:
-        st = os.lstat(old)
-        same = (st.st_ino, st.st_dev) == (st0.st_ino, st0.st_dev)
-        same = same and _sha256_path(old / "result.json")[0] == digest0
-        same = same and not_a_result_bundle(old) is None
+        st = os.lstat(tmp)
+        same = (st.st_dev, st.st_ino) == (st0.st_dev, st0.st_ino)
+        same = same and _sha256_path(tmp / "result.json")[0] == digest0
+        same = same and not_a_result_bundle(tmp) is None
     except (OSError, ResultFormatError):
         same = False
     if not same:
-        if not os.path.lexists(dest):
-            os.rename(old, dest)  # put back what was displaced; nothing is deleted
+        _exchange(tmp, dest)  # undo: dest holds the displaced object again, tmp our bundle
         raise _fail(f"{dest.name!r} changed between its validation and its replacement; "
                     "nothing was deleted")  # fmt: skip
-    os.rename(tmp, dest)
-    shutil.rmtree(old)
+    try:
+        _delete_validated_dir(tmp, st0)
+    except (OSError, ResultFormatError) as exc:
+        keep = dest.parent / f"{dest.name}.displaced-{tmp.name[len('.ionmc-tmp-') :]}"
+        try:
+            os.rename(tmp, keep)
+        except OSError:
+            keep = tmp
+        raise BundleDisplacedError(
+            f"{dest.name!r} was written, but the displaced directory could not be proven to be "
+            f"the validated bundle and was left at {keep.name!r} ({exc})"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------------------------

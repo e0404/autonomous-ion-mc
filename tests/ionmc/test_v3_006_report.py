@@ -15,6 +15,7 @@ import dataclasses
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import shutil
@@ -208,8 +209,7 @@ def test_rep2_generator_reproduces_the_committed_fixture(tmp_path: Path) -> None
         if lv or rel.suffix not in (".json", ".md"):
             assert a == b, rel
         elif rel.suffix == ".json":
-            diffs = _diff_pointers(json.loads(a), json.loads(b))
-            foreign = [d for d in diffs if not _TABLE_DERIVED_LEAF.fullmatch(d)]
+            foreign = _foreign_differences(json.loads(a), json.loads(b))
             assert not foreign, f"{rel}: platform-independent pointers differ: {foreign}"
         else:
             ta, tb = _mask_table_values(a.decode("utf-8")), _mask_table_values(b.decode("utf-8"))
@@ -219,11 +219,42 @@ def test_rep2_generator_reproduces_the_committed_fixture(tmp_path: Path) -> None
 # The scalar leaves of result.json whose values derive from the stopping tables (the table
 # digest, the step bound computed from the ranges, the per-channel accumulator bound, and the
 # hash of the report that prints them), and the report substrings printing those values.
-_TABLE_DERIVED_LEAF = re.compile(
-    r"/effective/tables/sha256|/provenance/data/table_sha256|/effective/max_steps"
-    r"|/effective/tallies/channels/\d+/bound_per_history|/effective/tallies/bounds/\w+"
-    r"|/files/report\.md/sha256"
+_TABLE_DIGEST_LEAF = re.compile(  # digests of table-derived content: exempt (any value)
+    r"/effective/tables/sha256|/provenance/data/table_sha256|/files/report\.md/sha256"
+)
+_TABLE_NUMERIC_LEAF = re.compile(  # numbers computed from the tables: 1e-9 relative (REG-2)
+    r"/effective/max_steps|/effective/tallies/channels/\d+/bound_per_history"
+    r"|/effective/tallies/bounds/\w+"
 )  # the accumulator bounds B_* are computed from the tables too (CI run 45198306479)
+
+
+def _foreign_differences(a: Any, b: Any) -> list[str]:
+    """Differing pointers that are NOT explained by the stopping tables of the runner: a digest
+    leaf of table-derived content may differ freely, a numeric table-derived leaf only within
+    the REG-2 relative tolerance of 1e-9, everything else not at all."""
+    out: list[str] = []
+    for ptr in _diff_pointers(a, b):
+        if _TABLE_DIGEST_LEAF.fullmatch(ptr):
+            continue
+        x, y = _pointer_get(a, ptr), _pointer_get(b, ptr)
+        if (
+            _TABLE_NUMERIC_LEAF.fullmatch(ptr)
+            and isinstance(x, int | float)
+            and isinstance(y, int | float)
+            and math.isclose(x, y, rel_tol=1e-9, abs_tol=0.0)
+        ):
+            continue  # fmt: skip
+        out.append(f"{ptr} ({x!r} vs {y!r})")
+    return out
+
+
+def _pointer_get(doc: Any, ptr: str) -> Any:
+    node = doc
+    for part in ptr.split("/")[1:]:
+        node = node[int(part)] if isinstance(node, list) else node[part]
+    return node
+
+
 _TABLE_VALUE_SUBSTRINGS = (
     (re.compile(r"(table sha256: )[0-9a-f]{64}"), r"\1<table-sha256>"),
     (re.compile(r"(/max_steps = )\d+"), r"\1<n>"),

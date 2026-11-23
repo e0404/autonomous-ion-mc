@@ -2611,3 +2611,100 @@ def test_out11_destination_race_never_deletes_what_was_not_authorised(
     save(r, dest3, overwrite=True)
     load(dest3)
     _no_leftovers(tmp_path)
+
+
+def _before(monkeypatch: Any, name: str, action: Any) -> None:
+    """Run ``action(*args)`` once immediately before the real ``results.<name>`` call."""
+    real = getattr(results, name)
+    fired = []
+
+    def hooked(*args: Any) -> Any:
+        if not fired:
+            fired.append(True)
+            action(*args)
+        return real(*args)
+
+    monkeypatch.setattr(results, name, hooked)
+
+
+def test_out11_commit_time_races_never_delete_what_was_not_authorised(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """REVIEW-afa2f91f: an entry appearing right before the no-replace rename, a destination
+    swapped right before the exchange, and the displaced object swapped right before its
+    deletion are each refused without deleting anything that was not authorised."""
+    r = make_result()
+    # (1) absent destination: an empty directory, then a symlink, appears right before the rename
+    for kind in ("dir", "link"):
+        dest = tmp_path / f"late_{kind}"
+
+        def appear(src: Path, dst: Path, _k: str = kind) -> None:
+            if _k == "dir":
+                dst.mkdir()
+            else:
+                os.symlink(tmp_path, dst)
+
+        _before(monkeypatch, "_rename_noreplace", appear)
+        with pytest.raises(ResultFormatError, match="appeared while the bundle was being written"):
+            save(r, dest)
+        assert os.path.lexists(dest) and (dest.is_symlink() if kind == "link" else dest.is_dir())
+        monkeypatch.undo()
+    _no_leftovers(tmp_path)
+    # (2) authorised bundle swapped for a stranger right before the exchange
+    dest = tmp_path / "swap_at_exchange"
+    save(r, dest)
+    aside = tmp_path / "aside_exchange"
+
+    def swap(_a: Path, _b: Path) -> None:
+        os.rename(dest, aside)
+        dest.mkdir()
+        (dest / "keep.txt").write_text("sentinel", encoding="utf-8")
+
+    _before(monkeypatch, "_exchange", swap)
+    with pytest.raises(ResultFormatError, match="changed between its validation"):
+        save(r, dest, overwrite=True)
+    assert (dest / "keep.txt").read_text(encoding="utf-8") == "sentinel"
+    assert sorted(p.name for p in dest.iterdir()) == ["keep.txt"]
+    load(aside)
+    monkeypatch.undo()
+    _no_leftovers(tmp_path)
+    # (3) the displaced object is swapped for a stranger right before its deletion
+    dest = tmp_path / "swap_at_delete"
+    save(r, dest)
+    aside2 = tmp_path / "aside_delete"
+
+    def swap_displaced(path: Path, _st: Any) -> None:
+        os.rename(path, aside2)
+        path.mkdir()
+        (path / "keep.txt").write_text("sentinel", encoding="utf-8")
+
+    _before(monkeypatch, "_delete_validated_dir", swap_displaced)
+    with pytest.raises(results.BundleDisplacedError, match="left at"):
+        save(r, dest, overwrite=True)
+    load(dest)  # the new bundle is in place
+    load(aside2)  # the displaced real bundle was not deleted
+    kept = [p for p in tmp_path.iterdir() if p.name.startswith("swap_at_delete.displaced-")]
+    assert len(kept) == 1 and (kept[0] / "keep.txt").read_text(encoding="utf-8") == "sentinel"
+    monkeypatch.undo()
+    assert not [p.name for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]
+    # the control: an undisturbed authorised bundle is replaced with nothing left behind
+    dest = tmp_path / "plain2"
+    save(r, dest)
+    save(r, dest, overwrite=True)
+    load(dest)
+    assert not [p.name for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]
+
+
+def test_out11_renameat2_primitives_are_atomic_and_refuse_replacement(tmp_path: Path) -> None:
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir()
+    (a / "x").write_text("a", encoding="utf-8")
+    b.mkdir()
+    (b / "y").write_text("b", encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        results._rename_noreplace(a, b)  # never replaces, even an empty or non-empty directory
+    assert (a / "x").exists() and (b / "y").exists()
+    results._exchange(a, b)
+    assert (a / "y").exists() and (b / "x").exists()
+    results._rename_noreplace(a, tmp_path / "c")
+    assert (tmp_path / "c" / "y").exists() and not a.exists()
