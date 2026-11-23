@@ -619,10 +619,55 @@ OPEN. Not a clinical claim."
   `REF-0202e306870f81bc4a24-118f7146` (111 s); case 3 part 3 `REF-3dfa10bacf7299ba9dda-c6c08c2f` (109 s).
   Every run: exit 0, no missing outputs, executed `input.txt`/`case.json` hashes equal to the sealed bundle files;
   signed records and artifact listings committed under `validation/results/stopping/v3-013/topas-runs/<run-id>/`
-  (evidence) and `topas-smokes/<run-id>/` (smokes); outputs are bound through the listed hashes and are not read
-  before the sealed evaluator. Sandbox replay of the evaluator's per-run TOPAS checks (`check_topas_run`,
+  (evidence) and `topas-smokes/<run-id>/` (smokes); outputs are bound through the listed hashes [corrected
+  2026-11-23, Codex REVIEW-4bf04263 minor finding: the sandbox replay below parsed every `work/idd_dose.csv` through
+  the sealed reader for the frozen run-validity checks of `check_topas_run` (file structure and finiteness); no
+  ionmc–TOPAS comparison or V-C statistic was computed or displayed before the sealed evaluator, and the replay
+  printed only run ids, validity, start times and problems]. Sandbox replay of the evaluator's per-run TOPAS checks (`check_topas_run`,
   seal loaded with the committed environment record): all 12 evidence runs valid, no problems; no repeat part (4–7)
   was needed. Contrary evidence to §E: the TOPAS evidence compute was ≈ 20 min in total (≈ 40 / 98 / 110 s per
   part for cases 1/2/3), below the estimate. No V-C statistic has been computed. Next (§D step 6): the sealed
   evaluator once, through `sealed_launch.py` in a controlled host run at this commit; results commit; ledger.
   Not a clinical claim.
+- 2026-11-23 (orchestrator, §D step 6 — RESULTS of the sealed evaluation, run once): controlled host run
+  RUN-20261123T015435Z-1bc786b7 at 9f1fa8ec (signed host-runner record; `sealed_launch.py` → `v13_evaluate.py`,
+  `--seal-sha 5de58656 --code-sha 9f1fa8ec`, records at the ignored task cache, 4 s; stdout
+  `topas-agreement-shared-lineage:V-C1:PASS; science gates PASS`). Result committed verbatim as
+  `validation/results/stopping/v3-013/v13_result.json` (sha256 8af7d9290d9527fcf1f237b3bc8ea71294b60590801bcfe4122c73643bdc1855) with the host record under
+  `host-records/`. Seal checks: 82 sealed paths and the `src/ionmc` tree 54d226da… equal to the seal blobs, seal review
+  REVIEW-42e8dbb1 and samples review REVIEW-47ccbb24 verified, environment digests equal to `seal-environment.json`.
+  Runs: 18 ionmc samples valid (0 problems; Warp attestations identical per backend/row group), 12 TOPAS evidence
+  parts valid (0 problems; no repeat part used).
+  **V-C1 (`icru90-water-v1` vs TOPAS opt4, shared ICRU 90 alpha lineage; gating): PASS at all three cases.**
+  Case 1 (75 MeV/u): (a) R80 46.688 vs 46.798 mm, |Δ| 0.114 ≤ tol 0.164; (c) z_peak 46.391 vs 46.536, 0.147 ≤ 0.5;
+  (d) peak/entrance 9.155 vs 9.348, 0.231 ≤ 0.280; (e) plateau 18 groups, max |Δ|/tol 0.35, none failing;
+  (b) width 0.346 vs 0.344 mm (report-only). Case 2 (125 MeV/u): (a) 115.735 vs 115.899, 0.180 ≤ 0.406;
+  (c) 115.144 vs 115.327, 0.198 ≤ 0.5; (d) 9.445 vs 9.481, 0.056 ≤ 0.284; (e) 45 groups, max 0.32; (b) 0.834 vs 0.819
+  (report-only). Case 3 (200 MeV/u): (a) 262.045 vs 262.505, 0.476 ≤ 0.919; (c) 260.765 vs 261.214, 0.471 ≤ 0.5;
+  (d) 9.287 vs 9.221, 0.079 ≤ 0.277; (e) 41 groups, max 0.20; (b) 1.797 vs 1.784, 0.051 ≤ 0.178. The evidence
+  record `topas-agreement-shared-lineage:V-C1:PASS` is appended once to the registry of `icru90-water-v1`
+  (`src/ionmc/physics/stopping_evidence.py`, graded at 9f1fa8ec); it is evidence for transport, straggling and
+  end of range of this configuration against a reference that shares the stopping data, never for stopping physics,
+  and never `validated`.
+  **V-C1-A (the default `bethe-ionmc-v1`, same criteria, report-only, never gating): cases 1 and 2 PASS, case 3
+  FAIL** on criterion (c): z_peak 260.601 vs 261.214 mm, |Δ| 0.636 > tol 0.5 (R80 261.869 vs 262.505, 0.652 ≤ 0.919
+  PASS; (d) 0.078 ≤ 0.277 PASS; (e) 41 groups max 0.23 PASS; (b) 0.052 ≤ 0.178 PASS). Recorded in full as contrary
+  evidence; it changes no V3-008 verdict, the default or any spec (plan §B V-C1-A, §F): the default's evidence record
+  stays `as-graded:0043` with its documented I3 limitation and the V3-008 TOPAS-agreement statements unchanged.
+  **V-C2 (selection reaches transport; gating where the precondition holds): PASS at every case.** ΔR80(icru90 −
+  default) = +0.0189 / +0.0702 / +0.1754 mm vs ΔR_pred +0.0061 / +0.0585 / +0.1626 mm, |Δ − ΔR_pred| = 0.0129 / 0.0122 /
+  0.0145 mm ≤ tol 0.02 mm (σ 0.0001 / 0.0003 / 0.0010 mm, 40 batches); the precondition holds at cases 2 and 3
+  (gating) and not at case 1 (report-only; the sealed substitute gate CC-T + CC-ID + PER-1 for `icru90-water-v1`
+  applies there and its rows passed in the A-row test runs). **V-C2-D (deterministic, both backends): PASS at all six
+  (case, backend) pairs**, gates (i) and (ii): |ΔZ_m − ΔR_pred,D| = 1.2e-6 / 2.6e-6 / 1.6e-5 mm ≤ 0.0047 / 0.0116 /
+  0.0262 mm; round trips ≤ 3.4e-4 mm. V-C3 report-only aggregates unchanged (`v-c3.json`).
+  Integration state recorded by the evaluator: science gates PASS, blocking none; not evaluated by the evaluator:
+  the A.1–A.5 rows (test runs recorded 2026-11-18 and in CI), step S6 documentation (368cad59), Codex review,
+  validation record, CI and the controlled merge. Contrary evidence to §E: total compute ≈ 11.5 h for the six
+  1e6-history `vc-sample` runs (above the 1.5–3 h estimate) and ≈ 20 min TOPAS (below). Post-evaluation closure: the
+  registry append changes the `src/ionmc` tree after the evaluation (the only source change; no spec, hash or table
+  changes), so the committed `vc-predictions.json` tree pin is re-derived on the host at the results commit (values,
+  identities and table hashes unchanged, tree pin only) by the following commit; seal 15 (REVIEW-42e8dbb1 at 5de58656)
+  remains the seal of this evaluation at 9f1fa8ec, its frozen manifest is kept as the record of that seal, and NO run
+  or evaluation follows at the post-evaluation state (the evaluator fails closed there by design: a re-run would need
+  a new seal). Not a clinical claim.

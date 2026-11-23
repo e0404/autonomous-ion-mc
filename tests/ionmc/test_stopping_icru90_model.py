@@ -16,6 +16,7 @@ import importlib.util
 import json
 import math
 import os
+import re
 import shutil
 import sys
 from dataclasses import replace
@@ -51,6 +52,8 @@ from ionmc.scoring import ScoringGrid
 from ionmc.sources import PencilBeamSource
 from ionmc.transport.tables import TransportTables
 
+# The record appended once by the V3-013 V-C1 grading (plan §B).
+VC1_PASS = "topas-agreement-shared-lineage:V-C1:PASS"
 MID = "icru90-water-v1"
 ICRU_ID = "geant4-icru90-stopping-11.4.2"
 PSTAR_ID, ASTAR_ID = "nist-pstar-water-2005", "nist-astar-water-2005"
@@ -153,7 +156,12 @@ def test_registered_spec_is_cache_independent_and_carries_one_construction_pin()
     assert spec.options["points_per_decade"] == 200
     digest = spec_sha256(spec)
     assert digest not in {spec_sha256(s) for k, s in STOPPING_MODELS.items() if k != MID}
-    assert [r.status for r in STOPPING_EVIDENCE[digest]] == ["consistency-only"]
+    assert [r.status for r in STOPPING_EVIDENCE[digest]] == ["consistency-only", VC1_PASS]
+    new = STOPPING_EVIDENCE[digest][1]
+    assert new.row == "V-C1"
+    assert re.fullmatch(r"[0-9a-f]{40}", new.graded_at_sha or "")
+    assert new.graded_at_sha == "9f1fa8ecae082307776e8001fb0708038a3eef2c"
+    assert not any(r.status == "validated" for r in STOPPING_EVIDENCE[digest])
     # the circular rows: the dataset and the rows named by plan row PER-2
     assert STOPPING_CIRCULAR_ROWS[digest] == (
         ICRU_ID,
@@ -173,7 +181,7 @@ def test_capabilities_list_the_model_with_pin_licence_role_and_record() -> None:
             "use_role": "construction-permitted",
         }
     ]
-    assert [r["status"] for r in cap["evidence"]] == ["consistency-only"]
+    assert [r["status"] for r in cap["evidence"]] == ["consistency-only", VC1_PASS]
     assert cap["domain"]["species"] == ["alpha", "proton"]
 
 
@@ -539,7 +547,7 @@ def test_per3_data_used_lists_the_single_icru_pin_with_the_projectile_table(
         }
     ]
     assert blk["cache_dir"] == str(cdir)
-    assert [r["status"] for r in blk["evidence_at_run"]] == ["consistency-only"]
+    assert [r["status"] for r in blk["evidence_at_run"]] == ["consistency-only", VC1_PASS]
     # PER-2: circular rows, and the MCS proton path of an ion run
     assert blk["circular_rows"] == [
         ICRU_ID,

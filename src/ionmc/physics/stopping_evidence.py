@@ -48,6 +48,19 @@ def _initial() -> dict[str, tuple[EvidenceRecord, ...]]:
                 h, "consistency-only", None, "validation/plans/v3-013-acceptance.md", None
             ),
         )
+    # Appended once, never mutated: the sealed V3-013 evaluator graded row V-C1 PASS for
+    # icru90-water-v1 (result file validation/results/stopping/v3-013/v13_result.json, host run
+    # RUN-20261123T015435Z-1bc786b7). Shared ICRU 90 lineage: never "validated".
+    h = spec_sha256(ids["icru90-water-v1"])
+    out[h] = out[h] + (
+        EvidenceRecord(
+            h,
+            "topas-agreement-shared-lineage:V-C1:PASS",
+            "V-C1",
+            "validation/plans/v3-013-acceptance.md",
+            "9f1fa8ecae082307776e8001fb0708038a3eef2c",
+        ),
+    )
     return out
 
 

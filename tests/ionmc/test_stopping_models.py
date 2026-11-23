@@ -160,6 +160,15 @@ def test_evidence_registry_is_separate_keyed_by_spec_hash_and_initial() -> None:
         "nist-pstar-astar-water-2005": "consistency-only",
         "icru90-water-v1": "consistency-only",
     }
+    icru = ev[spec_sha256(STOPPING_MODELS["icru90-water-v1"])]
+    assert [r.status for r in icru] == [
+        "consistency-only",
+        "topas-agreement-shared-lineage:V-C1:PASS",
+    ]
+    assert icru[1].row == "V-C1"
+    assert icru[1].graded_at_sha == "9f1fa8ecae082307776e8001fb0708038a3eef2c"
+    nist = ev[spec_sha256(STOPPING_MODELS["nist-pstar-astar-water-2005"])]
+    assert [r.status for r in nist] == ["consistency-only"]
     assert all(r.spec_sha256 == h for h, rs in ev.items() for r in rs)
     assert not any("validated" == r.status for rs in ev.values() for r in rs)
     assert stopping_models.STOPPING_MODELS is STOPPING_MODELS  # no evidence import cycle
