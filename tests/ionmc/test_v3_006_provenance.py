@@ -94,7 +94,7 @@ def _doc(bundle: Path) -> dict[str, Any]:
 
 def test_prov1_tree_oid_equals_git(tmp_path: Path) -> None:
     if GIT is None:
-        pytest.skip("git is not available")
+        _git_required()
     # the committed package tree is reproduced byte for byte (git archive of HEAD) ...
     arch = tmp_path / "arch"
     arch.mkdir()
@@ -118,7 +118,7 @@ def test_prov1_tree_oid_equals_git(tmp_path: Path) -> None:
 def test_prov1_git_sorting_and_modes(tmp_path: Path) -> None:
     """Directories sort as ``name/``; the executable bit selects mode 100755."""
     if GIT is None:
-        pytest.skip("git is not available")
+        _git_required()
     pkg = tmp_path / "repo" / "src" / "ionmc"
     (pkg / "a").mkdir(parents=True)
     (pkg / "a" / "z.py").write_text("z\n")
@@ -167,7 +167,7 @@ def test_prov2_git_fallback_ignores_foreign_git_vars(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     if GIT is None:
-        pytest.skip("git is not available")
+        _git_required()
     repo, foreign = tmp_path / "a", tmp_path / "foreign"
     pkg = _copy_pkg(repo / "src" / "ionmc")
     for r in (repo, foreign):
@@ -342,6 +342,13 @@ def _lv_tier() -> bool:
     return os.environ.get("IONMC_LV_TIER") == "1"
 
 
+def _git_required() -> None:
+    """Git is a required tool of the local-validation tier (IONMC_LV_TIER=1); CI may skip."""
+    if _lv_tier():
+        pytest.fail("IONMC_LV_TIER=1 but git is not available")
+    pytest.skip("git is not available")
+
+
 def _uv_build(src: Path, out: Path) -> Path:
     uv = shutil.which("uv")
     if uv is None:
@@ -368,7 +375,7 @@ def _uv_build(src: Path, out: Path) -> Path:
 
 def test_prov5_wheel_build_stamp(tmp_path: Path) -> None:
     if GIT is None:
-        pytest.skip("git is not available")
+        _git_required()
     before = _git(["status", "--porcelain"], ROOT)
     wheel = _uv_build(ROOT, tmp_path / "out")
     assert _git(["status", "--porcelain"], ROOT) == before  # the checkout is not touched
@@ -405,7 +412,7 @@ def test_prov5_build_without_repository_stamps_unknown(tmp_path: Path) -> None:
 
 def test_prov5_pyproject_and_lock_unchanged() -> None:
     if GIT is None:
-        pytest.skip("git is not available")
+        _git_required()
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'requires = ["hatchling==1.32.4"]' in text
     assert '[tool.hatch.build.hooks.custom]\npath = "hatch_build.py"' in text
@@ -415,7 +422,7 @@ def test_prov5_pyproject_and_lock_unchanged() -> None:
 
 def test_prov5_dirty_build_is_stamped_dirty(tmp_path: Path) -> None:
     if GIT is None:
-        pytest.skip("git is not available")
+        _git_required()
     repo = tmp_path / "repo"
     repo.mkdir()
     for name in ("pyproject.toml", "hatch_build.py", "README.md", ".gitignore"):
