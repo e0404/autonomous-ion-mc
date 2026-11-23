@@ -36,7 +36,6 @@ import json
 import math
 import os
 import re
-import shutil
 import struct
 import tempfile
 import zipfile
@@ -1004,6 +1003,7 @@ def save(
     check_allowlist(doc["arrays"])
     check_path_hygiene(doc)
     tmp = Path(tempfile.mkdtemp(dir=parent, prefix=".ionmc-tmp-"))
+    st_tmp = os.lstat(tmp)  # our temporary directory object; cleanup is bound to it
     try:
         write_npz(tmp / "arrays.npz", arrays, zlib_level)
         derived = report_mod.render_all(doc, {a.name: a.data for a in arrays})
@@ -1019,9 +1019,9 @@ def save(
             doc["files"][name] = {"sha256": sha, "size": size}
         (tmp / "result.json").write_bytes(canonical_bytes(doc))
         os.chmod(tmp, 0o755)
-        _commit_bundle(tmp, dest, replaced)
+        _commit_bundle(tmp, st_tmp, dest, replaced)
     except BaseException:
-        shutil.rmtree(tmp, ignore_errors=True)
+        _discard_tmp(tmp, st_tmp)  # only our own temporary object, never a swapped-in entry
         raise
     return dest
 
@@ -1033,7 +1033,7 @@ _AT_FDCWD = -100
 
 def _renameat2(src: Path, dst: Path, flags: int) -> None:
     """Linux ``renameat2`` through libc (atomic no-replace rename or exchange of two paths).
-    ``NotImplementedError`` where the call does not exist; ``OSError`` with the errno otherwise."""
+    ``NotImplementedError`` where the call or the flag is unsupported; ``OSError`` otherwise."""
     try:
         libc = ctypes.CDLL(None, use_errno=True)
         fn = libc.renameat2
@@ -1050,72 +1050,96 @@ def _renameat2(src: Path, dst: Path, flags: int) -> None:
 
 
 def _rename_noreplace(src: Path, dst: Path) -> None:
-    """Rename ``src`` to ``dst`` only if nothing exists at ``dst`` (atomic where renameat2 is
-    available; elsewhere an existence check precedes a plain rename, which still never deletes a
-    non-empty directory or a file)."""
+    """Atomic rename of ``src`` to ``dst`` that fails (``FileExistsError``) if anything exists at
+    ``dst``. Fails closed (``ResultFormatError``) where the atomic primitive is unavailable:
+    there is no portable rename that never replaces an entry (REVIEW-1f5c2754)."""
     try:
         _renameat2(src, dst, _RENAME_NOREPLACE)
-    except NotImplementedError:
-        if os.path.lexists(dst):
-            raise FileExistsError(errno.EEXIST, "exists", str(dst)) from None
-        os.rename(src, dst)
+    except NotImplementedError as exc:
+        raise _fail(
+            "atomic no-replace rename (renameat2) is unavailable on this platform or file "
+            "system; refusing to write a bundle whose destination could be replaced"
+        ) from exc
 
 
 def _exchange(a: Path, b: Path) -> None:
-    """Atomically swap the directory entries ``a`` and ``b`` (renameat2 RENAME_EXCHANGE); without
-    renameat2 two renames through a third name (never onto a non-empty directory or a file)."""
+    """Atomically swap the directory entries ``a`` and ``b`` (renameat2 RENAME_EXCHANGE); fails
+    closed where the primitive is unavailable (a two-step swap is not atomic)."""
     try:
         _renameat2(a, b, _RENAME_EXCHANGE)
-    except NotImplementedError:
-        hold = a.parent / f"{a.name}.hold"
-        os.rename(b, hold)
-        try:
-            os.rename(a, b)
-        except OSError:
-            os.rename(hold, b)
-            raise
-        os.rename(hold, a)
+    except NotImplementedError as exc:
+        raise _fail(
+            "atomic exchange (renameat2) is unavailable on this platform or file system; "
+            "refusing to replace an existing bundle"
+        ) from exc
 
 
-def _delete_validated_dir(path: Path, st0: os.stat_result) -> None:
-    """Delete the bundle directory at ``path`` through a descriptor of the directory object
-    validated earlier (same device and inode as ``st0``); every unlink is relative to that
-    descriptor, so a swap of the path after validation can never redirect the deletion. The
-    bundle tree is one level deep (files and the plots directory)."""
-    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+def _open_dir(path: Path) -> int:
+    return os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+
+
+def _empty_dir_fd(fd: int) -> None:
+    """Unlink the one-level bundle tree below the open directory ``fd``: every unlink and the
+    removal of the ``plots`` entry are relative to that descriptor, never to a path."""
+    for entry in list(os.scandir(fd)):
+        if entry.is_dir(follow_symlinks=False):
+            sub = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                for leaf in list(os.scandir(sub)):
+                    if leaf.is_dir(follow_symlinks=False):
+                        raise _fail("unexpected nested directory in the displaced bundle")
+                    os.unlink(leaf.name, dir_fd=sub)
+            finally:
+                os.close(sub)
+            os.rmdir(entry.name, dir_fd=fd)  # removes only an empty entry of the validated dir
+        else:
+            os.unlink(entry.name, dir_fd=fd)
+
+
+def _rmdir_empty(path: Path) -> None:
+    """Remove the emptied directory entry at ``path``. ``rmdir`` is the only name-bound step
+    of a deletion: it cannot remove anything but an EMPTY directory, so no content can be lost
+    through it; a non-empty or vanished entry raises ``OSError`` and is left alone."""
+    os.rmdir(path)
+
+
+def _delete_dir_object(path: Path, st0: os.stat_result) -> None:
+    """Delete the bundle directory at ``path`` if it is the directory object ``st0`` (device and
+    inode checked on the open descriptor): the content is unlinked through that descriptor, the
+    empty entry removed last by :func:`_rmdir_empty`."""
+    fd = _open_dir(path)
     try:
         st = os.fstat(fd)
         if (st.st_dev, st.st_ino) != (st0.st_dev, st0.st_ino):
-            raise _fail("the displaced directory is not the one validated for deletion")
-        for entry in list(os.scandir(fd)):
-            if entry.is_dir(follow_symlinks=False):
-                sub = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
-                try:
-                    for leaf in list(os.scandir(sub)):
-                        if leaf.is_dir(follow_symlinks=False):
-                            raise _fail("unexpected nested directory in the displaced bundle")
-                        os.unlink(leaf.name, dir_fd=sub)
-                finally:
-                    os.close(sub)
-                os.rmdir(entry.name, dir_fd=fd)
-            else:
-                os.unlink(entry.name, dir_fd=fd)
+            raise _fail("the directory at the path is not the one validated for deletion")
+        _empty_dir_fd(fd)
     finally:
         os.close(fd)
-    st = os.lstat(path)
-    if (st.st_dev, st.st_ino) == (st0.st_dev, st0.st_ino):
-        os.rmdir(path)  # the emptied directory object itself (rmdir never follows or recurses)
+    _rmdir_empty(path)
 
 
-def _commit_bundle(tmp: Path, dest: Path, replaced: tuple[os.stat_result, str] | None) -> None:
+def _discard_tmp(tmp: Path, st_tmp: os.stat_result) -> None:
+    """Remove the temporary bundle directory created by ``save`` only if the entry still is that
+    very directory object (``st_tmp``); any other object at the path is left untouched."""
+    try:
+        _delete_dir_object(tmp, st_tmp)
+    except (OSError, ResultFormatError):
+        return
+
+
+def _commit_bundle(
+    tmp: Path, st_tmp: os.stat_result, dest: Path, replaced: tuple[os.stat_result, str] | None
+) -> None:
     """Move the finished temporary bundle to ``dest``. Nothing that was not authorised at the
-    start of ``save`` is ever deleted (REVIEW-0003a8be, REVIEW-afa2f91f): a destination that
-    was absent takes the bundle by an atomic no-replace rename (anything that appeared meanwhile
-    makes the write fail); an authorised destination is exchanged atomically with the finished
-    bundle, the displaced object is proven to be the same directory object (device and inode)
-    with the same result.json and still a loadable bundle, and only then deleted through its
-    own descriptor; otherwise the exchange is undone and the write fails, or, when the proof
-    fails only at deletion time, the displaced object is left under a visible name."""
+    start of ``save`` is ever deleted (REVIEW-0003a8be, REVIEW-afa2f91f, REVIEW-1f5c2754): a
+    destination that was absent takes the bundle by an atomic no-replace rename (anything that
+    appeared meanwhile makes the write fail); an authorised destination is exchanged atomically
+    with the finished bundle, the displaced object is proven through its own descriptor to be
+    the same directory object (device and inode) with the same result.json and still a
+    loadable bundle, and only then its content is unlinked through that descriptor and the
+    empty entry removed; otherwise the exchange is undone and the write fails, or, when the
+    proof fails only at deletion time, the displaced object is left under a visible name.
+    Without the atomic primitives the write fails closed."""
     if replaced is None:
         try:
             _rename_noreplace(tmp, dest)
@@ -1125,10 +1149,21 @@ def _commit_bundle(tmp: Path, dest: Path, replaced: tuple[os.stat_result, str] |
         return
     st0, digest0 = replaced
     _exchange(tmp, dest)  # dest holds the new bundle, tmp the displaced object
+    same = False
     try:
-        st = os.lstat(tmp)
-        same = (st.st_dev, st.st_ino) == (st0.st_dev, st0.st_ino)
-        same = same and _sha256_path(tmp / "result.json")[0] == digest0
+        fd = _open_dir(tmp)
+        try:
+            st = os.fstat(fd)
+            same = (st.st_dev, st.st_ino) == (st0.st_dev, st0.st_ino)
+            if same:
+                rfd = os.open("result.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+                try:
+                    with os.fdopen(rfd, "rb") as fh:
+                        same = hashlib.sha256(fh.read()).hexdigest() == digest0
+                finally:
+                    pass  # fdopen owns rfd
+        finally:
+            os.close(fd)
         same = same and not_a_result_bundle(tmp) is None
     except (OSError, ResultFormatError):
         same = False
@@ -1137,12 +1172,12 @@ def _commit_bundle(tmp: Path, dest: Path, replaced: tuple[os.stat_result, str] |
         raise _fail(f"{dest.name!r} changed between its validation and its replacement; "
                     "nothing was deleted")  # fmt: skip
     try:
-        _delete_validated_dir(tmp, st0)
+        _delete_dir_object(tmp, st0)
     except (OSError, ResultFormatError) as exc:
         keep = dest.parent / f"{dest.name}.displaced-{tmp.name[len('.ionmc-tmp-') :]}"
         try:
-            os.rename(tmp, keep)
-        except OSError:
+            _rename_noreplace(tmp, keep)
+        except (OSError, ResultFormatError):
             keep = tmp
         raise BundleDisplacedError(
             f"{dest.name!r} was written, but the displaced directory could not be proven to be "

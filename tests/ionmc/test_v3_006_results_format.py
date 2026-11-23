@@ -2678,7 +2678,7 @@ def test_out11_commit_time_races_never_delete_what_was_not_authorised(
         path.mkdir()
         (path / "keep.txt").write_text("sentinel", encoding="utf-8")
 
-    _before(monkeypatch, "_delete_validated_dir", swap_displaced)
+    _before(monkeypatch, "_delete_dir_object", swap_displaced)
     with pytest.raises(results.BundleDisplacedError, match="left at"):
         save(r, dest, overwrite=True)
     load(dest)  # the new bundle is in place
@@ -2708,3 +2708,66 @@ def test_out11_renameat2_primitives_are_atomic_and_refuse_replacement(tmp_path: 
     assert (a / "y").exists() and (b / "x").exists()
     results._rename_noreplace(a, tmp_path / "c")
     assert (tmp_path / "c" / "y").exists() and not a.exists()
+
+
+def test_out11_without_renameat2_the_writer_fails_closed(tmp_path: Path, monkeypatch: Any) -> None:
+    """REVIEW-1f5c2754: no non-atomic fallback. Where renameat2 is unavailable, save refuses to
+    write to an absent destination and to replace an existing one; nothing is written or deleted."""
+    r = make_result()
+    real = save(r, tmp_path / "real")
+    before = sorted(p.name for p in real.rglob("*"))
+
+    def unavailable(*_a: Any) -> None:
+        raise NotImplementedError("forced in the test")
+
+    monkeypatch.setattr(results, "_renameat2", unavailable)
+    with pytest.raises(ResultFormatError, match="renameat2"):
+        save(r, tmp_path / "fresh")
+    assert not (tmp_path / "fresh").exists()
+    with pytest.raises(ResultFormatError, match="renameat2"):
+        save(r, real, overwrite=True)
+    assert sorted(p.name for p in real.rglob("*")) == before
+    monkeypatch.undo()
+    load(real)
+    assert not [p.name for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]
+
+
+def test_out11_final_rmdir_cannot_remove_content_and_cleanup_is_bound_to_our_object(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """REVIEW-1f5c2754: (a) a non-empty stranger swapped into the emptied displaced path right
+    before its rmdir survives (rmdir removes at most an empty entry) and the write reports the
+    displaced object; (b) the temporary-directory cleanup removes only our own directory object."""
+    r = make_result()
+    dest = tmp_path / "late_rmdir"
+    save(r, dest)
+    aside = tmp_path / "aside_rmdir"
+
+    def swap_before_rmdir(path: Path) -> None:
+        os.rename(path, aside)
+        path.mkdir()
+        (path / "keep.txt").write_text("sentinel", encoding="utf-8")
+
+    _before(monkeypatch, "_rmdir_empty", swap_before_rmdir)
+    with pytest.raises(results.BundleDisplacedError, match="left at"):
+        save(r, dest, overwrite=True)
+    load(dest)  # the new bundle is in place
+    kept = [p for p in tmp_path.iterdir() if p.name.startswith("late_rmdir.displaced-")]
+    assert len(kept) == 1 and (kept[0] / "keep.txt").read_text(encoding="utf-8") == "sentinel"
+    assert aside.is_dir() and not list(aside.iterdir())  # the emptied validated object itself
+    monkeypatch.undo()
+    # (b) _discard_tmp: a different object at the path is left alone, our own is removed
+    ours = tmp_path / ".ionmc-tmp-ours"
+    ours.mkdir()
+    (ours / "f").write_text("x", encoding="utf-8")
+    st = os.lstat(ours)
+    os.rename(ours, tmp_path / "ours_moved")
+    ours.mkdir()
+    (ours / "keep.txt").write_text("sentinel", encoding="utf-8")
+    results._discard_tmp(ours, st)
+    assert (ours / "keep.txt").read_text(encoding="utf-8") == "sentinel"
+    os.rename(tmp_path / "ours_moved", tmp_path / "ours_back")
+    st2 = os.lstat(tmp_path / "ours_back")
+    assert (st2.st_dev, st2.st_ino) == (st.st_dev, st.st_ino)
+    results._discard_tmp(tmp_path / "ours_back", st2)
+    assert not (tmp_path / "ours_back").exists()
