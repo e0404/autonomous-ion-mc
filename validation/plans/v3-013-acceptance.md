@@ -671,3 +671,12 @@ OPEN. Not a clinical claim."
   remains the seal of this evaluation at 9f1fa8ec, its frozen manifest is kept as the record of that seal, and NO run
   or evaluation follows at the post-evaluation state (the evaluator fails closed there by design: a re-run would need
   a new seal). Not a clinical claim.
+- 2026-11-23 (orchestrator, post-evaluation closure of §D step 6): `vc-predictions.json` re-derived on the host at the
+  results commit 53d779ae (RUN-20261123T020639Z-f861724c, signed record under `host-records/`; sha256 fc255f06…,
+  replacing d0826360…). Differences to the sealed file: the `src/ionmc` tree pin (54d226da… → c5b33495…, the registry
+  append of the V-C1 record being the only source change) and the `evidence_at_run` list inside the three
+  `icru90-water-v1` identity blocks (now two records); every energy, R_def, ΔR_pred, ΔR_pred,D, informativeness
+  flag, spec_sha256, content_sha256 and table identity is unchanged. The 18 samples were graded at 9f1fa8ec against
+  the sealed pins (identity blocks with the single `consistency-only` record), which is the binding comparison; the
+  frozen manifest is kept as the record of seal 15 and no longer matches this file on disk, so the sealed evaluator
+  fails closed at this state by design (no run or evaluation follows; any re-run is a new seal). Not a clinical claim.

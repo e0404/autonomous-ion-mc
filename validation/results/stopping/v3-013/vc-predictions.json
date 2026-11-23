@@ -363,6 +363,13 @@
             "row": null,
             "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
             "status": "consistency-only"
+          },
+          {
+            "graded_at_sha": "9f1fa8ecae082307776e8001fb0708038a3eef2c",
+            "plan": "validation/plans/v3-013-acceptance.md",
+            "row": "V-C1",
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+            "status": "topas-agreement-shared-lineage:V-C1:PASS"
           }
         ],
         "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
@@ -458,6 +465,13 @@
             "row": null,
             "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
             "status": "consistency-only"
+          },
+          {
+            "graded_at_sha": "9f1fa8ecae082307776e8001fb0708038a3eef2c",
+            "plan": "validation/plans/v3-013-acceptance.md",
+            "row": "V-C1",
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+            "status": "topas-agreement-shared-lineage:V-C1:PASS"
           }
         ],
         "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
@@ -553,6 +567,13 @@
             "row": null,
             "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
             "status": "consistency-only"
+          },
+          {
+            "graded_at_sha": "9f1fa8ecae082307776e8001fb0708038a3eef2c",
+            "plan": "validation/plans/v3-013-acceptance.md",
+            "row": "V-C1",
+            "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+            "status": "topas-agreement-shared-lineage:V-C1:PASS"
           }
         ],
         "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
@@ -858,5 +879,5 @@
     "path": "validation/scripts/stopping/steps_v13.py",
     "sha256": "9bf727568654e974d2b3db923ffa0d3b9e74939635926a2df8fa317ed15136ff"
   },
-  "src_ionmc_tree": "54d226daeaa812d84bbdf430761bcb284ce364c5"
+  "src_ionmc_tree": "c5b33495898cbf45f78c72a3b7e416610d369e83"
 }
