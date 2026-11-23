@@ -209,28 +209,31 @@ def test_rep2_generator_reproduces_the_committed_fixture(tmp_path: Path) -> None
             assert a == b, rel
         elif rel.suffix == ".json":
             diffs = _diff_pointers(json.loads(a), json.loads(b))
-            foreign = [d for d in diffs if not d.startswith(TABLE_DERIVED_POINTERS)]
+            foreign = [d for d in diffs if not _TABLE_DERIVED_LEAF.fullmatch(d)]
             assert not foreign, f"{rel}: platform-independent pointers differ: {foreign}"
         else:
-            keep_a = [ln for ln in a.decode("utf-8").splitlines() if not _table_derived_line(ln)]
-            keep_b = [ln for ln in b.decode("utf-8").splitlines() if not _table_derived_line(ln)]
-            assert keep_a == keep_b, rel
+            ta, tb = _mask_table_values(a.decode("utf-8")), _mask_table_values(b.decode("utf-8"))
+            assert ta.splitlines() == tb.splitlines(), rel
 
 
-# result.json pointers whose values derive from the stopping tables (digests, ranges, step and
-# accumulator bounds computed from them) and the report lines that print such values
-TABLE_DERIVED_POINTERS = (
-    "/effective/tables", "/effective/max_steps", "/effective/tallies/channels",
-    "/provenance/data/table_sha256", "/provenance/data/table_materials",
-    "/files/report.md/sha256",
-)  # fmt: skip
-_TABLE_DERIVED_LINE = re.compile(
-    r"table sha256:|^\| max-steps \||^\| tallies \||^\| stopping-identity \|"
+# The scalar leaves of result.json whose values derive from the stopping tables (the table
+# digest, the step bound computed from the ranges, the per-channel accumulator bound, and the
+# hash of the report that prints them), and the report substrings printing those values.
+_TABLE_DERIVED_LEAF = re.compile(
+    r"/effective/tables/sha256|/provenance/data/table_sha256|/effective/max_steps"
+    r"|/effective/tallies/channels/\d+/bound_per_history|/files/report\.md/sha256"
+)
+_TABLE_VALUE_SUBSTRINGS = (
+    (re.compile(r"(table sha256: )[0-9a-f]{64}"), r"\1<table-sha256>"),
+    (re.compile(r"(/max_steps = )\d+"), r"\1<n>"),
+    (re.compile(r"(bound_per_history: )[0-9.eE+-]+"), r"\1<x>"),
 )
 
 
-def _table_derived_line(line: str) -> bool:
-    return _TABLE_DERIVED_LINE.search(line) is not None
+def _mask_table_values(text: str) -> str:
+    for pattern, repl in _TABLE_VALUE_SUBSTRINGS:
+        text = pattern.sub(repl, text)
+    return text
 
 
 def _diff_pointers(a: Any, b: Any, path: str = "") -> list[str]:

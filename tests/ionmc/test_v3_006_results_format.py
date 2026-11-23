@@ -2509,6 +2509,25 @@ def test_out11_overwrite_refuses_anything_but_an_owned_bundle(tmp_path: Path) ->
     with pytest.raises(ResultFormatError, match="symbolic link"):
         save(r, ln, overwrite=True)
     assert ln.is_symlink() and (real / "result.json").is_file()
+    # a spoofed files map naming the sentinel (REVIEW-01dd96ba): refused, the sentinel survives
+    spoof = tmp_path / "spoof"
+    spoof.mkdir()
+    (spoof / "result.json").write_text(
+        json.dumps({"schema": "ionmc.result", "files": {"sentinel.txt": {}}}), encoding="utf-8"
+    )
+    (spoof / "sentinel.txt").write_text("do not delete", encoding="utf-8")
+    with pytest.raises(ResultFormatError, match="does not load as a result bundle"):
+        save(r, spoof, overwrite=True)
+    assert (spoof / "sentinel.txt").read_text(encoding="utf-8") == "do not delete"
+    assert sorted(p.name for p in spoof.iterdir()) == ["result.json", "sentinel.txt"]
+    # a real bundle whose arrays.npz was altered: not loadable, hence not replaced
+    damaged = save(r, tmp_path / "damaged")
+    raw = bytearray((damaged / "arrays.npz").read_bytes())
+    raw[-1] ^= 0x01
+    (damaged / "arrays.npz").write_bytes(bytes(raw))
+    with pytest.raises(ResultFormatError, match="does not load as a result bundle"):
+        save(r, damaged, overwrite=True)
+    assert (damaged / "arrays.npz").read_bytes() == bytes(raw)
     # the control: an owned bundle is replaced, nothing is left behind
     save(r, real, overwrite=True)
     load(real)

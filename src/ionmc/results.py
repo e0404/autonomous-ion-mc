@@ -908,8 +908,10 @@ def not_a_result_bundle(dest: Path) -> str | None:
     a real directory (no symlink) holding a regular ``result.json`` (no symlink, at most
     MAX_JSON_BYTES) that parses as JSON with ``schema == SCHEMA`` and a ``files`` map, whose every
     other entry is a regular file named in ``files`` or the ``plots`` directory holding only such
-    files. Anything else (an unrelated directory, a sentinel file, a planted link) is never
-    renamed or deleted (REVIEW-3a75af27 finding 1)."""
+    files, AND that passes the complete tier-1 :func:`load` (schema version, strict file tree,
+    every recorded hash, every array and every invariant). Anything else (an unrelated
+    directory, a sentinel file, a planted link, a spoofed files map, a damaged bundle) is never
+    renamed or deleted (REVIEW-3a75af27 finding 1, REVIEW-01dd96ba finding 1)."""
     import stat as _stat
 
     st = os.lstat(dest)
@@ -953,6 +955,10 @@ def not_a_result_bundle(dest: Path) -> str | None:
             return f"{de.name!r} is not a regular file"
         if de.name not in files:
             return f"{de.name!r} is not listed in the bundle's files"
+    try:  # ownership is proven by the reader itself: a spoofed or damaged bundle never loads
+        load(dest)
+    except ResultFormatError as exc:
+        return f"it does not load as a result bundle ({exc})"
     return None
 
 
