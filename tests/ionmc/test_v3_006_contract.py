@@ -1230,13 +1230,19 @@ def test_cap3c_trace_count_is_reconciled_exactly() -> None:
     ev2["diagnostics"]["trace_count"] = 2
     with pytest.raises(UnsupportedCombinationError, match="trace_count: requested 1, effective 2"):
         contract.reconcile(rq, summary, ev2)
-    # more traces than histories: validate refuses the request; the realisable count of the
-    # persisted-array path is bounded by the history count all the same
+    # more traces than histories: validate refuses the request, and so does the reconciliation
+    # (uncapped: a request can never grow past the realised count)
     cfg3 = _cfg(diagnostics=DiagnosticsOptions(trace_histories=100), run={"n_histories": 40})
     with pytest.raises(UnsupportedCombinationError, match="exceeds n_histories"):
         validate(cfg3)
-    assert contract.realisable_trace_count(100, 40) == 40
-    assert contract.realisable_trace_count(0, 40) is None
+    with pytest.raises(UnsupportedCombinationError, match="at most n_histories 40"):
+        contract.requested_trace_count(41, 40)
+    assert contract.requested_trace_count(40, 40) == 40
+    assert contract.requested_trace_count(0, 40) is None
+    rq4 = copy.deepcopy(rq)
+    rq4["diagnostics"]["trace_histories"] = 41
+    with pytest.raises(UnsupportedCombinationError, match="at most n_histories 40"):
+        contract.reconcile(rq4, summary, ev)
     # from persisted origins: the length of trace_end_history
     ev3 = contract.evidence_from_origins(
         [
@@ -1267,6 +1273,21 @@ def test_cap5_writer_and_reader_refuse_a_changed_trace_count_and_tally_semantics
     _mutate(b, lambda d: d["requested"]["diagnostics"].update(trace_histories=1))
     with pytest.raises(ResultFormatError, match="trace"):
         load(b)
+    # every history traced (N of N): the request N + 1 is refused by the writer and the reader
+    full = Simulation(_cfg(run={"n_histories": 4, "n_batches": 2},
+                           diagnostics=DiagnosticsOptions(trace_histories=4))).run()  # fmt: skip
+    assert full.diagnostics["trace_end_history"].shape == (4,)
+    plus = dataclasses.replace(
+        full.requested_config, diagnostics=DiagnosticsOptions(trace_histories=5)
+    )
+    with pytest.raises((ResultFormatError, UnsupportedCombinationError), match="trace"):
+        save(dataclasses.replace(full, requested_config=plus), tmp_path / "trace5")
+    assert not (tmp_path / "trace5").exists()
+    bf = save(full, tmp_path / "trace_full")
+    load(bf)
+    _mutate(bf, lambda d: d["requested"]["diagnostics"].update(trace_histories=5))
+    with pytest.raises(ResultFormatError, match="trace"):
+        load(bf)
     r = tally_result
     for field, value in (("let_medium", "bone"), ("dose_reference", "water")):
         req = dataclasses.replace(

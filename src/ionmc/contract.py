@@ -531,8 +531,8 @@ def _row_requests(c: _Ctx) -> None:
                       ("trace_histories", rd["trace_histories"] > 0)):  # fmt: skip
         if bool(ev.get(k)) != want_d:
             raise _differ(f"diagnostics.{k}", want_d, ev.get(k))
-    want_n = realisable_trace_count(rd["trace_histories"], c.rq["run"]["n_histories"])
-    if ev.get("trace_count") != want_n:  # the exact count, not its sign
+    want_n = requested_trace_count(rd["trace_histories"], c.rq["run"]["n_histories"])
+    if ev.get("trace_count") != want_n:  # the exact uncapped count, not its sign
         raise _differ("diagnostics.trace_count", want_n, ev.get("trace_count"))
     c.add("diagnostics", EQUAL, "arrays-present", [])
     tallies, lookups = c.rq.get("tallies") or [], c.rq.get("lookups") or []
@@ -613,10 +613,14 @@ def evidence_from_origins(
     return {"geometry_digests": digests, "diagnostics": diag}
 
 
-def realisable_trace_count(trace_histories: int, n_histories: int) -> int | None:
-    """Traced primaries a run realises: ``min(trace_histories, n_histories)``
-    (transport.tally.build_diagnostics), None when no trace is requested."""
-    return min(int(trace_histories), int(n_histories)) if trace_histories > 0 else None
+def requested_trace_count(trace_histories: int, n_histories: int) -> int | None:
+    """The traced primaries a request asks for, uncapped (None without a trace). More traces
+    than histories is a request no run realises (``config.validate`` refuses it); it is refused
+    here as well, so a persisted request can never grow past the realised count."""
+    t, n = int(trace_histories), int(n_histories)
+    if t > n:
+        raise _differ("diagnostics.trace_histories", t, f"at most n_histories {n}")
+    return t if t > 0 else None
 
 
 def evidence_from_effective(effective: _cfg.EffectiveConfig) -> dict[str, Any]:
@@ -634,7 +638,7 @@ def evidence_from_effective(effective: _cfg.EffectiveConfig) -> dict[str, Any]:
         "diagnostics": {"track_end_positions": d.track_end_positions,
                         "escape_records": d.escape_records,
                         "trace_histories": d.trace_histories > 0,
-                        "trace_count": realisable_trace_count(
+                        "trace_count": requested_trace_count(
                             d.trace_histories, effective.requested.run.n_histories)},
     }  # fmt: skip
 
@@ -668,7 +672,7 @@ def reconcile(
             "diagnostics": {"track_end_positions": requested["diagnostics"]["track_end_positions"],
                             "escape_records": requested["diagnostics"]["escape_records"],
                             "trace_histories": requested["diagnostics"]["trace_histories"] > 0,
-                            "trace_count": realisable_trace_count(
+                            "trace_count": requested_trace_count(
                                 requested["diagnostics"]["trace_histories"],
                                 requested["run"]["n_histories"])},
         }  # fmt: skip

@@ -79,7 +79,6 @@ from ionmc.physics.stopping_models import (
 )
 from ionmc.physics.stopping_selection import validate_identity_block
 from ionmc.scoring import (
-    overlap_matrix,
     reduce_batches,
     reduce_ratio,
 )
@@ -889,12 +888,13 @@ def _honoured_trace(requested: bool, diag: set[Any]) -> None:
 
 
 def _honoured_trace_count(requested: int, n_histories: int, realised: list[int]) -> None:
-    """The exact trace count: ``trace_end_history`` holds ``min(trace_histories, n_histories)``
-    traced primaries (transport.tally.build_diagnostics), one array, no more and no fewer."""
-    want = min(int(requested), int(n_histories))
-    if realised != [want]:
-        raise _fail(f"trace count: requested {requested} ({want} realisable of {n_histories} "
-                    f"histories), trace_end_history holds {realised}")  # fmt: skip
+    """The exact trace count: ``trace_end_history`` holds exactly ``trace_histories`` traced
+    primaries (transport.tally.build_diagnostics), one array, no more and no fewer; a request
+    for more traces than histories is refused (no run realises it, ``validate`` refuses it)."""
+    if int(requested) > int(n_histories):
+        raise _fail(f"trace count: requested {requested} traces of {n_histories} histories")
+    if realised != [int(requested)]:
+        raise _fail(f"trace count: requested {requested}, trace_end_history holds {realised}")
 
 
 def _check_honoured(doc: dict[str, Any]) -> None:
@@ -2482,15 +2482,72 @@ def _mass_from_geometry(
         out: np.ndarray[Any, Any] = e if exit_mm is None or axis != 2 else np.minimum(e, exit_mm)
         return out
 
-    ov = [
-        overlap_matrix(
-            edges(sg["origin_mm"], sg["spacing_mm"], sg["shape"], a),
-            edges(geo["origin_mm"], geo["spacing_mm"], geo["shape"], a, geo["z_exit_mm"]),
-        )
-        for a in range(3)
-    ]
-    mass = np.einsum("ia,jb,kc,abc->ijk", *ov, rho, optimize=True) * 1.0e-3
-    return mass  # type: ignore[no-any-return]
+    return banded_voxel_mass(
+        [edges(sg["origin_mm"], sg["spacing_mm"], sg["shape"], a) for a in range(3)],
+        [edges(geo["origin_mm"], geo["spacing_mm"], geo["shape"], a, geo["z_exit_mm"])
+         for a in range(3)],
+        rho,
+    )  # fmt: skip
+
+
+_OVERLAP_CHUNK_BYTES = 64 * 1024 * 1024  # workspace bound of one banded contraction step
+
+
+def banded_overlap(
+    edges_a: np.ndarray[Any, Any], edges_b: np.ndarray[Any, Any]
+) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any], np.ndarray[Any, Any]]:
+    """The nonzero entries ``(i, j, length)`` of ``scoring.overlap_matrix(edges_a, edges_b)``
+    without the dense ``(n, m)`` matrix: both edge arrays are nondecreasing, so interval ``i``
+    of ``a`` can overlap only the band of ``b`` intervals between the one holding its lower edge
+    and the one holding its upper edge; at most ``n + m`` entries, O(n + m) memory. The lengths
+    are the same expression as the dense matrix (``clip(min(hi) - max(lo), 0)``)."""
+    a = np.asarray(edges_a, dtype=np.float64)
+    b = np.asarray(edges_b, dtype=np.float64)
+    n, m = a.size - 1, b.size - 1
+    if n <= 0 or m <= 0:
+        z = np.zeros(0, dtype=np.int64)
+        return z, z, np.zeros(0, dtype=np.float64)
+    j_lo = np.clip(np.searchsorted(b, a[:-1], side="right") - 1, 0, m - 1)
+    j_hi = np.clip(np.searchsorted(b, a[1:], side="left"), j_lo + 1, m)
+    counts = j_hi - j_lo
+    i = np.repeat(np.arange(n, dtype=np.int64), counts)
+    j = (np.arange(int(counts.sum()), dtype=np.int64)
+         - np.repeat(np.cumsum(counts) - counts, counts) + np.repeat(j_lo, counts))  # fmt: skip
+    length = np.clip(np.minimum(a[i + 1], b[j + 1]) - np.maximum(a[i], b[j]), 0.0, None)
+    keep = length > 0
+    return i[keep], j[keep], length[keep]
+
+
+def _contract_axis(
+    arr: np.ndarray[Any, Any], axis: int, n_out: int, band: tuple[Any, Any, Any]
+) -> np.ndarray[Any, Any]:
+    """``out[..., i, ...] = sum_j length[i, j] arr[..., j, ...]`` along ``axis`` with the banded
+    entries, in slabs of bounded workspace."""
+    i, j, w = band
+    src = np.moveaxis(arr, axis, 0)
+    out = np.zeros((n_out, *src.shape[1:]), dtype=np.float64)
+    slab = int(np.prod(src.shape[1:], dtype=np.int64)) * 8
+    step = max(1, _OVERLAP_CHUNK_BYTES // max(slab, 1))
+    for s0 in range(0, i.size, step):
+        sl = slice(s0, s0 + step)
+        gathered = src[j[sl]] * w[sl].reshape((-1, *([1] * (src.ndim - 1))))
+        np.add.at(out, i[sl], gathered)
+    return np.moveaxis(out, 0, axis)
+
+
+def banded_voxel_mass(
+    grid_edges: Sequence[np.ndarray[Any, Any]],
+    geometry_edges: Sequence[np.ndarray[Any, Any]],
+    rho: np.ndarray[Any, Any],
+) -> np.ndarray[Any, Any]:
+    """``scoring.voxel_mass_g`` (the overlap integral of the density over every scoring voxel,
+    g, volumes mm3 -> cm3) for an untrusted bundle: per-axis banded overlaps and three bounded
+    contractions, never a dense ``(n, m)`` overlap matrix (REVIEW-5b86e36f finding 2)."""
+    out = np.asarray(rho, dtype=np.float64)
+    for axis in range(3):
+        band = banded_overlap(grid_edges[axis], geometry_edges[axis])
+        out = _contract_axis(out, axis, int(len(grid_edges[axis]) - 1), band)
+    return out * 1.0e-3
 
 
 def _quantity_channels(doc: dict[str, Any], gname: str, qname: str) -> tuple[int, int | None]:

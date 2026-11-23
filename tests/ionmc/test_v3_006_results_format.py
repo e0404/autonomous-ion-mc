@@ -2285,3 +2285,82 @@ def test_fix12_nuclear_deuteron_interval_is_bound_to_the_model_window() -> None:
         bad["effective"]["physics"]["e_cut_deuteron_mev"] = phys  # coherent except the mismatch
         with pytest.raises(ResultFormatError, match=match):
             results._check_stopping_pins(bad)
+
+
+# ---- the reader's voxel mass without dense overlap matrices (REVIEW-5b86e36f finding 2) ------
+
+
+def test_banded_overlap_equals_the_dense_matrix() -> None:
+    """Irregular, unaligned edges with an exit plane: the banded entries are exactly the nonzero
+    entries of ``scoring.overlap_matrix`` and the banded mass equals ``voxel_mass_g`` to 1e-12."""
+    from ionmc.geometry import VoxelGeometry
+    from ionmc.scoring import overlap_matrix, voxel_mass_g
+
+    a = np.array([-1.0, 0.3, 0.7, 2.0, 2.0, 3.5])  # a zero-length interval as well
+    b = np.array([0.0, 0.5, 0.5, 1.0, 2.5, 3.0])
+    dense = overlap_matrix(a, b)
+    i, j, w = results.banded_overlap(a, b)
+    sparse = np.zeros_like(dense)
+    sparse[i, j] = w
+    assert np.array_equal(sparse, dense) and len(w) <= a.size + b.size
+    for ea, eb in ((a, np.array([5.0, 6.0])), (np.array([0.0, 1.0]), b)):
+        i, j, w = results.banded_overlap(ea, eb)
+        got = np.zeros((ea.size - 1, eb.size - 1))
+        got[i, j] = w
+        assert np.array_equal(got, overlap_matrix(ea, eb))
+    rng = np.random.default_rng(3)  # synthetic density only
+    rho = rng.uniform(0.5, 2.0, (5, 4, 7))
+    geo = VoxelGeometry((-2.5, -2.0, 0.0), (1.0, 1.0, 1.0), (5, 4, 7), (WATER,),
+                        np.zeros((5, 4, 7), dtype=np.int32), rho, z_exit_mm=6.3)  # fmt: skip
+    grid = ScoringGrid((-2.2, -1.7, 0.4), (0.7, 1.3, 1.1), (6, 3, 6))
+    want = voxel_mass_g(grid, geo)
+    gedges = [grid.edges_mm(k) for k in range(3)]
+    eedges = [geo.origin_mm[k] + geo.spacing_mm[k] * np.arange(geo.shape[k] + 1) for k in range(3)]
+    eedges[2] = np.minimum(eedges[2], 6.3)
+    got = results.banded_voxel_mass(gedges, eedges, rho)
+    assert got.shape == want.shape
+    assert np.allclose(got, want, rtol=1e-12, atol=0.0) and np.any(want > 0)
+
+
+def test_out10_skinny_geometry_and_grid_do_not_allocate_a_dense_overlap(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """A valid bundle with geometry and scoring arrays of shape [1, 1, N]: the reader's mass
+    check needs O(N) workspace, never an N x N matrix (N = 40000 would be 12.8 GB)."""
+    import ionmc.simulation as sim
+    from ionmc.geometry import VoxelGeometry
+    from ionmc.simulation import _grid_result
+
+    n = 40000
+    rho = np.full((1, 1, n), 1.0)
+    geo = VoxelGeometry((-5.0, -5.0, 0.0), (10.0, 10.0, 0.01), (1, 1, n), (WATER,),
+                        np.zeros((1, 1, n), dtype=np.int32), rho)  # fmt: skip
+    cfg = SimulationConfig(
+        PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 20.0),
+        geo,
+        (ScoringGrid((-5.0, -5.0, 0.0), (10.0, 10.0, 0.01), (1, 1, n), "dose"),),
+        PhysicsOptions(nuclear=False, stopping_model="bethe-ionmc-v1"),
+        RunOptions("python", "float64", 11, 8, n_batches=NB),
+    )
+    eff = validate(cfg)
+    # the engine's own mass uses the dense product; the synthetic result takes the banded one
+    # (equal to 1e-12 by the test above), so the test never allocates N x N itself
+    monkeypatch.setattr(sim, "voxel_mass_g", lambda g, ge: results.banded_voxel_mass(
+        [g.edges_mm(k) for k in range(3)],
+        [ge.origin_mm[k] + ge.spacing_mm[k] * np.arange(ge.shape[k] + 1) for k in range(3)],
+        ge.densities_g_cm3()))  # fmt: skip
+    rng = np.random.default_rng(5)  # synthetic arrays only
+    sums = rng.uniform(0.5, 2.0, (NB, n)) * 2.0
+    grid = _grid_result(cfg.scoring[0], sums, eff, True)
+    base = make_result()
+    in_grid = (float(np.sum(grid.energy_mev)) * 8,)
+    total = in_grid[0] + 1.0
+    bal = EnergyBalance(total + 0.25, total - 0.5, 0.5, 0.25, 0.0, 0.0, in_grid,
+                        (total - in_grid[0],))  # fmt: skip
+    r = Result(True, cfg, eff, "python", "cpu", "float64", 11, dict(eff.rng), 8, NB, (grid,),
+               bal, TransportCounters(), {"total": 0.1}, base.environment, {})  # fmt: skip
+    b = save(r, tmp_path / "skinny")
+    before = _peak_kb()
+    loaded = load(b)
+    assert _peak_kb() - before < 256 * 1024  # KiB: far below one dense N x N float64 matrix
+    assert loaded.arrays["grid__dose__mass_g"].shape == (1, 1, n)
