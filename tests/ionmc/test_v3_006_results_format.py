@@ -1862,6 +1862,7 @@ def test_fix7_rng_identity_is_the_frozen_record(bundle: Path) -> None:
 
 def _pin_doc(**over: Any) -> dict[str, Any]:
     from ionmc.physics.stopping_models import (
+        NIST_CONTENT_SHA256,
         NIST_MODEL_ID,
         STOPPING_MODELS,
         _canonical,
@@ -1884,7 +1885,8 @@ def _pin_doc(**over: Any) -> dict[str, Any]:
                     "ls_requested": "off", "ls_effective": "off"},
         "selected_by": "stopping_model",
         "range_construction": "exact-loglog-quadrature-v1",
-        "content_sha256": "a" * 64,
+        "content_sha256": NIST_CONTENT_SHA256["proton"],
+        "domain_resolved": {"proton": {"e_min_per_u": 1.0, "e_max_per_u": 500.0}},
         "species_transported": ["proton"],
         "data_declared": [_canonical(p) for p in spec.data],
         "data_used": [{"pin": pin, "role_in_this_run": "construction",
@@ -1893,7 +1895,10 @@ def _pin_doc(**over: Any) -> dict[str, Any]:
     st.update(over)
     return {
         "effective": {"stopping": st, "geometry": {"materials": ["water"]},
-                      "source": {"projectile": "proton", "z": 1}},
+                      "source": {"projectile": "proton", "z": 1, "a": 1}},
+        "effective_extra": {"materials": [{
+            "name": "water", "density_g_cm3": 1.0, "mass_fractions": {"H": 0.111894, "O": 0.888106},
+            "I_eV_requested": 78.0, "I_eV_effective": 78.0}]},
         "requested": {"physics": {"stopping_model": NIST_MODEL_ID}, "tallies": []},
     }  # fmt: skip
 
@@ -1911,7 +1916,7 @@ def test_fix7_stopping_pins_are_registry_backed() -> None:
         results._check_stopping_pins(d)
     d = _pin_doc()  # a different source projectile needs different pins
     d["effective"]["source"].update(projectile="alpha", z=2)
-    with pytest.raises(ResultFormatError, match="data_used"):
+    with pytest.raises(ResultFormatError, match="data_used|domain_resolved|content_sha256"):
         results._check_stopping_pins(d)
 
 
@@ -1920,7 +1925,8 @@ def test_fix8_stopping_identity_is_complete_and_data_used_is_an_exact_multiset()
     for key, bad in (("version", "9"), ("kind", "analytic"), ("interpolation", "x"),
                      ("range_start", "x"), ("decision", "x"), ("domain", {}),
                      ("options", {"class": "C"}), ("selected_by", "stopping-object"),
-                     ("range_construction", "other"), ("content_sha256", None)):  # fmt: skip
+                     ("range_construction", "other"), ("content_sha256", "a" * 64),
+                     ("domain_resolved", None)):  # fmt: skip
         with pytest.raises(ResultFormatError, match=key):
             results._check_stopping_pins(_pin_doc(**{key: bad}))
     d = _pin_doc()  # a duplicated use is not the multiset of the run
@@ -1928,12 +1934,22 @@ def test_fix8_stopping_identity_is_complete_and_data_used_is_an_exact_multiset()
     st["data_used"] = [st["data_used"][0], dict(st["data_used"][0])]
     with pytest.raises(ResultFormatError, match="data_used"):
         results._check_stopping_pins(d)
+    d = _pin_doc()  # a projectile the model does not support, a disallowed material
+    d["effective"]["source"].update(projectile="carbon12", z=6, a=12)
+    with pytest.raises(ResultFormatError, match="does not support"):
+        results._check_stopping_pins(d)
+    d = _pin_doc()
+    d["effective_extra"]["materials"][0]["density_g_cm3"] = 1.2
+    with pytest.raises(ResultFormatError, match="material rule"):
+        results._check_stopping_pins(d)
     d = _pin_doc()  # a material outside the geometry
     d["effective"]["stopping"]["data_used"][0]["table"] = ["proton", "bone"]
     with pytest.raises(ResultFormatError, match="data_used"):
         results._check_stopping_pins(d)
     d = _pin_doc()  # tallies add the LET water row: a missing use is detected
-    d["effective"]["geometry"]["materials"] = ["air"]
+    d["effective"]["geometry"]["materials"] = ["w2"]
+    d["effective_extra"]["materials"].append(dict(d["effective_extra"]["materials"][0], name="w2"))
+    d["effective"]["stopping"]["data_used"][0]["table"] = ["proton", "w2"]
     d["requested"]["tallies"] = [{"name": "t"}]
     with pytest.raises(ResultFormatError, match="data_used"):
         results._check_stopping_pins(d)
@@ -2117,11 +2133,70 @@ def test_fix9_history_energy_and_particle_bounds_are_derived_from_the_request(
     _mutate(bb, e_side)
     with pytest.raises(ResultFormatError, match="E_hi_mev"):
         load(bb)
-    # N side of a nuclear run: max_particles and every N bound changed together
-    d["effective"]["nuclear"] = {}
-    tl["bounds"].update(E_bound_mev=tl["bounds"]["E_hi_mev"], max_particles=64.0)
+    # sigma != 0: E_hi must be E0 + 6 sigma (the model's table cap is far above): every E bound,
+    # E_hi_mev and B_ES moved coherently to another in-range value is refused
+    d = _doc(bundle)
+    d["effective"]["source"]["energy_sigma_mev"] = 1.0
+    tl = d["effective"]["tallies"]
+
+    def set_e(e: float) -> None:
+        old = tl["bounds"]["E_hi_mev"]
+        for c in tl["channels"]:
+            if c["kind"] == "E":
+                c["bound_per_history"] = e
+        tl["bounds"]["B_ES"] *= e / old
+        tl["bounds"]["E_hi_mev"] = e
+
+    e0 = d["effective"]["source"]["kinetic_energy_mev"]
+    set_e(e0 + 3.0)
+    with pytest.raises(ResultFormatError, match="E_hi_mev"):
+        results._check_channel_numerics(d, tl["channels"])
+    # nuclear run: E_bound = max(E_hi, persisted history bound), max_particles = 32 (frozen)
+    set_e(e0 + 6.0)
+    d["effective"]["nuclear"] = {"history_energy_bound_mev": 2.0 * e0}
+    nuc = e0 * 2.0
+    for c in tl["channels"]:
+        if c["kind"] == "E":
+            c["bound_per_history"] = nuc
+    tl["bounds"].update(
+        E_bound_mev=nuc, max_particles=32.0, B_ES=tl["bounds"]["S_w_max_mev_per_mm"] * nuc
+    )
     for c in tl["channels"]:
         if c["kind"] == "N":
-            c["bound_per_history"] *= 64.0
-    with pytest.raises(ResultFormatError, match="recomputed plan|particle"):
+            c["bound_per_history"] *= 32.0
+    results._check_channel_numerics(d, tl["channels"])  # coherent and derivable: accepted
+    for c in tl["channels"]:  # E side moved coherently away from the persisted history bound
+        if c["kind"] == "E":
+            c["bound_per_history"] = 3.0 * e0
+    tl["bounds"].update(E_bound_mev=3.0 * e0, B_ES=tl["bounds"]["S_w_max_mev_per_mm"] * 3.0 * e0)
+    with pytest.raises(ResultFormatError, match="particle|energy bound"):
         results._check_channel_numerics(d, tl["channels"])
+    for c in tl["channels"]:  # N side: max_particles and every N bound moved together
+        if c["kind"] == "E":
+            c["bound_per_history"] = nuc
+        if c["kind"] == "N":
+            c["bound_per_history"] *= 2.0
+    tl["bounds"].update(
+        E_bound_mev=nuc, max_particles=64.0, B_ES=tl["bounds"]["S_w_max_mev_per_mm"] * nuc
+    )
+    with pytest.raises(ResultFormatError, match="particle|recomputed plan"):
+        results._check_channel_numerics(d, tl["channels"])
+
+
+def test_fix10_tabulated_bundle_content_digest_is_registry_bound(tmp_path: Path) -> None:
+    from ionmc.physics.stopping_models import NIST_MODEL_ID
+
+    cfg = dataclasses.replace(
+        _config(), physics=PhysicsOptions(nuclear=False, stopping_model=NIST_MODEL_ID)
+    )
+    b = save(make_result(cfg=cfg), tmp_path / "b")
+    load(b)
+    mirror = "a" * 64
+
+    def content(d: dict[str, Any]) -> None:  # mirrored into provenance: still not the registry's
+        d["effective"]["stopping"]["content_sha256"] = mirror
+        d["provenance"]["data"]["stopping_content_sha256"] = mirror
+
+    _mutate(b, content)
+    with pytest.raises(ResultFormatError, match="NIST digest"):
+        load(b)

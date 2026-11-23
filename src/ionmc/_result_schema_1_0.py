@@ -50,6 +50,27 @@ REGISTERED_SOURCE_CLASS = {
     "nist-pstar-astar-water-2005": "NistStarCombinedSource",
     "icru90-water-v1": "Icru90WaterSource",
 }
+_BETHE_E_MAX = dict.fromkeys(("proton", "deuteron", "alpha", "carbon12", "oxygen16"), 500.0)
+# resolved upper end of the energy window [MeV per nucleon] of the tables of a registered model
+# (= domain_resolved of a tabulated model; the analytic models cap at the grid end), lower end 1.0
+REGISTERED_E_MAX_PER_U = {
+    "bethe-ionmc-v1": _BETHE_E_MAX,
+    "bethe-ionmc-v1+ls-eff": _BETHE_E_MAX,
+    "bethe-ionmc-v1+ls-bare_mixed": _BETHE_E_MAX,
+    "nist-pstar-astar-water-2005": {"proton": 500.0, "alpha": 250.0},
+    "icru90-water-v1": {"proton": 500.0, "alpha": 250.0},
+}
+REGISTERED_E_MIN_PER_U = 1.0
+# material rule of a registered model: "any", "water" (structural liquid water) or "water_i78"
+REGISTERED_MATERIAL_RULE = {
+    "bethe-ionmc-v1": "any",
+    "bethe-ionmc-v1+ls-eff": "any",
+    "bethe-ionmc-v1+ls-bare_mixed": "any",
+    "nist-pstar-astar-water-2005": "water",
+    "icru90-water-v1": "water_i78",
+}
+WATER_FRACTIONS = {"H": 0.111894, "O": 0.888106}
+ICRU_I_VALUE_EV = 78.0
 CLASS_STEP = 1
 CLASS_LOCAL = 2
 DEUTERON_NAME = "deuteron"

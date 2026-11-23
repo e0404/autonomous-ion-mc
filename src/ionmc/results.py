@@ -1443,6 +1443,28 @@ def _expected_pin_datasets(model_id: str, projectile: str) -> list[str] | None:
     return None
 
 
+def _check_material_rule(doc: dict[str, Any], names: list[str], rule: str) -> None:
+    """The registered material rule of the model on the geometry materials (and the water row):
+    ``any``; structural liquid water (H and O within 1e-4 of the water fractions, density 1 within
+    1e-6); ``water_i78`` additionally a requested mean excitation energy of 78 eV."""
+    if rule == "any":
+        return
+    defs = {m["name"]: m for m in doc["effective_extra"]["materials"]}
+    defs.setdefault("water", frozen.material_definition({"name": "water"}))
+    for n in names:
+        m = defs.get(n)
+        _need(m is not None, f"material {n!r} has no persisted definition")
+        assert m is not None
+        fr = m["mass_fractions"]
+        ok = (set(fr) == set(frozen.WATER_FRACTIONS)
+              and all(abs(fr[k] - v) <= 1e-4 for k, v in frozen.WATER_FRACTIONS.items())
+              and abs(m["density_g_cm3"] - 1.0) <= 1e-6)  # fmt: skip
+        if rule == "water_i78":
+            i_req = m["I_eV_requested"] if m["I_eV_requested"] is not None else m["I_eV_effective"]
+            ok = ok and abs(i_req - frozen.ICRU_I_VALUE_EV) <= 1e-9
+        _need(ok, f"material {n!r} is outside the material rule of the stopping model")
+
+
 def _check_stopping_pins(doc: dict[str, Any]) -> None:
     """Registry-backed check of the COMPLETE derivable identity of ``effective.stopping`` (specs
     are immutable): version, kind, spec hash, interpolation, range start, decision, domain,
@@ -1491,6 +1513,18 @@ def _check_stopping_pins(doc: dict[str, Any]) -> None:
     if rq.get("tallies") and "water" not in mats:
         mats.append("water")  # the LET water row is a table of the run
     proj = eff["source"]["projectile"]
+    mid = spec.model_id
+    window = frozen.REGISTERED_E_MAX_PER_U.get(mid)
+    if window is not None:
+        _need(proj in window, f"stopping model {mid!r} does not support projectile {proj!r}")
+        _check_material_rule(doc, mats, frozen.REGISTERED_MATERIAL_RULE[mid])
+        resolved = {proj: {"e_min_per_u": frozen.REGISTERED_E_MIN_PER_U,
+                           "e_max_per_u": window[proj]}}  # fmt: skip
+        _need(st.get("domain_resolved") == (resolved if spec.kind == "tabulated" else None),
+              "effective.stopping.domain_resolved differs from the registered window")  # fmt: skip
+        if mid == NIST_MODEL_ID:  # the registry declares the content digest per projectile
+            _need(st["content_sha256"] == spec.options["content_sha256"][proj],
+                  "effective.stopping.content_sha256 differs from the NIST digest")  # fmt: skip
     ids = [] if spec.kind == "analytic" else _expected_pin_datasets(spec.model_id, proj)
     got: collections.Counter[tuple[str, str, str]] = collections.Counter()
     for use in st["data_used"]:
@@ -1745,18 +1779,27 @@ def _check_channel_numerics(doc: dict[str, Any], got: list[dict[str, Any]]) -> N
         e_hist = next(iter(ebs))
         _need(("E_bound_mev" in b) == nuclear and ("max_particles" in b) == nuclear,
               "effective.tallies.bounds nuclear entries disagree with the nuclear run")  # fmt: skip
-        # the history energy bound from the REQUESTED source: E_hi = min(E0 + 6 sigma, table
-        # maximum); the table cap is a declared limit, so E0 <= E_hi <= E0 + 6 sigma
+        # E_hi = min(E0 + 6 sigma, table maximum) as compile_channels: the table maximum of a
+        # registered model is its frozen window end (MeV/u) times the mass number; for a user
+        # stopping object it is a declared limit, so only E0 <= E_hi <= E0 + 6 sigma holds
         e0, sg = eff["source"]["kinetic_energy_mev"], eff["source"]["energy_sigma_mev"]
-        _need(e0 <= b["E_hi_mev"] <= e0 + 6.0 * sg,
-              "bounds.E_hi_mev is outside [E0, E0 + 6 sigma_E] of the source")  # fmt: skip
-        if nuclear:  # e_hist = max(E_hi, table bound): the table bound is a declared limit
-            _need(b["E_bound_mev"] == e_hist and e_hist >= b["E_hi_mev"]
+        e_hi, want = b["E_hi_mev"], e0 + 6.0 * sg
+        cap_u = frozen.REGISTERED_E_MAX_PER_U.get(eff["stopping"]["model_id_effective"], {}).get(
+            eff["source"]["projectile"])  # fmt: skip
+        if cap_u is None:
+            _need(e0 <= e_hi <= want, "bounds.E_hi_mev is outside [E0, E0 + 6 sigma_E]")
+        else:
+            cap = cap_u * eff["source"]["a"]
+            _need(e_hi == want if want < cap * (1.0 - 1e-9)
+                  else (e_hi == want or math.isclose(e_hi, cap, rel_tol=1e-9)),
+                  "bounds.E_hi_mev differs from min(E0 + 6 sigma_E, table maximum)")  # fmt: skip
+        if nuclear:  # e_hist = max(E_hi, the persisted nuclear history-energy bound)
+            e_nuc = max(e_hi, eff["nuclear"]["history_energy_bound_mev"])
+            _need(b["E_bound_mev"] == e_hist == e_nuc
                   and float(b["max_particles"]) == frozen.NUCLEAR_MAX_PARTICLES,
                   "effective.tallies.bounds energy bound or particle limit differs")  # fmt: skip
         else:
-            _need(b["E_hi_mev"] == e_hist,
-                  "the energy-channel bound differs from bounds.E_hi_mev")  # fmt: skip
+            _need(e_hi == e_hist, "the energy-channel bound differs from bounds.E_hi_mev")
         s_max, b_l = b["S_w_max_mev_per_mm"], b["B_L_mm"]
         _need(b["B_LS_mev"] == s_max * b_l and b["B_LS2"] == s_max * b["B_LS_mev"]
               and b["B_ES"] == s_max * e_hist,
@@ -2775,13 +2818,14 @@ def _binding_limits(doc: Mapping[str, Any]) -> tuple[str, ...]:
         "effective.scattering_length_g_cm2, effective.max_steps (computed) and "
         "effective.scoring_pieces derive from registry tables: integrity-protected by the file "
         "hashes only (verify_effective rebuilds them)",
-        "effective.stopping.content_sha256 (digest of the parsed table arrays: only a trusted "
-        "cache has it; verify_effective rebuilds it), domain_resolved, evidence_at_run and "
-        "circular_rows are format-checked only; identity, options, selection path, range "
-        "construction and pins are bound to the registry and the request",
-        "effective.tallies bounds S_w_max, B_L and a table cap of E_hi (primary-only run) or the "
-        "table energy bound (nuclear run) derive from registry tables: bound only through the "
-        "algebraic relations and [E0, E0 + 6 sigma_E]",
+        "effective.stopping.content_sha256 of the ICRU 90 model (the registry declares only a "
+        "model-level digest, not the per-projectile one) and of a user stopping object, and "
+        "evidence_at_run / circular_rows: format-checked only (verify_effective rebuilds them); "
+        "of a user stopping object only the class, model id, spec hash (when the model in effect "
+        "is the requested one), selection path and range construction are bound",
+        "effective.tallies bounds S_w_max and B_L (tables), the nuclear history-energy bound "
+        "(effective.nuclear) and, for a user stopping object, the table cap of E_hi: bound only "
+        "through their algebraic relations and [E0, E0 + 6 sigma_E]",
     ]
     if eff["tallies"] is not None and doc["effective_extra"]["lookup_plan"]:
         out.append(
