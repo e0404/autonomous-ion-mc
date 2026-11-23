@@ -1,9 +1,9 @@
 # 0045 — Persisted result bundle, configuration files, `ionmc run` and the requested/effective capability contract
 
-- Status: freeze candidate, second revision 2026-11-23: revised after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
-  (findings 11–15) and after Codex REVIEW-0f7aad46 of the revised S0 commit 00989a8b (findings 16–19;
-  changes_required, resolved in place). The revised S0 commit is re-reviewed; the freeze is the first S0 commit whose
-  Codex review passes (together with `validation/plans/v3-006-acceptance.md`, after an independent
+- Status: freeze candidate, third revision 2026-11-23: revised after Codex REVIEW-bd983b92 of the S0 commit 00b5e3de
+  (findings 11–15), Codex REVIEW-0f7aad46 of 00989a8b (findings 16–19) and Codex REVIEW-c8397a61 of 034e3fb8 (findings
+  20–22); each changes_required, resolved in place. The revised S0 commit is re-reviewed; the freeze is the first S0
+  commit whose Codex review passes (together with `validation/plans/v3-006-acceptance.md`, after an independent
   architecture/scientific review), before any V3-006 code exists (planner). Later changes are dated amendments;
   earlier text is kept.
 - Task: V3-006 (program plan task table: self-describing persisted results, human-readable reports and SVG plots,
@@ -141,7 +141,17 @@ A directory `<name>/`:
   bounded) and must equal the catalogue entry before data are read; decompression is streamed with a byte budget and
   stops at the declared size; `result.json` is read with a size limit. Budgets are keyword arguments of `load` (and
   options of `ionmc verify`/`report`) with safe defaults (`max_total_bytes` = 8 GiB, `max_array_bytes` = 4 GiB,
-  `max_json_bytes` = 64 MiB); any violation raises `ResultFormatError` before allocation.
+  `max_json_bytes` = 16 MiB); before `json.loads`, a single pass over the raw bytes of `result.json` (no allocation
+  proportional to content) counts `{`, `[` and string tokens and tracks the nesting depth, each against a budget
+  derived from the schema (defaults ≤ 1 000 000 containers, ≤ 1 000 000 strings, depth ≤ 64); any violation raises
+  `ResultFormatError` before allocation.
+- **Safe names and bundle-relative paths.** Every derived file and npz member name comes from a fixed safe-name
+  mapping of the user's grid, tally and lookup names: characters `[a-z0-9_-]` after lower-casing, length ≤ 64,
+  collisions resolved by an index suffix; the mapping (name → file/member) is recorded in the catalogue. Every `files`
+  entry and npz member name is bundle-relative and either single-level or `plots/<safe>.svg`: never absolute, no `..`
+  or `.` segments, no other separator, no NUL. The writer refuses anything else and never follows or creates symlinks;
+  the reader checks each entry with `os.lstat` (regular file, not a symlink) and `os.path.realpath` containment in the
+  bundle directory before opening it, and refuses (`ResultFormatError`) otherwise.
 - Writer `save(result, path, *, manifest=None, persist_batches=True, overwrite=False)` writes into a temporary sibling
   directory and renames (no partial bundle), refuses an existing path unless `overwrite`, writes an invalid result
   only when the run allowed it (`valid = false` and a banner in the report).
@@ -292,24 +302,29 @@ A directory `<name>/`:
 - **`InputManifest`** (immutable; produced by the loader): `source = "toml" | "api"`, `base_dir`, `config_file` (path,
   sha256) and `files` (one entry per referenced file: role `material_index | density | lookup:<name>`, resolved
   absolute path, file sha256 and, for arrays, `content_sha256`). It also carries `config_sha256`, the sha256 of the
-  canonical JSON of `to_dict(config)` computed by the loader, which binds it to the complete configuration. It is a
-  side carrier: `Simulation` and `SimulationConfig` are unchanged; the CLI passes it to `save(..., manifest=...)`.
-  `InputManifest.verify(config)` and `save` recompute `config_sha256` from `result.requested_config` and refuse any
-  mismatch (`ConfigError`, exit 2, no bundle): a manifest of another configuration or a configuration mutated after
-  loading is never attributed to these files. `save` re-hashes every listed file and checks every `content_sha256`
-  against the arrays of the requested config; a mismatch raises `ConfigError` (exit 2, no bundle). Without a manifest
-  `save` records `source = "api"` with `unavailable` file pointers.
+  canonical JSON of `to_dict(config, manifest=m)` computed by the loader with its own manifest `m`, which binds it to
+  the complete configuration. It is a side carrier: `Simulation` and `SimulationConfig` are unchanged; the CLI passes
+  it to `save(..., manifest=...)`. `InputManifest.verify(config)` and `save` recompute `config_sha256` as the sha256
+  of `to_dict(result.requested_config, manifest=m)` with the same manifest (deterministic by construction) and refuse
+  any mismatch (`ConfigError`, exit 2, no bundle): a manifest of another configuration or a configuration mutated
+  after loading is never attributed to these files. `save` re-hashes every listed file and checks every
+  `content_sha256` against the arrays of the requested config; a mismatch raises `ConfigError` (exit 2, no bundle).
+  Without a manifest `save` records `source = "api"` with `unavailable` file pointers.
 - **Round-trip semantics.** Equality of configurations is canonical and semantic: `to_dict` equality, arrays compared
   by `content_sha256` (`VoxelGeometry` and `LookupTable` use identity equality, `eq=False`). Reconstruction API:
-  `from_dict(d, *, manifest: InputManifest | None = None)`. `to_dict` serialises every file-backed array (voxel
-  `material_index`, density, lookup table) as a reference `{"ref": "<role>", "sha256": ..., "content_sha256": ...}`;
-  `from_dict` reloads it through the manifest entry of that role (path from the manifest, file re-hashed, content
-  digest checked); without a manifest, or with a manifest lacking the role or with a different digest, it raises
-  `ConfigError` naming the pointer. The exact round trip `to_dict(from_dict(to_dict(c), manifest=m)) == to_dict(c)` is
-  guaranteed for the reconstructible subset: every field except user `stopping` objects and arrays that exist only in
-  memory (API-created lookup tables, geometry arrays without a file); API configs without file-backed arrays need no
-  manifest. The excluded fields serialise to `{"status": "not-reconstructible", "reason": ...}` and `from_dict`
-  refuses them (`ConfigError`), never substituting a default.
+  `from_dict(d, *, manifest: InputManifest | None = None)`. Serialisation takes the manifest: `to_dict(config, *,
+  manifest: InputManifest | None = None)`. With a manifest, every array (voxel `material_index`, density, lookup
+  table) whose `content_sha256` equals a manifest file entry is emitted as the reference `{"ref": "<role>", "sha256":
+  ..., "content_sha256": ...}` (matching by content digest; an in-process array with identical content matches the
+  same reference by construction); without a manifest, or for an array without a matching entry, it is emitted as
+  `{"status": "not-reconstructible", "content_sha256": ...}`. `from_dict` reloads it through the manifest entry of
+  that role (path from the manifest, file re-hashed, content digest checked); without a manifest, or with a manifest
+  lacking the role or with a different digest, it raises `ConfigError` naming the pointer. The exact round trip
+  `to_dict(from_dict(to_dict(c, manifest=m), manifest=m), manifest=m) == to_dict(c, manifest=m)` is guaranteed for the
+  reconstructible subset: every field except user `stopping` objects and arrays that exist only in memory (API-created
+  lookup tables, geometry arrays without a file); API configs without file-backed arrays need no manifest. The
+  excluded fields serialise to `{"status": "not-reconstructible", "reason": ...}` and `from_dict` refuses them
+  (`ConfigError`), never substituting a default.
 
 
 ### 7. CLI
@@ -474,6 +489,22 @@ changes_required, four important findings, resolved in place:
     raw-byte preflight of the end-of-central-directory record bounds file size, entry count and central-directory
     size (ZIP64 included) before the archive is opened (decision 0045 §1; row OUT-10 with a programmatically built
     oversized archive).
+
+Codex REVIEW-c8397a61 (REVIEW-c8397a617d184374a1aa585b772da729, 2026-11-23) of the revised S0 commit 034e3fb8:
+changes_required, three important findings, resolved in place (CAP-1b and the ZIP preflight accepted):
+
+20. **Important.** `to_dict(config)` could not tell file-backed arrays from identical in-process arrays, so it could
+    neither emit the references nor reproduce `config_sha256` → the manifest is passed to serialisation:
+    `to_dict(config, *, manifest=None)` emits a reference for every array whose `content_sha256` matches a manifest
+    entry and `{"status": "not-reconstructible", "content_sha256": ...}` otherwise; `config_sha256` is computed and
+    recomputed with the same manifest (decision 0045 §6; rows CFG-1, CFG-7, PROV-8).
+21. **Important.** A `result.json` within the size limit could still allocate far beyond its size in `json.loads`
+    → default `max_json_bytes` lowered to 16 MiB and a single-pass structural pre-scan of the raw bytes (container,
+    string and depth budgets) before decoding (decision 0045 §1; row OUT-10).
+22. **Important.** Names from grids, tallies and lookups could become traversal paths, and the reader trusted the
+    `files` catalogue → fixed safe-name mapping for every derived file and npz member, bundle-relative single-level
+    or `plots/<safe>.svg` entries only, no symlinks, `realpath` containment and `lstat` checks in the reader, refusal
+    in the writer (decision 0045 §1; new row OUT-11).
 
 ## Later validation outcome
 
