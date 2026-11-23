@@ -498,7 +498,8 @@ OPEN. Not a clinical claim."
   reviewed infrastructure workflow; V3-INFRA-008, PR #94, develop 9926cc0, Codex REVIEW-8393f38b pass, CI green)
   and noted that `infrastructure/host_runner/host_runner.py` is part of the frozen manifest, so the previous seal
   (REVIEW-0e6ca486 at ad73d94e, pin fd30ee82) does not survive the change. develop merged into V3-013 at e0e0707e
-  (operator fast-forward, IR-20261119-083449-21B26A; the worktree git directory is read-only in the sandbox). Frozen
+  (branch fast-forwarded, actor not recorded, IR-20261119-083449-21B26A; the worktree git directory is read-only in
+  the sandbox). Frozen
   manifest regenerated at this commit: 82 sealed paths, only the `host_runner.py` hash changed; `src/ionmc` tree
   54d226da… and `vc-predictions.json` (script sha256 9bf72756…) unchanged, so no host re-derivation was needed.
   Sample definitions, tolerances, seeds and acceptance criteria are unchanged; the three timing-smoke records remain
@@ -554,7 +555,7 @@ OPEN. Not a clinical claim."
   structured intervention records are committed with the amendment: IR-20261120-111407-B2596D (request and the
   operator's response "A: amend"), and, for completeness of the V3-013 authorization trail, IR-20261118-182151-FD0238
   (cache_dir fix, "A"), IR-20261117-151541-ED9CA9 and IR-20261118-134659-22DDF8 (ancestry / fast-forward) and
-  IR-20261119-083449-21B26A (fast-forward to e0e0707e, performed by the operator; no response text was recorded).
+  IR-20261119-083449-21B26A (branch fast-forwarded to e0e0707e; actor not recorded, no response text was recorded).
   (2) The evaluator's result now records, per `backend/row` group, the run ids, whether the attestations are
   identical, the canonical `warp_modules` map shared by the group (the sha256 of every generated source and shared
   object of the fresh Warp kernel cache) and its digest (`warp_modules_sha256`, sha256 of the canonical JSON), with
@@ -573,3 +574,25 @@ OPEN. Not a clinical claim."
   started after this review finished, completion established from the signed record before the next start); the
   samples commit and its review (second pin note `samples review <id> at <sha>`); the three TOPAS smokes; the
   evidence parts 0–3; the sealed evaluator. Not a clinical claim.
+- 2026-11-23 (orchestrator, §D step 4 — ionmc samples, k = 1 after amendment A-2): the 18 ionmc samples were
+  produced at c8d70637 (seal 15 candidate 5de58656 an ancestor; sealed blobs and `src/ionmc` tree 54d226da…
+  identical), one controlled host run at a time with `timeout_seconds` 14400, every controlled start
+  (first start 13:48:17 UTC) after the seal review REVIEW-42e8dbb1 finished (13:39:50 UTC) and the pin
+  review REVIEW-cae86114 passed (13:46:18 UTC): 12 `vc2d-sample` runs (3 cases × 2 models × {python,
+  warp-cpu}; 2000 histories, MCS and straggling off) and 6 `vc-sample` runs (3 cases × 2 models; 1e6
+  histories in 40 batches, warp-cpu float64), all with the k = 1 evidence seeds (20612005 / 20612105 /
+  20612205 for `vc-sample` cases 1/2/3, 20613505 for every `vc2d-sample` run, as `step_expectation` prints them).
+  Run ids and step documents: `validation/results/stopping/v3-013/samples/index.json` and
+  `samples/<run-id>/step-stdout.txt`; signed host records: `host-records/`. Every step document: `pass`
+  true, all counters zero, identity block equal to the sealed pins, environment digests equal to
+  `seal-environment.json`, `warp_modules` identical within each backend/row group (A-2 rule; the `vc2d-sample`
+  and `vc-sample` warp-cpu groups legitimately differ: 6 vs 9 attested module files). Deterministic V-C2-D readings
+  (report-only here; the evaluator applies the gates): both backends agree on Z_m to the printed digit;
+  round-trip |Z_m − R_m(E0)|/R ≤ 1.3e-6; ΔZ_m(icru90 − default) = +0.006126 / +0.058538 / +0.162586 mm vs
+  ΔR_pred,D +0.006124 / +0.058541 / +0.162570 mm (cases 1/2/3), identical to the seal-14 k = 0 records.
+  Group digests (`warp_modules_sha256`, canonical JSON of the attested file hashes): warp-cpu/vc-sample
+  be792915d593b93ed96e919d393f880d15f5dc542942e22dc2edaec65cc4eb58 (9 files), warp-cpu/vc2d-sample
+  44ab3e0f9455e70dee4dcbfac0cd4c6be351c2b89f2ed2a4f2baab42f6072bbb (6 files); python groups null.
+  Wall times of the six `vc-sample` runs (icru90 / bethe): case 1 4363 / 3902 s, case 2 5991 / 5389 s,
+  case 3 9006 / 8463 s. No TOPAS run has been started; the samples commit's review is the second pin.
+  Not a clinical claim.

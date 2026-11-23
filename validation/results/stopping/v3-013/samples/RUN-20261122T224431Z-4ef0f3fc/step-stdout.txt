@@ -1,0 +1,456 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /workspace/validation/generated/vc-sample-case3-bethe-ionmc-v1-k1/warp-cache-vc-case3-bethe-ionmc-v1-k1/1.17.0
+Module _table_node_kernel__locals__nodes_160cf81d 930f1d7 load on device 'cpu' took 2115.30 ms  (compiled)
+Module transport_float64_plain_c272ba79 c272ba7 load on device 'cpu' took 2991.96 ms  (compiled)
+Module transport_float64_plain_c272ba79 2975782 load on device 'cpu' took 1397.51 ms  (compiled)
+#JSON-BEGIN
+{
+ "backend": "warp-cpu",
+ "case": 3,
+ "counters": {
+  "accumulator_overflow": 0,
+  "energy_inversion": 0,
+  "genealogy_overflow": 0,
+  "mcs_mapping_failure": 0,
+  "mcs_table_bracket_miss": 0,
+  "queue_overflow": 0,
+  "scoring_pieces_overflow": 0,
+  "source_energy_out_of_range": 0,
+  "stall": 0,
+  "step_truncation": 0,
+  "straggling_rejection": 0
+ },
+ "e_mev_per_u": 200.0,
+ "effective_config": {
+  "backend": "warp-cpu",
+  "chunk_histories": 262144,
+  "cpu_workers": 1,
+  "geometry": {
+   "materials": [
+    "water"
+   ],
+   "origin_mm": [
+    -60.0,
+    -60.0,
+    0.0
+   ],
+   "shape": [
+    1,
+    1,
+    1
+   ],
+   "spacing_mm": [
+    120.0,
+    120.0,
+    350.0
+   ],
+   "z_exit_mm": null
+  },
+  "max_steps": 2768,
+  "max_steps_origin": "computed",
+  "mcs_mapping": {
+   "depth_fractions": [
+    0.001,
+    0.01,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    0.9,
+    0.97
+   ],
+   "evaluation": "table",
+   "fdm_domain_edge_mev": 300.0,
+   "fdm_extrapolated": true,
+   "mapping": "exact-Omega b-matching (decision 0043 section 3)",
+   "p1v1_eq_kinetic_energy_hi_mev": 628.9560865715739,
+   "p1v1_eq_kinetic_energy_mev": 628.9560865715739,
+   "proton_table_edge_mev": 4000.0,
+   "table": {
+    "bracket_factor": 10.0,
+    "bracket_half_width_per_material": [
+     0.00047876597416927327
+    ],
+    "bracket_min": 1e-05,
+    "contract": "mapping evaluation = exact root solve on every step (Illinois iteration of b_p(pv_eq, pv_eq r) = b_ion(pv, p1v1) to |residual| <= 1e-13 or a step/bracket <= 1e-14 in ln pv_eq, float64, the root path's tolerance and status codes); the pv_eq/pv table only supplies the starting bracket (half-width max(10 x the table's interpolation estimate, 1e-5) around the bilinear guess, widened once x10, else the full proton-path bracket, counted as mcs_table_bracket_miss); a state outside the table or in a cell with an invalid node (no root at a node) has no guess and uses the full proton-path bracket from the start, as mcs_mapping_eval 'root' (not counted as a miss); the fraction of covered cells is recorded (table_coverage, 1.0 for every validated run: validation fails closed when a reachable node has no root, in both modes); the interpolation error of the table is a performance diagnostic (build-time estimate recorded), not a correctness claim",
+    "estimated_cells": 379,
+    "interp_estimate": 4.787659741692733e-05,
+    "interp_estimate_note": "build-time estimate of |ln pv_eq(table) - ln pv_eq(root)| (bilinear bound from second differences on a 2x-refined root-solve grid, safety factor 2): a performance diagnostic, not a correctness claim",
+    "interp_estimate_per_material": [
+     4.787659741692733e-05
+    ],
+    "kind": "pv_eq/pv, bilinear in (ln pv, ln(p1v1/pv)) (decision 0043 section 3)",
+    "ln_pv_range": [
+     2.751335994033482,
+     7.286256813229002
+    ],
+    "ln_r_range": [
+     9.999995000003334e-07,
+     4.53492181919502
+    ],
+    "n_materials": 1,
+    "n_pv": 128,
+    "n_r": 128,
+    "p1v1_max_mev": 1460.0965070375862,
+    "p1v1_min_mev": 1457.180688479938,
+    "pv_lo_mev": 15.663544313383198,
+    "refined_points": 2025,
+    "root_residual_tol": 1e-13,
+    "root_step_tol": 1e-14,
+    "safety_factor": 2.0,
+    "sha256": "c83864d17e32c38eaf1c1f81968391984b23db99639703cfa7dfef12c1d2b66c",
+    "table_coverage": 1.0,
+    "table_coverage_note": "fraction of the table cells meeting the band of initial states with four valid nodes; 1.0 for every validated run (validate fails closed when a reachable node has no root, in both evaluations); a state outside the table or in an uncovered cell has no starting guess and uses the full proton-path bracket, as mcs_mapping_eval 'root'; interp_estimate is None for a material without an estimated cell",
+    "table_coverage_per_material": [
+     1.0
+    ]
+   }
+  },
+  "n_batches": 40,
+  "n_histories": 1000000,
+  "physics": {
+   "delta_electrons": "local",
+   "e_cut_effective_mev": 8.0,
+   "e_cut_ion_mev_per_u": 2.0,
+   "e_cut_mev": 2.0,
+   "end_of_range_model": "default",
+   "end_of_range_model_effective": "continuous_residual_v1",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "max_energy_loss_fraction": 0.02,
+   "max_rejection_attempts": 64,
+   "max_step_mm": 1.0,
+   "mcs_model": "differential_moliere",
+   "multiple_scattering": true,
+   "nuclear": false,
+   "range_alpha": 0.2,
+   "range_rho_f_mm": 0.1,
+   "scattering_E_s_mev": 15.0,
+   "short_step_fraction": 0.01,
+   "straggling": true,
+   "straggling_model": "bohr_gamma_v1",
+   "truncated_hinge_diagnostic": false
+  },
+  "precision": "float64",
+  "production": false,
+  "rng": {
+   "counter": "(history, genealogy id, block, purpose)",
+   "generator": "philox4x32-10",
+   "key": "seed low/high 32 bits",
+   "u01": "((w >> 8) + 0.5) * 2**-24"
+  },
+  "scattering_length_g_cm2": [
+   46.88050454803533
+  ],
+  "scoring": [
+   {
+    "name": "idd",
+    "origin_mm": [
+     -60.0,
+     -60.0,
+     0.0
+    ],
+    "shape": [
+     1,
+     1,
+     3500
+    ],
+    "spacing_mm": [
+     120.0,
+     120.0,
+     0.1
+    ]
+   }
+  ],
+  "scoring_pieces": 34,
+  "seed": 20612205,
+  "source": {
+   "a": 4,
+   "energy_sigma_mev": 0.0,
+   "kinetic_energy_mev": 800.0,
+   "lateral_sigma_mm": 0.0,
+   "mass_mev": 3727.3794066,
+   "position_mm": [
+    0.0,
+    0.0,
+    -0.001
+   ],
+   "projectile": "alpha",
+   "z": 2
+  },
+  "stopping": {
+   "cache_dir": null,
+   "circular_rows": [],
+   "content_sha256": null,
+   "data_declared": [],
+   "data_used": [],
+   "decision": "0044",
+   "domain": {
+    "e_max_per_u": {
+     "alpha": 500.0,
+     "carbon12": 500.0,
+     "deuteron": 500.0,
+     "oxygen16": 500.0,
+     "proton": 500.0
+    },
+    "e_min_per_u": {
+     "alpha": 1.0,
+     "carbon12": 1.0,
+     "deuteron": 1.0,
+     "oxygen16": 1.0,
+     "proton": 1.0
+    },
+    "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+    "species": [
+     "alpha",
+     "carbon12",
+     "deuteron",
+     "oxygen16",
+     "proton"
+    ]
+   },
+   "evidence_at_run": [
+    {
+     "graded_at_sha": null,
+     "plan": "validation/plans/v3-008-acceptance.md",
+     "row": null,
+     "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+     "status": "as-graded:0043"
+    }
+   ],
+   "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+   "kind": "analytic",
+   "mcs_proton_path_stopping": "bethe-ionmc-v1",
+   "model_id_effective": "bethe-ionmc-v1",
+   "model_id_requested": "bethe-ionmc-v1",
+   "options": {
+    "barkas": true,
+    "bloch": true,
+    "class": "BetheStoppingSource",
+    "effective_charge": true,
+    "effective_charge_model": "barkas-125",
+    "i_value": "material",
+    "ls": "off",
+    "ls_effective": "off",
+    "ls_requested": "off",
+    "mott": true,
+    "points_per_decade": 200,
+    "shell": true,
+    "source_name": "bethe"
+   },
+   "range_construction": "exact-loglog-quadrature-v1",
+   "range_start": "constant-S approximation a*E_min/S(E_min)",
+   "selected_by": "stopping_model",
+   "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+   "species_transported": [
+    "alpha"
+   ],
+   "version": "1"
+  },
+  "tables": {
+   "materials": [
+    {
+     "I_eV_effective": 78.0,
+     "I_eV_requested": 78.0,
+     "content_sha256": null,
+     "dataset_id": null,
+     "e_max_mev": 2000.0,
+     "e_min_mev": 4.0,
+     "energy_axis": "total_kinetic_mev",
+     "material": "water",
+     "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+     "metadata": {
+      "I_eV": 78.0,
+      "material": "water",
+      "material_density_g_cm3": 1.0,
+      "material_mass_fractions": {
+       "H": 0.11189834407236524,
+       "O": 0.8881016559276347
+      },
+      "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+      "options": {
+       "barkas": true,
+       "bloch": true,
+       "effective_charge": true,
+       "mott": true,
+       "shell": true
+      },
+      "projectile": "alpha",
+      "range_construction": "exact-loglog-quadrature-v1",
+      "source": "bethe",
+      "start_range": "constant-S approximation a*E_min/S(E_min)"
+     },
+     "projectile": "alpha",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "source_sha256": null
+    }
+   ],
+   "n_e": 541,
+   "n_r": 3575,
+   "sha256": "2dd989046233764790c151b92be90804e2f9d39a5a27a8f60322ba8698885112",
+   "stopping_source": "bethe"
+  },
+  "tallies": null,
+  "unit_direction": [
+   0.0,
+   0.0,
+   1.0
+  ]
+ },
+ "energy_balance": {
+  "closure_residual_mev": 0.0,
+  "cutoff_mev": 7918784.098833096,
+  "escaped_mev": 0.0,
+  "in_grid_mev": [
+   799999999.9999942
+  ],
+  "initial_mev": 800000000.0,
+  "outside_mev": [
+   0.0
+  ],
+  "quantization_mev": [
+   5.881060963187532e-06
+  ],
+  "relative_residual": 0.0,
+  "step_deposit_mev": 792081215.9011669,
+  "truncated_mev": 0.0,
+  "unaccounted_mev": 0.0
+ },
+ "environment_digests": {
+  "digests": {
+   "interpreter": "56bfd38b490ae57cd942ad6a7573cef9ad6c43d1c903bdfba92fa88512953c36",
+   "numpy": "269e58d934e3bf12cfb9297db7fa4ecd70ddd8c06973b20276014a791072b497",
+   "stdlib": "1e6d8a0c0e8de46b5af59de92b7c564ec3fed5992bf0a8ce1f5e9080e8f5e89c",
+   "uv_lock": "0d7e79d3b88fd95f7b59d717efa27d6bfb9b78a435fb2ccc5b991e4347d37299",
+   "warp": "3a29fce101667eef02800a559ad9f82ea6694a8026ee7f922070db020caea02a"
+  },
+  "file_counts": {
+   "interpreter": 1,
+   "numpy": 930,
+   "stdlib": 887,
+   "uv_lock": 1,
+   "warp": 598
+  },
+  "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "schema": "ionmc-v13-environment-digests-1",
+  "sys_version": "3.12.0 (main, Oct 18 2023, 16:27:16) [GCC 11.4.0]",
+  "versions": {
+   "numpy": "2.5.3",
+   "python": "3.12.0",
+   "warp": "1.17.0"
+  }
+ },
+ "environment_digests_note": null,
+ "format": 1,
+ "frozen_histories": 1000000,
+ "git_sha": "c8d70637",
+ "histories": 1000000,
+ "ion": "he",
+ "k": 1,
+ "model": "bethe-ionmc-v1",
+ "n_batches": 40,
+ "npz": "ionmc-vc-case3-bethe-ionmc-v1-k1.npz",
+ "npz_sha256": "c979f389cb1bc6343649bf8712c15f61cf96e9bd9d20e949ea9a57ff9bf4d16c",
+ "pass": true,
+ "precision": "float64",
+ "r_index": 2,
+ "reduced": false,
+ "row": "vc-sample",
+ "seed": 20612205,
+ "seed_family": {
+  "base": 20612004,
+  "family": "ion13",
+  "k": 1,
+  "r_index": 2
+ },
+ "stopping_identity": {
+  "cache_dir": null,
+  "circular_rows": [],
+  "content_sha256": null,
+  "data_declared": [],
+  "data_used": [],
+  "decision": "0044",
+  "domain": {
+   "e_max_per_u": {
+    "alpha": 500.0,
+    "carbon12": 500.0,
+    "deuteron": 500.0,
+    "oxygen16": 500.0,
+    "proton": 500.0
+   },
+   "e_min_per_u": {
+    "alpha": 1.0,
+    "carbon12": 1.0,
+    "deuteron": 1.0,
+    "oxygen16": 1.0,
+    "proton": 1.0
+   },
+   "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+   "species": [
+    "alpha",
+    "carbon12",
+    "deuteron",
+    "oxygen16",
+    "proton"
+   ]
+  },
+  "evidence_at_run": [
+   {
+    "graded_at_sha": null,
+    "plan": "validation/plans/v3-008-acceptance.md",
+    "row": null,
+    "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+    "status": "as-graded:0043"
+   }
+  ],
+  "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+  "kind": "analytic",
+  "mcs_proton_path_stopping": "bethe-ionmc-v1",
+  "model_id_effective": "bethe-ionmc-v1",
+  "model_id_requested": "bethe-ionmc-v1",
+  "options": {
+   "barkas": true,
+   "bloch": true,
+   "class": "BetheStoppingSource",
+   "effective_charge": true,
+   "effective_charge_model": "barkas-125",
+   "i_value": "material",
+   "ls": "off",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "mott": true,
+   "points_per_decade": 200,
+   "shell": true,
+   "source_name": "bethe"
+  },
+  "range_construction": "exact-loglog-quadrature-v1",
+  "range_start": "constant-S approximation a*E_min/S(E_min)",
+  "selected_by": "stopping_model",
+  "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+  "species_transported": [
+   "alpha"
+  ],
+  "version": "1"
+ },
+ "suite": "lv13",
+ "valid": true,
+ "wall_s": 8463.350884578016,
+ "warp_modules": {
+  "1.17.0/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7.cpp": "57f41bb522c16f0a374214472c65e42f97c248c4c7ba99511fcc17fc7bc80ce4",
+  "1.17.0/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7.cpu1bc6e1db.o": "58295b8c27d19be117b05ae64a4d32a07e72b07258e3b3ed688ab14931cc28a8",
+  "1.17.0/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7.meta": "c7998788c9214860f162c8c06a143db17c2c278b18f29f81e7ec559d4052c2fa",
+  "1.17.0/wp_transport_float64_plain_c272ba79_2975782/wp_transport_float64_plain_c272ba79_2975782.cpp": "601ab77e9d29e07776ca9b939e33c85f118ab2e9a804213d5e01502fbc33179c",
+  "1.17.0/wp_transport_float64_plain_c272ba79_2975782/wp_transport_float64_plain_c272ba79_2975782.cpu1bc6e1db.o": "a42d8d74432fdf17299b2ad20646c810cc2c114428e8be92d7010bc4884c167d",
+  "1.17.0/wp_transport_float64_plain_c272ba79_2975782/wp_transport_float64_plain_c272ba79_2975782.meta": "004c548b108d6977573f57ce7707af827bab157924d730e1727f5c362fd1bef4",
+  "1.17.0/wp_transport_float64_plain_c272ba79_c272ba7/wp_transport_float64_plain_c272ba79_c272ba7.cpp": "39e0e2fb34927051ff13320000a566e78ad01b42b50f8212eed86d4daf2a5bfe",
+  "1.17.0/wp_transport_float64_plain_c272ba79_c272ba7/wp_transport_float64_plain_c272ba79_c272ba7.cpu1bc6e1db.o": "7c196043be1b3a5aae6df5e6936662a5c192e679835c42782ab69c2981c7b092",
+  "1.17.0/wp_transport_float64_plain_c272ba79_c272ba7/wp_transport_float64_plain_c272ba79_c272ba7.meta": "004c548b108d6977573f57ce7707af827bab157924d730e1727f5c362fd1bef4"
+ }
+}
+#JSON-END
