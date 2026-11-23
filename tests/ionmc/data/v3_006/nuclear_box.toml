@@ -1,0 +1,37 @@
+# Documented example 6 (synthetic, tiny; step S6): a 100 MeV proton pencil beam on a water box
+# with nuclear = true (python backend). "@TABLE_ID@" is a placeholder: test_v3_006_cli.py
+# substitutes the id of a built nuclear table of the cache (IONMC_CACHE_DIR) and skips the case
+# without one (fail under IONMC_REQUIRE_DATA=1 or IONMC_LV_TIER=1). Not loadable unsubstituted.
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[source]
+projectile = "proton"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 100.0
+
+[geometry]
+type = "box"
+lower_mm = [-10.0, -10.0, 0.0]
+size_mm = [20.0, 20.0, 100.0]
+material = "water"
+
+[[scoring]]
+name = "dose"
+origin_mm = [-10.0, -10.0, 0.0]
+spacing_mm = [10.0, 10.0, 10.0]
+shape = [2, 2, 10]
+
+[physics]
+nuclear = true
+nuclear_table_id = "@TABLE_ID@"
+stopping_model = "bethe-ionmc-v1"
+multiple_scattering = false
+
+[run]
+backend = "python"
+precision = "float64"
+seed = 16
+n_histories = 4
+n_batches = 2

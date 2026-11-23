@@ -1,0 +1,36 @@
+# Documented example 5 (synthetic, tiny; step S6): a proton pencil beam on a water box with the
+# ICRU 90 stopping model (icru90-water-v1, python backend). Needs the cached dataset
+# geant4-icru90-stopping-11.4.2; used by the CLI tests (test_v3_006_cli.py), which skip it
+# without the dataset (fail under IONMC_REQUIRE_DATA=1 or IONMC_LV_TIER=1). 8 histories.
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[source]
+projectile = "proton"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 20.0
+
+[geometry]
+type = "box"
+lower_mm = [-10.0, -10.0, 0.0]
+size_mm = [20.0, 20.0, 20.0]
+material = "water"
+
+[[scoring]]
+name = "dose"
+origin_mm = [-10.0, -10.0, 0.0]
+spacing_mm = [5.0, 5.0, 2.0]
+shape = [4, 4, 10]
+
+[physics]
+nuclear = false
+stopping_model = "icru90-water-v1"
+multiple_scattering = false
+
+[run]
+backend = "python"
+precision = "float64"
+seed = 15
+n_histories = 8
+n_batches = 4
