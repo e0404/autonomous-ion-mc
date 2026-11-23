@@ -23,7 +23,9 @@ Nothing here makes a claim about combinations outside the enumerated dimensions.
 
 from __future__ import annotations
 
+import hashlib
 import itertools
+import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -200,7 +202,7 @@ RECONCILIATION_TABLE: tuple[Row, ...] = (
         "equal:arrays-present",
         "the arrays are checked by the honoured check of save and load",
     ),  # fmt: skip
-    _r("tallies", "tallies", "/tallies/quantities", "equal:in-channel-plan"),
+    _r("tallies", "tallies", "/tallies/channels /tallies/quantities", "equal:in-channel-plan"),
     _r("lookups", "lookups", "/tallies/lookups", "equal:in-channel-plan"),
 )
 ROWS: Mapping[str, Row] = {r.id: r for r in RECONCILIATION_TABLE}
@@ -252,8 +254,10 @@ def _differ(what: str, requested: Any, effective: Any) -> UnsupportedCombination
 
 
 class _Ctx:
-    def __init__(self, rq: Mapping[str, Any], eff: Mapping[str, Any]) -> None:
-        self.rq, self.eff = rq, eff
+    def __init__(
+        self, rq: Mapping[str, Any], eff: Mapping[str, Any], evidence: Mapping[str, Any]
+    ) -> None:
+        self.rq, self.eff, self.evidence = rq, eff, evidence
         self.out: list[Resolution] = []
 
     def need(self, what: str, requested: Any, pointer: str) -> Any:
@@ -331,6 +335,13 @@ def _row_geometry(c: _Ctx) -> None:
     got = {k: _norm(geo.get(k, _ABSENT)) for k in want}
     if got != want:
         raise _differ("geometry", want, got)
+    if rg["type"] == "voxel":
+        have = c.evidence["geometry_digests"]
+        for role in ("material_index", "density"):
+            rec = rg.get(role)
+            want_d = None if rec is None else rec.get("content_sha256")
+            if have.get(role) != want_d:
+                raise _differ(f"geometry.{role} content digest", want_d, have.get(role))
     c.add(row, cls, rule, ROWS[row].pointers)
     scoring = c.need("scoring", c.rq["scoring"], "/scoring")
     rs = c.rq["scoring"]
@@ -341,6 +352,41 @@ def _row_geometry(c: _Ctx) -> None:
             if _norm(g.get(k, _ABSENT)) != _norm(w[k]):
                 raise _differ(f"scoring[{i}].{k}", w[k], g.get(k, _ABSENT))
     c.add("scoring", EQUAL, "equal", ["/scoring"])
+
+
+def _material_fingerprint(record: Mapping[str, Any]) -> str:
+    """sha256 of the complete definition of a requested material, by the frozen schema's
+    definition (no live registry): the digest ``transport.tables.material_fingerprint`` records in
+    the table identity (composition, density, requested I, density-effect parameters)."""
+    d = frozen.material_definition(dict(record))
+    payload = {
+        "name": d["name"],
+        "density_g_cm3": float(d["density_g_cm3"]),
+        "mass_fractions": {k: float(d["mass_fractions"][k]) for k in sorted(d["mass_fractions"])},
+        "I_eV": None if d["I_eV_requested"] is None else float(d["I_eV_requested"]),
+        "sternheimer": d["sternheimer"],
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def _check_material_identities(c: _Ctx) -> None:
+    """``/tables/materials`` names, in order, the geometry materials with the fingerprint of the
+    COMPLETE requested definition (composition, density, I, density-effect parameters)."""
+    rg = c.rq["geometry"]
+    names = rg["materials"] if rg["type"] == "voxel" else [rg["material"]]
+    defs = {m["name"]: m for m in c.rq.get("materials", [])}
+    got = c.need("tables.materials", names, "/tables/materials")
+    if not isinstance(got, list) or len(got) != len(names):
+        raise _differ("tables.materials (count)", len(names), got)
+    for name, ident in zip(names, got, strict=True):
+        try:
+            want = _material_fingerprint(defs[name])
+        except (KeyError, ValueError, TypeError) as exc:
+            raise _differ(f"materials[{name}] definition", name, repr(exc)) from exc
+        if ident.get("material") != name or ident.get("material_sha256") != want:
+            raise _differ(f"materials[{name}] (name and definition fingerprint)",
+                          {"material": name, "material_sha256": want},
+                          {k: ident.get(k) for k in ("material", "material_sha256")})  # fmt: skip
 
 
 def _row_stopping(c: _Ctx, z: int) -> None:
@@ -367,6 +413,7 @@ def _row_stopping(c: _Ctx, z: int) -> None:
     has_water = pointer_resolves(eff, "/tables/water_row")
     if has_water != bool(c.rq.get("tallies")):
         raise _differ("tallies (LET water row)", bool(c.rq.get("tallies")), has_water)
+    _check_material_identities(c)
     c.add("stopping-identity", DERIVED, "deuteron-and-water-row",
           ROWS["stopping-identity"].pointers[:2]
           + (("/tables/water_row",) if has_water else ()))  # fmt: skip
@@ -476,6 +523,13 @@ def _row_run(c: _Ctx, z: int) -> None:
 
 
 def _row_requests(c: _Ctx) -> None:
+    rd = c.rq["diagnostics"]
+    ev = c.evidence["diagnostics"]
+    for k, want_d in (("track_end_positions", bool(rd["track_end_positions"])),
+                      ("escape_records", bool(rd["escape_records"])),
+                      ("trace_histories", rd["trace_histories"] > 0)):  # fmt: skip
+        if bool(ev.get(k)) != want_d:
+            raise _differ(f"diagnostics.{k}", want_d, ev.get(k))
     c.add("diagnostics", EQUAL, "arrays-present", [])
     tallies, lookups = c.rq.get("tallies") or [], c.rq.get("lookups") or []
     plan = c.eff.get("tallies")
@@ -483,36 +537,114 @@ def _row_requests(c: _Ctx) -> None:
         if not isinstance(plan, Mapping):
             raise _differ("tallies/lookups", f"{len(tallies)} tallies, {len(lookups)} lookups",
                           "no channel plan")  # fmt: skip
-    plan_map: Mapping[str, Any] = plan if isinstance(plan, Mapping) else {}
-    if tallies:
-        names = {q.get("name") for q in plan_map["quantities"]}
-        want = {t["name"] for t in tallies}
-        if names != want:
-            raise _differ("tallies", sorted(want), sorted(map(str, names)))
-        c.add("tallies", EQUAL, "in-channel-plan", ["/tallies/quantities"])
-    else:
+    if not tallies:
         if plan is not None:
             raise _differ("tallies", [], "a channel plan")
         c.add("tallies", EQUAL, "in-channel-plan", [])
-    if len(plan_map.get("lookups", []) if lookups else []) != len(lookups):
-        raise _differ("lookups", len(lookups), len(plan_map.get("lookups", [])) if plan else 0)
+        c.add("lookups", EQUAL, "in-channel-plan", [])
+        return
+    assert isinstance(plan, Mapping)
+    from ionmc.results import ResultFormatError, derive_channel_plan
+
+    lk = plan.get("lookups", [])
+    if len(lk) != len(lookups):
+        raise _differ("lookups", len(lookups), len(lk))
+    for i, (r, e) in enumerate(zip(lookups, lk, strict=True)):  # identity, not count
+        for k in ("units", "content_sha256"):
+            if r.get(k) != e.get(k):
+                raise _differ(f"lookups[{i}].{k}", r.get(k), e.get(k))
+    try:
+        channels, quantities, total, n_res = derive_channel_plan(c.rq, [e["name"] for e in lk])
+    except (KeyError, ValueError, TypeError, ResultFormatError) as exc:
+        raise _differ("tallies (channel plan derivation)", len(tallies), repr(exc)) from exc
+    got = plan.get("channels", [])
+    if len(got) != len(channels):
+        raise _differ("tallies (channel count)", len(channels), len(got))
+    for i, (g, w) in enumerate(zip(got, channels, strict=True)):
+        core = {k: v for k, v in g.items() if k not in ("k", "bound_per_history")}
+        if core != w:
+            raise _differ(f"tallies.channels[{i}] (kind, grid, species, generation, lookup, "
+                          "spectrum, size, offset)", w, core)  # fmt: skip
+    if plan.get("quantities") != quantities:
+        raise _differ("tallies.quantities (name, kind, channels, units, definition)", quantities,
+                      plan.get("quantities"))  # fmt: skip
+    hpb = c.rq["run"]["n_histories"] // c.rq["run"]["n_batches"]
+    sizes = {"n_channels": len(channels), "total_size": total, "n_residual_columns": n_res,
+             "histories_per_batch": hpb}  # fmt: skip
+    if {k: plan.get(k) for k in sizes} != sizes:
+        raise _differ("tallies sizes", sizes, {k: plan.get(k) for k in sizes})
+    c.add("tallies", EQUAL, "in-channel-plan", ["/tallies/channels", "/tallies/quantities"])
     c.add("lookups", EQUAL, "in-channel-plan", ["/tallies/lookups"] if lookups else [])
 
 
-def reconcile(requested: Any, effective: Any) -> tuple[Resolution, ...]:
+def evidence_from_origins(
+    entries: Iterable[tuple[Mapping[str, Any], str | None]],
+) -> dict[str, Any]:
+    """The independent evidence ``reconcile`` compares with the request, from persisted arrays:
+    ``(origin, content_sha256)`` of the geometry arrays (the digest is only read for them) and the
+    presence of the diagnostic arrays (end positions, escape history, trace)."""
+    digests: dict[str, str | None] = {"material_index": None, "density": None}
+    diag = {"track_end_positions": False, "escape_records": False, "trace_histories": False}
+    for origin, digest in entries:
+        if origin["kind"] == "geometry":
+            digests[{"density_g_cm3": "density"}.get(origin["array"], origin["array"])] = digest
+        elif origin["kind"] == "diagnostic":
+            a = str(origin["array"])
+            diag["track_end_positions"] |= a == "end_position_mm"
+            diag["escape_records"] |= a == "escape_history"
+            diag["trace_histories"] |= a.startswith("trace_")
+    return {"geometry_digests": digests, "diagnostics": diag}
+
+
+def evidence_from_effective(effective: _cfg.EffectiveConfig) -> dict[str, Any]:
+    """The same evidence from the effective configuration objects the engine is built from: the
+    content digests of ITS geometry arrays and ITS diagnostics options."""
+    from ionmc.configio import array_content_sha256
+
+    geom, d = effective.geometry, effective.requested.diagnostics
+    mi, rho = geom.material_index, geom.density_g_cm3
+    return {
+        "geometry_digests": {
+            "material_index": None if mi is None else array_content_sha256(mi),
+            "density": None if rho is None else array_content_sha256(rho),
+        },
+        "diagnostics": {"track_end_positions": d.track_end_positions,
+                        "escape_records": d.escape_records,
+                        "trace_histories": d.trace_histories > 0},
+    }  # fmt: skip
+
+
+def reconcile(
+    requested: Any, effective: Any, evidence: Mapping[str, Any] | None = None
+) -> tuple[Resolution, ...]:
     """Requested -> effective reconciliation (decision 0045 section 4 item 3), pure.
 
     ``requested`` is a ``SimulationConfig`` or its ``configio.to_dict`` form; ``effective`` an
     ``EffectiveConfig`` or its ``summary()`` dict. Returns one :class:`Resolution` per table row
     and raises ``UnsupportedCombinationError("... requested X, effective Y")`` for any difference
-    outside the table and for a requested feature without its effective implementation object."""
+    outside the table and for a requested feature without its effective implementation object.
+
+    ``evidence`` (``evidence_from_origins`` / ``evidence_from_effective``) carries what the
+    effective summary does not: the content digests of the voxel material-index and density arrays
+    and the diagnostics realised. Without it (a bare-dict call) the request itself stands in for
+    it, so those two comparisons are trivial; ``Simulation``, ``save`` and ``load`` always pass
+    it."""
     if isinstance(requested, _cfg.SimulationConfig):
         from ionmc.configio import to_dict
 
         requested = to_dict(requested)
     if isinstance(effective, _cfg.EffectiveConfig):
         effective = effective.summary()
-    c = _Ctx(requested, effective)
+    if evidence is None:
+        rg = requested["geometry"]
+        evidence = {
+            "geometry_digests": {r: (rg.get(r) or {}).get("content_sha256") or None
+                                 for r in ("material_index", "density")},
+            "diagnostics": {"track_end_positions": requested["diagnostics"]["track_end_positions"],
+                            "escape_records": requested["diagnostics"]["escape_records"],
+                            "trace_histories": requested["diagnostics"]["trace_histories"] > 0},
+        }  # fmt: skip
+    c = _Ctx(requested, effective, evidence)
     try:
         z = int(pointer_get(effective, "/source/z"))
     except (TypeError, ValueError) as exc:
@@ -663,7 +795,7 @@ class Matrix:
     backends: tuple[str, ...] = tuple(_cfg.BACKENDS)
     precisions: tuple[str, ...] = tuple(_cfg.PRECISIONS)
     nuclear: tuple[bool, ...] = (False, True)
-    tallies: tuple[bool, ...] = (False, True)
+    tallies: tuple[str, ...] = ("none", "let")  # modes: none | let | full (every quantity + lookup)
     trace: tuple[bool, ...] = (False, True)
     models: tuple[str, ...] = ("bethe-ionmc-v1", "bethe-ionmc-v1+ls-eff",
                                "bethe-ionmc-v1+ls-bare_mixed")  # fmt: skip
@@ -689,7 +821,7 @@ class Outcome:
     backend: str
     precision: str
     nuclear: bool
-    tallies: bool
+    tallies: str
     trace: bool
     model: str
     workers: int
@@ -712,7 +844,7 @@ def _declare(case: Mapping[str, Any]) -> tuple[str, str]:
             and mat.name != "water"):  # fmt: skip
         return UNSUPPORTED, "material-not-in-model-domain"
     status, rule = run_combination_status(case["backend"], case["precision"], case["nuclear"],
-                                          case["tallies"], case["trace"], case["workers"],
+                                          case["tallies"] != "none", case["trace"], case["workers"],
                                           sp)  # fmt: skip
     if status == UNSUPPORTED:
         return status, rule
@@ -723,10 +855,49 @@ def _declare(case: Mapping[str, Any]) -> tuple[str, str]:
     return status, rule
 
 
+def _synthetic_lookup() -> Any:
+    """A built-in-code lookup table covering every swept species and the LET range the transport
+    reaches (0 to 10 000 keV/um; no file, no cache)."""
+    from ionmc.lookup import LookupTable, resample_uniform
+
+    names = sorted({*(sp.name for sp in SPECIES), "deuteron"})
+    axis, values, record = resample_uniform(
+        [0.0, 100.0, 5000.0, 10000.0], {n: [1.0, 1.1, 1.3, 1.4] for n in names}, n_points=5,
+        spacing="linear",
+    )  # fmt: skip
+    return LookupTable("synthetic", "synthetic factor", "1", "let_water_kev_um", "linear", axis,
+                       values, "synthetic citation", "CC0-1.0", "built in the contract sweep",
+                       True, resampling=record)  # fmt: skip
+
+
+def _tally_mode(mode: str, species: str = "proton") -> tuple[Any, ...]:
+    """The tallies of a sweep mode: none, one LET, or one of every quantity (with the lookup); the
+    species-filtered quantity names the swept beam, the only species every engine produces."""
+    from ionmc.scoring import TallyRequest
+
+    if mode == "none":
+        return ()
+    if mode == "let":
+        return (TallyRequest("let", "dose", "let_d"),)
+    if mode != "full":
+        raise ValueError(f"unknown tally mode {mode!r}")
+    g = "dose"
+    return (
+        TallyRequest("edep", g, "edep"), TallyRequest("dose", g, "dose"),
+        TallyRequest("flu", g, "fluence"), TallyRequest("lt", g, "let_t"),
+        TallyRequest("ld", g, "let_d", generation="primary"),
+        TallyRequest("lde", g, "let_d_eps", species=(species,)),
+        TallyRequest("ls", g, "lookup_sum", lookup="synthetic"),
+        TallyRequest("lda", g, "lookup_dose_avg", lookup="synthetic"),
+        TallyRequest("spec", g, "fluence_spectrum",
+                     energy_edges_mev_per_u=(1.0, 101.0, 201.0, 301.0, 401.0)),
+    )  # fmt: skip
+
+
 def build_config(case: Mapping[str, Any]) -> Any:
     """The tiny ``SimulationConfig`` of one swept case (never run, only validated)."""
     from ionmc.materials import WATER
-    from ionmc.scoring import ScoringGrid, TallyRequest
+    from ionmc.scoring import ScoringGrid
 
     sp = case["species"]
     mat = case["material"]
@@ -744,7 +915,8 @@ def build_config(case: Mapping[str, Any]) -> Any:
             case["backend"], case["precision"], 1, 40, n_batches=4, cpu_workers=case["workers"]
         ),  # fmt: skip
         _cfg.DiagnosticsOptions(trace_histories=1 if case["trace"] else 0),
-        tallies=(TallyRequest("let", "dose", "let_d"),) if case["tallies"] else (),
+        tallies=_tally_mode(case["tallies"], sp.name),
+        lookups=(_synthetic_lookup(),) if case["tallies"] == "full" else (),
     )
 
 

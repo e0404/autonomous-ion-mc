@@ -21,6 +21,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -94,6 +95,68 @@ def _nuclear_table_id_or_none() -> str | None:
     return None
 
 
+class _SyntheticNuclearTable:
+    """A cache-free stand-in for ``NuclearTable`` that carries exactly what ``validate`` and the
+    effective summary read (energy bounds, path-bound terms, identity fields, per-material rows).
+    It is installed with ``NuclearTable.load`` patched, so every nuclear cell of the sweep runs the
+    real ``validate`` nuclear branch (species/material/energy rules, deuteron tables, summary)."""
+
+    table_id = "synthetic-nuclear-ci"
+
+    def __init__(self) -> None:
+        term = {"n_max": 1.0, "t_lab_max_mev": 250.0}
+        self.info = {
+            "schema": "synthetic", "builder_version": "synthetic", "npz_sha256": "0" * 64,
+            "sources": {}, "elements": {}, "q_plus_table_mev": 0.0, "recoil_t_max_mev": 1.0,
+            "transport_energy_bound_mev": 250.0, "history_energy_bound_mev": 250.0,
+            "transport_path_bound_terms": {"p": dict(term), "d": dict(term)},
+            "grid": {"n_points": 2}, "multiplicity": {"model": "synthetic"},
+        }  # fmt: skip
+
+    def material_rows(self, material: Any) -> Any:
+        import types
+
+        return types.SimpleNamespace(f_e=1.0, material=material)
+
+
+SYNTHETIC_NUCLEAR_ID = _SyntheticNuclearTable.table_id
+
+
+def _patch_synthetic_nuclear(monkeypatch: pytest.MonkeyPatch) -> str:
+    from ionmc.nuclear.tables import NuclearTable
+
+    table = _SyntheticNuclearTable()
+    monkeypatch.setattr(NuclearTable, "load", classmethod(lambda cls, cache_dir, tid: table))
+    return SYNTHETIC_NUCLEAR_ID
+
+
+def _nuclear_boundary(monkeypatch: pytest.MonkeyPatch) -> str:
+    """The nuclear table the cells are evaluated with. LV tier (IONMC_LV_TIER=1): the real cached
+    table, whose absence FAILS. Lightweight CI: the synthetic boundary above. Never 'not
+    evaluated'."""
+    if os.environ.get("IONMC_LV_TIER") == "1":
+        tid = _nuclear_table_id_or_none()
+        if tid is None:
+            pytest.fail("a built nuclear table is required in the local-validation tier")
+        return _memoize_real_nuclear(monkeypatch, tid)
+    return _patch_synthetic_nuclear(monkeypatch)
+
+
+def _memoize_real_nuclear(monkeypatch: pytest.MonkeyPatch, tid: str) -> str:
+    """The real cached table, loaded once for the sweep instead of once per nuclear cell (the
+    cells read the same object ``validate`` would load; any other table id loads as usual)."""
+    from ionmc.nuclear.tables import NuclearTable
+
+    real_load = NuclearTable.load
+    table = real_load(None, tid)
+
+    def load(cls: Any, cache_dir: Any, table_id: str) -> Any:
+        return table if table_id == tid else real_load(cache_dir, table_id)
+
+    monkeypatch.setattr(NuclearTable, "load", classmethod(load))
+    return tid
+
+
 def _cfg(
     species: Any = PROTON,
     energy: float = 20.0,
@@ -130,15 +193,15 @@ def _bad(outcomes: list[contract.Outcome]) -> list[contract.Outcome]:
     return [o for o in outcomes if o.verdict in ("third", "disagree")]
 
 
-def test_cap1a_sweep_declared_equals_enforced() -> None:
-    tid = _nuclear_table_id_or_none()
+def test_cap1a_sweep_declared_equals_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
+    tid = _nuclear_boundary(monkeypatch)
     matrix = contract.Matrix(nuclear_table_id=tid)
     assert matrix.size() == 4 * 4 * 3 * 2 * 2 * 2 * 2 * 3 == 2304  # not vacuous
     out = contract.sweep(matrix)
     assert len(out) == matrix.size()
     assert _bad(out) == []  # zero third outcomes and zero disagreements
     counts = contract.summarise(out)
-    print("CAP-1a sweep", len(out), counts, "nuclear table:", tid is not None)
+    print("CAP-1a sweep", len(out), counts, "nuclear table:", tid)
     supported = [o for o in out if o.actual == contract.OK]
     refused = [o for o in out if o.actual == contract.UNSUPPORTED]
     unavailable = [o for o in out if o.actual == contract.UNAVAILABLE]
@@ -147,12 +210,12 @@ def test_cap1a_sweep_declared_equals_enforced() -> None:
     for dc, expect in (("below", False), ("inside", True), ("upper-edge", True), ("above", False)):
         cases = [o for o in out if o.species == "proton" and o.domain_class == dc
                  and o.backend == "python" and o.precision == "float64" and not o.nuclear
-                 and not o.tallies and not o.trace and o.model == BETHE]  # fmt: skip
+                 and o.tallies == "none" and not o.trace and o.model == BETHE]  # fmt: skip
         assert len(cases) == 1 and (cases[0].actual == contract.OK) is expect, (dc, cases)
     # an ion at the edges (domain of decision 0043 section 5)
     edge = [o for o in out if o.species == "alpha" and o.domain_class == "upper-edge"
             and o.backend == "python" and o.precision == "float64" and not o.nuclear
-            and not o.tallies and not o.trace and o.model == BETHE]  # fmt: skip
+            and o.tallies == "none" and not o.trace and o.model == BETHE]  # fmt: skip
     assert edge[0].actual == contract.OK
     if config.cuda_available():
         assert not unavailable
@@ -162,22 +225,36 @@ def test_cap1a_sweep_declared_equals_enforced() -> None:
         ]
         assert cuda_ok and all(o.actual == contract.UNAVAILABLE for o in cuda_ok)
         assert len(unavailable) == len(cuda_ok)
-    if tid is None:
-        pending = [o for o in out if o.verdict == "not-evaluated"]
-        assert pending and all(o.nuclear and o.backend == "python" for o in pending)
-    else:
-        assert counts.get("not-evaluated", 0) == 0
+    assert counts.get("not-evaluated", 0) == 0  # every nuclear cell is evaluated, in every tier
+    nuclear_ok = [o for o in out if o.nuclear and o.declared == contract.OK]
+    assert nuclear_ok and all(o.actual == contract.OK for o in nuclear_ok)
 
 
-def test_cap1a_declared_run_combinations_equal_validate_including_workers() -> None:
-    tid = _nuclear_table_id_or_none()
+def test_cap1a_nuclear_cells_on_the_synthetic_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cache-free in every tier: the nuclear cells (proton, alpha, carbon) run the real validate
+    nuclear branch against the synthetic table, so declared-vs-enforced of nuclear is checked in
+    the lightweight CI as well."""
+    tid = _patch_synthetic_nuclear(monkeypatch)
+    matrix = contract.Matrix(nuclear=(True,), backends=("python", "warp-cpu"), nuclear_table_id=tid)
+    out = contract.sweep(matrix)
+    assert len(out) == matrix.size() == 4 * 4 * 2 * 2 * 1 * 2 * 2 * 3
+    assert _bad(out) == []
+    assert not [o for o in out if o.verdict == "not-evaluated"]
+    ok = [o for o in out if o.declared == contract.OK]
+    assert ok and all(o.actual == contract.OK and o.backend == "python" for o in ok)
+    refused = {(o.species == "proton", o.backend) for o in out if o.actual == contract.UNSUPPORTED}
+    assert (True, "warp-cpu") in refused and (False, "python") in refused  # ion + backend rules
+
+
+def test_cap1a_declared_run_combinations_equal_validate_including_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tid = _nuclear_boundary(monkeypatch)
     declared = contract.declared_capabilities()["run_combinations"]
     assert len(declared) == 3 * 2 * 2 * 2 * 2 * 2
     seen: set[str] = set()
     for d in declared:
         w = 2 if d["workers_above_one"] else 1
-        if d["nuclear"] and d["status"] == contract.OK and tid is None:
-            continue  # needs the nuclear table of the cache
         cfg = _cfg(
             energy=100.0,
             physics={"nuclear": d["nuclear"], "nuclear_table_id": tid if d["nuclear"] else None},
@@ -200,28 +277,91 @@ def test_cap1a_declared_run_combinations_equal_validate_including_workers() -> N
 
 
 def test_cap1b_cache_backed_tabulated_models_sweep() -> None:
+    """The frozen matrix: species x domain class x backend x precision x nuclear x tally mode
+    {none, LET, full set with a synthetic lookup} x trace x tabulated model x material {water,
+    PMMA}. LV tier: a missing cache object FAILS (``_require_datasets``), never skips there."""
     _require_datasets("nist-pstar-water-2005", "geant4-icru90-stopping-11.4.2")
+    tid = _nuclear_table_id_or_none()
+    if tid is None:
+        pytest.fail("a built nuclear table is required for the cache-backed matrix")
     matrix = contract.Matrix(
         species=(PROTON, ALPHA, CARBON12),
         models=("nist-pstar-astar-water-2005", "icru90-water-v1"),
         nuclear=(False, True),
+        tallies=("none", "let", "full"),
+        trace=(False, True),
         materials=(WATER, PMMA),
-        nuclear_table_id=_nuclear_table_id_or_none(),
+        nuclear_table_id=tid,
     )
     out = contract.sweep(matrix)
-    assert len(out) == matrix.size() == 3 * 4 * 3 * 2 * 2 * 2 * 2 * 2 * 2
+    assert matrix.size() == 3 * 4 * 3 * 2 * 2 * 3 * 2 * 2 * 2 == 3456
+    assert len(out) == matrix.size()
     assert _bad(out) == []
     assert not [o for o in out if o.verdict == "not-evaluated"]  # a missing object is a failure
     counts = contract.summarise(out)
     print("CAP-1b sweep", len(out), counts)
     assert counts.get("agree", 0) == len(out)
-    assert any(o.actual == contract.OK for o in out)
-    # the LET water row names the selected model (config.py:594-598), with and without water
-    for model in matrix.models:
-        for geometry in (BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 20.0), WATER),):
-            eff = validate(_cfg(geometry=geometry, physics={"stopping_model": model}, tallies=LET))
+    assert {o.tallies for o in out} == {"none", "let", "full"}
+    assert any(o.actual == contract.OK and o.tallies == "full" for o in out)
+    assert any(o.actual == contract.OK and o.material == "water" for o in out)
+    assert any(o.material == PMMA.name and o.actual == contract.UNSUPPORTED for o in out)
+    assert {o.material for o in out} == {WATER.name, PMMA.name}
+
+
+DEFAULT_SELECTION = BETHE
+PMMA_BOX = BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 20.0), PMMA)
+WATER_BOX = BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 20.0), WATER)
+WATER_PMMA = VoxelGeometry(
+    (-10.0, -10.0, 0.0), (20.0, 20.0, 10.0), (1, 1, 2), (WATER, PMMA),
+    material_index=np.array([[[0, 1]]], dtype=np.int32),
+)  # fmt: skip
+
+
+def test_cap1b_the_water_row_names_the_selected_model_with_and_without_water() -> None:
+    """The LET water row follows the selected stopping model, whether or not the geometry holds
+    water (config.py: the LET medium is part of the tally definition), for each tabulated model
+    and for the default."""
+    _require_datasets("nist-pstar-water-2005", "geant4-icru90-stopping-11.4.2")
+    rows: dict[tuple[str, str], dict[str, Any]] = {}
+    phantom = dataclasses.replace(WATER, name="phantom")  # water composition, not named water
+    for model in (DEFAULT_SELECTION, "nist-pstar-astar-water-2005", "icru90-water-v1"):
+        tabulated = STOPPING_MODELS_KIND(model) == "tabulated"
+        cases = [("water", WATER_BOX), ("no-water", PMMA_BOX), ("mixed", WATER_PMMA)]
+        for label, geometry in cases:
+            cfg = _cfg(geometry=geometry, physics={"stopping_model": model}, tallies=LET)
+            if tabulated and label != "water":  # a tabulated model has water data only
+                with pytest.raises(UnsupportedCombinationError, match="pmma"):
+                    validate(cfg)
+                continue
+            eff = validate(cfg)
             assert eff.stopping_identity()["model_id_effective"] == model
-            assert eff.summary()["tables"]["water_row"]["material"] == "water"
+            row = eff.summary()["tables"]["water_row"]
+            assert row["material"] == "water" and row["projectile"] == "proton"
+            rows[(model, label)] = row
+        # a geometry whose material is not NAMED water: the row is still the selected model's
+        eff = validate(_cfg(geometry=BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 20.0), phantom),
+                            physics={"stopping_model": model}, tallies=LET))  # fmt: skip
+        assert eff.summary()["tables"]["water_row"]["material"] == "water"
+        rows[(model, "renamed-water")] = eff.summary()["tables"]["water_row"]
+    # the row names the dataset of the selected model, independent of the geometry
+    for model, dataset in (("nist-pstar-astar-water-2005", "nist-pstar-water-2005"),
+                           ("icru90-water-v1", "geant4-icru90-stopping-11.4.2")):  # fmt: skip
+        assert rows[(model, "water")]["dataset_id"] == dataset
+        assert rows[(model, "renamed-water")]["dataset_id"] == dataset
+    for label in ("water", "no-water", "mixed", "renamed-water"):
+        assert (
+            rows[(DEFAULT_SELECTION, label)]["source"]
+            == rows[(DEFAULT_SELECTION, "water")]["source"]
+        )
+    assert (
+        rows[(DEFAULT_SELECTION, "water")]["source"] != rows[("icru90-water-v1", "water")]["source"]
+    )
+
+
+def STOPPING_MODELS_KIND(model: str) -> str:  # noqa: N802 - reads like the registry lookup
+    from ionmc.physics.stopping_models import STOPPING_MODELS
+
+    return str(STOPPING_MODELS[model].kind)
 
 
 # ---- CAP-1c: every remaining validate rule has a positive/negative pair -----------------------
@@ -860,9 +1000,7 @@ def test_cap4_a_dropped_nuclear_setup_raises_in_reconcile_and_in_simulation(
     del neff["nuclear"]
     with pytest.raises(UnsupportedCombinationError, match="effective <absent>"):
         contract.reconcile(nrq, neff)
-    tid = _nuclear_table_id_or_none()
-    if tid is None:
-        pytest.skip("no built nuclear table in the cache: the Simulation half needs one")
+    tid = _patch_synthetic_nuclear(monkeypatch)  # cache-free: runs in the lightweight CI too
     cfg = _cfg(energy=100.0, physics={"nuclear": True, "nuclear_table_id": tid})
     Simulation(cfg)
     _drop_in_summary(monkeypatch, lambda d: d.pop("nuclear"))
@@ -992,3 +1130,136 @@ def test_cap6_simulation_keeps_the_resolutions_and_result_gains_no_field() -> No
     from ionmc.simulation import Result
 
     assert not [f.name for f in dataclasses.fields(Result) if "resolution" in f.name]
+
+
+# ---- CAP-3c: every request field class is compared field by field (Codex REVIEW-57661746) -----
+
+
+def _mutation_base() -> tuple[SimulationConfig, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    lk = (contract._synthetic_lookup(),)
+    grids = (
+        ScoringGrid((-10.0, -10.0, 0.0), (5.0, 5.0, 5.0), (4, 4, 4), "dose"),
+        ScoringGrid((-10.0, -10.0, 0.0), (10.0, 10.0, 10.0), (2, 2, 2), "other"),
+    )
+    tallies = (
+        TallyRequest("let", "dose", "let_d"),
+        TallyRequest("ls", "dose", "lookup_sum", lookup=lk[0].name),
+        TallyRequest("spec", "other", "fluence_spectrum",
+                     energy_edges_mev_per_u=(1.0, 101.0, 201.0, 301.0, 401.0)),
+    )  # fmt: skip
+    cfg = dataclasses.replace(_cfg(scoring=grids, tallies=tallies), lookups=lk)
+    eff = validate(cfg)
+    return cfg, to_dict(cfg), eff.summary(), contract.evidence_from_effective(eff)
+
+
+def _mutations() -> list[
+    tuple[str, Callable[[dict[str, Any], dict[str, Any], dict[str, Any]], None]]
+]:
+    from ionmc.configio import _material_dict
+
+    return [
+        ("tally quantity", lambda rq, eff, ev: rq["tallies"][0].update(quantity="let_t")),
+        ("tally species", lambda rq, eff, ev: rq["tallies"][0].update(species=["alpha"])),
+        ("tally generation", lambda rq, eff, ev: rq["tallies"][0].update(generation="primary")),
+        ("tally grid", lambda rq, eff, ev: rq["tallies"][0].update(grid="other")),
+        ("tally lookup binding",
+         lambda rq, eff, ev: rq["tallies"][1].update(lookup="elsewhere")),
+        ("tally spectrum edges",
+         lambda rq, eff, ev: rq["tallies"][2].update(
+             energy_edges_mev_per_u=[2.0, 102.0, 202.0, 302.0, 402.0])),
+        ("tally removed and replaced",
+         lambda rq, eff, ev: rq["tallies"].__setitem__(
+             0, {**rq["tallies"][0], "name": "renamed"})),
+        ("lookup units", lambda rq, eff, ev: rq["lookups"][0].update(units="2")),
+        ("lookup content", lambda rq, eff, ev: rq["lookups"][0].update(content_sha256="f" * 64)),
+        ("effective lookup content",
+         lambda rq, eff, ev: eff["tallies"]["lookups"][0].update(content_sha256="e" * 64)),
+        ("effective channel generation",
+         lambda rq, eff, ev: eff["tallies"]["channels"][0].update(generation=[1, 1])),
+        ("effective channel species",
+         lambda rq, eff, ev: eff["tallies"]["channels"][0].update(species=[])),
+        ("effective quantity units",
+         lambda rq, eff, ev: eff["tallies"]["quantities"][0].update(units="Gy")),
+        ("diagnostics end positions",
+         lambda rq, eff, ev: rq["diagnostics"].update(track_end_positions=True)),
+        ("diagnostics escape records",
+         lambda rq, eff, ev: rq["diagnostics"].update(escape_records=True)),
+        ("diagnostics trace", lambda rq, eff, ev: rq["diagnostics"].update(trace_histories=2)),
+        ("realised diagnostics (evidence)",
+         lambda rq, eff, ev: ev["diagnostics"].update(escape_records=True)),
+        ("material definition",
+         lambda rq, eff, ev: rq["materials"].__setitem__(
+             0, _material_dict(dataclasses.replace(WATER, density_g_cm3=1.1)))),
+        ("effective material identity",
+         lambda rq, eff, ev: eff["tables"]["materials"][0].update(material_sha256="d" * 64)),
+    ]  # fmt: skip
+
+
+def test_cap3c_reconcile_compares_every_request_field_class() -> None:
+    _cfg_, rq0, eff0, ev0 = _mutation_base()
+    contract.reconcile(rq0, eff0, ev0)  # the control passes
+    assert {r.row for r in contract.reconcile(rq0, eff0, ev0)} >= {"tallies", "lookups"}
+    for label, mutate in _mutations():
+        rq, eff, ev = copy.deepcopy(rq0), copy.deepcopy(eff0), copy.deepcopy(ev0)
+        mutate(rq, eff, ev)
+        with pytest.raises(UnsupportedCombinationError):
+            contract.reconcile(rq, eff, ev)
+        print("CAP-3c refused:", label)
+
+
+def test_cap3c_voxel_array_digests_are_compared() -> None:
+    cfg, _ = load_toml(SLAB_TOML)
+    eff = validate(cfg)
+    rq, summary, ev = to_dict(cfg), eff.summary(), contract.evidence_from_effective(eff)
+    contract.reconcile(rq, summary, ev)
+    assert ev["geometry_digests"]["material_index"] and ev["geometry_digests"]["density"]
+    for role in ("material_index", "density"):
+        bad = copy.deepcopy(ev)
+        bad["geometry_digests"][role] = "c" * 64  # the arrays the engine holds differ
+        with pytest.raises(UnsupportedCombinationError, match=role):
+            contract.reconcile(rq, summary, bad)
+        rq2 = copy.deepcopy(rq)
+        rq2["geometry"][role]["content_sha256"] = "b" * 64  # the request names other arrays
+        with pytest.raises(UnsupportedCombinationError, match=role):
+            contract.reconcile(rq2, summary, ev)
+
+
+def test_cap5_the_writer_compares_the_full_quantity_identity(
+    tmp_path: Path, tally_result: Any
+) -> None:
+    r = tally_result
+    grid = r.grids[0]
+    q = grid.quantities["let"]
+    for field, value in (("quantity", "let_t"), ("units", "Gy"), ("definition", "other text")):
+        altered = dataclasses.replace(q, **{field: value})
+        bad = dataclasses.replace(grid, quantities={**grid.quantities, "let": altered})
+        with pytest.raises(ResultFormatError, match="not the requested quantity|left no array"):
+            save(dataclasses.replace(r, grids=(bad, *r.grids[1:])), tmp_path / f"bad_{field}")
+        assert not (tmp_path / f"bad_{field}").exists()
+
+
+# ---- the LS memo of the Bethe tables (pure memoisation, bit-identical values) -----------------
+
+
+def test_ls_memo_returns_bit_identical_private_copies() -> None:
+    """``stopping.delta_l_ls_memo`` returns the uncached value bit for bit, a fresh array on every
+    call (a caller's mutation never reaches the memo), stays bounded, and is bypassed for
+    unequal shapes (the broadcast path of ``delta_l_ls``)."""
+    from ionmc.physics import lindhard_sorensen, stopping
+
+    memo = stopping._LsMemo(entries=2)
+    q = np.full(5, 6.0)
+    beta = np.linspace(0.2, 0.6, 5)
+    ref = lindhard_sorensen.delta_l_ls(q, beta)
+    first = memo(q, beta)
+    second = memo(q, beta)
+    assert np.array_equal(first, ref) and np.array_equal(second, ref)
+    assert first is not second and (memo.hits, memo.misses) == (1, 1)
+    first[0] = 0.0
+    assert np.array_equal(memo(q, beta), ref)  # the memoised array is private
+    memo(np.full(5, 2.0), beta)
+    memo(np.full(5, 8.0), beta)
+    assert len(memo._values) == 2  # bounded
+    one = memo(np.array([6.0]), beta)  # unequal shapes: broadcast by the uncached function
+    assert np.array_equal(one, lindhard_sorensen.delta_l_ls(6.0, beta))
+    assert memo.misses == 3 and len(memo._values) == 2  # the bypass is neither hit nor miss

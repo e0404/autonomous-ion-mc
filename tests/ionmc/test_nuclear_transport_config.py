@@ -423,8 +423,11 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
 
 
 # pinned at 94d57eb, re-pinned 2026-11-13 after the R2-STOP3 report changes (e6f17bc, 3f0fbae); this
-# test only runs with the nuclear datasets cached; the stale pin surfaced on the first complete run
-CAPABILITIES_SHA256 = "d0da26e8d85762a0ac865cf84fb6146973c7889f840f1c2577c6df3434e770fb"
+# test only runs with the nuclear datasets cached; the stale pin surfaced on the first complete run.
+# Re-pinned 2026-11-23 (V3-006 S4): the pin was already stale on v3/develop 95937553 (V3-013 changed
+# the stopping section; digest db8e79c0...) and decision 0045 adds the "declared" and "informative"
+# sections of the capability contract (digest at ae4fe3ec and after: 021c3c3d...).
+CAPABILITIES_SHA256 = "021c3c3d482278fb5b70c13fde0fdf28acb192a777670a318c7d5e145585f856"
 
 
 def test_capacity_bounds_follow_decision_0041_section_5(

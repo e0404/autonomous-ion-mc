@@ -40,7 +40,7 @@ import struct
 import tempfile
 import zipfile
 import zlib
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
@@ -701,6 +701,10 @@ def build_document(
         for a in arrays
         if a.origin["kind"] == "geometry"
     }
+    evidence = contract.evidence_from_origins(
+        (a.origin, array_content_sha256(a.data) if a.origin["kind"] == "geometry" else None)
+        for a in arrays
+    )
     return {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -717,7 +721,7 @@ def build_document(
             },
             "grid_convention": GRID_CONVENTION,
             "profile_axis": _profile_axis(summary["unit_direction"]),
-            "resolutions": [r.to_dict() for r in contract.reconcile(requested, summary)],
+            "resolutions": [r.to_dict() for r in contract.reconcile(requested, summary, evidence)],
             "resolutions_status": "computed: contract.reconcile(requested, effective)",
             "lookup_plan": _lookup_plan(result),
         },
@@ -806,19 +810,50 @@ def report_placeholder(doc: Mapping[str, Any]) -> str:
 # save
 
 
+def _honoured_extras(result: Result, arrays: list[_Arr]) -> None:
+    """No quantity array of a tally that was not requested (checked after the reconciliation,
+    whose refusal of a changed request names the cause first)."""
+    cfg = result.requested_config
+    plan = {t.name for t in cfg.tallies}
+    companions = {"edep_excluded_from_let", *_PIECE_DEFINITIONS}
+    grids = {t.grid for t in cfg.tallies}
+    for a in arrays:
+        o = a.origin
+        if o["kind"] != "quantity":
+            continue
+        if not (o["grid"] in grids and (o["name"] in plan or o["name"] in companions)):
+            raise _fail(f"array of tally {o['name']!r} on grid {o['grid']!r} was never requested")
+
+
 def _honoured(result: Result, arrays: list[_Arr]) -> None:
     """Every requested feature left its trace (decision 0045 section 4 item 4): tally arrays for
     every request, nuclear tallies iff nuclear, trace arrays iff requested. A missing trace is an
     error, never a thinner bundle."""
     cfg = result.requested_config
-    have = {
-        (a.origin.get("grid"), a.origin.get("name"))
-        for a in arrays
-        if a.origin["kind"] == "quantity"
-    }
-    for t in cfg.tallies:
-        if (t.grid, t.name) not in have:
-            raise _fail(f"requested tally {t.name!r} on grid {t.grid!r} left no array")
+    req = to_dict(cfg)
+    plan_q = {q["name"]: q for q in derive_channel_plan(req, [lk.name for lk in cfg.lookups])[1]}
+    ents: dict[tuple[Any, Any], dict[str, _Arr]] = {}
+    for a in arrays:
+        if a.origin["kind"] == "quantity":
+            ents.setdefault((a.origin["grid"], a.origin["name"]), {})[a.origin["array"]] = a
+    expected: set[tuple[Any, Any]] = set()
+    for gi, g in enumerate(cfg.scoring):
+        for qi, (qn, q, qunits, shp, qdef) in enumerate(
+            _quantity_plan(plan_q, req, gi, list(g.shape))
+        ):
+            expected.add((g.name, qn))
+            got = ents.get((g.name, qn), {})
+            what = f"requested tally {qn!r} on grid {g.name!r}"
+            for base in QUANTITY_ARRAYS:
+                arr = got.get(base)
+                if arr is None:
+                    raise _fail(f"{what} left no array ({base})")
+                unit = {"defined_mask": "bool", "n_nonzero": "count"}.get(base, qunits)
+                ident = (arr.origin["quantity"], arr.origin["index"], arr.units, arr.definition,
+                         list(arr.data.shape))  # fmt: skip
+                if ident != (q, qi, unit, f"{qdef} [{base}]", shp):
+                    raise _fail(f"{what}: array {base!r} is not the requested quantity {q!r} "
+                                f"(identity {ident!r})")  # fmt: skip
     diag = {a.origin["array"] for a in arrays if a.origin["kind"] == "diagnostic"}
     d = cfg.diagnostics
     for flag, key in (
@@ -895,6 +930,7 @@ def save(
     arrays = _collect_arrays(result, persist_batches)
     _honoured(result, arrays)
     doc = build_document(result, manifest, arrays, persist_batches, str(dest))
+    _honoured_extras(result, arrays)
     check_allowlist(doc["arrays"])
     check_path_hygiene(doc)
     tmp = Path(tempfile.mkdtemp(dir=parent, prefix=".ionmc-tmp-"))
@@ -1605,7 +1641,14 @@ def _check_reconciliation(doc: dict[str, Any]) -> None:
     persisted ``effective_extra.resolutions`` must be exactly its output."""
     eff, rq = doc["effective"], doc["requested"]
     try:
-        res = contract.reconcile(rq, eff)
+        res = contract.reconcile(
+            rq,
+            eff,
+            contract.evidence_from_origins(
+                (e["origin"], e["content_sha256"] if e["origin"]["kind"] == "geometry" else None)
+                for e in doc["arrays"]
+            ),
+        )
     except UnsupportedCombinationError as exc:
         head = (
             "effective.scoring disagrees with requested.scoring"
@@ -1683,14 +1726,21 @@ _QRULES = {  # quantity -> (numerator kind, class, denominator, units, definitio
 def _derive_channel_plan(
     doc: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, int]:
+    """The channel plan of a document: ``derive_channel_plan`` of its ``requested`` block with the
+    lookup names of ``provenance.data.lookups``."""
+    names = [x["name"] for x in doc["provenance"]["data"]["lookups"]]
+    return derive_channel_plan(doc["requested"], names)
+
+
+def derive_channel_plan(
+    rq: Mapping[str, Any], lnames: Sequence[str]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, int]:
     """``(channels, quantities, total_size, n_residual_columns)`` that ``compile_channels`` builds
     from the requested tallies, grids and lookup units: the channel specs, their deduplication
     and order, the automatic channels of every used grid, the sizes, offsets and the quantity
     definitions. The numerical quanta and bounds (``k``, ``bound_per_history``) are not derived."""
-    rq = doc["requested"]
     grids = rq["scoring"]
     gi_of = {g["name"]: i for i, g in enumerate(grids)}
-    lnames = [x["name"] for x in doc["provenance"]["data"]["lookups"]]
     lunits = [r["units"] for r in rq.get("lookups", [])]
     specs: dict[tuple[Any, ...], dict[str, Any]] = {}
 

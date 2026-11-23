@@ -768,7 +768,7 @@ class Simulation:
         # requested -> effective reconciliation (decision 0045 section 4): raises before transport;
         # kept here (not a Result field); results.save recomputes it from the persisted blocks
         self.resolutions: tuple[contract.Resolution, ...] = contract.reconcile(
-            config, self.effective
+            config, self.effective, contract.evidence_from_effective(self.effective)
         )
         self._setup_s = time.perf_counter() - t0
 
