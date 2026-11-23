@@ -1,0 +1,167 @@
+{
+ "ionmc": [
+  {
+   "backend": "warp-cpu",
+   "case": 1,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T134817Z-78fa700f",
+   "step_stdout": "vc2d-sample-case1-icru90-water-v1-warp-cpu-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 1,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T134851Z-b7b4811c",
+   "step_stdout": "vc2d-sample-case1-bethe-ionmc-v1-warp-cpu-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 2,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T134911Z-7f2984d0",
+   "step_stdout": "vc2d-sample-case2-icru90-water-v1-warp-cpu-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 2,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T134930Z-0ac6390c",
+   "step_stdout": "vc2d-sample-case2-bethe-ionmc-v1-warp-cpu-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 3,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T134950Z-142226f1",
+   "step_stdout": "vc2d-sample-case3-icru90-water-v1-warp-cpu-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 3,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T135010Z-d9edd5c0",
+   "step_stdout": "vc2d-sample-case3-bethe-ionmc-v1-warp-cpu-k1/step-stdout.txt"
+  },
+  {
+   "backend": "python",
+   "case": 1,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T135030Z-cb165332",
+   "step_stdout": "vc2d-sample-case1-icru90-water-v1-python-k1/step-stdout.txt"
+  },
+  {
+   "backend": "python",
+   "case": 1,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T135108Z-46c9d917",
+   "step_stdout": "vc2d-sample-case1-bethe-ionmc-v1-python-k1/step-stdout.txt"
+  },
+  {
+   "backend": "python",
+   "case": 2,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T135146Z-77645fc7",
+   "step_stdout": "vc2d-sample-case2-icru90-water-v1-python-k1/step-stdout.txt"
+  },
+  {
+   "backend": "python",
+   "case": 2,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T135239Z-250b3efa",
+   "step_stdout": "vc2d-sample-case2-bethe-ionmc-v1-python-k1/step-stdout.txt"
+  },
+  {
+   "backend": "python",
+   "case": 3,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T135332Z-0b6ec085",
+   "step_stdout": "vc2d-sample-case3-icru90-water-v1-python-k1/step-stdout.txt"
+  },
+  {
+   "backend": "python",
+   "case": 3,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc2d-sample",
+   "run_id": "RUN-20261122T135442Z-58d31cc0",
+   "step_stdout": "vc2d-sample-case3-bethe-ionmc-v1-python-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 1,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc-sample",
+   "run_id": "RUN-20261122T135555Z-0229dab1",
+   "step_stdout": "vc-sample-case1-icru90-water-v1-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 1,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc-sample",
+   "run_id": "RUN-20261122T151453Z-08dedf8d",
+   "step_stdout": "vc-sample-case1-bethe-ionmc-v1-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 2,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc-sample",
+   "run_id": "RUN-20261122T163326Z-99c72269",
+   "step_stdout": "vc-sample-case2-icru90-water-v1-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 2,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc-sample",
+   "run_id": "RUN-20261122T182531Z-bd63b558",
+   "step_stdout": "vc-sample-case2-bethe-ionmc-v1-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 3,
+   "k": 1,
+   "model": "icru90-water-v1",
+   "row": "vc-sample",
+   "run_id": "RUN-20261122T201236Z-99a4c802",
+   "step_stdout": "vc-sample-case3-icru90-water-v1-k1/step-stdout.txt"
+  },
+  {
+   "backend": "warp-cpu",
+   "case": 3,
+   "k": 1,
+   "model": "bethe-ionmc-v1",
+   "row": "vc-sample",
+   "run_id": "RUN-20261122T224431Z-4ef0f3fc",
+   "step_stdout": "vc-sample-case3-bethe-ionmc-v1-k1/step-stdout.txt"
+  }
+ ],
+ "topas": []
+}

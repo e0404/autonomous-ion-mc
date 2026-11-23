@@ -2,7 +2,7 @@
 
 **Task:** V3-013
 **Category:** authorization
-**Status:** open
+**Status:** resolved 2026-11-19 (operator: "A: prepare the PR"; see response.json)
 
 ## Summary
 

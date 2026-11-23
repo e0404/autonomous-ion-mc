@@ -1,0 +1,405 @@
+#JSON-BEGIN
+{
+ "backend": "python",
+ "case": 3,
+ "counters": {
+  "accumulator_overflow": 0,
+  "energy_inversion": 0,
+  "genealogy_overflow": 0,
+  "mcs_mapping_failure": 0,
+  "mcs_table_bracket_miss": 0,
+  "queue_overflow": 0,
+  "scoring_pieces_overflow": 0,
+  "source_energy_out_of_range": 0,
+  "stall": 0,
+  "step_truncation": 0,
+  "straggling_rejection": 0
+ },
+ "e0_mev": 800.0,
+ "e_cut_mev": 8.0,
+ "e_end_all_at_or_below_cut": true,
+ "e_end_mev": {
+  "max": 7.982866166569801,
+  "min": 7.982866166569801
+ },
+ "e_mev_per_u": 200.0,
+ "effective_config": {
+  "backend": "python",
+  "chunk_histories": 262144,
+  "cpu_workers": 1,
+  "geometry": {
+   "materials": [
+    "water"
+   ],
+   "origin_mm": [
+    -60.0,
+    -60.0,
+    0.0
+   ],
+   "shape": [
+    1,
+    1,
+    1
+   ],
+   "spacing_mm": [
+    120.0,
+    120.0,
+    350.0
+   ],
+   "z_exit_mm": null
+  },
+  "max_steps": 2768,
+  "max_steps_origin": "computed",
+  "mcs_mapping": {
+   "depth_fractions": [],
+   "evaluation": "root",
+   "fdm_domain": "not evaluated (multiple_scattering=False)",
+   "fdm_domain_edge_mev": 300.0,
+   "fdm_extrapolated": false,
+   "mapping": "exact-Omega b-matching (unused: multiple_scattering=False)",
+   "p1v1_eq_kinetic_energy_hi_mev": null,
+   "p1v1_eq_kinetic_energy_mev": null,
+   "proton_table_edge_mev": 4000.0,
+   "unused": true,
+   "unused_note": "multiple_scattering=False: the mapping is never evaluated; no f_dM domain check, no proton path, no packing and no root solve; no pv_eq/pv table is built whatever mcs_mapping_eval requests"
+  },
+  "n_batches": 20,
+  "n_histories": 2000,
+  "physics": {
+   "delta_electrons": "local",
+   "e_cut_effective_mev": 8.0,
+   "e_cut_ion_mev_per_u": 2.0,
+   "e_cut_mev": 2.0,
+   "end_of_range_model": "default",
+   "end_of_range_model_effective": "continuous_residual_v1",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "max_energy_loss_fraction": 0.02,
+   "max_rejection_attempts": 64,
+   "max_step_mm": 1.0,
+   "mcs_model": "differential_moliere",
+   "multiple_scattering": false,
+   "nuclear": false,
+   "range_alpha": 0.2,
+   "range_rho_f_mm": 0.1,
+   "scattering_E_s_mev": 15.0,
+   "short_step_fraction": 0.01,
+   "straggling": false,
+   "straggling_model": "bohr_gamma_v1",
+   "truncated_hinge_diagnostic": false
+  },
+  "precision": "float64",
+  "production": false,
+  "rng": {
+   "counter": "(history, genealogy id, block, purpose)",
+   "generator": "philox4x32-10",
+   "key": "seed low/high 32 bits",
+   "u01": "((w >> 8) + 0.5) * 2**-24"
+  },
+  "scattering_length_g_cm2": [
+   46.88050454803533
+  ],
+  "scoring": [
+   {
+    "name": "idd",
+    "origin_mm": [
+     -60.0,
+     -60.0,
+     0.0
+    ],
+    "shape": [
+     1,
+     1,
+     3500
+    ],
+    "spacing_mm": [
+     120.0,
+     120.0,
+     0.1
+    ]
+   }
+  ],
+  "scoring_pieces": 34,
+  "seed": 20613504,
+  "source": {
+   "a": 4,
+   "energy_sigma_mev": 0.0,
+   "kinetic_energy_mev": 800.0,
+   "lateral_sigma_mm": 0.0,
+   "mass_mev": 3727.3794066,
+   "position_mm": [
+    0.0,
+    0.0,
+    -0.001
+   ],
+   "projectile": "alpha",
+   "z": 2
+  },
+  "stopping": {
+   "cache_dir": null,
+   "circular_rows": [],
+   "content_sha256": null,
+   "data_declared": [],
+   "data_used": [],
+   "decision": "0044",
+   "domain": {
+    "e_max_per_u": {
+     "alpha": 500.0,
+     "carbon12": 500.0,
+     "deuteron": 500.0,
+     "oxygen16": 500.0,
+     "proton": 500.0
+    },
+    "e_min_per_u": {
+     "alpha": 1.0,
+     "carbon12": 1.0,
+     "deuteron": 1.0,
+     "oxygen16": 1.0,
+     "proton": 1.0
+    },
+    "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+    "species": [
+     "alpha",
+     "carbon12",
+     "deuteron",
+     "oxygen16",
+     "proton"
+    ]
+   },
+   "evidence_at_run": [
+    {
+     "graded_at_sha": null,
+     "plan": "validation/plans/v3-008-acceptance.md",
+     "row": null,
+     "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+     "status": "as-graded:0043"
+    }
+   ],
+   "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+   "kind": "analytic",
+   "mcs_proton_path_stopping": "bethe-ionmc-v1",
+   "model_id_effective": "bethe-ionmc-v1",
+   "model_id_requested": "bethe-ionmc-v1",
+   "options": {
+    "barkas": true,
+    "bloch": true,
+    "class": "BetheStoppingSource",
+    "effective_charge": true,
+    "effective_charge_model": "barkas-125",
+    "i_value": "material",
+    "ls": "off",
+    "ls_effective": "off",
+    "ls_requested": "off",
+    "mott": true,
+    "points_per_decade": 200,
+    "shell": true,
+    "source_name": "bethe"
+   },
+   "range_construction": "exact-loglog-quadrature-v1",
+   "range_start": "constant-S approximation a*E_min/S(E_min)",
+   "selected_by": "stopping_model",
+   "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+   "species_transported": [
+    "alpha"
+   ],
+   "version": "1"
+  },
+  "tables": {
+   "materials": [
+    {
+     "I_eV_effective": 78.0,
+     "I_eV_requested": 78.0,
+     "content_sha256": null,
+     "dataset_id": null,
+     "e_max_mev": 2000.0,
+     "e_min_mev": 4.0,
+     "energy_axis": "total_kinetic_mev",
+     "material": "water",
+     "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+     "metadata": {
+      "I_eV": 78.0,
+      "material": "water",
+      "material_density_g_cm3": 1.0,
+      "material_mass_fractions": {
+       "H": 0.11189834407236524,
+       "O": 0.8881016559276347
+      },
+      "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+      "options": {
+       "barkas": true,
+       "bloch": true,
+       "effective_charge": true,
+       "mott": true,
+       "shell": true
+      },
+      "projectile": "alpha",
+      "range_construction": "exact-loglog-quadrature-v1",
+      "source": "bethe",
+      "start_range": "constant-S approximation a*E_min/S(E_min)"
+     },
+     "projectile": "alpha",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "source_sha256": null
+    }
+   ],
+   "n_e": 541,
+   "n_r": 3575,
+   "sha256": "2dd989046233764790c151b92be90804e2f9d39a5a27a8f60322ba8698885112",
+   "stopping_source": "bethe"
+  },
+  "tallies": null,
+  "unit_direction": [
+   0.0,
+   0.0,
+   1.0
+  ]
+ },
+ "end_codes_all_cutoff": true,
+ "energy_balance": {
+  "closure_residual_mev": 4.656612873077393e-10,
+  "cutoff_mev": 15965.732333139602,
+  "escaped_mev": 0.0,
+  "in_grid_mev": [
+   1600000.000008395
+  ],
+  "initial_mev": 1600000.0,
+  "outside_mev": [
+   0.0
+  ],
+  "quantization_mev": [
+   -8.39492944863768e-06
+  ],
+  "relative_residual": 2.9103830456733706e-16,
+  "step_deposit_mev": 1584034.26766686,
+  "truncated_mev": 0.0,
+  "unaccounted_mev": 0.0
+ },
+ "environment_digests": {
+  "digests": {
+   "interpreter": "56bfd38b490ae57cd942ad6a7573cef9ad6c43d1c903bdfba92fa88512953c36",
+   "numpy": "269e58d934e3bf12cfb9297db7fa4ecd70ddd8c06973b20276014a791072b497",
+   "stdlib": "1e6d8a0c0e8de46b5af59de92b7c564ec3fed5992bf0a8ce1f5e9080e8f5e89c",
+   "uv_lock": "0d7e79d3b88fd95f7b59d717efa27d6bfb9b78a435fb2ccc5b991e4347d37299",
+   "warp": "3a29fce101667eef02800a559ad9f82ea6694a8026ee7f922070db020caea02a"
+  },
+  "file_counts": {
+   "interpreter": 1,
+   "numpy": 930,
+   "stdlib": 887,
+   "uv_lock": 1,
+   "warp": 598
+  },
+  "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "schema": "ionmc-v13-environment-digests-1",
+  "sys_version": "3.12.0 (main, Oct 18 2023, 16:27:16) [GCC 11.4.0]",
+  "versions": {
+   "numpy": "2.5.3",
+   "python": "3.12.0",
+   "warp": "1.17.0"
+  }
+ },
+ "environment_digests_note": null,
+ "format": 1,
+ "git_sha": "c1cfaf9b043dc8a61b1dfeb80775255566113ee9",
+ "histories": 2000,
+ "ion": "he",
+ "k": 0,
+ "model": "bethe-ionmc-v1",
+ "n_batches": 20,
+ "npz": "ionmc-vc2d-case3-bethe-ionmc-v1-python-k0.npz",
+ "npz_sha256": "f6a68d3d386068a7a470c4b6f6fb71c13950a23bfe9bab14e49a4675018fce82",
+ "pass": true,
+ "precision": "float64",
+ "r_e0_mm": 261.9258204078876,
+ "r_index": 15,
+ "row": "vc2d-sample",
+ "seed": 20613504,
+ "seed_family": {
+  "base": 20612004,
+  "family": "ion13",
+  "k": 0,
+  "r_index": 15
+ },
+ "stopping_identity": {
+  "cache_dir": null,
+  "circular_rows": [],
+  "content_sha256": null,
+  "data_declared": [],
+  "data_used": [],
+  "decision": "0044",
+  "domain": {
+   "e_max_per_u": {
+    "alpha": 500.0,
+    "carbon12": 500.0,
+    "deuteron": 500.0,
+    "oxygen16": 500.0,
+    "proton": 500.0
+   },
+   "e_min_per_u": {
+    "alpha": 1.0,
+    "carbon12": 1.0,
+    "deuteron": 1.0,
+    "oxygen16": 1.0,
+    "proton": 1.0
+   },
+   "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+   "species": [
+    "alpha",
+    "carbon12",
+    "deuteron",
+    "oxygen16",
+    "proton"
+   ]
+  },
+  "evidence_at_run": [
+   {
+    "graded_at_sha": null,
+    "plan": "validation/plans/v3-008-acceptance.md",
+    "row": null,
+    "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+    "status": "as-graded:0043"
+   }
+  ],
+  "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+  "kind": "analytic",
+  "mcs_proton_path_stopping": "bethe-ionmc-v1",
+  "model_id_effective": "bethe-ionmc-v1",
+  "model_id_requested": "bethe-ionmc-v1",
+  "options": {
+   "barkas": true,
+   "bloch": true,
+   "class": "BetheStoppingSource",
+   "effective_charge": true,
+   "effective_charge_model": "barkas-125",
+   "i_value": "material",
+   "ls": "off",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "mott": true,
+   "points_per_decade": 200,
+   "shell": true,
+   "source_name": "bethe"
+  },
+  "range_construction": "exact-loglog-quadrature-v1",
+  "range_start": "constant-S approximation a*E_min/S(E_min)",
+  "selected_by": "stopping_model",
+  "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+  "species_transported": [
+   "alpha"
+  ],
+  "version": "1"
+ },
+ "suite": "lv13",
+ "valid": true,
+ "wall_s": 56.6529859569855,
+ "warp_modules": null,
+ "z_end_mm": {
+  "max": 261.8340749966478,
+  "mean": 261.83407499664685,
+  "min": 261.83407499664594
+ },
+ "z_m_minus_r_e0_relative": 1.2180084905872896e-06,
+ "z_m_mm": 261.9261394357608
+}
+#JSON-END

@@ -25,7 +25,7 @@ WATER_INDEX = 1
 _MATERIAL_ORDER = ("G4_AIR", "G4_WATER", "G4_GRAPHITE")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Icru90Water:
     """ICRU 90 liquid-water electronic stopping power arrays (float64).
 
@@ -42,6 +42,15 @@ class Icru90Water:
     version: str | None = None
     sha256: str | None = None
     retrieved_at: str | None = None
+
+    def __post_init__(self) -> None:
+        # read-only arrays: an in-place write raises; a writable input is copied, never altered
+        for name in ("proton_energy_mev", "proton_stopping", "alpha_energy_mev", "alpha_stopping"):
+            a = getattr(self, name)
+            if type(a) is not np.ndarray or a.flags.writeable or a.dtype != np.float64:
+                a = np.array(a, dtype=np.float64)
+                a.setflags(write=False)
+                object.__setattr__(self, name, a)
 
 
 def _array(source: str, name: str) -> NDArray[np.float64]:

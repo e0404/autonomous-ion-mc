@@ -1,0 +1,168 @@
+{
+ "base_commit": "afe42b3",
+ "identity": {
+  "alpha": [
+   {
+    "I_eV_effective": 75.0,
+    "I_eV_requested": 78.0,
+    "content_sha256": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
+    "dataset_id": "nist-astar-water-2005",
+    "e_max_mev": 1000.0,
+    "e_min_mev": 4.0,
+    "energy_axis": "total_kinetic_mev",
+    "material": "water",
+    "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+    "metadata": {
+     "I_eV": 75.0,
+     "content_sha256": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
+     "dataset_id": "nist-astar-water-2005",
+     "effective_material": {
+      "I_eV": 75.0,
+      "density_g_cm3": 1.0,
+      "mass_fractions": {
+       "H": 0.111894,
+       "O": 0.888106
+      },
+      "name": "NIST liquid water (matno 276)"
+     },
+     "program": "ASTAR",
+     "projectile": "alpha",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "requested_material": {
+      "I_eV": 78.0,
+      "density_g_cm3": 1.0,
+      "mass_fractions": {
+       "H": 0.11189834407236524,
+       "O": 0.8881016559276347
+      },
+      "name": "water"
+     },
+     "retrieved_at": "2026-10-03T18:29:05+00:00",
+     "sha256": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
+     "source": "nist-star",
+     "start_range": "NIST CSDA range at e_min (log-log interpolation)",
+     "version": "ASTAR 2.0.1 (2005), liquid water (matno 276)"
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "nist-star",
+    "source_sha256": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f"
+   }
+  ],
+  "proton": [
+   {
+    "I_eV_effective": 75.0,
+    "I_eV_requested": 78.0,
+    "content_sha256": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
+    "dataset_id": "nist-pstar-water-2005",
+    "e_max_mev": 500.0,
+    "e_min_mev": 1.0,
+    "material": "water",
+    "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+    "metadata": {
+     "I_eV": 75.0,
+     "content_sha256": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
+     "dataset_id": "nist-pstar-water-2005",
+     "effective_material": {
+      "I_eV": 75.0,
+      "density_g_cm3": 1.0,
+      "mass_fractions": {
+       "H": 0.111894,
+       "O": 0.888106
+      },
+      "name": "NIST liquid water (matno 276)"
+     },
+     "program": "PSTAR",
+     "projectile": "proton",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "requested_material": {
+      "I_eV": 78.0,
+      "density_g_cm3": 1.0,
+      "mass_fractions": {
+       "H": 0.11189834407236524,
+       "O": 0.8881016559276347
+      },
+      "name": "water"
+     },
+     "retrieved_at": "2026-10-03T18:29:04+00:00",
+     "sha256": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
+     "source": "nist-star",
+     "start_range": "NIST CSDA range at e_min (log-log interpolation)",
+     "version": "PSTAR 2.0.1 (2005), liquid water (matno 276)"
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "nist-star",
+    "source_sha256": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18"
+   }
+  ]
+ },
+ "metadata": {
+  "alpha": {
+   "I_eV": 75.0,
+   "content_sha256": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
+   "dataset_id": "nist-astar-water-2005",
+   "effective_material": {
+    "I_eV": 75.0,
+    "density_g_cm3": 1.0,
+    "mass_fractions": {
+     "H": 0.111894,
+     "O": 0.888106
+    },
+    "name": "NIST liquid water (matno 276)"
+   },
+   "program": "ASTAR",
+   "projectile": "alpha",
+   "range_construction": "exact-loglog-quadrature-v1",
+   "requested_material": {
+    "I_eV": 78.0,
+    "density_g_cm3": 1.0,
+    "mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "name": "water"
+   },
+   "retrieved_at": "2026-10-03T18:29:05+00:00",
+   "sha256": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f",
+   "source": "nist-star",
+   "start_range": "NIST CSDA range at e_min (log-log interpolation)",
+   "version": "ASTAR 2.0.1 (2005), liquid water (matno 276)"
+  },
+  "proton": {
+   "I_eV": 75.0,
+   "content_sha256": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
+   "dataset_id": "nist-pstar-water-2005",
+   "effective_material": {
+    "I_eV": 75.0,
+    "density_g_cm3": 1.0,
+    "mass_fractions": {
+     "H": 0.111894,
+     "O": 0.888106
+    },
+    "name": "NIST liquid water (matno 276)"
+   },
+   "program": "PSTAR",
+   "projectile": "proton",
+   "range_construction": "exact-loglog-quadrature-v1",
+   "requested_material": {
+    "I_eV": 78.0,
+    "density_g_cm3": 1.0,
+    "mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "name": "water"
+   },
+   "retrieved_at": "2026-10-03T18:29:04+00:00",
+   "sha256": "f5fc6482235f1e779bb9d221014ed0a343cf28dec88cc1bde19267a38daead18",
+   "source": "nist-star",
+   "start_range": "NIST CSDA range at e_min (log-log interpolation)",
+   "version": "PSTAR 2.0.1 (2005), liquid water (matno 276)"
+  }
+ },
+ "sha256": {
+  "alpha": "0ed26e7f3e1128ddce9cbd0e5178e95da04488898a58d3f228b8aacc2d084597",
+  "proton": "74f1b002aff4ed2edd5723c4397eb313a96ec449fa06c6c06bca8441ffd3b6e8"
+ }
+}

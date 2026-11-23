@@ -186,8 +186,8 @@
   "e_cut_mev_per_u": 2.0,
   "input_sha256": {
     "geant4-icru90-stopping-11.4.2 (cache object)": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
-    "src/ionmc/data/icru90.py": "8cb50ce7b67ed2969c405f81cf930a0282ba6b8c06f303116e7478f87d8ebfe8",
-    "src/ionmc/physics/stopping.py": "4be0934a76219e4e56d3eb7c329137e5781f75ba923899cc44b0d2dc66cd6c08",
+    "src/ionmc/data/icru90.py": "3e95b2ce353f74d34360f0cbbd0132221b9d383c27e695fb9468873edede23c0",
+    "src/ionmc/physics/stopping.py": "3cf99707a1b71e36a9eabcd4d864847992f9e892112ff2cc23c3426ebfcd4502",
     "validation/results/transport/v8r2-topas/reports/TD-EM-case1.json": "d7e2f1c6f2bcf988c8ebf0b87f981b3ebed7e28f8b7f98f098157a620495841f",
     "validation/results/transport/v8r2-topas/reports/TD-EM-case2.json": "61c5dbb7d4dd8e8e5c275dc055bdef526e047e9e183d68c77c5dbefdfab3dd2d",
     "validation/results/transport/v8r2-topas/reports/TD-EM-case3.json": "d7a160df3b7c5a1a0bd7abe074890dec5e7590170c0b020615f1c94f52d914e4",

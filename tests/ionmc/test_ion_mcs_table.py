@@ -505,7 +505,7 @@ def test_table_build_beyond_the_paths_records_coverage() -> None:
     closed): a state in an uncovered cell has no starting guess and the accelerated path returns
     the root path's result and status from the full bracket (no bracket miss). An invalid domain
     still fails closed (``UnsupportedCombinationError``)."""
-    mp = XO.ExactOmegaMapping.build(CARBON12, WATER)
+    mp = XO.ExactOmegaMapping.build(CARBON12, WATER, BetheStoppingSource().table(WATER, CARBON12))
     e_top = mp.ion_path.e_max_mev
     dom = XO.table_domain(CARBON12, 24.0, e_top * 0.99, e_top * 0.9999)
     args = (mp.ion_path.pack, mp.proton.pack, mp.comp, mp.quad, 6.0, CARBON12.mass_mev, *dom)

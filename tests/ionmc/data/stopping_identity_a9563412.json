@@ -1,0 +1,855 @@
+{
+ "base_commit": "a9563412",
+ "identity": {
+  "alpha": [
+   {
+    "I_eV_effective": 78.0,
+    "I_eV_requested": 78.0,
+    "content_sha256": null,
+    "dataset_id": null,
+    "e_max_mev": 2000.0,
+    "e_min_mev": 4.0,
+    "energy_axis": "total_kinetic_mev",
+    "material": "water",
+    "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+    "metadata": {
+     "I_eV": 78.0,
+     "material": "water",
+     "material_density_g_cm3": 1.0,
+     "material_mass_fractions": {
+      "H": 0.11189834407236524,
+      "O": 0.8881016559276347
+     },
+     "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+     "options": {
+      "barkas": true,
+      "bloch": true,
+      "effective_charge": true,
+      "mott": true,
+      "shell": true
+     },
+     "projectile": "alpha",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "start_range": "constant-S approximation a*E_min/S(E_min)"
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "source_sha256": null
+   },
+   {
+    "I_eV_effective": 74.0,
+    "I_eV_requested": 74.0,
+    "content_sha256": null,
+    "dataset_id": null,
+    "e_max_mev": 2000.0,
+    "e_min_mev": 4.0,
+    "energy_axis": "total_kinetic_mev",
+    "material": "pmma",
+    "material_sha256": "b617334ba8f2b151d31c8d24106d0a9ee811c7e0d90c6c129b4b68a5cccb8293",
+    "metadata": {
+     "I_eV": 74.0,
+     "material": "pmma",
+     "material_density_g_cm3": 1.19,
+     "material_mass_fractions": {
+      "C": 0.5998402650050711,
+      "H": 0.08054191635248056,
+      "O": 0.3196178186424483
+     },
+     "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+     "options": {
+      "barkas": true,
+      "bloch": true,
+      "effective_charge": true,
+      "mott": true,
+      "shell": true
+     },
+     "projectile": "alpha",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "start_range": "constant-S approximation a*E_min/S(E_min)"
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "source_sha256": null
+   }
+  ],
+  "carbon12": [
+   {
+    "I_eV_effective": 78.0,
+    "I_eV_requested": 78.0,
+    "content_sha256": null,
+    "dataset_id": null,
+    "e_max_mev": 6000.0,
+    "e_min_mev": 12.0,
+    "energy_axis": "total_kinetic_mev",
+    "material": "water",
+    "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+    "metadata": {
+     "I_eV": 78.0,
+     "material": "water",
+     "material_density_g_cm3": 1.0,
+     "material_mass_fractions": {
+      "H": 0.11189834407236524,
+      "O": 0.8881016559276347
+     },
+     "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+     "options": {
+      "barkas": true,
+      "bloch": true,
+      "effective_charge": true,
+      "mott": true,
+      "shell": true
+     },
+     "projectile": "carbon12",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "start_range": "constant-S approximation a*E_min/S(E_min)"
+    },
+    "projectile": "carbon12",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "source_sha256": null
+   },
+   {
+    "I_eV_effective": 74.0,
+    "I_eV_requested": 74.0,
+    "content_sha256": null,
+    "dataset_id": null,
+    "e_max_mev": 6000.0,
+    "e_min_mev": 12.0,
+    "energy_axis": "total_kinetic_mev",
+    "material": "pmma",
+    "material_sha256": "b617334ba8f2b151d31c8d24106d0a9ee811c7e0d90c6c129b4b68a5cccb8293",
+    "metadata": {
+     "I_eV": 74.0,
+     "material": "pmma",
+     "material_density_g_cm3": 1.19,
+     "material_mass_fractions": {
+      "C": 0.5998402650050711,
+      "H": 0.08054191635248056,
+      "O": 0.3196178186424483
+     },
+     "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+     "options": {
+      "barkas": true,
+      "bloch": true,
+      "effective_charge": true,
+      "mott": true,
+      "shell": true
+     },
+     "projectile": "carbon12",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "start_range": "constant-S approximation a*E_min/S(E_min)"
+    },
+    "projectile": "carbon12",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "source_sha256": null
+   }
+  ],
+  "oxygen16": [
+   {
+    "I_eV_effective": 78.0,
+    "I_eV_requested": 78.0,
+    "content_sha256": null,
+    "dataset_id": null,
+    "e_max_mev": 8000.0,
+    "e_min_mev": 16.0,
+    "energy_axis": "total_kinetic_mev",
+    "material": "water",
+    "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+    "metadata": {
+     "I_eV": 78.0,
+     "material": "water",
+     "material_density_g_cm3": 1.0,
+     "material_mass_fractions": {
+      "H": 0.11189834407236524,
+      "O": 0.8881016559276347
+     },
+     "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+     "options": {
+      "barkas": true,
+      "bloch": true,
+      "effective_charge": true,
+      "mott": true,
+      "shell": true
+     },
+     "projectile": "oxygen16",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "start_range": "constant-S approximation a*E_min/S(E_min)"
+    },
+    "projectile": "oxygen16",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "source_sha256": null
+   },
+   {
+    "I_eV_effective": 74.0,
+    "I_eV_requested": 74.0,
+    "content_sha256": null,
+    "dataset_id": null,
+    "e_max_mev": 8000.0,
+    "e_min_mev": 16.0,
+    "energy_axis": "total_kinetic_mev",
+    "material": "pmma",
+    "material_sha256": "b617334ba8f2b151d31c8d24106d0a9ee811c7e0d90c6c129b4b68a5cccb8293",
+    "metadata": {
+     "I_eV": 74.0,
+     "material": "pmma",
+     "material_density_g_cm3": 1.19,
+     "material_mass_fractions": {
+      "C": 0.5998402650050711,
+      "H": 0.08054191635248056,
+      "O": 0.3196178186424483
+     },
+     "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+     "options": {
+      "barkas": true,
+      "bloch": true,
+      "effective_charge": true,
+      "mott": true,
+      "shell": true
+     },
+     "projectile": "oxygen16",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "start_range": "constant-S approximation a*E_min/S(E_min)"
+    },
+    "projectile": "oxygen16",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "source_sha256": null
+   }
+  ],
+  "proton": [
+   {
+    "I_eV_effective": 78.0,
+    "I_eV_requested": 78.0,
+    "content_sha256": null,
+    "dataset_id": null,
+    "e_max_mev": 500.0,
+    "e_min_mev": 1.0,
+    "material": "water",
+    "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+    "metadata": {
+     "I_eV": 78.0,
+     "material": "water",
+     "material_density_g_cm3": 1.0,
+     "material_mass_fractions": {
+      "H": 0.11189834407236524,
+      "O": 0.8881016559276347
+     },
+     "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+     "options": {
+      "barkas": true,
+      "bloch": true,
+      "effective_charge": true,
+      "mott": true,
+      "shell": true
+     },
+     "projectile": "proton",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "start_range": "constant-S approximation a*E_min/S(E_min)"
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "source_sha256": null
+   },
+   {
+    "I_eV_effective": 74.0,
+    "I_eV_requested": 74.0,
+    "content_sha256": null,
+    "dataset_id": null,
+    "e_max_mev": 500.0,
+    "e_min_mev": 1.0,
+    "material": "pmma",
+    "material_sha256": "b617334ba8f2b151d31c8d24106d0a9ee811c7e0d90c6c129b4b68a5cccb8293",
+    "metadata": {
+     "I_eV": 74.0,
+     "material": "pmma",
+     "material_density_g_cm3": 1.19,
+     "material_mass_fractions": {
+      "C": 0.5998402650050711,
+      "H": 0.08054191635248056,
+      "O": 0.3196178186424483
+     },
+     "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+     "options": {
+      "barkas": true,
+      "bloch": true,
+      "effective_charge": true,
+      "mott": true,
+      "shell": true
+     },
+     "projectile": "proton",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "bethe",
+     "start_range": "constant-S approximation a*E_min/S(E_min)"
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "source_sha256": null
+   }
+  ]
+ },
+ "metadata": {
+  "alpha/PMMA": {
+   "default": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_bare_mixed": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "bare_mixed",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_eff": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "eff",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   }
+  },
+  "alpha/WATER": {
+   "default": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_bare_mixed": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "bare_mixed",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_eff": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "eff",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "alpha",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   }
+  },
+  "carbon12/PMMA": {
+   "default": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "carbon12",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_bare_mixed": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "bare_mixed",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "carbon12",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_eff": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "eff",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "carbon12",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   }
+  },
+  "carbon12/WATER": {
+   "default": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "carbon12",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_bare_mixed": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "bare_mixed",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "carbon12",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_eff": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "eff",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "carbon12",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   }
+  },
+  "oxygen16/PMMA": {
+   "default": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "oxygen16",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_bare_mixed": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "bare_mixed",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "oxygen16",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_eff": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "eff",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "oxygen16",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   }
+  },
+  "oxygen16/WATER": {
+   "default": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "oxygen16",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_bare_mixed": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "bare_mixed",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "oxygen16",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_eff": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "ls": "eff",
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "oxygen16",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   }
+  },
+  "proton/PMMA": {
+   "default": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_bare_mixed": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_eff": {
+    "I_eV": 74.0,
+    "material": "pmma",
+    "material_density_g_cm3": 1.19,
+    "material_mass_fractions": {
+     "C": 0.5998402650050711,
+     "H": 0.08054191635248056,
+     "O": 0.3196178186424483
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   }
+  },
+  "proton/WATER": {
+   "default": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_bare_mixed": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   },
+   "ls_eff": {
+    "I_eV": 78.0,
+    "material": "water",
+    "material_density_g_cm3": 1.0,
+    "material_mass_fractions": {
+     "H": 0.11189834407236524,
+     "O": 0.8881016559276347
+    },
+    "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+    "options": {
+     "barkas": true,
+     "bloch": true,
+     "effective_charge": true,
+     "mott": true,
+     "shell": true
+    },
+    "projectile": "proton",
+    "range_construction": "exact-loglog-quadrature-v1",
+    "source": "bethe",
+    "start_range": "constant-S approximation a*E_min/S(E_min)"
+   }
+  }
+ },
+ "sha256": {
+  "alpha": "ca56a7fed8aac27483c136065df920e5aaa41cedcaee7e81faeef0e8f9c8b35e",
+  "carbon12": "811cd94bb6b04526ca9af510edf0e494f656651ba6e071d16fc33db6e55a35ec",
+  "oxygen16": "ad8d499f106e187ec588c420bc48c8068d8ce60b97f900b719247f143e2bbf4d",
+  "proton": "7aa8ccff804ff0540a1bbfcc0109c453bcfed63521cfa3ec70fcbfe8d1d9e2ee"
+ }
+}

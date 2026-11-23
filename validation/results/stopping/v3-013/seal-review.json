@@ -1,0 +1,37 @@
+{
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "b53b2800f81a4e64",
+    "payload_sha256": "a6d28e6b2b88545fab7d61dd2d3e23387d14e0df0337b0a58abebeefe20e8a79",
+    "public_key": "2fa323ebc164551322a8268176a463563f8036a2a91cf6de02d7a1ebfe407bfe",
+    "schema": "ionmc-attestation-1",
+    "signature": "f8f811503f4422f225681dfed95e18a9fffead63fc52cc4438c36615b676dd30e9e60e91d8c0e1db8acc4cd0cc8049d0dec604eb042f67628e084a543177f20e",
+    "signed_at_utc": "2026-11-22T13:39:50.424828+00:00",
+    "signer": "codex-worker"
+  },
+  "base_sha": "9926cc00c1d889b51fa510b02e2936aef2b7f5f5",
+  "experiment_id": "experiment-v3",
+  "finished_at": "2026-11-22T13:39:50.421932+00:00",
+  "head_sha": "5de58656f5c6f95b9a2f113115929c1d540e8872",
+  "model": "gpt-5.6-sol",
+  "provider": "openai",
+  "report": {
+    "findings": [
+      {
+        "description": "This intervention remains marked open and has no response.json, although the acceptance plan and commit message state that the operator performed the requested fast-forward. V3 requires an actual operator action or response to be recorded through the intervention resolution mechanism. Preserve and record the actual completion response if available, or remove the unsupported completion claim.",
+        "path": "reference_requests/interventions/IR-20261119-083449-21B26A/request.json:50",
+        "severity": "minor"
+      }
+    ],
+    "head_sha": "5de58656f5c6f95b9a2f113115929c1d540e8872",
+    "summary": "Both prior important findings are resolved. Amendment A-2 now includes the substantive structured operator authorization, and the evaluator durably records complete per-group Warp module maps and canonical digests with focused regression coverage. No blocking or important findings remain; one intervention-record consistency issue is minor.",
+    "verdict": "pass"
+  },
+  "report_sha256": "e05b1d1df54578813f7cd4e413a55f2330d1ae72e38c1ea14369e346fca297ca",
+  "review_id": "REVIEW-42e8dbb1257340f088da3f6a1cd91240",
+  "schema_version": 1,
+  "started_at": "2026-11-22T13:36:35.710510+00:00",
+  "status": "passed",
+  "task_id": "V3-013",
+  "tool": "codex exec"
+}

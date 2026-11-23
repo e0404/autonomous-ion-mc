@@ -1,6 +1,7 @@
 """Sealed launcher of the amendment I3-FU-1 diagnostics (stdlib only; Codex REVIEW-cf6fa397).
 
-Usage (the only accepted launch of ``i3_band_diagnostic.py`` and ``i3fu2_evaluate.py``)::
+Usage (the only accepted launch of ``i3_band_diagnostic.py``, ``i3fu2_evaluate.py``, and, for
+V3-013, ``env_digest.py`` and ``v13_evaluate.py``)::
 
     .venv/bin/python -I -S -B -X pycache_prefix="$(mktemp -d)" \
         validation/scripts/stopping/sealed_launch.py <target script> <args...>
@@ -126,6 +127,8 @@ REPO = Path(__file__).resolve().parents[3]
 ALLOWED_TARGETS = (
     "validation/scripts/stopping/i3_band_diagnostic.py",
     "validation/scripts/stopping/i3fu2_evaluate.py",
+    "validation/scripts/stopping/env_digest.py",  # V3-013 sealed environment digests
+    "validation/scripts/stopping/v13_evaluate.py",  # V3-013 sealed evaluator
 )
 
 

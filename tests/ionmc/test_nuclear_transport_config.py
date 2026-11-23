@@ -42,6 +42,7 @@ from ionmc.species import producible
 from ionmc.transport.channels import MAX_PARTICLES, STRAGGLING_MARGIN, mixed_path_bound_mm
 from ionmc.transport.scoring_ref import ReferenceChannelScorer
 from ionmc.transport.tables import _ARRAY_FIELDS, TransportTables
+from tests.ionmc._user_sources import UserSpecMixin
 
 MakeConfig = Callable[..., SimulationConfig]
 MATS = (WATER, ADIPOSE_TISSUE_ICRP, AIR)
@@ -76,7 +77,7 @@ def _libm_matches_recording() -> bool:
     return hashlib.sha256(x.tobytes()).hexdigest()[:16] == _LIBM_CANARY
 
 
-class _NistStarStandIn:
+class _NistStarStandIn(UserSpecMixin):
     """Carries the name of the NIST PSTAR/ASTAR source (which has no deuteron table)."""
 
     name = "nist-star"

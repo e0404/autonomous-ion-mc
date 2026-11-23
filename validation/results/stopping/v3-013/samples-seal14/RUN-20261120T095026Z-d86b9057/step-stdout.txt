@@ -1,0 +1,512 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.5
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA RTX A6000" (48 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /workspace/validation/generated/vc-sample-case1-icru90-water-v1-k0/warp-cache-vc-case1-icru90-water-v1-k0/1.17.0
+Module _table_node_kernel__locals__nodes_160cf81d 930f1d7 load on device 'cpu' took 2206.41 ms  (compiled)
+Module transport_float64_plain_c272ba79 c272ba7 load on device 'cpu' took 3166.23 ms  (compiled)
+Module transport_float64_plain_c272ba79 2975782 load on device 'cpu' took 1486.50 ms  (compiled)
+#JSON-BEGIN
+{
+ "backend": "warp-cpu",
+ "case": 1,
+ "counters": {
+  "accumulator_overflow": 0,
+  "energy_inversion": 0,
+  "genealogy_overflow": 0,
+  "mcs_mapping_failure": 0,
+  "mcs_table_bracket_miss": 0,
+  "queue_overflow": 0,
+  "scoring_pieces_overflow": 0,
+  "source_energy_out_of_range": 0,
+  "stall": 0,
+  "step_truncation": 0,
+  "straggling_rejection": 0
+ },
+ "e_mev_per_u": 75.0,
+ "effective_config": {
+  "backend": "warp-cpu",
+  "chunk_histories": 262144,
+  "cpu_workers": 1,
+  "geometry": {
+   "materials": [
+    "water"
+   ],
+   "origin_mm": [
+    -60.0,
+    -60.0,
+    0.0
+   ],
+   "shape": [
+    1,
+    1,
+    1
+   ],
+   "spacing_mm": [
+    120.0,
+    120.0,
+    100.0
+   ],
+   "z_exit_mm": null
+  },
+  "max_steps": 1560,
+  "max_steps_origin": "computed",
+  "mcs_mapping": {
+   "depth_fractions": [
+    0.001,
+    0.01,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    0.9,
+    0.97
+   ],
+   "evaluation": "table",
+   "fdm_domain_edge_mev": 300.0,
+   "fdm_extrapolated": false,
+   "mapping": "exact-Omega b-matching (decision 0043 section 3)",
+   "p1v1_eq_kinetic_energy_hi_mev": 216.7046349056192,
+   "p1v1_eq_kinetic_energy_mev": 216.7046349056192,
+   "proton_table_edge_mev": 4000.0,
+   "table": {
+    "bracket_factor": 10.0,
+    "bracket_half_width_per_material": [
+     0.0026434192110098777
+    ],
+    "bracket_min": 1e-05,
+    "contract": "mapping evaluation = exact root solve on every step (Illinois iteration of b_p(pv_eq, pv_eq r) = b_ion(pv, p1v1) to |residual| <= 1e-13 or a step/bracket <= 1e-14 in ln pv_eq, float64, the root path's tolerance and status codes); the pv_eq/pv table only supplies the starting bracket (half-width max(10 x the table's interpolation estimate, 1e-5) around the bilinear guess, widened once x10, else the full proton-path bracket, counted as mcs_table_bracket_miss); a state outside the table or in a cell with an invalid node (no root at a node) has no guess and uses the full proton-path bracket from the start, as mcs_mapping_eval 'root' (not counted as a miss); the fraction of covered cells is recorded (table_coverage, 1.0 for every validated run: validation fails closed when a reachable node has no root, in both modes); the interpolation error of the table is a performance diagnostic (build-time estimate recorded), not a correctness claim",
+    "estimated_cells": 379,
+    "interp_estimate": 0.00026434192110098777,
+    "interp_estimate_note": "build-time estimate of |ln pv_eq(table) - ln pv_eq(root)| (bilinear bound from second differences on a 2x-refined root-solve grid, safety factor 2): a performance diagnostic, not a correctness claim",
+    "interp_estimate_per_material": [
+     0.00026434192110098777
+    ],
+    "kind": "pv_eq/pv, bilinear in (ln pv, ln(p1v1/pv)) (decision 0043 section 3)",
+    "ln_pv_range": [
+     2.751335994033482,
+     6.359971777196905
+    ],
+    "ln_r_range": [
+     9.999995000003334e-07,
+     3.608636783162923
+    ],
+    "n_materials": 1,
+    "n_pv": 128,
+    "n_r": 128,
+    "p1v1_max_mev": 578.2306151209986,
+    "p1v1_min_mev": 577.0758862725672,
+    "pv_lo_mev": 15.663544313383198,
+    "refined_points": 2025,
+    "root_residual_tol": 1e-13,
+    "root_step_tol": 1e-14,
+    "safety_factor": 2.0,
+    "sha256": "997941a92025ecabd31bb87adfd9f8c9ab98e6d4563020441bc083e32f386bc1",
+    "table_coverage": 1.0,
+    "table_coverage_note": "fraction of the table cells meeting the band of initial states with four valid nodes; 1.0 for every validated run (validate fails closed when a reachable node has no root, in both evaluations); a state outside the table or in an uncovered cell has no starting guess and uses the full proton-path bracket, as mcs_mapping_eval 'root'; interp_estimate is None for a material without an estimated cell",
+    "table_coverage_per_material": [
+     1.0
+    ]
+   }
+  },
+  "n_batches": 40,
+  "n_histories": 1000000,
+  "physics": {
+   "delta_electrons": "local",
+   "e_cut_effective_mev": 8.0,
+   "e_cut_ion_mev_per_u": 2.0,
+   "e_cut_mev": 2.0,
+   "end_of_range_model": "default",
+   "end_of_range_model_effective": "continuous_residual_v1",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "max_energy_loss_fraction": 0.02,
+   "max_rejection_attempts": 64,
+   "max_step_mm": 1.0,
+   "mcs_model": "differential_moliere",
+   "multiple_scattering": true,
+   "nuclear": false,
+   "range_alpha": 0.2,
+   "range_rho_f_mm": 0.1,
+   "scattering_E_s_mev": 15.0,
+   "short_step_fraction": 0.01,
+   "straggling": true,
+   "straggling_model": "bohr_gamma_v1",
+   "truncated_hinge_diagnostic": false
+  },
+  "precision": "float64",
+  "production": false,
+  "rng": {
+   "counter": "(history, genealogy id, block, purpose)",
+   "generator": "philox4x32-10",
+   "key": "seed low/high 32 bits",
+   "u01": "((w >> 8) + 0.5) * 2**-24"
+  },
+  "scattering_length_g_cm2": [
+   46.88050454803533
+  ],
+  "scoring": [
+   {
+    "name": "idd",
+    "origin_mm": [
+     -60.0,
+     -60.0,
+     0.0
+    ],
+    "shape": [
+     1,
+     1,
+     2000
+    ],
+    "spacing_mm": [
+     120.0,
+     120.0,
+     0.05
+    ]
+   }
+  ],
+  "scoring_pieces": 64,
+  "seed": 20612004,
+  "source": {
+   "a": 4,
+   "energy_sigma_mev": 0.0,
+   "kinetic_energy_mev": 300.0,
+   "lateral_sigma_mm": 0.0,
+   "mass_mev": 3727.3794066,
+   "position_mm": [
+    0.0,
+    0.0,
+    -0.001
+   ],
+   "projectile": "alpha",
+   "z": 2
+  },
+  "stopping": {
+   "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+   "circular_rows": [
+    "geant4-icru90-stopping-11.4.2",
+    "I2 (ICRU 90 part)",
+    "decision-0038 ICRU 90 comparisons"
+   ],
+   "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+   "data_declared": [
+    {
+     "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+     "dataset_id": "geant4-icru90-stopping-11.4.2",
+     "licence": "Geant4 Software License",
+     "member": null,
+     "member_sha256": null,
+     "parser": "icru90",
+     "use_role": "construction-permitted"
+    }
+   ],
+   "data_used": [
+    {
+     "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+     "pin": {
+      "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+      "dataset_id": "geant4-icru90-stopping-11.4.2",
+      "licence": "Geant4 Software License",
+      "member": null,
+      "member_sha256": null,
+      "parser": "icru90",
+      "use_role": "construction-permitted"
+     },
+     "role_in_this_run": "construction",
+     "table": [
+      "alpha",
+      "water"
+     ]
+    }
+   ],
+   "decision": "0044",
+   "domain": {
+    "e_max_per_u": {
+     "alpha": 250.0,
+     "proton": 500.0
+    },
+    "e_min_per_u": {
+     "alpha": 1.0,
+     "proton": 1.0
+    },
+    "material_rule": "structural liquid water (composition and density, not the name) and requested I = 78 eV (any other requested I fails closed)",
+    "species": [
+     "alpha",
+     "proton"
+    ]
+   },
+   "domain_resolved": {
+    "alpha": {
+     "e_max_per_u": 250.0,
+     "e_min_per_u": 1.0
+    }
+   },
+   "evidence_at_run": [
+    {
+     "graded_at_sha": null,
+     "plan": "validation/plans/v3-013-acceptance.md",
+     "row": null,
+     "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+     "status": "consistency-only"
+    }
+   ],
+   "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
+   "kind": "tabulated",
+   "mcs_proton_path_stopping": "bethe-ionmc-v1",
+   "model_id_effective": "icru90-water-v1",
+   "model_id_requested": "icru90-water-v1",
+   "options": {
+    "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
+    "class": "Icru90WaterSource",
+    "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
+    "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
+    "i_value": "78 eV required: any other requested water I fails closed",
+    "ls_effective": "off",
+    "ls_requested": "off",
+    "points_per_decade": 200,
+    "source_name": "icru90",
+    "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
+   },
+   "range_construction": "exact-loglog-quadrature-v1",
+   "range_start": "icru90-integrated-from-lowest-node-v1",
+   "selected_by": "stopping_model",
+   "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+   "species_transported": [
+    "alpha"
+   ],
+   "version": "1"
+  },
+  "tables": {
+   "materials": [
+    {
+     "I_eV_effective": 78.0,
+     "I_eV_requested": 78.0,
+     "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+     "dataset_id": "geant4-icru90-stopping-11.4.2",
+     "e_max_mev": 1000.0,
+     "e_min_mev": 4.0,
+     "energy_axis": "total_kinetic_mev",
+     "material": "water",
+     "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+     "metadata": {
+      "I_eV": 78.0,
+      "I_eV_model": 78.0,
+      "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+      "dataset_id": "geant4-icru90-stopping-11.4.2",
+      "dataset_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+      "dataset_version": "Geant4 v11.4.2 G4ICRU90StoppingData.cc",
+      "decision": "0044",
+      "file_content_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+      "material": "water",
+      "material_density_g_cm3": 1.0,
+      "material_mass_fractions": {
+       "H": 0.11189834407236524,
+       "O": 0.8881016559276347
+      },
+      "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+      "model_id": "icru90-water-v1",
+      "projectile": "alpha",
+      "range_construction": "exact-loglog-quadrature-v1",
+      "retrieved_at": "2026-10-03T18:29:05+00:00",
+      "source": "tabulated",
+      "source_name": "icru90",
+      "start_range": "icru90-integrated-from-lowest-node-v1",
+      "version": "1"
+     },
+     "projectile": "alpha",
+     "range_construction": "exact-loglog-quadrature-v1",
+     "source": "tabulated",
+     "source_sha256": null
+    }
+   ],
+   "n_e": 481,
+   "n_r": 3313,
+   "sha256": "39ac44e005771bc5c17c69ee6987a9ed26351ab318d6aaffb6bfbefb68d29c49",
+   "stopping_source": "icru90"
+  },
+  "tallies": null,
+  "unit_direction": [
+   0.0,
+   0.0,
+   1.0
+  ]
+ },
+ "energy_balance": {
+  "closure_residual_mev": 0.0,
+  "cutoff_mev": 7918900.071215815,
+  "escaped_mev": 0.0,
+  "in_grid_mev": [
+   299999999.9999831
+  ],
+  "initial_mev": 300000000.0,
+  "outside_mev": [
+   0.0
+  ],
+  "quantization_mev": [
+   1.6901895436027833e-05
+  ],
+  "relative_residual": 0.0,
+  "step_deposit_mev": 292081099.9287842,
+  "truncated_mev": 0.0,
+  "unaccounted_mev": 0.0
+ },
+ "environment_digests": {
+  "digests": {
+   "interpreter": "56bfd38b490ae57cd942ad6a7573cef9ad6c43d1c903bdfba92fa88512953c36",
+   "numpy": "269e58d934e3bf12cfb9297db7fa4ecd70ddd8c06973b20276014a791072b497",
+   "stdlib": "1e6d8a0c0e8de46b5af59de92b7c564ec3fed5992bf0a8ce1f5e9080e8f5e89c",
+   "uv_lock": "0d7e79d3b88fd95f7b59d717efa27d6bfb9b78a435fb2ccc5b991e4347d37299",
+   "warp": "3a29fce101667eef02800a559ad9f82ea6694a8026ee7f922070db020caea02a"
+  },
+  "file_counts": {
+   "interpreter": 1,
+   "numpy": 930,
+   "stdlib": 887,
+   "uv_lock": 1,
+   "warp": 598
+  },
+  "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "schema": "ionmc-v13-environment-digests-1",
+  "sys_version": "3.12.0 (main, Oct 18 2023, 16:27:16) [GCC 11.4.0]",
+  "versions": {
+   "numpy": "2.5.3",
+   "python": "3.12.0",
+   "warp": "1.17.0"
+  }
+ },
+ "environment_digests_note": null,
+ "format": 1,
+ "frozen_histories": 1000000,
+ "git_sha": "c1cfaf9b043dc8a61b1dfeb80775255566113ee9",
+ "histories": 1000000,
+ "ion": "he",
+ "k": 0,
+ "model": "icru90-water-v1",
+ "n_batches": 40,
+ "npz": "ionmc-vc-case1-icru90-water-v1-k0.npz",
+ "npz_sha256": "018ba03917c2597b9805257821a9c8d0d06200e9a6b75d777c8c1cce31f5b08d",
+ "pass": true,
+ "precision": "float64",
+ "r_index": 0,
+ "reduced": false,
+ "row": "vc-sample",
+ "seed": 20612004,
+ "seed_family": {
+  "base": 20612004,
+  "family": "ion13",
+  "k": 0,
+  "r_index": 0
+ },
+ "stopping_identity": {
+  "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+  "circular_rows": [
+   "geant4-icru90-stopping-11.4.2",
+   "I2 (ICRU 90 part)",
+   "decision-0038 ICRU 90 comparisons"
+  ],
+  "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+  "data_declared": [
+   {
+    "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+    "dataset_id": "geant4-icru90-stopping-11.4.2",
+    "licence": "Geant4 Software License",
+    "member": null,
+    "member_sha256": null,
+    "parser": "icru90",
+    "use_role": "construction-permitted"
+   }
+  ],
+  "data_used": [
+   {
+    "cache_dir": "/workspace/.ionmc-cache/ionmc-data",
+    "pin": {
+     "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+     "dataset_id": "geant4-icru90-stopping-11.4.2",
+     "licence": "Geant4 Software License",
+     "member": null,
+     "member_sha256": null,
+     "parser": "icru90",
+     "use_role": "construction-permitted"
+    },
+    "role_in_this_run": "construction",
+    "table": [
+     "alpha",
+     "water"
+    ]
+   }
+  ],
+  "decision": "0044",
+  "domain": {
+   "e_max_per_u": {
+    "alpha": 250.0,
+    "proton": 500.0
+   },
+   "e_min_per_u": {
+    "alpha": 1.0,
+    "proton": 1.0
+   },
+   "material_rule": "structural liquid water (composition and density, not the name) and requested I = 78 eV (any other requested I fails closed)",
+   "species": [
+    "alpha",
+    "proton"
+   ]
+  },
+  "domain_resolved": {
+   "alpha": {
+    "e_max_per_u": 250.0,
+    "e_min_per_u": 1.0
+   }
+  },
+  "evidence_at_run": [
+   {
+    "graded_at_sha": null,
+    "plan": "validation/plans/v3-013-acceptance.md",
+    "row": null,
+    "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+    "status": "consistency-only"
+   }
+  ],
+  "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
+  "kind": "tabulated",
+  "mcs_proton_path_stopping": "bethe-ionmc-v1",
+  "model_id_effective": "icru90-water-v1",
+  "model_id_requested": "icru90-water-v1",
+  "options": {
+   "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
+   "class": "Icru90WaterSource",
+   "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
+   "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
+   "i_value": "78 eV required: any other requested water I fails closed",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "points_per_decade": 200,
+   "source_name": "icru90",
+   "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
+  },
+  "range_construction": "exact-loglog-quadrature-v1",
+  "range_start": "icru90-integrated-from-lowest-node-v1",
+  "selected_by": "stopping_model",
+  "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+  "species_transported": [
+   "alpha"
+  ],
+  "version": "1"
+ },
+ "suite": "lv13",
+ "valid": true,
+ "wall_s": 4411.084840572003,
+ "warp_modules": {
+  "1.17.0/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7.cpp": "57f41bb522c16f0a374214472c65e42f97c248c4c7ba99511fcc17fc7bc80ce4",
+  "1.17.0/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7.cpu1bc6e1db.o": "58295b8c27d19be117b05ae64a4d32a07e72b07258e3b3ed688ab14931cc28a8",
+  "1.17.0/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7/wp__table_node_kernel__locals__nodes_160cf81d_930f1d7.meta": "c7998788c9214860f162c8c06a143db17c2c278b18f29f81e7ec559d4052c2fa",
+  "1.17.0/wp_transport_float64_plain_c272ba79_2975782/wp_transport_float64_plain_c272ba79_2975782.cpp": "601ab77e9d29e07776ca9b939e33c85f118ab2e9a804213d5e01502fbc33179c",
+  "1.17.0/wp_transport_float64_plain_c272ba79_2975782/wp_transport_float64_plain_c272ba79_2975782.cpu1bc6e1db.o": "a42d8d74432fdf17299b2ad20646c810cc2c114428e8be92d7010bc4884c167d",
+  "1.17.0/wp_transport_float64_plain_c272ba79_2975782/wp_transport_float64_plain_c272ba79_2975782.meta": "004c548b108d6977573f57ce7707af827bab157924d730e1727f5c362fd1bef4",
+  "1.17.0/wp_transport_float64_plain_c272ba79_c272ba7/wp_transport_float64_plain_c272ba79_c272ba7.cpp": "39e0e2fb34927051ff13320000a566e78ad01b42b50f8212eed86d4daf2a5bfe",
+  "1.17.0/wp_transport_float64_plain_c272ba79_c272ba7/wp_transport_float64_plain_c272ba79_c272ba7.cpu1bc6e1db.o": "7c196043be1b3a5aae6df5e6936662a5c192e679835c42782ab69c2981c7b092",
+  "1.17.0/wp_transport_float64_plain_c272ba79_c272ba7/wp_transport_float64_plain_c272ba79_c272ba7.meta": "004c548b108d6977573f57ce7707af827bab157924d730e1727f5c362fd1bef4"
+ }
+}
+#JSON-END

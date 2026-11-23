@@ -1,0 +1,955 @@
+"""Model ``icru90-water-v1`` (decision 0044; V3-013 step S4).
+
+Rows ID/CC-HASH, DOM-1, DOM-3, DOM-4, DOM-5, DOM-6, ROLE-1, PER-2, PER-3 (ICRU case) and the
+consistency checks CC-NODE, CC-INT, CC-I2 and CC-SPAN (section A.5) of
+``validation/plans/v3-013-acceptance.md``. The A.5 checks are gating for implementation
+correctness and are never evidence. The tests that need the ICRU 90 object (and, for CC-I2 and the
+committed aggregates, the PSTAR/ASTAR objects) find the cache like the other cache-dependent tests
+(``cache.resolve_cache_dir()``: ``IONMC_CACHE_DIR`` or the default) and skip with a message when an
+object is absent; ``IONMC_REQUIRE_DATA=1`` makes that a failure. The tests that need no data run on
+synthetic power-law arrays. No table value is stored in Git.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import math
+import os
+import re
+import shutil
+import sys
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pytest
+
+from ionmc.config import PhysicsOptions, RunOptions, SimulationConfig, validate
+from ionmc.data import cache
+from ionmc.data.icru90 import Icru90Water, load_icru90_water
+from ionmc.errors import UnsupportedCombinationError
+from ionmc.geometry import BoxPhantom
+from ionmc.materials import PMMA, WATER, Material, water
+from ionmc.physics import stopping_icru90, stopping_models
+from ionmc.physics.projectiles import ALPHA, CARBON12, DEUTERON, OXYGEN16, PROTON
+from ionmc.physics.stopping import BetheStoppingSource
+from ionmc.physics.stopping_evidence import STOPPING_CIRCULAR_ROWS, STOPPING_EVIDENCE
+from ionmc.physics.stopping_icru90 import (
+    Icru90WaterSource,
+    build_icru90_source,
+    icru90_start_range,
+)
+from ionmc.physics.stopping_models import STOPPING_MODELS, resolve, spec_of, spec_sha256
+from ionmc.physics.stopping_selection import (
+    check_window,
+    select,
+    table_model_id,
+    validate_identity_block,
+)
+from ionmc.scoring import ScoringGrid
+from ionmc.sources import PencilBeamSource
+from ionmc.transport.tables import TransportTables
+
+# The record appended once by the V3-013 V-C1 grading (plan §B).
+VC1_PASS = "topas-agreement-shared-lineage:V-C1:PASS"
+MID = "icru90-water-v1"
+ICRU_ID = "geant4-icru90-stopping-11.4.2"
+PSTAR_ID, ASTAR_ID = "nist-pstar-water-2005", "nist-astar-water-2005"
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "validation/scripts/stopping/v13_consistency.py"
+RESULTS = ROOT / "validation/results/stopping/v3-013"
+REL = 1.0e-12
+
+
+def _need(ids: tuple[str, ...]) -> Path:
+    d = cache.resolve_cache_dir()
+    try:
+        for ds in ids:
+            cache.verify(ds, d)
+    except (FileNotFoundError, cache.IntegrityError) as exc:
+        if os.environ.get("IONMC_REQUIRE_DATA") == "1":
+            pytest.fail(f"IONMC_REQUIRE_DATA=1 but {ids} are not cached: {exc}")
+        pytest.skip(f"{ids} not cached in {d}")
+    return d
+
+
+@pytest.fixture(scope="module")
+def cdir() -> Path:
+    return _need((ICRU_ID,))
+
+
+@pytest.fixture(scope="module")
+def cdir_all() -> Path:
+    return _need((ICRU_ID, PSTAR_ID, ASTAR_ID))
+
+
+@pytest.fixture(scope="module")
+def gen() -> Any:
+    spec = importlib.util.spec_from_file_location("v13_consistency", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    m = importlib.util.module_from_spec(spec)
+    sys.modules["v13_consistency"] = m
+    spec.loader.exec_module(m)
+    return m
+
+
+@pytest.fixture(scope="module")
+def data(cdir: Path) -> Icru90Water:
+    return load_icru90_water(cache.verify(ICRU_ID, cdir))
+
+
+def _synthetic() -> Icru90Water:
+    """Power-law arrays S = c E_u^-p per projectile (no ICRU value): total energies span the
+    windows of the model on both sides, the alpha energies are total (4 E_u)."""
+    e_p = np.geomspace(0.1, 1000.0, 41)
+    e_a = np.geomspace(0.4, 1000.0, 41)
+    return Icru90Water(
+        e_p,
+        50.0 * e_p**-0.8,
+        e_a,
+        150.0 * (e_a / 4.0) ** -0.7,
+        content_sha256="synthetic",
+        dataset_id=None,
+    )
+
+
+def _cfg(proj: Any = PROTON, e_u: float | None = None, **physics: Any) -> SimulationConfig:
+    e_u = e_u if e_u is not None else (20.0 if proj.z == 1 else 50.0)
+    sigma = physics.pop("sigma_mev", 0.0)
+    geo = physics.pop("geometry", None) or BoxPhantom(
+        (-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), WATER
+    )
+    physics.setdefault("stopping_model", MID)
+    return SimulationConfig(
+        source=PencilBeamSource(proj, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), e_u * proj.a, sigma, 0.0),
+        geometry=geo,
+        scoring=(ScoringGrid((-10.0, -10.0, 0.0), (2.0, 2.0, 2.0), (10, 10, 20)),),
+        physics=PhysicsOptions(nuclear=physics.pop("nuclear", False), **physics),
+        run=RunOptions(backend="python", precision="float64", seed=1, n_histories=2, n_batches=2),
+    )
+
+
+# ---- registered spec (cache-independent) ----
+
+
+def test_registered_spec_is_cache_independent_and_carries_one_construction_pin() -> None:
+    from ionmc.data.registry import DATASETS
+
+    spec = STOPPING_MODELS[MID]
+    assert spec.kind == "tabulated" and spec.version == "1" and spec.decision == "0044"
+    (pin,) = spec.data
+    ds = DATASETS[ICRU_ID]
+    assert pin.dataset_id == ICRU_ID and pin.archive_sha256.startswith("afd14794")
+    assert (pin.archive_sha256, pin.parser, pin.licence) == (ds.sha256, "icru90", ds.license)
+    assert pin.licence == "Geant4 Software License"
+    assert pin.member is None and pin.member_sha256 is None
+    assert pin.use_role == "construction-permitted"
+    assert ds.role == "evaluation"  # the dataset's own role is unchanged by the model
+    assert spec.interpolation == "log-log of S onto 200/decade from 1 MeV/u"
+    assert spec.range_start == "icru90-integrated-from-lowest-node-v1"
+    assert spec.domain.species == frozenset({"proton", "alpha"})
+    assert spec.domain.material_rule == stopping_models.MATERIAL_RULE_WATER_I78
+    assert spec.domain.e_min_per_u == {"proton": 1.0, "alpha": 1.0}
+    assert spec.domain.e_max_per_u == {"proton": 500.0, "alpha": 250.0}
+    assert spec.options["points_per_decade"] == 200
+    digest = spec_sha256(spec)
+    assert digest not in {spec_sha256(s) for k, s in STOPPING_MODELS.items() if k != MID}
+    assert [r.status for r in STOPPING_EVIDENCE[digest]] == ["consistency-only", VC1_PASS]
+    new = STOPPING_EVIDENCE[digest][1]
+    assert new.row == "V-C1"
+    assert re.fullmatch(r"[0-9a-f]{40}", new.graded_at_sha or "")
+    assert new.graded_at_sha == "9f1fa8ecae082307776e8001fb0708038a3eef2c"
+    assert not any(r.status == "validated" for r in STOPPING_EVIDENCE[digest])
+    # the circular rows: the dataset and the rows named by plan row PER-2
+    assert STOPPING_CIRCULAR_ROWS[digest] == (
+        ICRU_ID,
+        "I2 (ICRU 90 part)",
+        "decision-0038 ICRU 90 comparisons",
+    )
+
+
+def test_capabilities_list_the_model_with_pin_licence_role_and_record() -> None:
+    import ionmc
+
+    cap = ionmc.capabilities()["physics"]["stopping_models"]["models"][MID]
+    assert cap["data_pins"] == [
+        {
+            "dataset_id": ICRU_ID,
+            "licence": "Geant4 Software License",
+            "use_role": "construction-permitted",
+        }
+    ]
+    assert [r["status"] for r in cap["evidence"]] == ["consistency-only", VC1_PASS]
+    assert cap["domain"]["species"] == ["alpha", "proton"]
+
+
+@pytest.mark.parametrize("role", ["evaluation-only", "lineage-only"])
+def test_role1_a_non_construction_pin_cannot_be_resolved(
+    role: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = STOPPING_MODELS[MID]
+    weak = replace(spec, data=(replace(spec.data[0], use_role=role),))
+    monkeypatch.setitem(stopping_models._REGISTRY, MID, weak)
+    with pytest.raises(ValueError, match="use_role"):
+        resolve(MID, cache_dir="/nonexistent")  # refused before any cache access
+
+
+# ---- start range and synthetic construction (cache-independent) ----
+
+
+def test_start_range_is_exact_on_a_power_law_with_constant_s_only_below_the_lowest_node() -> None:
+    c, p, a, e0 = 60.0, 0.75, 4.0, 0.2
+    e = np.geomspace(e0, 100.0, 30)
+    s = c * e**-p
+    got = icru90_start_range(e, s, a)
+    exact = a * e0 ** (p + 1.0) / c + a / (c * (p + 1.0)) * (1.0 - e0 ** (p + 1.0))
+    assert got == pytest.approx(exact, rel=REL)
+    # a node exactly at the start energy adds no extra node; a lowest node at the start gives
+    # the constant-S term only
+    e1 = np.append(e[e < 1.0], [1.0, 3.0])
+    s1 = c * e1**-p
+    assert icru90_start_range(e1, s1, a) == pytest.approx(exact, rel=REL)
+    assert icru90_start_range(np.array([1.0, 2.0]), np.array([10.0, 8.0]), 4.0) == pytest.approx(
+        0.4, rel=REL
+    )
+    with pytest.raises(ValueError, match="starts at"):
+        icru90_start_range(np.array([2.0, 3.0]), np.array([1.0, 1.0]), 1.0)
+
+
+def test_synthetic_model_tables_windows_and_identity() -> None:
+    model = build_icru90_source(_synthetic())
+    assert isinstance(model, Icru90WaterSource)
+    assert model.window_per_u(PROTON) == (1.0, 500.0) and model.window_per_u(ALPHA) == (1.0, 250.0)
+    for proj, c, p in ((PROTON, 50.0, 0.8), (ALPHA, 150.0, 0.7)):
+        t = model.table(WATER, proj)
+        assert t.energy_per_u[0] == 1.0
+        np.testing.assert_allclose(t.s_el_mass, c * t.energy_per_u**-p, rtol=1e-12)
+        assert t.metadata["model_id"] == MID and t.metadata["version"] == "1"
+        assert t.metadata["decision"] == "0044" and t.metadata["range_construction"]
+        assert table_model_id({"metadata": dict(t.metadata)}, proj) == MID
+        # range: exact power-law integral from the lowest node plus the constant-S term
+        e_lo = 0.1  # lowest node per u of the synthetic arrays
+        a = float(proj.a)
+        r_start = a * e_lo ** (p + 1.0) / c + a / (c * (p + 1.0)) * (1.0 - e_lo ** (p + 1.0))
+        assert t.csda_range_g_cm2[0] == pytest.approx(r_start, rel=REL)
+    assert model.content_sha256_for(PROTON) != model.content_sha256_for(ALPHA)
+    assert len({model.content_sha256, model.content_sha256_for(PROTON)}) == 2
+    # an unverified (synthetic) object is not the registered model: no pin, spec_of unregistered
+    assert spec_of(model)[0] == "unregistered" and spec_of(model)[1].data == ()
+
+
+def test_synthetic_dom1_and_dom4_raise_naming_model_species_material_and_domain() -> None:
+    model = build_icru90_source(_synthetic())
+    for proj in (DEUTERON, CARBON12, OXYGEN16):
+        with pytest.raises(UnsupportedCombinationError) as ei:
+            model.table(WATER, proj)
+        for part in (MID, f"'{proj.name}'", "'water'", "energy any", "domain"):
+            assert part in str(ei.value)
+    for i_ev in (75.0, 78.5, 80.0):
+        with pytest.raises(UnsupportedCombinationError) as ei:
+            model.table(water(i_ev), PROTON)
+        msg = str(ei.value)
+        for part in (MID, "'proton'", "'water'", f"I = {i_ev} eV", "domain", "78.0 eV only"):
+            assert part in msg
+    model.table(water(78.0), PROTON)
+    with pytest.raises(UnsupportedCombinationError, match="'pmma'.*domain"):
+        model.table(PMMA, PROTON)  # structural rule (DOM-2), named by model and domain
+
+
+def test_synthetic_source_must_cover_the_windows() -> None:
+    d = _synthetic()
+    short = replace(
+        d, proton_energy_mev=d.proton_energy_mev[:-8], proton_stopping=d.proton_stopping[:-8]
+    )
+    # the proton window is capped at the array end (no extrapolation)
+    m = build_icru90_source(short)
+    assert m.window_per_u(PROTON)[1] < 500.0
+    high = replace(
+        d, alpha_energy_mev=d.alpha_energy_mev[20:], alpha_stopping=d.alpha_stopping[20:]
+    )
+    with pytest.raises(ValueError, match="outside the array span"):  # starts above 1 MeV/u
+        build_icru90_source(high)
+
+
+# ---- cache-dependent: the loaded model ----
+
+
+def test_resolve_builds_the_registered_model_from_the_verified_cache(
+    cdir: Path, data: Icru90Water
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert isinstance(model, Icru90WaterSource)
+    assert spec_of(model) == (MID, STOPPING_MODELS[MID])
+    changed = Icru90WaterSource(replace(model.proton, points_per_decade=100), model.alpha)
+    assert spec_of(changed)[0] == "unregistered"
+    unverified = build_icru90_source(replace(data, sha256=None, dataset_id=None))
+    assert spec_of(unverified)[0] == "unregistered"
+    for proj in (PROTON, ALPHA):
+        t = model.table(WATER, proj)
+        meta = t.metadata
+        assert meta["model_id"] == MID and meta["version"] == "1" and meta["decision"] == "0044"
+        assert meta["dataset_id"] == ICRU_ID and meta["dataset_sha256"] == data.sha256
+        assert meta["content_sha256"] == model.content_sha256_for(proj)
+        assert meta["I_eV"] == 78.0 and meta["source"] == "tabulated"
+
+
+def test_cc_hash_new_model_metadata_carry_the_id_and_the_hash_differs(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    nist_like = BetheStoppingSource()
+    for proj in (PROTON, ALPHA):
+        t = model.table(WATER, proj)
+        b = BetheStoppingSource().table(WATER, proj)
+        assert "model_id" in t.metadata and "model_id" not in b.metadata
+        h_icru = TransportTables.from_stopping_tables([t], projectile=proj).sha256
+        h_bethe = TransportTables.from_stopping_tables([b], projectile=proj).sha256
+        assert h_icru != h_bethe
+        # same arrays but another model id give another hash (the id is in the identity)
+        other = replace(t, metadata={**t.metadata, "model_id": "icru90-water-v2"})
+        assert TransportTables.from_stopping_tables([other], projectile=proj).sha256 != h_icru
+    assert nist_like.table(WATER, PROTON).metadata.get("model_id") is None
+
+
+def test_cc_span_loader_counts_and_coverage(cdir: Path, data: Icru90Water) -> None:
+    assert data.proton_energy_mev.size == 57 and data.proton_stopping.size == 57
+    assert data.alpha_energy_mev.size == 49 and data.alpha_stopping.size == 49
+    model = resolve(MID, cache_dir=str(cdir))
+    for proj, e_tot in ((PROTON, data.proton_energy_mev), (ALPHA, data.alpha_energy_mev)):
+        lo, hi = model.window_per_u(proj)
+        e_u = e_tot / proj.a
+        assert e_u[0] <= lo and hi <= e_u[-1] * (1 + 1e-12)
+    assert model.window_per_u(PROTON) == (1.0, 500.0)
+    assert model.window_per_u(ALPHA) == (1.0, 250.0)
+
+
+@pytest.mark.parametrize("proj", [PROTON, ALPHA], ids=["proton", "alpha"])
+def test_cc_node_fine_grid_equals_the_loglog_interpolant_of_the_array(
+    cdir: Path, data: Icru90Water, gen: Any, proj: Any
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert gen.cc_node_fine(model, data, proj) <= REL
+    chord = gen.cc_node_chord(model, data, proj)  # report-only: aggregates, no assertion on size
+    assert chord["n_points"] > 0 and math.isfinite(chord["max_abs_relative_deviation"])
+    assert chord["rms_relative_deviation"] <= chord["max_abs_relative_deviation"]
+
+
+@pytest.mark.parametrize("proj", [PROTON, ALPHA], ids=["proton", "alpha"])
+def test_cc_int_aggregates_per_decade_are_finite_and_cover_the_window(
+    cdir: Path, data: Icru90Water, gen: Any, proj: Any
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    out = gen.cc_int(data, proj, model.window_per_u(proj))
+    assert [d["decade_per_u_mev"] for d in out] == [[1.0, 10.0], [10.0, 100.0], [100.0, 1000.0]]
+    for d in out:
+        assert d["n_points"] > 100 and set(d) == {
+            "decade_per_u_mev",
+            "window_per_u_mev",
+            "n_points",
+            "max_abs_relative_deviation",
+            "rms_relative_deviation",
+        }
+        assert 0.0 < d["rms_relative_deviation"] <= d["max_abs_relative_deviation"] < 0.05
+
+
+def test_cc_int_monotone_cubic_helper_reproduces_nodes_and_preserves_monotonicity(
+    gen: Any,
+) -> None:
+    x = np.linspace(0.0, 5.0, 12)
+    y = -0.8 * x + 0.05 * np.sin(2 * x)
+    y = np.minimum.accumulate(y)  # monotone decreasing data
+    d = gen.pchip_slopes(x, y)
+    np.testing.assert_allclose(gen.pchip_eval(x, y, d, x), y, rtol=0, atol=1e-13)
+    xq = np.linspace(0.0, 5.0, 400)
+    assert np.all(np.diff(gen.pchip_eval(x, y, d, xq)) <= 1e-12)
+
+
+@pytest.mark.parametrize("proj", [PROTON, ALPHA], ids=["proton", "alpha"])
+def test_cc_i2_node_arrays_equal_the_i2_construction(cdir_all: Path, gen: Any, proj: Any) -> None:
+    model, data, pstar, astar = gen.load_inputs(cdir_all)
+    star = pstar if proj is PROTON else astar
+    r_m, r_i, e = gen.cc_i2_arrays(model, data, star, proj)
+    assert e[0] == 1.0 and r_m[0] == 0.0 and r_i[0] == 0.0  # exact at the first node
+    assert np.all(np.abs(r_m[1:] / r_i[1:] - 1.0) <= REL)
+    assert gen.cc_i2_max_rel(model, data, star, proj) <= REL
+    offset = gen.cc_i2_start_offset(data, star, proj)  # report-only: one number per projectile
+    assert math.isfinite(offset)
+
+
+def test_committed_aggregates_are_reproduced_and_hold_no_table_values(
+    cdir_all: Path, gen: Any
+) -> None:
+    docs = gen.compute(cdir_all)
+    text_all = ""
+    for name, fresh in docs.items():
+        path = RESULTS / f"{name}.json"
+        committed = json.loads(path.read_text())
+        _same(fresh, committed, name)
+        text_all += path.read_text().replace(" ", "")
+        assert path.read_text().endswith("}\n") and not path.read_text().endswith("\n\n")
+    model, data, pstar, astar = gen.load_inputs(cdir_all)
+    for arr in (
+        data.proton_stopping,
+        data.alpha_stopping,
+        data.proton_energy_mev,
+        data.alpha_energy_mev,
+        pstar.s_electronic,
+        pstar.csda_range,
+        astar.s_electronic,
+        astar.csda_range,
+    ):
+        for v in arr:
+            s = f"{v:.8g}"
+            assert len(s) < 7 or s not in text_all, "a table value appears in a committed JSON"
+    cc = json.loads((RESULTS / "cc-int.json").read_text())
+    assert cc["species"]["proton"]["cc_span"]["n_nodes"] == 57
+    assert cc["species"]["alpha"]["cc_span"]["n_nodes"] == 49
+    assert cc["species"]["proton"]["cc_node_max_rel_dev_at_fine_nodes"] <= REL
+    assert cc["species"]["alpha"]["cc_i2_max_rel_dev_node_arrays"] <= REL
+
+
+def _same(a: Any, b: Any, path: str = "") -> None:
+    if isinstance(a, dict):
+        assert a.keys() == b.keys(), path
+        for k in a:
+            _same(a[k], b[k], f"{path}/{k}")
+    elif isinstance(a, list):
+        assert len(a) == len(b), path
+        for i, (x, y) in enumerate(zip(a, b, strict=True)):
+            _same(x, y, f"{path}[{i}]")
+    elif isinstance(a, float):
+        assert math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12), path
+    else:
+        assert a == b, path
+
+
+# ---- domains (DOM-1, DOM-3, DOM-4, DOM-5) ----
+
+
+def _refused(cfg: SimulationConfig, *parts: str) -> None:
+    with pytest.raises(UnsupportedCombinationError) as ei:
+        validate(cfg)
+    msg = str(ei.value)
+    for part in parts:
+        assert part in msg, (part, msg)
+
+
+@pytest.mark.parametrize("proj", [CARBON12, OXYGEN16], ids=lambda p: p.name)
+def test_dom1_other_species_fail_closed(cdir: Path, proj: Any) -> None:
+    _refused(_cfg(proj, 100.0), MID, proj.name, "'water'", "energy any", "domain")
+
+
+def test_dom1_deuteron_fails_closed_at_the_table_and_at_validate(cdir: Path) -> None:
+    # the deuteron is not a source projectile of the engine at all (earlier, pre-existing rule);
+    # the model itself has no deuteron table
+    with pytest.raises(UnsupportedCombinationError):
+        validate(_cfg(DEUTERON, 100.0))
+    with pytest.raises(UnsupportedCombinationError, match="deuteron.*domain"):
+        resolve(MID, cache_dir=str(cdir)).table(WATER, DEUTERON)
+
+
+def test_dom3_energy_above_the_window_fails_closed_for_both_species(cdir: Path) -> None:
+    # The alpha window end (250 MeV/u) is also the pre-existing source rule of decision 0043
+    # section 5, which `validate` applies first; the model's own window check (the interval
+    # [E_cut, E0 + 6 sigma_E] against the per-species window) is called directly as well.
+    for cfg in (_cfg(ALPHA, 251.0), _cfg(ALPHA, 245.0, sigma_mev=10.0)):  # 980 + 60 MeV
+        with pytest.raises(UnsupportedCombinationError, match="250"):
+            validate(cfg)
+    validate(_cfg(ALPHA, 200.0, sigma_mev=1.0))
+    sel = select(None, MID)
+    check_window(sel, ALPHA, "water", "source interval", 200.0, 1000.0)  # the exact end passes
+    with pytest.raises(UnsupportedCombinationError) as ei:
+        check_window(sel, ALPHA, "water", "source interval", 200.0, 1004.0)  # E0 + 6 sigma_E
+    for part in (MID, "'alpha'", "'water'", "251 MeV/u", "domain"):
+        assert part in str(ei.value)
+    _refused(_cfg(PROTON, 520.0), MID, "'proton'", "520", "domain")
+    _refused(_cfg(PROTON, 480.0, sigma_mev=10.0), MID, "'proton'", "domain")  # 540 MeV
+    validate(_cfg(PROTON, 480.0, sigma_mev=1.0))
+    blk = validate(_cfg(ALPHA, 100.0)).stopping_identity()
+    assert blk["domain_resolved"] == {"alpha": {"e_min_per_u": 1.0, "e_max_per_u": 250.0}}
+
+
+def test_dom4_requested_water_i_other_than_78_ev_fails_closed(cdir: Path) -> None:
+    for i_ev in (75.0, 77.9, 78.1, 80.0):
+        box = BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), water(i_ev))
+        for proj in (PROTON, ALPHA):
+            _refused(_cfg(proj, geometry=box), MID, proj.name, f"I = {i_ev} eV", "domain")
+    ok = BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), water(78.0))
+    validate(_cfg(PROTON, geometry=ok))
+    # a structurally non-water material of any I is refused by the structural rule (DOM-2)
+    pmma = BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), PMMA)
+    _refused(_cfg(geometry=pmma), MID)
+    # named otherwise but structurally water with I = 78 eV: accepted
+    real = Material("tank liquid", 1.0, {"H": 0.111894, "O": 0.888106}, 78.0)
+    validate(_cfg(geometry=BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), real)))
+
+
+def test_dom5_nuclear_with_the_icru90_model_is_refused_naming_the_model(cdir: Path) -> None:
+    _refused(_cfg(nuclear=True, nuclear_table_id="x"), MID, "deuteron", "nuclear=True")
+
+
+# ---- DOM-6 ----
+
+
+def test_dom6_missing_object_hash_mismatch_and_parse_failure_raise(
+    cdir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(FileNotFoundError):
+        resolve(MID, cache_dir=str(empty))
+    monkeypatch.setenv("IONMC_CACHE_DIR", str(empty))
+    with pytest.raises(UnsupportedCombinationError, match="FileNotFoundError"):
+        select(None, MID)  # the selection point fails closed with the loader's message
+    monkeypatch.undo()
+    # hash mismatch: a copy of the ICRU object with other bytes under the same name
+    bad = tmp_path / "bad"
+    (bad / "objects").mkdir(parents=True)
+    (bad / "manifests").mkdir()
+    sha = stopping_models.DATASETS[ICRU_ID].sha256
+    shutil.copy(cache.manifest_path(ICRU_ID, cdir), cache.manifest_path(ICRU_ID, bad))
+    obj = cache.object_path(sha, bad)
+    shutil.copy(cache.object_path(sha, cdir), obj)
+    os.chmod(obj, 0o644)  # cache objects may be read-only (host runner: hard-linked store)
+    obj.write_bytes(obj.read_bytes() + b"x")
+    with pytest.raises(cache.IntegrityError):
+        resolve(MID, cache_dir=str(bad))
+
+    # parse failure of an object that passed the hash check
+    def broken(_path: Any, **_k: Any) -> None:
+        raise ValueError("array T0_proton not found in source")
+
+    monkeypatch.setattr(stopping_icru90, "load_icru90_water", broken)
+    with pytest.raises(ValueError, match="T0_proton"):
+        resolve(MID, cache_dir=str(cdir))
+
+
+# ---- PER-2 / PER-3 (ICRU case) ----
+
+
+@pytest.mark.parametrize("proj", [PROTON, ALPHA], ids=lambda p: p.name)
+def test_per3_data_used_lists_the_single_icru_pin_with_the_projectile_table(
+    cdir: Path, proj: Any
+) -> None:
+    spec = STOPPING_MODELS[MID]
+    pin = stopping_models._canonical(spec.data[0])
+    eff = validate(_cfg(proj))
+    blk = eff.summary()["stopping"]
+    validate_identity_block(blk)
+    assert blk["model_id_requested"] == blk["model_id_effective"] == MID
+    assert blk["data_declared"] == [pin]
+    assert blk["data_used"] == [
+        {
+            "pin": pin,
+            "role_in_this_run": "construction",
+            "table": [proj.name, "water"],
+            "cache_dir": str(cdir),
+        }
+    ]
+    assert blk["cache_dir"] == str(cdir)
+    assert [r["status"] for r in blk["evidence_at_run"]] == ["consistency-only", VC1_PASS]
+    # PER-2: circular rows, and the MCS proton path of an ion run
+    assert blk["circular_rows"] == [
+        ICRU_ID,
+        "I2 (ICRU 90 part)",
+        "decision-0038 ICRU 90 comparisons",
+    ]
+    assert ("mcs_proton_path_stopping" in blk) == (proj.z >= 2)
+    if proj.z >= 2:
+        assert blk["mcs_proton_path_stopping"] == "bethe-ionmc-v1"
+    model = resolve(MID, cache_dir=str(cdir))
+    assert blk["content_sha256"] == model.content_sha256_for(proj)
+    assert json.loads(json.dumps(blk)) == blk
+    # negative control: a pin of a projectile that was not transported is rejected
+    other = "alpha" if proj is PROTON else "proton"
+    wrong = {**blk, "data_used": [{**blk["data_used"][0], "table": [other, "water"]}]}
+    with pytest.raises(ValueError, match="not transported"):
+        validate_identity_block(wrong)
+
+
+def test_single_model_assertion_names_the_model_for_both_species(cdir: Path) -> None:
+    for proj in (PROTON, ALPHA):
+        eff = validate(_cfg(proj))
+        assert eff.stopping_identity()["model_id_effective"] == MID
+        t = eff.summary()["stopping"]
+        assert t["kind"] == "tabulated" and t["version"] == "1" and t["decision"] == "0044"
+
+
+# ---- identity from the live arrays (review finding 1) ----
+
+
+def test_loaded_icru_arrays_are_read_only(data: Icru90Water, cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    for arr in (
+        data.proton_energy_mev,
+        data.proton_stopping,
+        data.alpha_energy_mev,
+        data.alpha_stopping,
+        *(a for src in (model.proton, model.alpha) for pair in src._arrays.values() for a in pair),
+    ):
+        assert not arr.flags.writeable
+        with pytest.raises(ValueError, match="read-only"):
+            arr[0] = 1.0
+
+
+def test_registered_icru_digest_matches_the_loaded_content(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert STOPPING_MODELS[MID].options["content_sha256"] == model.content_sha256
+    assert spec_of(model)[0] == MID
+
+
+def test_modified_content_with_the_pinned_metadata_is_unregistered(
+    data: Icru90Water, cdir: Path
+) -> None:
+    changed = data.proton_stopping.copy()  # a writable copy of a read-only array
+    changed[5] *= 1.001
+    other = build_icru90_source(replace(data, proton_stopping=changed))
+    assert other.proton.metadata["dataset_sha256"] == data.sha256  # pinned metadata intact
+    mid, spec = spec_of(other)
+    assert mid == "unregistered" and spec.decision == "user" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+def test_constructed_object_claiming_the_pinned_metadata_is_unregistered() -> None:
+    syn = _synthetic()
+    claimed = replace(
+        syn,
+        dataset_id=ICRU_ID,
+        sha256=stopping_models.DATASETS[ICRU_ID].sha256,
+    )
+    mid, spec = spec_of(build_icru90_source(claimed))
+    assert mid == "unregistered" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+# ---- exact implementations and the effective start range (review REVIEW-c8c734b6) ----
+
+
+def test_replaced_start_range_callable_is_unregistered_without_pins_or_evidence(
+    cdir: Path,
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert spec_of(model)[0] == MID and model.is_exact_implementation()
+    inner = model.proton
+    other = build_icru90_source(load_icru90_water(cache.verify(ICRU_ID, cdir)))
+    object.__setattr__(other.proton, "start_range", lambda *_a: 1.0)  # same id, arrays, metadata
+    assert other.proton.start_range_id == inner.start_range_id
+    mid, spec = spec_of(other)
+    assert mid == "unregistered" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+    assert spec_of(model)[0] == MID  # the untouched resolved source is still registered
+
+
+def test_subclasses_never_keep_the_registered_identity(cdir: Path) -> None:
+    from ionmc.physics.stopping_tabulated import TabulatedStoppingSource
+
+    model = resolve(MID, cache_dir=str(cdir))
+
+    class SubComposite(Icru90WaterSource):
+        def table(self, material: Any, projectile: Any) -> Any:
+            return super().table(material, projectile)
+
+    class SubInner(TabulatedStoppingSource):
+        pass
+
+    sub = SubComposite(model.proton, model.alpha, model.name)
+    assert spec_of(sub)[0] == "unregistered"
+    inner = model.proton
+    sub_inner = SubInner(
+        inner.name,
+        inner.metadata,
+        {"proton": inner._arrays["proton"]},
+        inner.e_min_per_u,
+        inner.e_max_per_u,
+        inner.start_range_id,
+        inner.start_range,
+        inner.material_rule,
+        inner.points_per_decade,
+    )
+    mixed = Icru90WaterSource.__new__(Icru90WaterSource)
+    for k, v in (("proton", sub_inner), ("alpha", model.alpha), ("name", model.name)):
+        object.__setattr__(mixed, k, v)
+    assert spec_of(mixed)[0] == "unregistered"
+    assert spec_of(sub_inner)[0] == "unregistered"
+    assert spec_of(model)[0] == MID
+
+
+# ---- trust decided by spec_of from exact types and the installed start rule (REVIEW-58783c86) ----
+
+
+def test_subclass_overriding_table_and_the_exactness_method_is_unregistered(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+
+    class Liar(Icru90WaterSource):
+        def is_exact_implementation(self) -> bool:
+            return True
+
+        def instance_spec(self) -> Any:
+            return STOPPING_MODELS[MID]
+
+        def table(self, material: Any, projectile: Any) -> Any:
+            return super().table(material, projectile)
+
+    mid, spec = spec_of(Liar(model.proton, model.alpha, model.name))
+    assert mid == "unregistered" and spec.data == () and spec.decision == "user"
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+def test_conditional_start_callable_is_unregistered_and_water_variant_is_identical(
+    cdir: Path,
+) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    assert spec_of(model)[0] == MID
+    # identity sanity: a structurally equivalent water() gives the same table bit for bit
+    t1, t2 = model.table(WATER, ALPHA), model.table(water(), ALPHA)
+    for name in ("energy_per_u", "s_mass", "range"):
+        if hasattr(t1, name):
+            assert np.array_equal(getattr(t1, name), getattr(t2, name))
+    assert t1.sha256 == t2.sha256 if hasattr(t1, "sha256") else True
+
+    other = build_icru90_source(load_icru90_water(cache.verify(ICRU_ID, cdir)))
+    original = other.proton.start_range
+
+    def conditional(p: Any, m: Any, e: Any, s: Any) -> float:
+        r = original(p, m, e, s)
+        return r if m is WATER else r * 1.01
+
+    object.__setattr__(other.proton, "start_range", conditional)
+    mid, spec = spec_of(other)
+    assert mid == "unregistered" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+    assert spec_of(model)[0] == MID
+
+
+# ---- slotted trusted classes: no per-instance shadowing (REVIEW-77a533e9) ----
+
+
+def test_trusted_instances_have_no_dict_and_reject_method_shadowing(cdir: Path) -> None:
+    from ionmc.physics.stopping_nist import NistStarCombinedSource
+
+    icru = resolve(MID, cache_dir=str(cdir))
+    nist = resolve("nist-pstar-astar-water-2005", cache_dir=str(cdir))
+    bethe = resolve("bethe-ionmc-v1")
+    for obj, attr in (
+        (icru, "table"),
+        (icru.proton, "table"),
+        (icru.proton, "_start"),
+        (icru.proton.start_range, "__call__"),
+        (nist, "table"),
+        (nist.pstar, "table"),
+        (bethe, "table"),
+    ):
+        assert not hasattr(obj, "__dict__")
+        with pytest.raises(AttributeError):
+            object.__setattr__(obj, attr, lambda *a: 0.0)
+    assert isinstance(nist, NistStarCombinedSource)
+    for m in ("icru90-water-v1", "nist-pstar-astar-water-2005", "bethe-ionmc-v1"):
+        assert spec_of(resolve(m, cache_dir=str(cdir)))[0] == m
+
+
+def test_non_slotted_lookalikes_and_class_patches_are_unregistered(
+    cdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ionmc.physics.stopping_tabulated import TabulatedStoppingSource
+
+    icru = resolve(MID, cache_dir=str(cdir))
+
+    class Dummy(Icru90WaterSource):  # a subclass without __slots__ has an instance __dict__
+        pass
+
+    d = Dummy(icru.proton, icru.alpha, icru.name)
+    assert hasattr(d, "__dict__")
+    assert spec_of(d)[0] == "unregistered"
+    # a class-level patch of the trusted implementation is detected
+    monkeypatch.setattr(TabulatedStoppingSource, "table", lambda self, m, p: None)
+    mid, spec = spec_of(icru)
+    assert mid == "unregistered" and spec.data == ()
+    assert spec_sha256(spec) not in STOPPING_EVIDENCE
+
+
+# ---- frozen start rule and selection-to-table identity (REVIEW-b01b9fa4) ----
+
+
+def test_start_rule_state_is_frozen_and_read_only(cdir: Path) -> None:
+    from dataclasses import FrozenInstanceError
+
+    st = resolve(MID, cache_dir=str(cdir)).proton.start_range
+    with pytest.raises(FrozenInstanceError):
+        st._s = st._s.copy()  # type: ignore[misc]
+    with pytest.raises(ValueError, match="read-only"):
+        st._s[0] = 1.0
+
+
+class _Sub(np.ndarray):
+    """Not an exact ndarray: spec_of requires ``type(arr) is np.ndarray``."""
+
+
+def test_non_exact_array_likes_are_rejected_by_spec_of(cdir: Path) -> None:
+    model = resolve(MID, cache_dir=str(cdir))
+    st = model.proton.start_range
+    for bad in (st._s.view(_Sub), memoryview(st._s.copy())):
+        other = build_icru90_source(load_icru90_water(cache.verify(ICRU_ID, cdir)))
+        object.__setattr__(other.proton.start_range, "_s", bad)  # bypass frozen on purpose
+        mid, spec = spec_of(other)
+        assert mid == "unregistered" and spec.data == ()
+    # an equal-valued but different start array is also not the inner source's array
+    other = build_icru90_source(load_icru90_water(cache.verify(ICRU_ID, cdir)))
+    changed = st._s.copy()
+    changed[0] *= 1.001
+    changed.setflags(write=False)
+    object.__setattr__(other.proton.start_range, "_s", changed)
+    assert spec_of(other)[0] == "unregistered"
+
+
+def test_validate_fails_closed_when_the_identity_changes_after_selection(
+    cdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _cfg()
+    sel = cfg.physics.selection
+    assert sel.observed == (MID, spec_sha256(STOPPING_MODELS[MID]))
+    validate(cfg)  # untouched: selection id == post-build id
+    # a source whose live arrays change after PhysicsOptions time (write flag re-enabled on its
+    # own copy): the table is built from the changed data and the recheck refuses the run
+    src = sel.source
+    e, s = src.proton._arrays["proton"]
+    s.setflags(write=True)
+    old = s.copy()
+    try:
+        s[10] *= 1.01
+        with pytest.raises(UnsupportedCombinationError, match="identity changed"):
+            validate(cfg)
+    finally:
+        s[:] = old
+        s.setflags(write=False)
+    validate(cfg)
+
+
+# ---- the selected cache is part of the selection (REVIEW-6483e470) ----
+
+
+def _copy_cache(src: Path, dst: Path, ids: tuple[str, ...]) -> Path:
+    (dst / "objects").mkdir(parents=True)
+    (dst / "manifests").mkdir()
+    for ds in ids:
+        shutil.copy(cache.manifest_path(ds, src), cache.manifest_path(ds, dst))
+        sha = stopping_models.DATASETS[ds].sha256
+        obj = cache.object_path(sha, dst)
+        shutil.copy(cache.object_path(sha, src), obj)
+        os.chmod(obj, 0o644)
+    return dst
+
+
+def _select_from(cache_dir: Path, model_id: str) -> Any:
+    from ionmc.physics.stopping_selection import select
+
+    return select(resolve(model_id, cache_dir=str(cache_dir)), None)
+
+
+@pytest.mark.parametrize("model_id", [MID, "nist-pstar-astar-water-2005"])
+def test_alternate_cache_validates_and_keeps_the_registered_id(
+    cdir_all: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model_id: str
+) -> None:
+    alt = _copy_cache(cdir_all, tmp_path / "alt", (ICRU_ID, PSTAR_ID, ASTAR_ID))
+    base = _cfg()  # built while the default cache is still available
+    empty, home = tmp_path / "empty", tmp_path / "home"
+    empty.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("IONMC_CACHE_DIR", str(empty))  # the default cache is unavailable
+    monkeypatch.setenv("HOME", str(home))
+    src = resolve(model_id, cache_dir=str(alt))
+    assert src.cache_dir == str(alt)
+    water = water_i78() if model_id == MID else WATER
+    cfg = SimulationConfig(
+        source=base.source,
+        geometry=BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 40.0), water),
+        scoring=base.scoring,
+        physics=PhysicsOptions(nuclear=False, stopping=src),
+        run=base.run,
+    )
+    sel = cfg.physics.selection
+    assert sel.requested_id == model_id and sel.cache_dir == str(alt)
+    blk = validate(cfg).summary()["stopping"]
+    assert blk["cache_dir"] == str(alt)
+    assert all(u["cache_dir"] == str(alt) for u in blk["data_used"])
+    assert cfg.physics.stopping_source is src
+
+
+def water_i78() -> Material:
+    return WATER if WATER.mean_excitation_eV == 78.0 else water(78.0)
+
+
+def test_alternate_cache_with_other_retrieved_at_validates_and_changed_bytes_fail(
+    cdir_all: Path, tmp_path: Path
+) -> None:
+    ids = (ICRU_ID, PSTAR_ID, ASTAR_ID)
+    alt = _copy_cache(cdir_all, tmp_path / "alt", ids)
+    for ds in ids:  # alter the manifest timestamp: provenance, ignored by the comparison
+        mp = cache.manifest_path(ds, alt)
+        m = json.loads(mp.read_text())
+        m["retrieved_at"] = "2001-01-01T00:00:00+00:00"
+        mp.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n")
+    for model_id in (MID, "nist-pstar-astar-water-2005"):
+        src = resolve(model_id, cache_dir=str(alt))
+        sel = _select_from(alt, model_id)
+        assert sel.requested_id == model_id
+        from ionmc.physics.stopping_selection import assert_identity_stable
+
+        tables = [
+            src.table(water_i78() if model_id == MID else WATER, PROTON),
+        ]
+        assert tables[0].metadata["retrieved_at"] == "2001-01-01T00:00:00+00:00"
+        assert_identity_stable(sel, tables, (PROTON,))  # the rebuild from the same cache passes
+    # a byte change of an object fails closed (hash check of the loader)
+    sha = stopping_models.DATASETS[ICRU_ID].sha256
+    obj = cache.object_path(sha, alt)
+    obj.write_bytes(obj.read_bytes() + b"x")
+    with pytest.raises(cache.IntegrityError):
+        resolve(MID, cache_dir=str(alt))
+
+
+def test_comparison_ignores_only_the_cache_local_provenance_keys() -> None:
+    from ionmc.physics.stopping_selection import CACHE_LOCAL_METADATA_KEYS, _comparable
+
+    a = {"retrieved_at": "x", "dataset_sha256": "s", "content_sha256": "c", "grid": 200}
+    b = {**a, "retrieved_at": "y"}
+    assert CACHE_LOCAL_METADATA_KEYS == ("retrieved_at",)
+    assert _comparable(a) == _comparable(b)
+    assert _comparable({**a, "dataset_sha256": "t"}) != _comparable(a)
+
+
+@pytest.mark.parametrize("via_env", [False, True])
+def test_relative_cache_path_is_recorded_absolute_and_survives_a_chdir(
+    cdir_all: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, via_env: bool
+) -> None:
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    _copy_cache(cdir_all, parent / "relcache", (ICRU_ID, PSTAR_ID, ASTAR_ID))
+    base = _cfg()  # built while the default cache is still available
+    monkeypatch.chdir(parent)
+    if via_env:
+        monkeypatch.setenv("IONMC_CACHE_DIR", "relcache")
+    kw: dict[str, Any] = {} if via_env else {"cache_dir": "relcache"}
+    for model_id in (MID, "nist-pstar-astar-water-2005"):
+        src = resolve(model_id, **kw)
+        absolute = str((parent / "relcache").resolve())
+        assert src.cache_dir == absolute
+        monkeypatch.chdir(tmp_path)  # the working directory changes before validate()
+        if via_env:
+            monkeypatch.setenv("IONMC_CACHE_DIR", str(tmp_path / "nowhere"))
+        cfg = SimulationConfig(
+            source=base.source,
+            geometry=BoxPhantom(
+                (-10.0, -10.0, 0.0),
+                (20.0, 20.0, 40.0),
+                water_i78() if model_id == MID else WATER,
+            ),
+            scoring=base.scoring,
+            physics=PhysicsOptions(nuclear=False, stopping=src),
+            run=base.run,
+        )
+        blk = validate(cfg).summary()["stopping"]
+        assert blk["cache_dir"] == absolute
+        assert all(u["cache_dir"] == absolute for u in blk["data_used"])
+        monkeypatch.chdir(parent)
+        if via_env:
+            monkeypatch.setenv("IONMC_CACHE_DIR", "relcache")

@@ -1,0 +1,53 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys\nos.environ.update({'PYTHONPATH': '/workspace/src', 'IONMC_CACHE_DIR': '/workspace/.ionmc-cache/ionmc-data', 'IONMC_REQUIRE_DATA': '1', 'IONMC_SINGLE_PROCESS': '1', 'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2', 'MKL_NUM_THREADS': '2', 'NUMEXPR_NUM_THREADS': '2', 'PYTHONUNBUFFERED': '1', 'PYTHONFAULTHANDLER': '1', 'IONMC_RUN_SHA': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), 'IONMC_RUN_SUITE': 'lv13'})\ncmd = [sys.executable, 'validation/scripts/stopping/lv13_r1ion.py', '--backend', 'python', '--cache-dir', '/workspace/.ionmc-cache/ionmc-data', '--out-dir', '/workspace/validation/generated/lv13-r1ion']\np = subprocess.run(cmd, text=True, capture_output=True)\nprint(p.stdout[-6000:]); print(p.stderr[-2000:], file=sys.stderr)\nsys.exit(p.returncode)\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "cd49f65d598a4d4574e1865e14cb9a3ee23310a7c13f866425d44c745f92c620",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "6d4679498962c601a1ba4832314a3f5d4ca92c80186d7493b11d3953feb527dde035c2d75c9f6a83020a3f8103931bbce21dc89e66038dbeb2e547c418703d00",
+    "signed_at_utc": "2026-11-18T13:10:40.848292+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-013-explicit-selection-of-stopping-power-models-and-tabulated-so",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 156.39357529900735,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T130803Z-6d0338d9/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-18T13:10:40.835123+00:00",
+  "input_manifest": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T130803Z-6d0338d9/input-manifest.json",
+  "input_manifest_sha256": "f94d8c8ed83bd166b5c0729932ccfbf4068332de875446e369829af7253be2ec",
+  "output_manifest_sha256": "50dcbdbe245c89fcec154f04589949962bebc7b8ab40d66afaf13040c3c93741",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-013/validation/generated/RUN-20261118T130803Z-6d0338d9",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-013/benchmarks/generated/RUN-20261118T130803Z-6d0338d9"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T130803Z-6d0338d9",
+  "run_id": "RUN-20261118T130803Z-6d0338d9",
+  "schema_version": 1,
+  "sha": "2d9e90e1ca33a63af7a7234454c199970dd4c549",
+  "sha_after": "2d9e90e1ca33a63af7a7234454c199970dd4c549",
+  "started_at": "2026-11-18T13:08:04.441525+00:00",
+  "stderr": "\n",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T130803Z-6d0338d9/stderr.txt",
+  "stderr_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+  "stderr_total_chars": 1,
+  "stderr_truncated": false,
+  "stdout": "4a79075ae02cea73ff3deda0bf8b9dc83b0fdffcddd\",\n  \"A2\": \"be61c1fcc006572c9d6644a79075ae02cea73ff3deda0bf8b9dc83b0fdffcddd\",\n  \"B1\": \"be61c1fcc006572c9d6644a79075ae02cea73ff3deda0bf8b9dc83b0fdffcddd\",\n  \"B2\": \"be61c1fcc006572c9d6644a79075ae02cea73ff3deda0bf8b9dc83b0fdffcddd\"\n },\n \"tally_sha256\": {\n  \"A1\": {\n   \"end_state.end_code\": \"cd00e292c5970d3c5e2f0ffa5171e555bc46bfc4faddfb4a418b6840b86e79a3\",\n   \"end_state.end_direction\": \"cbfea9e4e0c59d7a3a8319810c6fa6264f92facfe4c3f028fe08e92f9ed3a7c2\",\n   \"end_state.end_energy_mev\": \"b762169f1d0aa7f3940e72e55d0f35fb0484011b52e9f9a75095eaa5fc2342cf\",\n   \"end_state.end_position_mm\": \"4459d09a42c8485cd66036c8331be7f78f65d54cf07ed55a9a8fe25c2655cd10\",\n   \"grid.dose.batch_energy_mev\": \"cb2a1bff10f366e46a7e4933a9a3e5a4c4768ec7951b8397043e2cbab1c7fae6\",\n   \"grid.dose.defined_mask\": \"ee7ba0fa9e025a902728ae3f18442a0ea6f88ecb208e80bd89e64406faa53f00\",\n   \"grid.dose.dose_gy\": \"1e296220f36775d1eff27e791cea9e1a93c750ab230fcba0935b419aa483f660\",\n   \"grid.dose.dose_std_gy\": \"7559dddb7ce62bce9d9b8e4a7d07059b769f28d6b11d141dc036a577e8164ce9\",\n   \"grid.dose.energy_mev\": \"1e94c83a90b3aae4740f08776ed51195446b08416a6059d1628ec3bfffc19b89\",\n   \"grid.dose.energy_std_mev\": \"a182f60b32637176ed61cfc237986cb121edbd39e0de7aa8760595cd1e88035e\",\n   \"grid.dose.mass_g\": \"eb7b27201749d43f555339cd2b5952e166e5bcfcffa9a6e95f84adefac632f89\",\n   \"grid.dose.n_nonzero_batches\": \"56070b2fa58cc845b338040117bd78d5cc05b827cfb2cf0c5f9c07a0f4b14afd\",\n   \"grid.dose.relative_uncertainty\": \"e1731f962a4c799083b0d6e595efe7bbbfefccb2c3d200805f1f1734a01cacad\",\n   \"grid.dose.sparse_mask\": \"e336a78de04528c6ae8311ebe25ee89016df94641fb0cce8b520407fcdeb8f88\"\n  },\n  \"A2\": {\n   \"end_state.end_code\": \"cd00e292c5970d3c5e2f0ffa5171e555bc46bfc4faddfb4a418b6840b86e79a3\",\n   \"end_state.end_direction\": \"cbfea9e4e0c59d7a3a8319810c6fa6264f92facfe4c3f028fe08e92f9ed3a7c2\",\n   \"end_state.end_energy_mev\": \"b762169f1d0aa7f3940e72e55d0f35fb0484011b52e9f9a75095eaa5fc2342cf\",\n   \"end_state.end_position_mm\": \"4459d09a42c8485cd66036c8331be7f78f65d54cf07ed55a9a8fe25c2655cd10\",\n   \"grid.dose.batch_energy_mev\": \"cb2a1bff10f366e46a7e4933a9a3e5a4c4768ec7951b8397043e2cbab1c7fae6\",\n   \"grid.dose.defined_mask\": \"ee7ba0fa9e025a902728ae3f18442a0ea6f88ecb208e80bd89e64406faa53f00\",\n   \"grid.dose.dose_gy\": \"1e296220f36775d1eff27e791cea9e1a93c750ab230fcba0935b419aa483f660\",\n   \"grid.dose.dose_std_gy\": \"7559dddb7ce62bce9d9b8e4a7d07059b769f28d6b11d141dc036a577e8164ce9\",\n   \"grid.dose.energy_mev\": \"1e94c83a90b3aae4740f08776ed51195446b08416a6059d1628ec3bfffc19b89\",\n   \"grid.dose.energy_std_mev\": \"a182f60b32637176ed61cfc237986cb121edbd39e0de7aa8760595cd1e88035e\",\n   \"grid.dose.mass_g\": \"eb7b27201749d43f555339cd2b5952e166e5bcfcffa9a6e95f84adefac632f89\",\n   \"grid.dose.n_nonzero_batches\": \"56070b2fa58cc845b338040117bd78d5cc05b827cfb2cf0c5f9c07a0f4b14afd\",\n   \"grid.dose.relative_uncertainty\": \"e1731f962a4c799083b0d6e595efe7bbbfefccb2c3d200805f1f1734a01cacad\",\n   \"grid.dose.sparse_mask\": \"e336a78de04528c6ae8311ebe25ee89016df94641fb0cce8b520407fcdeb8f88\"\n  },\n  \"B1\": {\n   \"end_state.end_code\": \"cd00e292c5970d3c5e2f0ffa5171e555bc46bfc4faddfb4a418b6840b86e79a3\",\n   \"end_state.end_direction\": \"cbfea9e4e0c59d7a3a8319810c6fa6264f92facfe4c3f028fe08e92f9ed3a7c2\",\n   \"end_state.end_energy_mev\": \"b762169f1d0aa7f3940e72e55d0f35fb0484011b52e9f9a75095eaa5fc2342cf\",\n   \"end_state.end_position_mm\": \"4459d09a42c8485cd66036c8331be7f78f65d54cf07ed55a9a8fe25c2655cd10\",\n   \"grid.dose.batch_energy_mev\": \"cb2a1bff10f366e46a7e4933a9a3e5a4c4768ec7951b8397043e2cbab1c7fae6\",\n   \"grid.dose.defined_mask\": \"ee7ba0fa9e025a902728ae3f18442a0ea6f88ecb208e80bd89e64406faa53f00\",\n   \"grid.dose.dose_gy\": \"1e296220f36775d1eff27e791cea9e1a93c750ab230fcba0935b419aa483f660\",\n   \"grid.dose.dose_std_gy\": \"7559dddb7ce62bce9d9b8e4a7d07059b769f28d6b11d141dc036a577e8164ce9\",\n   \"grid.dose.energy_mev\": \"1e94c83a90b3aae4740f08776ed51195446b08416a6059d1628ec3bfffc19b89\",\n   \"grid.dose.energy_std_mev\": \"a182f60b32637176ed61cfc237986cb121edbd39e0de7aa8760595cd1e88035e\",\n   \"grid.dose.mass_g\": \"eb7b27201749d43f555339cd2b5952e166e5bcfcffa9a6e95f84adefac632f89\",\n   \"grid.dose.n_nonzero_batches\": \"56070b2fa58cc845b338040117bd78d5cc05b827cfb2cf0c5f9c07a0f4b14afd\",\n   \"grid.dose.relative_uncertainty\": \"e1731f962a4c799083b0d6e595efe7bbbfefccb2c3d200805f1f1734a01cacad\",\n   \"grid.dose.sparse_mask\": \"e336a78de04528c6ae8311ebe25ee89016df94641fb0cce8b520407fcdeb8f88\"\n  },\n  \"B2\": {\n   \"end_state.end_code\": \"cd00e292c5970d3c5e2f0ffa5171e555bc46bfc4faddfb4a418b6840b86e79a3\",\n   \"end_state.end_direction\": \"cbfea9e4e0c59d7a3a8319810c6fa6264f92facfe4c3f028fe08e92f9ed3a7c2\",\n   \"end_state.end_energy_mev\": \"b762169f1d0aa7f3940e72e55d0f35fb0484011b52e9f9a75095eaa5fc2342cf\",\n   \"end_state.end_position_mm\": \"4459d09a42c8485cd66036c8331be7f78f65d54cf07ed55a9a8fe25c2655cd10\",\n   \"grid.dose.batch_energy_mev\": \"cb2a1bff10f366e46a7e4933a9a3e5a4c4768ec7951b8397043e2cbab1c7fae6\",\n   \"grid.dose.defined_mask\": \"ee7ba0fa9e025a902728ae3f18442a0ea6f88ecb208e80bd89e64406faa53f00\",\n   \"grid.dose.dose_gy\": \"1e296220f36775d1eff27e791cea9e1a93c750ab230fcba0935b419aa483f660\",\n   \"grid.dose.dose_std_gy\": \"7559dddb7ce62bce9d9b8e4a7d07059b769f28d6b11d141dc036a577e8164ce9\",\n   \"grid.dose.energy_mev\": \"1e94c83a90b3aae4740f08776ed51195446b08416a6059d1628ec3bfffc19b89\",\n   \"grid.dose.energy_std_mev\": \"a182f60b32637176ed61cfc237986cb121edbd39e0de7aa8760595cd1e88035e\",\n   \"grid.dose.mass_g\": \"eb7b27201749d43f555339cd2b5952e166e5bcfcffa9a6e95f84adefac632f89\",\n   \"grid.dose.n_nonzero_batches\": \"56070b2fa58cc845b338040117bd78d5cc05b827cfb2cf0c5f9c07a0f4b14afd\",\n   \"grid.dose.relative_uncertainty\": \"e1731f962a4c799083b0d6e595efe7bbbfefccb2c3d200805f1f1734a01cacad\",\n   \"grid.dose.sparse_mask\": \"e336a78de04528c6ae8311ebe25ee89016df94641fb0cce8b520407fcdeb8f88\"\n  }\n },\n \"total_wall_s\": 156.21195181099756,\n \"valid\": true,\n \"wall_s\": {\n  \"A1\": 39.745907877993886,\n  \"A2\": 38.85313980100909,\n  \"B1\": 38.69800509400375,\n  \"B2\": 38.56125692599744\n }\n}\n#JSON-END\n\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-013/RUN-20261118T130803Z-6d0338d9/stdout.txt",
+  "stdout_sha256": "097b57eba96af219765acd17d47dadf778879f4d9c2780a41a111f3c158863e9",
+  "stdout_total_chars": 6001,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-013",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-013"
+}

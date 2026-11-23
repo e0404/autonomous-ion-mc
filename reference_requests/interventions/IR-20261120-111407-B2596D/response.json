@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "IR-20261120-111407-B2596D",
+  "resolved_at_utc": "2026-11-22T13:26:15.710362+00:00",
+  "task_id": "V3-013",
+  "response": "A: amend, for IR-20261120-111407-B2596D.\n\nAuthorize the described correction: compare Warp module attestations\nwithin each backend and validation row, retaining strict within-group\nchecks and the Python-specific requirements. Add regression tests that\naccept legitimate differences between rows and reject differences\nwithin a row.\n\nPreserve the original runs and findings. Record the prospective\namendment, use the proposed fresh k=1 evidence seeds after checking\ntheir availability, and obtain the new seal and required independent\nreviews before further evidence runs. Scientific tolerances and\nacceptance criteria remain unchanged.\n\nContinue the autonomous experiment loop after this repair, through\nvalidation and subsequent justified tasks. Keep one heavy job at a time.\nA client-side timeout is not proof that the host job stopped: establish\nits completion before starting another run.\n\nDo not stop at completion of this intervention or task; retain the\npreviously established stopping conditions.",
+  "operator_note": "Operator message received in the orchestrator session on 2026-11-22: option A (amend): Warp attestation rule compared within (backend, row) with strict within-group checks and the python rule; regression tests for both directions; original runs and findings preserved; prospective amendment recorded; fresh k=1 seeds after an availability check; new seal and independent reviews before further evidence runs; tolerances and acceptance criteria unchanged; one heavy job at a time; a client-side timeout is not proof that a host job stopped."
+}
