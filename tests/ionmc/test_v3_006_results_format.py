@@ -2408,3 +2408,63 @@ def test_out10_crossed_aspect_ratios_keep_the_mass_intermediates_bounded(
         results.banded_voxel_mass(
             [np.linspace(0.0, 1.0, 3)] * 3, [np.linspace(0.0, 1.0, 3)] * 3, np.ones((2, 2, 2))
         )
+
+
+# ---- budgets before hashing (REVIEW-92b2e8cf finding 2) ----------------------------------------
+
+
+def _never_hash(monkeypatch: Any) -> None:
+    def boom(path: Path) -> tuple[str, int]:
+        raise AssertionError(f"hashed {path.name} before the size checks")
+
+    monkeypatch.setattr(results, "_sha256_path", boom)
+
+
+def _grow(path: Path, size: int) -> None:
+    """A sparse file of ``size`` bytes (no disk is consumed beyond the original content)."""
+    with open(path, "r+b") as fh:
+        fh.truncate(size)
+
+
+def test_out10_oversized_derived_file_is_refused_before_any_hashing(
+    bundle: Path, monkeypatch: Any
+) -> None:
+    size = results.MAX_DERIVED_BYTES + 1
+    _grow(bundle / "report.md", size)
+    _mutate(bundle, lambda d: d["files"]["report.md"].update(size=size))  # coherent catalogue
+    _never_hash(monkeypatch)
+    with pytest.raises(ResultFormatError, match="exceed max_derived_bytes"):
+        load(bundle)
+
+
+def test_out10_derived_files_together_are_budgeted(bundle: Path, monkeypatch: Any) -> None:
+    doc = _doc(bundle)
+    plots = sorted(n for n in doc["files"] if n.startswith("plots/"))
+    assert plots, "the bundle has plots"
+    each = results.MAX_DERIVED_BYTES // 2 + 1  # two such files exceed the aggregate budget
+    for n in plots[:1] + ["report.md"]:
+        _grow(bundle / n, each)
+    _mutate(bundle, lambda d: [d["files"][n].update(size=each) for n in plots[:1] + ["report.md"]])
+    _never_hash(monkeypatch)
+    with pytest.raises(ResultFormatError, match="exceed max_derived_bytes"):
+        load(bundle)
+
+
+def test_out10_oversized_npz_is_refused_before_any_hashing(bundle: Path, monkeypatch: Any) -> None:
+    size = 2 * 2**20
+    _grow(bundle / "arrays.npz", size)
+    _mutate(bundle, lambda d: d["files"]["arrays.npz"].update(size=size))
+    _never_hash(monkeypatch)
+    with pytest.raises(ResultFormatError, match="exceeds max_total_bytes"):
+        load(bundle, max_total_bytes=2**20)
+
+
+def test_out10_false_recorded_size_is_refused_before_any_hashing(
+    bundle: Path, monkeypatch: Any
+) -> None:
+    _mutate(
+        bundle, lambda d: d["files"]["report.md"].update(size=d["files"]["report.md"]["size"] + 1)
+    )
+    _never_hash(monkeypatch)
+    with pytest.raises(ResultFormatError, match="recorded size"):
+        load(bundle)

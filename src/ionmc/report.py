@@ -225,7 +225,7 @@ def render_plots(doc: Doc, arrays: Arrays) -> dict[str, str]:
         s_line = _line_through(s, where, axis)
         fig = svg.Figure(f"Depth dose profile, grid {g}", f"{ax_name} (mm), profile axis",
                          "dose per history (Gy)", f"{loc}; band = +-1 standard error")  # fmt: skip
-        fig.band(z, np.maximum(d_line - s_line, 0.0), d_line + s_line)
+        fig.band(z, d_line - s_line, d_line + s_line)  # the actual +-1 SE band, never clipped
         fig.line("dose", z, d_line)
         put(f"dose__{gs}", fig.render())
 
@@ -244,7 +244,7 @@ def render_plots(doc: Doc, arrays: Arrays) -> dict[str, str]:
         fig = svg.Figure(
             f"Lateral dose profile, grid {g}", f"{lat_name} (mm)", "dose per history (Gy)", note
         )
-        fig.band(y, np.maximum(l_d - l_s, 0.0), l_d + l_s)
+        fig.band(y, l_d - l_s, l_d + l_s)
         fig.line("dose", y, l_d)
         put(f"lateral__{gs}", fig.render())
 

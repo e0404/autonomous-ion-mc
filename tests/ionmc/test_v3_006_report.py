@@ -198,8 +198,19 @@ def test_rep2_generator_reproduces_the_committed_fixture(tmp_path: Path) -> None
     mine = sorted(p.relative_to(out) for p in out.rglob("*") if p.is_file())
     theirs = sorted(p.relative_to(GOLDEN) for p in GOLDEN.rglob("*") if p.is_file())
     assert mine == theirs
+    # Byte identity holds in the local-validation tier (IONMC_LV_TIER=1). Elsewhere (the hosted CI
+    # runner) the stopping tables built by `validate` differ in their last bits, so their sha256
+    # digests in result.json and report.md differ (plan v3-006, REG-2 clarification); every array
+    # and SVG is compared byte for byte there, the two documents with 64-hex digests masked.
+    lv = os.environ.get("IONMC_LV_TIER") == "1"
+    digest = re.compile(rb"[0-9a-f]{64}")
     for rel in theirs:
-        assert (out / rel).read_bytes() == (GOLDEN / rel).read_bytes(), rel
+        a, b = (out / rel).read_bytes(), (GOLDEN / rel).read_bytes()
+        if lv or rel.suffix not in (".json", ".md"):
+            assert a == b, rel
+        else:
+            assert digest.sub(b"<sha256>", a) == digest.sub(b"<sha256>", b), rel
+            assert len(digest.findall(a)) == len(digest.findall(b)), rel
 
 
 # ---- REP-3 ------------------------------------------------------------------------------------
@@ -411,3 +422,35 @@ def test_rep4_derived_files_never_print_timings(tilted_bundle: Path) -> None:
         for v in loaded.doc["run"]["timings"]["values_s"].values():
             s = format(v, ".6g")
             assert len(s) < 5 or s not in t, (n, s)
+
+
+# ---- REP-4: the +-1 standard-error band is never clipped (REVIEW-92b2e8cf finding 1) -----------
+
+
+def test_rep4_band_crosses_zero_where_the_standard_error_exceeds_the_dose() -> None:
+    """The band is drawn as mean - std to mean + std; with std > mean its lower edge is negative
+    and the plot's y axis extends below zero (a negative tick label appears)."""
+    import xml.etree.ElementTree as ET
+
+    from ionmc import report, svg
+
+    fig = svg.Figure("t", "x", "y")
+    fig.band([0.0, 1.0, 2.0], [-0.5, -0.2, -0.1], [1.0, 1.2, 1.1])
+    assert fig._ranges()[2] < 0.0
+    doc, arrays = _golden_inputs()
+    dose = arrays["grid__dose__dose_gy"]
+    big = dict(arrays)
+    big["grid__dose__dose_std_gy"] = np.where(np.isnan(dose), np.nan, 10.0 * dose + 1e-9)
+    plots = report.render_plots(doc, big)
+
+    def y_ticks(text: str) -> list[str]:  # the y-axis tick labels are the end-anchored texts
+        root = ET.fromstring(text)
+        return [t.text or "" for t in root.iter("{http://www.w3.org/2000/svg}text")
+                if t.get("text-anchor") == "end"]  # fmt: skip
+
+    for name in ("plots/dose__dose.svg", "plots/lateral__dose.svg"):
+        assert any(label.startswith("-") for label in y_ticks(plots[name])), name
+        assert "band = +-1 standard error" in plots[name]
+    # the control: the committed arrays (std < mean everywhere defined) have no negative y tick
+    control = report.render_plots(doc, arrays)["plots/dose__dose.svg"]
+    assert y_ticks(control) and not any(t.startswith("-") for t in y_ticks(control))

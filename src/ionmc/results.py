@@ -111,6 +111,7 @@ KIND = "transport"
 MAX_TOTAL_BYTES = 8 * 2**30
 MAX_ARRAY_BYTES = 4 * 2**30
 MAX_JSON_BYTES = 16 * 2**20
+MAX_DERIVED_BYTES = 64 * 2**20  # report.md and plots/*.svg, each and together
 MAX_CENTRAL_DIRECTORY_BYTES = 2**20
 MAX_JSON_TOKENS = 2_000_000
 MAX_JSON_DEPTH = 64
@@ -3172,6 +3173,7 @@ def load(
     max_central_directory_bytes: int = MAX_CENTRAL_DIRECTORY_BYTES,
     max_json_tokens: int = MAX_JSON_TOKENS,
     max_json_depth: int = MAX_JSON_DEPTH,
+    max_derived_bytes: int = MAX_DERIVED_BYTES,
 ) -> LoadedResult:
     """Tier 1 (decision 0045 amendment A-2): read and verify a bundle from ``result.json`` and
     ``arrays.npz`` only; never the data cache, a registry table, an input file or transport.
@@ -3188,6 +3190,7 @@ def load(
             max_central_directory_bytes=max_central_directory_bytes,
             max_json_tokens=max_json_tokens,
             max_json_depth=max_json_depth,
+            max_derived_bytes=max_derived_bytes,
         )
     except ResultFormatError:
         raise
@@ -3207,6 +3210,7 @@ def _load(
     max_central_directory_bytes: int = MAX_CENTRAL_DIRECTORY_BYTES,
     max_json_tokens: int = MAX_JSON_TOKENS,
     max_json_depth: int = MAX_JSON_DEPTH,
+    max_derived_bytes: int = MAX_DERIVED_BYTES,
 ) -> LoadedResult:
     root = Path(path)
     if root.is_symlink() or not root.is_dir():
@@ -3255,9 +3259,25 @@ def _load(
     for need in _FIXED_FILES:
         if need not in files:
             raise _fail(f"files has no entry for {need}")
+    # sizes and budgets first (lstat only), hashes second: no byte of an over-large or mis-sized
+    # file is ever read (REVIEW-92b2e8cf finding 2)
+    paths: dict[str, Path] = {}
+    derived_total = 0
     for name, rec in files.items():
-        p = _bundle_file(root, name)
-        sha, size = _sha256_path(p)
+        p = paths[name] = _bundle_file(root, name)
+        size = p.lstat().st_size
+        if size != rec["size"]:
+            raise _fail(f"file {name!r} has {size} bytes, its recorded size is {rec['size']}")
+        if name == "arrays.npz":
+            if size > max_total_bytes:
+                raise _fail(f"arrays.npz ({size} bytes) exceeds max_total_bytes")
+        else:
+            derived_total += size
+            if size > max_derived_bytes or derived_total > max_derived_bytes:
+                raise _fail(f"file {name!r}: report and plot files exceed max_derived_bytes "
+                            f"({max_derived_bytes} bytes, each and together)")  # fmt: skip
+    for name, rec in files.items():
+        sha, size = _sha256_path(paths[name])
         if size != rec["size"] or sha != rec["sha256"]:
             raise _fail(f"file {name!r} does not match its recorded sha256 and size")
     npz = root / "arrays.npz"

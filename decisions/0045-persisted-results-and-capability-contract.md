@@ -612,3 +612,12 @@ the reader allows five dimensions only for those two array roles (`MAX_NDIM_SPEC
 four for every other array. The byte budgets apply unchanged. `save` refuses a result with `valid = false` unless the
 run allowed it (`allow_invalid_result`), exactly as §1 states; the S2a fixtures that persist invalid results set that
 option explicitly.
+
+## Amendment A-4 (2026-11-23; after Codex REVIEW-92b2e8cf of 0b704e42): a byte budget for the derived files
+
+§1 lists the reader's byte budgets for `result.json` and `arrays.npz`. Clarification (prospective; no row outcome
+observed): the derived files `report.md` and `plots/*.svg` have their own budget, `max_derived_bytes` (default
+64 MiB, each file and all of them together), and tier 1 checks every listed file's `lstat` size against its recorded
+size and against its budget before any file is hashed, so no byte of an over-large or mis-sized file is read. The
+±1 standard-error bands of the plots are drawn as `mean - std` to `mean + std` without clipping at zero; a voxel whose
+standard error exceeds its dose shows a band crossing zero, as the label says.
