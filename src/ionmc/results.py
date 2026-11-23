@@ -1516,7 +1516,15 @@ def _check_stopping_pins(doc: dict[str, Any]) -> None:
     mid = spec.model_id
     window = frozen.REGISTERED_E_MAX_PER_U.get(mid)
     if window is not None:
-        _need(proj in window, f"stopping model {mid!r} does not support projectile {proj!r}")
+        for sp in st["species_transported"]:
+            _need(sp in window, f"stopping model {mid!r} does not support projectile {sp!r}")
+        # the source interval [E_cut, E0 + 6 sigma_E] lies inside the window (config validation)
+        a_src = eff["source"]["a"]
+        top = eff["source"]["kinetic_energy_mev"] + 6.0 * eff["source"]["energy_sigma_mev"]
+        _need(eff["physics"]["e_cut_effective_mev"] / a_src
+              >= frozen.REGISTERED_E_MIN_PER_U * (1.0 - 1e-12)
+              and top / a_src <= window[proj] * (1.0 + 1e-12),
+              "the source energy interval is outside the window of the stopping model")  # fmt: skip
         _check_material_rule(doc, mats, frozen.REGISTERED_MATERIAL_RULE[mid])
         resolved = {proj: {"e_min_per_u": frozen.REGISTERED_E_MIN_PER_U,
                            "e_max_per_u": window[proj]}}  # fmt: skip
@@ -1789,9 +1797,7 @@ def _check_channel_numerics(doc: dict[str, Any], got: list[dict[str, Any]]) -> N
         if cap_u is None:
             _need(e0 <= e_hi <= want, "bounds.E_hi_mev is outside [E0, E0 + 6 sigma_E]")
         else:
-            cap = cap_u * eff["source"]["a"]
-            _need(e_hi == want if want < cap * (1.0 - 1e-9)
-                  else (e_hi == want or math.isclose(e_hi, cap, rel_tol=1e-9)),
+            _need(e_hi == min(want, cap_u * eff["source"]["a"]),
                   "bounds.E_hi_mev differs from min(E0 + 6 sigma_E, table maximum)")  # fmt: skip
         if nuclear:  # e_hist = max(E_hi, the persisted nuclear history-energy bound)
             e_nuc = max(e_hi, eff["nuclear"]["history_energy_bound_mev"])
@@ -2836,8 +2842,12 @@ def _binding_limits(doc: Mapping[str, Any]) -> tuple[str, ...]:
         out.append("effective.nuclear except table_id: engine table summary, hash-protected only")
     user = doc["requested"]["physics"].get("stopping")
     if isinstance(user, dict) and "status" in user:
-        out.append("requested.physics.stopping is a user object: effective.stopping rests on "
-                   "validate_identity_block only")  # fmt: skip
+        out.append(
+            "requested.physics.stopping is a user object (not reconstructible): effective.stopping "
+            "is bound to its recorded class, model id, spec hash (when the model in effect is the "
+            "requested one), the selection path, the range construction and, for a registered "
+            "model id, the registry fields; its tables and data pins are not re-derived"
+        )
     if doc["statistics"]["quantity_batch_arrays"]["status"] != "persisted":
         out.append(
             "quantity means, standard errors and rounding bounds are not recomputed: no "

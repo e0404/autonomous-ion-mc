@@ -1895,7 +1895,9 @@ def _pin_doc(**over: Any) -> dict[str, Any]:
     st.update(over)
     return {
         "effective": {"stopping": st, "geometry": {"materials": ["water"]},
-                      "source": {"projectile": "proton", "z": 1, "a": 1}},
+                      "source": {"projectile": "proton", "z": 1, "a": 1,
+                                 "kinetic_energy_mev": 100.0, "energy_sigma_mev": 0.0},
+                      "physics": {"e_cut_effective_mev": 1.0}},
         "effective_extra": {"materials": [{
             "name": "water", "density_g_cm3": 1.0, "mass_fractions": {"H": 0.111894, "O": 0.888106},
             "I_eV_requested": 78.0, "I_eV_effective": 78.0}]},
@@ -1936,11 +1938,26 @@ def test_fix8_stopping_identity_is_complete_and_data_used_is_an_exact_multiset()
         results._check_stopping_pins(d)
     d = _pin_doc()  # a projectile the model does not support, a disallowed material
     d["effective"]["source"].update(projectile="carbon12", z=6, a=12)
+    d["effective"]["stopping"]["species_transported"] = ["carbon12"]
     with pytest.raises(ResultFormatError, match="does not support"):
         results._check_stopping_pins(d)
     d = _pin_doc()
     d["effective_extra"]["materials"][0]["density_g_cm3"] = 1.2
     with pytest.raises(ResultFormatError, match="material rule"):
+        results._check_stopping_pins(d)
+    d = _pin_doc()  # a forged nuclear run: transported deuterons are not a NIST projectile
+    d["effective"]["stopping"]["species_transported"] = ["proton", "deuteron"]
+    with pytest.raises(ResultFormatError, match="does not support"):
+        results._check_stopping_pins(d)
+    d = _pin_doc()  # below-window cutoff and above-window source
+    d["effective"]["physics"] = {"e_cut_effective_mev": 0.5}
+    d["effective"]["source"].update(kinetic_energy_mev=100.0, energy_sigma_mev=0.0)
+    with pytest.raises(ResultFormatError, match="energy interval"):
+        results._check_stopping_pins(d)
+    d["effective"]["physics"]["e_cut_effective_mev"] = 1.0
+    results._check_stopping_pins(d)
+    d["effective"]["source"]["kinetic_energy_mev"] = 600.0
+    with pytest.raises(ResultFormatError, match="energy interval"):
         results._check_stopping_pins(d)
     d = _pin_doc()  # a material outside the geometry
     d["effective"]["stopping"]["data_used"][0]["table"] = ["proton", "bone"]
@@ -2140,17 +2157,29 @@ def test_fix9_history_energy_and_particle_bounds_are_derived_from_the_request(
     tl = d["effective"]["tallies"]
 
     def set_e(e: float) -> None:
-        old = tl["bounds"]["E_hi_mev"]
         for c in tl["channels"]:
             if c["kind"] == "E":
                 c["bound_per_history"] = e
-        tl["bounds"]["B_ES"] *= e / old
+        tl["bounds"]["B_ES"] = tl["bounds"]["S_w_max_mev_per_mm"] * e
         tl["bounds"]["E_hi_mev"] = e
 
     e0 = d["effective"]["source"]["kinetic_energy_mev"]
     set_e(e0 + 3.0)
     with pytest.raises(ResultFormatError, match="E_hi_mev"):
         results._check_channel_numerics(d, tl["channels"])
+    # above the table maximum (500 MeV/u, within the window tolerance): E_hi is exactly the cap
+    d["effective"]["source"].update(kinetic_energy_mev=499.9999999)
+    d["effective"]["source"]["energy_sigma_mev"] = (500.0 - 499.9999999 + 2.5e-10) / 6.0
+    set_e(500.0)
+    results._check_channel_numerics(d, tl["channels"])
+    set_e(
+        d["effective"]["source"]["kinetic_energy_mev"]
+        + 6.0 * d["effective"]["source"]["energy_sigma_mev"]
+    )  # the uncapped value, coherent everywhere
+    with pytest.raises(ResultFormatError, match="E_hi_mev"):
+        results._check_channel_numerics(d, tl["channels"])
+    d["effective"]["source"].update(kinetic_energy_mev=e0, energy_sigma_mev=1.0)
+    set_e(e0 + 6.0)
     # nuclear run: E_bound = max(E_hi, persisted history bound), max_particles = 32 (frozen)
     set_e(e0 + 6.0)
     d["effective"]["nuclear"] = {"history_energy_bound_mev": 2.0 * e0}
