@@ -221,8 +221,9 @@ def test_rep2_generator_reproduces_the_committed_fixture(tmp_path: Path) -> None
 # hash of the report that prints them), and the report substrings printing those values.
 _TABLE_DERIVED_LEAF = re.compile(
     r"/effective/tables/sha256|/provenance/data/table_sha256|/effective/max_steps"
-    r"|/effective/tallies/channels/\d+/bound_per_history|/files/report\.md/sha256"
-)
+    r"|/effective/tallies/channels/\d+/bound_per_history|/effective/tallies/bounds/\w+"
+    r"|/files/report\.md/sha256"
+)  # the accumulator bounds B_* are computed from the tables too (CI run 45198306479)
 _TABLE_VALUE_SUBSTRINGS = (
     (re.compile(r"(table sha256: )[0-9a-f]{64}"), r"\1<table-sha256>"),
     (re.compile(r"(/max_steps = )\d+"), r"\1<n>"),

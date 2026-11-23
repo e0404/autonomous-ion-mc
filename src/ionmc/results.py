@@ -976,12 +976,16 @@ def save(
     parent = dest.parent
     if not parent.is_dir():
         raise _fail(f"parent directory {parent.name!r} does not exist")
+    replaced: tuple[os.stat_result, str] | None = (
+        None  # the exact bundle authorised for replacement
+    )
     if os.path.lexists(dest):
         if not overwrite:
             raise FileExistsError(f"{dest.name!r} exists (pass overwrite=True)")
         why = not_a_result_bundle(dest)
         if why is not None:
             raise _fail(f"refusing to overwrite {dest.name!r}: {why}")
+        replaced = (os.lstat(dest), _sha256_path(dest / "result.json")[0])
     if not result.valid and not result.requested_config.run.allow_invalid_result:
         raise _fail("invalid result: the run did not set allow_invalid_result")
     if manifest is not None:
@@ -1008,17 +1012,42 @@ def save(
             doc["files"][name] = {"sha256": sha, "size": size}
         (tmp / "result.json").write_bytes(canonical_bytes(doc))
         os.chmod(tmp, 0o755)
-        old = None
-        if os.path.lexists(dest):
-            old = parent / f".ionmc-old-{os.getpid()}"
-            os.rename(dest, old)
-        os.rename(tmp, dest)
-        if old is not None:
-            shutil.rmtree(old)
+        _commit_bundle(tmp, dest, replaced)
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
     return dest
+
+
+def _commit_bundle(tmp: Path, dest: Path, replaced: tuple[os.stat_result, str] | None) -> None:
+    """Move the finished temporary bundle to ``dest``. Nothing that was not authorised at the
+    start of ``save`` is ever deleted (REVIEW-0003a8be): a destination that was absent and
+    appeared meanwhile is refused; an authorised destination is displaced atomically, proven to
+    be the same directory object with the same result.json and still a loadable bundle, and
+    only then deleted; otherwise it is put back and the write fails."""
+    if replaced is None:
+        if os.path.lexists(dest):
+            raise _fail(f"{dest.name!r} appeared while the bundle was being written; nothing "
+                        "was replaced")  # fmt: skip
+        os.rename(tmp, dest)  # onto a non-empty directory or a file this raises, never deletes
+        return
+    st0, digest0 = replaced
+    old = dest.parent / f".ionmc-old-{os.getpid()}-{tmp.name[len('.ionmc-tmp-') :]}"
+    os.rename(dest, old)  # atomic displacement of whatever is at dest now
+    try:
+        st = os.lstat(old)
+        same = (st.st_ino, st.st_dev) == (st0.st_ino, st0.st_dev)
+        same = same and _sha256_path(old / "result.json")[0] == digest0
+        same = same and not_a_result_bundle(old) is None
+    except (OSError, ResultFormatError):
+        same = False
+    if not same:
+        if not os.path.lexists(dest):
+            os.rename(old, dest)  # put back what was displaced; nothing is deleted
+        raise _fail(f"{dest.name!r} changed between its validation and its replacement; "
+                    "nothing was deleted")  # fmt: skip
+    os.rename(tmp, dest)
+    shutil.rmtree(old)
 
 
 # ---------------------------------------------------------------------------------------------

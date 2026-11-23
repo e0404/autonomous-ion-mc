@@ -2532,3 +2532,82 @@ def test_out11_overwrite_refuses_anything_but_an_owned_bundle(tmp_path: Path) ->
     save(r, real, overwrite=True)
     load(real)
     assert not [p for p in tmp_path.iterdir() if p.name.startswith(".ionmc-")]
+
+
+_REAL_WRITE_NPZ = results.write_npz
+
+
+def _swap_during_write(monkeypatch: Any, action: Any) -> None:
+    """Run ``action`` once while the temporary bundle is being generated (inside write_npz)."""
+    fired = []
+
+    def hooked(path: Path, arrays: Any, level: int) -> Any:
+        if not fired:
+            fired.append(True)
+            action()
+        return _REAL_WRITE_NPZ(path, arrays, level)
+
+    monkeypatch.setattr(results, "write_npz", hooked)
+
+
+def _no_leftovers(parent: Path) -> None:
+    assert not [p.name for p in parent.iterdir() if p.name.startswith(".ionmc-")]
+
+
+def test_out11_destination_race_never_deletes_what_was_not_authorised(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """REVIEW-0003a8be: a destination created, swapped or altered while the bundle is being
+    written is never deleted; an authorised bundle displaced for replacement is put back."""
+    r = make_result()
+    # (a) absent destination, a stranger directory appears during the write (both modes)
+    for overwrite in (False, True):
+        dest = tmp_path / f"appears_{overwrite}"
+
+        def appear(d: Path = dest) -> None:
+            d.mkdir()
+            (d / "keep.txt").write_text("sentinel", encoding="utf-8")
+
+        _swap_during_write(monkeypatch, appear)
+        with pytest.raises(ResultFormatError, match="appeared while the bundle was being written"):
+            save(r, dest, overwrite=overwrite)
+        assert (dest / "keep.txt").read_text(encoding="utf-8") == "sentinel"
+        assert sorted(p.name for p in dest.iterdir()) == ["keep.txt"]
+        _no_leftovers(tmp_path)
+    # (b) an authorised bundle is swapped for a stranger directory during the write
+    dest = tmp_path / "swapped"
+    save(r, dest)
+    aside = tmp_path / "aside"
+
+    def swap() -> None:
+        os.rename(dest, aside)
+        dest.mkdir()
+        (dest / "keep.txt").write_text("sentinel", encoding="utf-8")
+
+    _swap_during_write(monkeypatch, swap)
+    with pytest.raises(ResultFormatError, match="changed between its validation"):
+        save(r, dest, overwrite=True)
+    assert (dest / "keep.txt").read_text(encoding="utf-8") == "sentinel"  # put back, intact
+    assert sorted(p.name for p in dest.iterdir()) == ["keep.txt"]
+    load(aside)  # the displaced real bundle is untouched
+    _no_leftovers(tmp_path)
+    # (c) the authorised bundle's result.json is altered during the write
+    dest2 = tmp_path / "altered"
+    save(r, dest2)
+    before = (dest2 / "result.json").read_bytes()
+
+    def alter() -> None:
+        (dest2 / "result.json").write_bytes(before + b"\n")
+
+    _swap_during_write(monkeypatch, alter)
+    with pytest.raises(ResultFormatError, match="changed between its validation"):
+        save(r, dest2, overwrite=True)
+    assert (dest2 / "result.json").read_bytes() == before + b"\n"  # still there, unchanged by us
+    _no_leftovers(tmp_path)
+    # the control: without interference the authorised bundle is replaced
+    monkeypatch.undo()
+    dest3 = tmp_path / "plain"
+    save(r, dest3)
+    save(r, dest3, overwrite=True)
+    load(dest3)
+    _no_leftovers(tmp_path)
