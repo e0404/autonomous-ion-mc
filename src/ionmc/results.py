@@ -9,8 +9,9 @@ internals or recomputes ``evidence_at_run``.
 Scope of this module version (plan V3-006, step S2a): ``report.md`` is a minimal deterministic
 placeholder generated here (S5 replaces it by the full report and adds ``plots/``); the
 ``effective_extra.resolutions`` list is empty with an explicit ``status`` (``reconcile`` is S4);
-``provenance.code`` is built from the run's ``describe_environment()`` record (S3 replaces the
-builder). No table values are ever persisted: array names are checked against an allowlist.
+``provenance`` is built by :mod:`ionmc.provenance` (code identity, environment, data, models) and
+checked there against the path set P before writing. No table values are ever persisted: array
+names are checked against an allowlist.
 
 Strictness of ``load``: unknown/missing fields are refused at every level of the blocks this
 module defines; ``requested`` is checked by ``configio.validate_dict_structure``,
@@ -28,15 +29,12 @@ from __future__ import annotations
 
 import collections
 import contextlib
-import getpass
 import hashlib
 import json
 import math
 import os
-import platform
 import re
 import shutil
-import socket
 import struct
 import tempfile
 import zipfile
@@ -50,6 +48,7 @@ import numpy as np
 
 from ionmc import _result_schema_1_0 as frozen
 from ionmc import _result_shapes as shapes
+from ionmc import provenance as prov
 from ionmc.config import validate
 from ionmc.configio import (
     ConfigError,
@@ -622,34 +621,6 @@ def _grid_stats(result: Result) -> list[dict[str, Any]]:
     return out
 
 
-def _data_block(result: Result) -> dict[str, Any]:
-    eff = result.effective_config.summary()
-    stopping = eff.get("stopping", {})
-    nuc = eff.get("nuclear")
-    return {
-        "stopping_data_used": _strip(stopping.get("data_used", []), frozenset({"cache_dir"})),
-        "stopping_content_sha256": stopping.get("content_sha256"),
-        "table_sha256": eff["tables"]["sha256"],
-        "table_stopping_source": eff["tables"]["stopping_source"],
-        "table_materials": eff["tables"]["materials"],
-        "nuclear": None if nuc is None else _strip(nuc, frozenset({"cache_dir"})),
-        "lookups": [dict(lk) for lk in result.lookups],
-    }
-
-
-def _code_block(env: Mapping[str, Any]) -> dict[str, Any]:
-    sha = env.get("git_sha")
-    return {
-        "ionmc_version": env.get("ionmc_version"),
-        "git_commit": sha,
-        "git_dirty": env.get("git_dirty"),
-        "package_tree_oid": None,
-        "source": "stamp" if sha else "unavailable",
-        "status": "known" if sha else "unknown",
-        "reason": "" if sha else "no build stamp (code identity builder is replaced in S3)",
-    }
-
-
 def _cache_dir_fields(stopping: Mapping[str, Any]) -> tuple[Any, str]:
     cd = stopping.get("cache_dir")
     if cd is None:
@@ -687,7 +658,6 @@ def build_document(
     summary = eff.summary()
     cfg = result.requested_config
     manifest_dict = (manifest or manifest_for_api_config(cfg)).to_dict()
-    env = result.environment
     stopping = summary.get("stopping", {})
     cache_dir, cache_source = _cache_dir_fields(stopping)
     counters = result.counters.as_dict()
@@ -696,7 +666,6 @@ def build_document(
         "lookup_out_of_domain": 0 if ch is None else int(ch.lookup_out_of_domain),
         "path_bound_exceeded": 0 if ch is None else int(ch.path_bound_exceeded),
     }
-    ph = summary["physics"]
     geom = eff.geometry
     by_origin = {
         (a.origin["kind"], a.origin["array"]): a.name
@@ -724,27 +693,10 @@ def build_document(
             "lookup_plan": _lookup_plan(result),
         },
         "provenance": {
-            "code": _code_block(env),
-            "environment": {
-                "python_version": env.get("python_version"),
-                "platform": f"{platform.system()} {platform.release()} {platform.machine()}",
-                "numpy_version": env.get("numpy_version"),
-                "warp_version": env.get("warp_version"),
-                "warp_devices": env.get("warp_devices"),
-                "warp_error": env.get("warp_error"),
-            },
-            "data": _data_block(result),
-            "models": {
-                "stopping_model_id_effective": stopping.get("model_id_effective"),
-                "stopping_version": stopping.get("version"),
-                "stopping_spec_sha256": stopping.get("spec_sha256"),
-                "evidence_at_run": stopping.get("evidence_at_run"),
-                "straggling_model": ph["straggling_model"] if ph["straggling"] else None,
-                "mcs_model": ph["mcs_model"] if ph["multiple_scattering"] else None,
-                "end_of_range_model": ph["end_of_range_model_effective"],
-                "delta_electrons": ph["delta_electrons"],
-                "nuclear_table_id": (summary.get("nuclear") or {}).get("table_id"),
-            },
+            "code": prov.code_identity(),
+            "environment": prov.environment_block(),
+            "data": prov.data_block(summary, result.lookups),
+            "models": prov.models_block(summary),
         },
         "run": {
             "backend": result.backend,
@@ -788,44 +740,13 @@ def build_document(
 # ---------------------------------------------------------------------------------------------
 # path hygiene (set P) and report placeholder
 
-_P_PATTERNS = tuple(
-    re.compile(p)
-    for p in (
-        r"^/run/output_path$",
-        r"^/run/cache_dir$",
-        r"^/input_manifest/base_dir$",
-        r"^/input_manifest/config_file/path$",
-        r"^/input_manifest/files/\d+/path$",
-        r"^/effective/(stopping|nuclear)(/.*)?/cache_dir$",
-    )
-)
-
-
-def _walk_strings(obj: Any, ptr: str = "") -> Iterator[tuple[str, str]]:
-    if isinstance(obj, str):
-        yield ptr, obj
-    elif isinstance(obj, Mapping):
-        for k, v in obj.items():
-            yield from _walk_strings(v, f"{ptr}/{k}")
-    elif isinstance(obj, list):
-        for i, v in enumerate(obj):
-            yield from _walk_strings(v, f"{ptr}/{i}")
-
 
 def check_path_hygiene(doc: Mapping[str, Any]) -> None:
-    """Outside the pointer set P no string may hold the home path, user name or host name."""
-    names: set[str] = set()
-    for fn in (getpass.getuser, socket.gethostname):
-        with contextlib.suppress(Exception):
-            names.add(fn())
-    names.discard("")
-    home = str(Path.home())
-    for ptr, s in _walk_strings(doc):
-        if any(p.match(ptr) for p in _P_PATTERNS):
-            continue
-        parts = set(re.split(r"[/\\]", s)) | {s}
-        if (home not in ("", "/") and home in s) or (names & parts):
-            raise _fail(f"string at {ptr} holds a home path, user name or host name")
+    """Outside the pointer set P no string may hold the home path, user name or host name
+    (:func:`ionmc.provenance.privacy_violations`)."""
+    bad = prov.privacy_violations(doc)
+    if bad:
+        raise _fail(f"path hygiene (set P): {bad[0]}")
 
 
 def report_placeholder(doc: Mapping[str, Any]) -> str:
@@ -1267,6 +1188,10 @@ def _check_effective(eff: dict[str, Any]) -> None:
         raise _fail(str(exc)) from exc
 
 
+_HEX40 = re.compile(r"^[0-9a-f]{40}$")
+_VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+!_-]{0,63}$")
+
+
 def _check_provenance(p: dict[str, Any]) -> None:
     for blk, spec in (
         ("code", shapes.PROVENANCE_CODE),
@@ -1275,7 +1200,19 @@ def _check_provenance(p: dict[str, Any]) -> None:
         ("models", shapes.PROVENANCE_MODELS),
     ):
         _schema(p[blk], spec, f"provenance.{blk}")
-    _need(p["code"]["source"] in ("stamp", "git", "unavailable"), "provenance.code.source")
+    c = p["code"]
+    _need(c["source"] in ("stamp", "git", "unavailable"), "provenance.code.source")
+    _need(c["status"] in ("ok", "unknown"), "provenance.code.status")
+    for k in ("git_commit", "package_tree_oid"):
+        _need(c[k] is None or _HEX40.match(c[k]) is not None, f"provenance.code.{k}: not 40 hex")
+    known = c["git_commit"] is not None and c["git_dirty"] is not None
+    _need((c["status"] == "ok") == known, "provenance.code.status disagrees with commit/dirty")
+    _need((c["reason"] == "") == known, "provenance.code.reason")
+    _need(c["source"] != "unavailable" or (c["git_commit"] is None and c["git_dirty"] is None),
+          "provenance.code: source 'unavailable' with a commit")  # fmt: skip
+    _need(c["source"] != "git" or known, "provenance.code: source 'git' without commit")
+    _need(c["ionmc_version"] is None or _VERSION_RE.match(c["ionmc_version"]) is not None,
+          "provenance.code.ionmc_version")  # fmt: skip
 
 
 def _bind(cond: bool, what: str) -> None:
@@ -1314,6 +1251,8 @@ def _check_run_binding(doc: dict[str, Any]) -> None:
     cd = run["cache_dir"]
     _need(cd == (eff["stopping"] or {}).get("cache_dir"), "run.cache_dir disagrees with effective")
     _need((cd is None) == (run["cache_dir_source"] == "not-used"), "run.cache_dir_source")
+    _need(run["cache_dir_source"] != "default" or cd.replace("\\", "/").endswith("/.cache/ionmc"),
+          "run.cache_dir_source 'default' disagrees with run.cache_dir")  # fmt: skip
     p = doc["provenance"]
     st, nuc = eff["stopping"], eff.get("nuclear")
     ph = eff["physics"]
