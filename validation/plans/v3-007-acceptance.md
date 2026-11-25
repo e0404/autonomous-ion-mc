@@ -43,7 +43,12 @@ performance targets.
 1. **Beamlet model.** `Beamlet(position_mm, direction, kinetic_energy_mev, energy_sigma_mev=0, lateral_sigma_mm=0,
    n_histories, weight=None, label=None)`; `BeamletSet(projectile, beamlets: tuple[Beamlet, ...])` is a second
    source type accepted by `SimulationConfig.source` (union with `PencilBeamSource`). One projectile per set. `weight`
-   (planning weight, primaries) is metadata for `plan_dose`; it **never** changes sampling. Limits (fail closed):
+   (planning weight; unit: primaries delivered by the beamlet in the plan) is metadata for `plan_dose` /
+   `plan_uncertainty`; it **never** changes sampling, columns or statistics. **Contract (A-6 item 2):** `weight` is
+   `None` or a finite float ≥ 0 (NaN, ±inf, negative, non-numeric refused by `validate`); it is persisted in the beamlet
+   table and in `requested` (so a weight change changes `config_sha256` but not one array); `plan_dose(A, weights=None)`
+   uses the stored weights and refuses (`ValueError`) when any stored weight is `None`; an explicit `weights` vector
+   (length J, finite, ≥ 0, else `ValueError`) overrides the stored ones; `plan_uncertainty` identical rules. Limits (fail closed):
    1 ≤ J ≤ 4 096 beamlets (ESTIMATE-justified: ≤ 400 B per beamlet inline in `requested` incl. a 64-character label
    ≈ 1.6 MiB at the limit, inside the 0045 `max_json_bytes` and token budgets; the frozen workload has 100),
    `label` optional, matching `^[A-Za-z0-9_.-]{1,64}$` and unique within the set (A-1 item 3, grammar A-5 item 3),
@@ -75,56 +80,46 @@ performance targets.
    pencil source is the J = 1 case of the same code path (bit identity guarded by REG-1). The beamlet id is
    range-asserted (0 ≤ j < J) in every backend; it can never wrap.
 
-   **Allocation rule (A-4 item 2; FACT: array names read in `transport/warp_driver.py` and `transport/reference.py`
-   at 3f3736a6).** `estimate(backend, B, ΣV, chunk, V_inf, G) ≤ memory_budget_bytes`, where `estimate` is
-   `ionmc.config.allocation_estimate` (implemented in S1). **Scope (A-5 item 1):** it bounds the ACCUMULATOR PAYLOAD
-   of a run, exactly: the grid accumulators `B·ΣV·8`, the per-chunk tally rows and counter rows of ONE chunk (chunk =
-   min(`chunk_histories`, length of the CURRENT group's history range), as `run_warp_range` sizes them), the influence
-   accumulators `G·B·V_inf·8` on the device and one simultaneous host copy of them during transfer (python path: no
-   second copy). It does NOT bound, and the documentation (S7, configuration reference) says so: diagnostic arrays
-   (traces, end positions, escape records; bounded by their own limits such as `trace_histories`), the retained
-   CSC/batch output of earlier groups and the assembled `Result` (bounded at `save` by the 0045 `max_array_bytes` /
-   `max_total_bytes` budgets, which refuse an oversized bundle, and measured by PERF-1/PERF-2 as bundle size),
-   Python object overhead, and the Warp kernel/module cache. Automatic G is a payload rule, not a guarantee about
-   process RSS. Symbols: B = `n_batches`; S = ΣV, the total voxels of all scoring grids
-   (`total_vox`); n_g = number of scoring grids; V_inf = voxels of the influence grid; G = group size; N = Σ_j n_j;
-   chunk = min(`RunOptions.chunk_histories`, max(N, 1)) (`chunk` in `run_warp_range`). Row widths are the named
-   constants and functions of the code, never re-typed numbers (the values at 3f3736a6 are in parentheses).
-   Scope: the rule applies to `BeamletSet` runs (with or without influence; V_inf = 0 and G = 1 without);
-   pencil configurations keep the existing `B·ΣV·8·workers ≤ memory_budget_bytes` check unchanged (REG-2, REG-3):
+   **Allocation rule (A-4 item 2, rewritten as ONE consistent contract by A-6 item 1; FACT: array names read in
+   `transport/warp_driver.py` and `transport/reference.py` at 3f3736a6).** `allocation_estimate(backend, B, S, n_g,
+   eff, N, chunk_histories, V_inf, G, offsets) ≤ memory_budget_bytes` (implemented in S1). The rule bounds exactly
+   the **accumulator-payload class** — these arrays and nothing else:
+   (i) the grid accumulators `edep` int64[B, S] (8·B·S bytes); (ii) the influence accumulators int64[G·B, V_inf]
+   (8·G·B·V_inf; device on warp, host on python); (iii) the per-history tally rows float64[L, W_t] (8·L·W_t) and
+   counter rows int32[L, W_c] (4·L·W_c) that a backend holds at one time: L = chunk on the warp paths (one chunk at a
+   time), L = N on the python path (the whole range, existing behaviour); (iv) on warp-cuda only, the ONE host copy
+   of the current group's influence accumulators during the device→host transfer (8·G·B·V_inf; on warp-cpu
+   `numpy()` is a view and nothing is copied). Symbols: B = `n_batches`; S = `total_vox` (all scoring grids); n_g =
+   number of scoring grids; V_inf = voxels of the influence grid; N = Σ_j n_j; J = beamlets; groups are the
+   consecutive beamlet ranges [g·G, (g+1)·G) ∩ [0, J); L_G = max_g Σ_{j in group g} n_j (the longest group range);
+   chunk = min(`RunOptions.chunk_histories`, L_G) — the worst case over the groups that G implies, so the selection
+   is static and conservative for unequal n_j. Row widths are named constants/functions of the code, never re-typed
+   numbers (values at 3f3736a6 in parentheses):
 
-   - tally-row width W_t, warp: `N_FIXED_TALLIES` (= `len(TALLY_NAMES)`, 6) + 2·n_g + `channel_columns(eff)`
-     (`n_cols` of `run_warp_range`); python: `N_FIXED_TALLIES` + 2·n_g + `channel_columns(eff)` +
-     `len(NUCLEAR_TALLY_NAMES)` (6) when nuclear is on (`tally_rows` of `reference.py`, 580–584);
-   - counter-row width W_c, warp: `len(COUNTER_NAMES)` (9) + `len(ION_COUNTER_NAMES)` (2) for an ion
-     (`counter_names`, `counter_rows` of `run_warp_range`); python: `len(self.counter_names)` of `reference.py`
-     (237–243): `COUNTER_NAMES` + `ION_COUNTER_NAMES` for an ion, `COUNTER_NAMES` + `NUCLEAR_COUNTER_NAMES` (3) when
-     nuclear is on;
-   - F = bytes of every other array the backend holds during the run (geometry `material_index` int32[S_geo] and
-     float64 densities, the uploaded tables, grid descriptors and offset arrays, the per-beamlet parameter and offset
-     arrays, the non-diagnostic dummy `end_state`/`end_code`/`trace_*` arrays); the function sums the `nbytes` of
-     the same arrays, so F follows the code instead of a typed constant.
+   - W_t, warp: `N_FIXED_TALLIES` (= `len(TALLY_NAMES)`, 6) + 2·n_g + `channel_columns(eff)` (`n_cols` of
+     `run_warp_range`); python: the same + `len(NUCLEAR_TALLY_NAMES)` (6) when nuclear is on (`tally_rows` of
+     `reference.py`, 580–584);
+   - W_c, warp: `len(COUNTER_NAMES)` (9) + `len(ION_COUNTER_NAMES)` (2) for an ion (`counter_names` of
+     `run_warp_range`); python: `len(self.counter_names)` (`reference.py` 237–243): `COUNTER_NAMES` +
+     `ION_COUNTER_NAMES` for an ion, + `NUCLEAR_COUNTER_NAMES` (3) when nuclear is on.
 
-   Warp paths (cpu and cuda), peak = persistent device arrays + the largest of three phases:
-   `P = 8·B·S` (`edep` int64[B, S]) `+ 8·chunk·W_t` (`tally_rows` float64) `+ 4·chunk·W_c` (`counter_rows` int32)
-   `+ F + 8·G·B·V_inf` (device influence accumulators int64[G·B, V_inf]); chunk phase
-   `X_chunk = 8·chunk·W_c` (`crows.astype(int64)`) plus, on cuda only (`numpy()` is a view on cpu),
-   `8·chunk·W_t + 4·chunk·W_c` (host copies of the rows); group phase `X_group = 8·G·B·V_inf` (ONE simultaneous host
-   dense copy of one group during the device→host transfer); end phase `X_end = 2·8·B·S` (`edep_all` and the
-   `edep_grids` copies). `estimate_warp = P + max(X_chunk, X_group, X_end)`.
-
-   Python reference path (whole range N in one call, existing behaviour, now counted): `estimate_py = 8·B·S`
-   (`self.edep`) `+ 8·N·W_t` (`tally_rows`) `+ 4·N·W_c` (`counter_rows`) `+ 89·N` (`end_pos`, `end_dir`,
-   `end_ctrl_sum` float64[N, 3], `end_energy`, `end_ctrl` float64[N], `end_code` int8[N]: 24 + 24 + 24 + 8 + 8 + 1
-   bytes per history, allocated unconditionally) `+ F + 8·G·B·V_inf` (host accumulators, no second copy)
-   `+ 8·N·W_c` (`counter_rows.astype(int64)` in the reduction). Python lists and float objects of the exact
-   summation (`exact_components`) are not arrays and are not counted; their size is bounded by one column of one
-   chunk or range at a time (S1 states the bound in the docstring and MEM-1 keeps the 1.5 factor honest). For
-   configurations WITHOUT a `BeamletSet` the `validate` rule stays as at 3f3736a6 (`B·ΣV·8·workers`), so REG-1..REG-3
-   are untouched; the formula governs beamlet runs with influence.
+   Formulas: `estimate_warp_cpu = 8·B·S + 8·chunk·W_t + 4·chunk·W_c + 8·G·B·V_inf`;
+   `estimate_warp_cuda = estimate_warp_cpu + 8·G·B·V_inf`; `estimate_python = 8·B·S + 8·N·W_t + 4·N·W_c +
+   8·G·B·V_inf`. **Not in the class and not bounded** (the documentation, S7, says so): geometry, tables, grid
+   descriptors, per-beamlet parameter/offset arrays and dummy arrays (F); the end-state arrays of the python path
+   and the end-phase `edep_all`/`edep_grids` copies of the warp path; reduction temporaries (`astype` copies);
+   diagnostic arrays (traces, end positions, escape records — bounded by their own limits); the retained CSC/batch
+   output of earlier groups and the assembled `Result` (bounded at `save` by the 0045 `max_array_bytes` /
+   `max_total_bytes` budgets, measured by PERF-1/PERF-2 as bundle size); Python object overhead (the exact-summation
+   lists of `exact_components`); the Warp kernel/module cache. Automatic G is therefore a payload rule, not a
+   guarantee about process RSS. **MEM-1 instruments exactly the class (i)–(iv)** — the allocation helpers record
+   the `nbytes` of those arrays and nothing else — and compares its peak over chunks/groups with the estimate for
+   the same configuration: measured peak ≤ estimate ≤ 1.5 × measured peak.
+   Scope: the rule applies to `BeamletSet` runs (with or without influence; V_inf = 0 and G = 1 without); pencil
+   configurations keep the existing `B·ΣV·8·workers ≤ memory_budget_bytes` check unchanged (REG-1..REG-3).
    Group selection: G = the largest value in [1, J] with `estimate ≤ memory_budget_bytes`; G = 1 over budget →
-   refused before allocation, naming the budget and `estimate` at G = 1; an explicit G outside [1, J] or over the
-   budget → refused. Diagnostics are refused with influence (§B.10), so the diagnostic arrays are not in the formula.
+   refused before allocation, naming the budget and the estimate at G = 1; an explicit G outside [1, J] or over the
+   budget → refused. Diagnostics are refused with influence (§B.10), so no diagnostic array is in the class.
 4. **Influence representation.** Canonical CSC by beamlet: `indptr int64[J+1]`, `voxel int64[nnz]` (flat C-order
    index into the influence grid, strictly increasing within a column), `energy_mev`, `energy_std_mev`, `dose_gy`,
    `dose_std_gy` float64[nnz], `n_nonzero_batches int32[nnz]`, batch values `float64[B, nnz]` (persisted by default,
@@ -354,6 +349,26 @@ important findings and one minor, all adopted).** The frozen text is edited in p
 
 Not a clinical claim.
 
+**Amendment A-6 (2026-11-25, S0, before any code; Codex REVIEW-0d4bb5f6 on 8db925e7, changes_required; two
+important findings, both adopted).** The frozen text is edited in place as before.
+
+1. **One allocation contract (finding 1).** §B.3's allocation rule is rewritten as a single contract: the
+   accumulator-payload class is exactly the arrays (i)–(iv) listed there; F (geometry, tables, descriptors, dummy
+   arrays), the python end-state arrays, the warp end-phase `edep` copies and reduction temporaries are OUT of the
+   class and of the formulas (they are in the "not bounded" list); `chunk = min(chunk_histories, L_G)` with L_G the
+   longest group range that G implies (static worst case over groups, correct for unequal n_j); the python path
+   counts rows for the whole range N; MEM-1 instruments exactly the class (i)–(iv) and compares with the estimate of
+   the same configuration. The earlier A-4/A-5 formula text containing F, the end-state and end-copy terms is
+   superseded (the §B.3 text now holds the only formulas).
+2. **`Beamlet.weight` contract (finding 2).** §B.1: `None` or a finite float ≥ 0 (unit: primaries in the plan),
+   persisted in the beamlet table and `requested`; `plan_dose`/`plan_uncertainty` without a vector use the stored
+   weights and refuse when any is `None`; an explicit vector (length J, finite, ≥ 0) overrides; weights never change
+   sampling, columns or statistics. Rows: BEAM-1 (refusals), SPA-4 (stored-weight semantics and refusals), PER-1
+   (round trip with stored weights), new WGT-1 (weight-only change leaves every array bitwise identical, changes
+   `config_sha256`, tier 1 re-validates the weight domain).
+
+Not a clinical claim.
+
 ## C. Seeds and determinism rules (declared before any run)
 
 - CI tests use fixed small seeds written in the tests (not evidence).
@@ -413,7 +428,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
-| BEAM-1 | Config validation: each fail-closed rule of §B.1 and §B.7 provoked separately | `UnsupportedCombinationError` (or `ConfigError` for TOML) before transport, message names the field; each positive twin passes; includes (A-1) `n_histories` ≠ Σ n_j refused (message names both values), absent TOML value derived, equal value accepted; label of 65 characters / duplicate refused / (A-5 item 3) a label with whitespace, `<`, `[`, `(`, `|`, a control character or non-ASCII refused (grammar `^[A-Za-z0-9_.-]{1,64}$`); the converted ion-mapping failure branch (`config.py` 498) provoked with a BeamletSet and naming the beamlet; (A-3 item 2) explicit `group_size` 0 / J + 1 / over-budget refused; automatic G = 1 over budget refused; a budget that admits exactly G = 2 yields effective group_size 2 (`derived: memory-budget`), the budget computed from `allocation_estimate` (A-4 item 2) | CI |
+| BEAM-1 | Config validation: each fail-closed rule of §B.1 and §B.7 provoked separately | `UnsupportedCombinationError` (or `ConfigError` for TOML) before transport, message names the field; each positive twin passes; includes (A-1) `n_histories` ≠ Σ n_j refused (message names both values), absent TOML value derived, equal value accepted; label of 65 characters / duplicate refused / (A-6 item 2) weights NaN / +inf / −1 / "1" refused, weight None and 0.0 accepted; (A-5 item 3) a label with whitespace, `<`, `[`, `(`, `|`, a control character or non-ASCII refused (grammar `^[A-Za-z0-9_.-]{1,64}$`); the converted ion-mapping failure branch (`config.py` 498) provoked with a BeamletSet and naming the beamlet; (A-3 item 2) explicit `group_size` 0 / J + 1 / over-budget refused; automatic G = 1 over budget refused; a budget that admits exactly G = 2 yields effective group_size 2 (`derived: memory-budget`), the budget computed from `allocation_estimate` (A-4 item 2) | CI |
 | BEAM-2 | Source-consumer audit: a test enumerates every reader of `config.source` (static list checked against `grep` of `src/ionmc`, reviewed; FACT at 3f3736a6, complete after A-1 item 2: `config.py` (348; 471–498 ion-mapping path, its failure branch at 498 converted to per-beamlet values; 526; 564; 588; 1016; max_steps E_hi 755–756; channel compile 807; nuclear bounds 921–943; the decision-0044 stopping-model window check 1035–1064; ion domain 1127–1153; sigma rules and ion mapping 1237–1294 incl. `fdm_domain_status(proj, mats, e0, σ)` at 1287; stopping identity species 594–611; summary 624; `unit_direction=src.unit_direction()` 1351), `reference.py` (projectile 193–260, sampling 840–860), `warp_driver.py` (ctl source fields 121–135, `ctl.dir` at 135), `kernels.py` (source sampling), `results.py` (producible 403; profile axis from `unit_direction` 725 and 1626; binding 1668–1675; stopping-window check on E0 + 6σ 1806; tally E_hi bound 2093), `_result_shapes.py` 335–345, `contract.py` 78–87, 308–320, 701 (`SOURCE_TYPES`), 939, `simulation.py` 736 (`capabilities()["sources"]`), `report.py` 335, `configio.py` 590; A-2 item 2 additions `config.py` 844, 1163, 1214–1229, `warp_driver.py` 187; `configio.py` 1162 is a lookup-file source, not `SimulationConfig.source`, listed as `not-a-source`) and asserts for a beamlet set the envelope rules: `max_steps`, channel `E_hi`, nuclear energy bounds, ion mapping domain and energy-sigma rules use min/max over beamlets | every consumer covered; a beamlet with E above the domain is refused although the mean energy is inside; exhaustive AST audit (A-2 item 2, replaces the grep rule): a test parses every module of `src/ionmc` with `ast`, follows attribute accesses rooted at `.source` of a config / effective-config value AND every alias binding in the same scope (`src = cfg.source`, `source = eff.source`; tuple/keyword passing is recorded as a reader at the call site) and asserts every (module, line, attribute) is in the static allowlist annotated `envelope` / `per-beamlet` / `refused-in-S1` / `not-a-source` (the allowlist is the inventory); any access outside it fails; the allowlist is re-derived (and the decision's Context updated) whenever S2/S3 add readers; exceptional/failure paths included | CI |
 | BEAM-3 | Offsets: `s_j`, batch membership and per-batch count n_j/B for unequal n_j | exact | CI |
 | BEAM-4 | Stream disjointness: the (c0, c3) pairs used by source sampling over all beamlets of R-INF are unique and equal `range(Σ n_j)` (instrumented reference run) | exact | CI |
@@ -439,7 +454,8 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 | SPA-1 | τ = 0 round trip dense ↔ CSC (`to_dense`, `from_dense`) | bitwise; nnz = count of nonzero integer accumulators summed over batches | CI |
 | SPA-2 | Canonical form: indptr monotone, voxel strictly increasing per column, dtypes, no explicit zeros at τ = 0 | exact | CI |
 | SPA-3 | Threshold accounting, τ ∈ {1e-4, 1e-2, 0.1}: every kept entry ≥ τ·max_j, every dropped < τ·max_j; dense − kept = discarded per beamlet (energy, rel 1e-12); reported fraction = discarded/in-grid energy; counts exact; τ = 0 reports exactly 0 for every column with positive in-grid energy; a transported zero-deposition column reports undefined (NaN + mask false) at every τ, with counts 0, which R-INF-Z exercises at τ = 0 AND τ = 0.1 (A-2 item 4, A-3 item 4, A-4 item 6); per-beamlet quantities are per primary of beamlet j and need no n_j/N weight | exact | CI, LV |
-| SPA-4 | Helpers: `matvec(w)` vs `to_dense() @ w`, `rmatvec(y)` vs `to_dense().T @ y`, `plan_dose(weights)` | relative 1e-12 | CI |
+| SPA-4 | Helpers: `matvec(w)` vs `to_dense() @ w`, `rmatvec(y)` vs `to_dense().T @ y`, `plan_dose(weights)`; (A-6 item 2) `plan_dose()` without a vector uses the stored weights (a set with non-None weights 0.5 / 2 / 0 / 1.25) and equals `to_dense() @ stored`; with any stored weight `None` it raises `ValueError`; an explicit vector of wrong length / NaN / negative raises `ValueError`; the same for `plan_uncertainty` | relative 1e-12; refusals exact | CI |
+| WGT-1 | Weights are metadata only (A-6 item 2): two R-INF runs identical except the stored weights (None vs 0.5 / 2 / 0 / 1.25) give bitwise identical influence columns, batch values, std, composite grids, balances and counters; `config_sha256` differs; the persisted beamlet table carries the weights; a bundle whose stored weights were edited to NaN fails `load` (tier 1 re-validates the weight domain) | bitwise / exact | CI |
 | SPA-5 | Threshold is never silent: τ appears in requested/effective/report; changing τ changes `config_sha256`; a bundle whose discarded arrays are removed fails `load` | exact | CI |
 
 **UNC — per-beamlet uncertainty**
@@ -456,7 +472,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | OUT-0-INF | Clause map: geometry, beamlet mapping (offsets, labels, parameters), units, histories per beamlet, normalisation, threshold, discarded accounting, uncertainty definition → JSON pointer/array | every clause resolved | CI |
-| PER-1 | In-process round trip `load(save(r))` for R-INF (python, warp-cpu f64), τ = 0 and τ = 1e-2, `persist_batches` on/off (off recorded `not-persisted`); includes a bundle whose `requested.run` carries the derived N = Σ n_j (A-1 item 1) and an R-INF-Z bundle with a zero-deposition column at τ = 0 and τ = 0.1 (A-2 item 4, A-3 item 4) | arrays bitwise, JSON equal | CI |
+| PER-1 | In-process round trip `load(save(r))` for R-INF (python, warp-cpu f64), τ = 0 and τ = 1e-2, `persist_batches` on/off (off recorded `not-persisted`); a set with non-None stored weights (A-6 item 2); includes a bundle whose `requested.run` carries the derived N = Σ n_j (A-1 item 1) and an R-INF-Z bundle with a zero-deposition column at τ = 0 and τ = 0.1 (A-2 item 4, A-3 item 4) | arrays bitwise, JSON equal | CI |
 | PER-2 | Clean-process round trip (`python -I`) | canonical dump equal | CI; LV/HR on three backends |
 | PER-3 | Version handling: the frozen V3-006 1.0 golden fixture loads unchanged; a 1.1 golden synthetic fixture (KB-scale) loads and regenerates its report byte-identically; "1.2"/"2.0" refused; `kind = "influence"` with schema 1.0 refused | exact | CI |
 | PER-4 | Tier-1 negative controls, one each: indptr non-monotone or ≠ nnz; voxel index ≥ V or unsorted or duplicate; nnz arrays of unequal length; negative std; batch values not reproducing mean/std; discarded accounting inconsistent; beamlet table ≠ `requested`; offsets ≠ cumulative n_j; columns swapped with balances unchanged and digests recomputed (fails through the INF-7 identity); `Σ_j (n_j/N)·(kept_j + discarded_j)` ≠ composite in-grid energy (rel 1e-9; N = Σ_j n_j; `kept_j` = Σ_v column_j energy, `discarded_j` the per-beamlet discarded energy; reader control at τ = 1e-2 with unequal n_j, R-INF with n_j ∈ {2 000, 4 000, 2 000, 4 000}, so an implementation that does not weight `discarded_j` by n_j/N fails; A-4 item 3); influence block missing for `kind = "influence"`; a label violating the §B.1 grammar (e.g. `<img src=x>` edited into `result.json`; A-5 item 3); for the τ = 1e-2 unequal-n_j control, `discarded_count_j ≥ 1` and `discarded_energy_j > 0` are asserted for EVERY beamlet j (A-5 item 4); zero column with nonzero discarded count or a defined fraction (A-2 item 4; R-INF-Z at τ = 0 and τ = 0.1, A-3 item 4) | each `ResultFormatError` naming the defect | CI |
@@ -490,7 +506,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
-| MEM-1 | Instrumented allocation audit: the accumulator-payload class of §B.3 (A-5 item 1: grid accumulators, tally and counter rows of one chunk, influence accumulators and one host copy; NOT diagnostics, retained output, Python overhead or the kernel cache) is measured as the peak over chunks of the sum of the byte sizes of its arrays, with the estimate computed for the current group's range; every such array (numpy `ndarray.nbytes` of arrays created by the driver and `wp.array` sizes, recorded through a test hook on the allocation helpers) is instrumented and its peak sum is at most `allocation_estimate(...)` (§B.3); for the python path and warp-cpu the peak is measured per chunk; the estimate must not exceed the measured peak by more than a factor 1.5 (an estimate that is too loose is also a fail, recorded) | measured peak ≤ estimate ≤ 1.5 × measured peak, for each of the python, warp-cpu f64 and f32 variants, with and without ions/nuclear where the backend supports them, and for G ∈ {1, 2, J} | CI (python, warp-cpu); LV (warp-cpu); HR (warp-cuda) |
+| MEM-1 | Instrumented allocation audit: the accumulator-payload class (i)–(iv) of §B.3 (A-6 item 1: grid accumulators, the tally and counter rows a backend holds at one time — one chunk on warp, the whole range on python —, influence accumulators and, on cuda, one host copy; NOT F, end-state/end-phase arrays, diagnostics, retained output, Python overhead or the kernel cache) is measured as the peak over chunks of the sum of the byte sizes of its arrays, with the estimate computed for the current group's range; every such array (numpy `ndarray.nbytes` of arrays created by the driver and `wp.array` sizes, recorded through a test hook on the allocation helpers) is instrumented and its peak sum is at most `allocation_estimate(...)` (§B.3); the peak is taken over chunks and groups (warp) or over the range (python); the estimate must not exceed the measured peak by more than a factor 1.5 (an estimate that is too loose is also a fail, recorded) | measured peak ≤ estimate ≤ 1.5 × measured peak, for each of the python, warp-cpu f64 and f32 variants, with and without ions/nuclear where the backend supports them, and for G ∈ {1, 2, J} | CI (python, warp-cpu); LV (warp-cpu); HR (warp-cuda) |
 
 **CLI, reuse, performance, regression, docs**
 
@@ -590,3 +606,7 @@ None. Cache-backed CAP-1 rows use datasets already cached; no download.
   not bound" list; (2) `influence_columns` raises unconditionally on an invalid transport; (3) label grammar; (4)
   thresholded controls assert nonzero discards. Rows BEAM-1, CLI-2, CLI-3, INF-4, MEM-1, PER-4 updated. Not a
   clinical claim.
+- 2026-11-25 (S0 fix 6, Codex REVIEW-0d4bb5f6 on 8db925e7, changes_required; two important findings adopted, see
+  Amendment A-6 after A-5): (1) one consistent allocation contract (class (i)–(iv), worst-case group range, F and
+  end-phase terms excluded); (2) `Beamlet.weight` contract. Rows BEAM-1, SPA-4, PER-1, MEM-1 updated; WGT-1 added.
+  Not a clinical claim.

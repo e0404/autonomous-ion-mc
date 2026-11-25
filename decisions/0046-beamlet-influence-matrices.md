@@ -2,6 +2,8 @@
 
 - Status: Accepted (frozen with plan `validation/plans/v3-007-acceptance.md` at the S0 commit, 2026-11-25). Later
   changes are dated amendments. Not a clinical claim.
+- Amended 2026-11-25 (S0 fix 6, Codex REVIEW-0d4bb5f6 on 8db925e7): (1) one consistent accumulator-payload
+  contract (§2); (2) `Beamlet.weight` contract (§1).
 - Amended 2026-11-25 (S0 fix 5, Codex REVIEW-54588747 on a783ac8a): (1) the memory rule is an accumulator-payload
   budget (not a process-RSS guarantee); (2) `influence_columns` raises unconditionally on an invalid transport;
   (3) label grammar `^[A-Za-z0-9_.-]{1,64}$`. See plan Amendment A-5.
@@ -81,6 +83,10 @@ beamlet mapping, units, history and normalisation metadata; V2-CAP forbids influ
 | (d) mixed projectiles in one set | two table sets/kernels per run; no planning need in M1 — rejected (fail closed) |
 
 Normalisation: columns in MeV and Gy **per primary of beamlet j**; plan dose `D = A·x` with x in primaries.
+`Beamlet.weight` (A-6 item 2): `None` or a finite float ≥ 0 (primaries in the plan), persisted in the beamlet
+table and `requested`; `plan_dose`/`plan_uncertainty` use the stored weights when no vector is given and refuse
+when any is `None`; an explicit vector (length J, finite, ≥ 0) overrides; weights never change sampling, columns or
+statistics (plan row WGT-1).
 
 Amendment (REVIEW-1652a7c1): for a `BeamletSet`, `RunOptions.n_histories` MUST equal Σ_j n_j; `validate` refuses a
 mismatch, and TOML `[run] n_histories` is optional (absent → derived Σ n_j, different → `ConfigError`); this is
@@ -109,15 +115,17 @@ accumulator row (`(j − j0)·B + batch`). The beamlet id is `searchsorted(offse
 (J ≤ 4 096: ≤ 12 comparisons); the id is range-asserted (0 ≤ j < J) in every backend and can never wrap. G = largest
 group in [1, J] fitting `memory_budget_bytes` as an ACCUMULATOR-PAYLOAD budget (A-3; exact since A-4 item 2; narrowed
 by A-5 item 1): the rule is `allocation_estimate(backend, B, ΣV, chunk, V_inf, G) ≤ memory_budget_bytes`,
-implemented in S1 and mirroring the arrays of each backend at 3f3736a6:
-warp paths: grid accumulators `B·ΣV·8`, per-chunk tally rows (width
-`N_FIXED_TALLIES + 2·n_g + channel_columns`) and counter rows (width `len(COUNTER_NAMES)` + `len(ION_COUNTER_NAMES)`
-for ions), device influence accumulators `G·B·V_inf·8` and ONE host dense copy of one group during transfer; python
-reference path: tally and counter rows for the whole range N plus host accumulators `G·B·V_inf·8` (no second copy).
-The per-backend formulas with their symbols are in plan §B.3. The budget does NOT bound diagnostic arrays, the
-retained CSC/batch output of earlier groups and the assembled `Result` (bounded at `save` by the 0045 budgets),
-Python object overhead or the Warp kernel/module cache; automatic G is a payload rule, not an RSS guarantee. MEM-1
-measures exactly the payload class.
+implemented in S1 and bounding exactly the accumulator-payload class (A-6 item 1): (i) grid accumulators
+`8·B·S`, (ii) influence accumulators `8·G·B·V_inf`, (iii) the tally rows (width `N_FIXED_TALLIES + 2·n_g +
+channel_columns`, + `len(NUCLEAR_TALLY_NAMES)` on python with nuclear) and counter rows (width `len(COUNTER_NAMES)` +
+`len(ION_COUNTER_NAMES)` for ions, + `len(NUCLEAR_COUNTER_NAMES)` on python with nuclear) a backend holds at one time
+(one chunk on warp, the whole range N on python), (iv) on warp-cuda one host copy of the current group's influence
+accumulators during transfer; chunk = min(`chunk_histories`, longest group range that G implies). The formulas are
+in plan §B.3. Not in the class and not bounded: geometry/tables/descriptors/parameter arrays, end-state arrays and
+end-phase `edep` copies, reduction temporaries, diagnostic arrays, the retained CSC/batch output of earlier groups
+and the assembled `Result` (bounded at `save` by the 0045 budgets), Python object overhead, the Warp kernel/module
+cache; automatic G is a payload rule, not an RSS guarantee. MEM-1 instruments exactly the class (i)–(iv) and
+compares its peak with the estimate of the same configuration (measured ≤ estimate ≤ 1.5 × measured).
  the audit row MEM-1 measures the allocations and fails
 an estimate that is below the measured peak or more than a factor 1.5 above it. Pencil configurations keep the
 `validate` rule of 3f3736a6; G = 1 not fitting, an explicit G outside [1, J] or over the
