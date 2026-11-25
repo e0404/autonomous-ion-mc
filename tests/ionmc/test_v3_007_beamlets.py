@@ -269,6 +269,22 @@ def test_beam1_group_size_memory_rule() -> None:
     assert validate(ok).influence_group_origin == "requested"
 
 
+def test_beam1_group_size_scan_is_exhaustive_for_non_monotone_estimates() -> None:
+    """warp-cpu, n = [2, 2, 512, 512, 2, 2], B = 2, chunk 1024: L_1 = 512, L_2 = 1024, L_3 = 516,
+    so the estimate is not monotone in G; a budget admitting G = 3 but not G = 2 yields G = 3."""
+    bs = tuple(bl(float(i), n=n) for i, n in enumerate((2, 2, 512, 512, 2, 2)))
+    wc = {"backend": "warp-cpu", "precision": "float32", "n_batches": 2, "chunk_histories": 1024}
+    base = cfg(beamlets=bs, influence=InfluenceOptions("dose"), run=wc)
+    _, est = _estimates(base)
+    assert est(3) < est(2) and est(1) < est(3)
+    budget = est(3)  # admits G = 1 and G = 3, not G = 2 (nor G = 4, 5, 6, which are larger)
+    assert [g for g in range(1, 7) if est(g) <= budget] == [1, 3]
+    c = cfg(beamlets=bs, influence=InfluenceOptions("dose"),
+            run=wc | {"memory_budget_bytes": budget})  # fmt: skip
+    eff = validate(c)
+    assert (eff.influence_group_size, eff.influence_group_origin) == (3, "memory-budget")
+
+
 def test_beam1_composite_run_without_influence_has_group_one_and_budget_rule() -> None:
     eff = validate(cfg())
     assert eff.influence_group_size is None
@@ -361,6 +377,22 @@ def test_beam1_dict_round_trip_and_toml_errors(tmp_path: Path) -> None:
     p.write_text(toml.replace("n_histories = 8\nn_batches", "n_histories = 13\nn_batches"))
     with pytest.raises(ConfigError, match="run.n_histories"):
         configio.load_toml_full(p)
+
+    # production path (finding 2 of REVIEW-f1c83a51): the helper `ionmc check` / `ionmc run` call
+    # builds the Simulation from the loaded file; its reconciliation row carries the provenance
+    from ionmc.cli import _simulation_of
+
+    def row(sim: Any) -> tuple[str, str]:
+        r = {x.row: (x.cls, x.rule) for x in sim.resolutions}["beamlet-histories"]
+        return r
+
+    p.write_text(toml_nohist)
+    assert row(_simulation_of(configio.load_toml_full(p))) == ("derived", "sum-of-beamlets")
+    p.write_text(toml.replace("n_histories = 8\nn_batches", "n_histories = 12\nn_batches"))
+    assert row(_simulation_of(configio.load_toml_full(p))) == ("equal", "sum-equal")
+    from ionmc.simulation import Simulation
+
+    assert row(Simulation(cfg())) == ("equal", "sum-equal")  # API-built configuration
 
 
 # ---- BEAM-3: offsets and batch membership -------------------------------------------------------

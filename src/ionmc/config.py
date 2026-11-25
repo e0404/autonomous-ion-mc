@@ -1478,8 +1478,8 @@ def allocation_estimate(
 
 def _finish_beamlet_set(eff: EffectiveConfig) -> EffectiveConfig:
     """Memory rule of a beamlet run (plan section B.3): refuse before any allocation when even
-    G = 1 exceeds ``memory_budget_bytes``, check an explicit G, derive the largest G in [1, J]
-    otherwise (the estimate is non-decreasing in G)."""
+    G = 1 exceeds ``memory_budget_bytes``, check an explicit G, derive the largest feasible G in
+    [1, J] otherwise (exhaustive scan: the estimate is not monotone in G for unequal n_j)."""
     cfg = eff.requested
     src, run, inf = cfg.source, cfg.run, cfg.influence
     assert isinstance(src, BeamletSet)
@@ -1510,15 +1510,13 @@ def _finish_beamlet_set(eff: EffectiveConfig) -> EffectiveConfig:
         return replace(eff, influence_group_size=inf.group_size, influence_group_origin="requested")
     if inf is None:
         return eff
-    lo, hi = 1, j_n  # largest g in [1, J] with estimate(g) <= budget; estimate(1) fits
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        if estimate(mid) <= budget:
-            lo = mid
-        else:
-            hi = mid - 1
+    # The longest group range L_G = max_g (sum of n_j in group g) is NOT monotone in G (n = [2, 2,
+    # 512, 512, 2, 2]: L_1 = 512, L_2 = 1024, L_3 = 516), so the estimate is not either: scan every
+    # G from J down to 1 (offsets are the prefix sums, one O(J) estimate per G, J <= 4096) and
+    # take the LARGEST feasible G; G = 1 fits (checked above).
+    best = next(g for g in range(j_n, 0, -1) if estimate(g) <= budget)
     return replace(
-        eff, influence_group_size=lo, influence_group_origin=INFLUENCE_GROUP_ORIGIN_MEMORY
+        eff, influence_group_size=best, influence_group_origin=INFLUENCE_GROUP_ORIGIN_MEMORY
     )
 
 

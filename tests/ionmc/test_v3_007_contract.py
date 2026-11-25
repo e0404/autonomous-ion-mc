@@ -211,6 +211,8 @@ def test_cap3_beamlet_rows_for_every_new_field(gate_open: None) -> None:
     got = {r.row: (r.cls, r.rule) for r in contract.reconcile(off, validate(off))}
     assert got["influence"] == ("unused", "no-influence")
     assert got["influence-group"] == ("unused", "no-influence")
+    # unit test of _row_beamlet_source with a hand-made evidence dict; the production-path test
+    # (TOML -> the CLI helper -> Simulation.resolutions) is in test_v3_007_beamlets.py
     dv = contract.reconcile(
         off,
         validate(off),
@@ -347,6 +349,19 @@ def test_reg2_pencil_summary_and_request_are_byte_identical_to_3f3736a6() -> Non
         assert isinstance(s["unit_direction"], list)
 
 
+# Result fields and capabilities() top-level keys at commit 3f3736a6 (V3-006 merge), literal.
+REQUIRED_RESULT_FIELDS = frozenset({
+    "valid", "requested_config", "effective_config", "backend", "device", "precision", "seed",
+    "rng", "n_histories", "n_batches", "grids", "energy_balance", "counters", "timings",
+    "environment", "diagnostics", "transport_report", "channel_raw", "lookups",
+})  # fmt: skip
+REQUIRED_CAPABILITY_KEYS = frozenset({
+    "species", "species_details", "species_roles", "unsupported_species", "backends", "trace",
+    "chunk_histories", "max_cpu_workers", "backend_names", "precisions", "physics", "geometry",
+    "sources", "scoring", "tallies", "max_scoring_grids", "declared", "informative",
+})  # fmt: skip
+
+
 def test_reg3_capabilities_and_result_fields_of_3f3736a6_are_still_present() -> None:
     caps = capabilities()
     for key in ("species", "backends", "physics", "geometry", "sources", "scoring", "tallies",
@@ -363,7 +378,10 @@ def test_reg3_capabilities_and_result_fields_of_3f3736a6_are_still_present() -> 
     from ionmc.simulation import Result
 
     names = {f.name for f in fields(Result)}
-    assert {"grids", "effective_config", "counters", "statistics", "timings"} <= names | {
-        "grids", "effective_config", "counters", "statistics", "timings"}  # fmt: skip
+    assert REQUIRED_RESULT_FIELDS <= names
+    assert REQUIRED_CAPABILITY_KEYS <= set(caps)
+    for dropped in ("effective_config", "grids"):  # negative control: a missing name is caught
+        assert not REQUIRED_RESULT_FIELDS <= names - {dropped}
+    assert not REQUIRED_CAPABILITY_KEYS <= set(caps) - {"sources"}
     assert "effective_config" in names
     assert [r.id for r in contract.RECONCILIATION_TABLE][:2] == ["source", "direction"]

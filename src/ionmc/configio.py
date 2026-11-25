@@ -900,6 +900,11 @@ class LoadedConfig:
     output: OutputOptions
     n_histories_derived: bool = False
 
+    @property
+    def n_histories_origin(self) -> str:
+        """Provenance of ``run.n_histories`` handed to ``Simulation`` (reconciliation evidence)."""
+        return "sum-of-beamlets" if self.n_histories_derived else "explicit"
+
 
 @dataclass(frozen=True)
 class _Source:

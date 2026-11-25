@@ -255,7 +255,6 @@ def _cmd_run(args: argparse.Namespace, out_stream: TextIO) -> int:
 
     from ionmc.configio import load_toml_full, verify_datasets
     from ionmc.results import save
-    from ionmc.simulation import Simulation
 
     loaded = load_toml_full(args.config)
     out = args.out if args.out is not None else loaded.output.path
@@ -267,7 +266,7 @@ def _cmd_run(args: argparse.Namespace, out_stream: TextIO) -> int:
     if dest.exists() and not args.overwrite:
         raise _UsageError(f"{dest.name!r} exists (pass --overwrite)")
     verify_datasets(loaded.config)
-    sim = Simulation(loaded.config)  # validate and reconcile; raises before any transport
+    sim = _simulation_of(loaded)  # validate and reconcile; raises before any transport
     result = sim.run()
     dest.parent.mkdir(parents=True, exist_ok=True)  # nothing is created before this point
     bundle = save(
@@ -288,13 +287,20 @@ def _cmd_run(args: argparse.Namespace, out_stream: TextIO) -> int:
     return 0
 
 
+def _simulation_of(loaded: Any) -> Any:
+    """The validated ``Simulation`` of a loaded TOML configuration, with the provenance of
+    ``n_histories`` (derived for a beamlet file without it) carried into the reconciliation."""
+    from ionmc.simulation import Simulation
+
+    return Simulation(loaded.config, n_histories_origin=loaded.n_histories_origin)
+
+
 def _cmd_check(args: argparse.Namespace, out_stream: TextIO) -> int:
     from ionmc.configio import load_toml_full, verify_datasets
-    from ionmc.simulation import Simulation
 
     loaded = load_toml_full(args.config)
     verify_datasets(loaded.config)
-    sim = Simulation(loaded.config)
+    sim = _simulation_of(loaded)
     print(_canonical(sim.effective.summary()), file=out_stream)
     return 0
 

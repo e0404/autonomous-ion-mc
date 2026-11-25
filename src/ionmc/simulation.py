@@ -761,14 +761,22 @@ class Simulation:
     """A validated simulation. Construction raises before any transport if the request is
     unsupported (``UnsupportedCombinationError`` / ``BackendUnavailableError``)."""
 
-    def __init__(self, config: SimulationConfig) -> None:
+    def __init__(self, config: SimulationConfig, *, n_histories_origin: str = "explicit") -> None:
+        """``n_histories_origin`` is the provenance of ``run.n_histories`` ("explicit", or
+        "sum-of-beamlets" when a TOML beamlet configuration omitted it, see
+        ``configio.LoadedConfig.n_histories_origin``); it only selects the reconciliation row."""
         t0 = time.perf_counter()
         self.config = config
         self.effective: EffectiveConfig = validate(config)
         # requested -> effective reconciliation (decision 0045 section 4): raises before transport;
         # kept here (not a Result field); results.save recomputes it from the persisted blocks
         self.resolutions: tuple[contract.Resolution, ...] = contract.reconcile(
-            config, self.effective, contract.evidence_from_effective(self.effective)
+            config,
+            self.effective,
+            {
+                **contract.evidence_from_effective(self.effective),
+                "n_histories_origin": n_histories_origin,
+            },
         )
         self._setup_s = time.perf_counter() - t0
 
