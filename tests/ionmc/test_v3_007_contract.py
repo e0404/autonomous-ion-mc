@@ -380,3 +380,38 @@ def test_reg3_capabilities_and_result_fields_of_3f3736a6_are_still_present() -> 
     assert not REQUIRED_CAPABILITY_KEYS <= set(caps) - {"sources"}
     assert "effective_config" in names
     assert [r.id for r in contract.RECONCILIATION_TABLE][:2] == ["source", "direction"]
+
+
+# --- tier-1 binding of the derived beamlet count (plan A-1 item 1; Codex REVIEW-2b383901) ---
+
+
+def _hist_doc(requested: int | None, run_n: int, eff_n: int, rows: list[int] | None,
+              src_type: str = "beamlets") -> tuple[dict, dict, dict]:  # fmt: skip
+    rq: dict = {"run": {"n_histories": requested}}
+    if rows is not None:
+        rq["source"] = {"type": src_type, "beamlets": [{"n_histories": n} for n in rows]}
+    return rq, {"n_histories": run_n}, {"n_histories": eff_n}
+
+
+def test_tier1_derived_histories_bind_to_the_persisted_beamlet_table() -> None:
+    """A requested ``null`` binds run/effective N to the sum of the beamlet table; every
+    deviation is a ``ResultFormatError`` naming the field."""
+    from ionmc import results
+    from ionmc.results import ResultFormatError
+
+    results._bind_histories(*_hist_doc(None, 80, 80, [40, 40]))  # derived, consistent
+    results._bind_histories(*_hist_doc(80, 80, 80, [40, 40]))  # explicit equal
+    results._bind_histories(*_hist_doc(80, 80, 80, None))  # a pencil source, explicit
+    bad = [
+        (_hist_doc(None, 80, 80, None), "not a beamlet set"),  # null without a beamlet table
+        (_hist_doc(None, 80, 80, [40, 40], "pencil"), "not a beamlet set"),
+        (_hist_doc(None, 84, 84, [40, 40]), "run.n_histories"),  # run N != sum
+        (_hist_doc(None, 80, 84, [40, 40]), "effective.n_histories"),  # effective N != sum
+        (_hist_doc(None, 80, 80, []), "empty"),
+        (_hist_doc(None, 80, 80, [40, 0]), "positive integer"),
+        (_hist_doc(84, 80, 80, [40, 40]), "run.n_histories"),  # explicit but run disagrees
+        (_hist_doc(80, 80, 84, [40, 40]), "effective.n_histories"),
+    ]
+    for (rq, run, eff), needle in bad:
+        with pytest.raises(ResultFormatError, match=needle):
+            results._bind_histories(rq, run, eff)

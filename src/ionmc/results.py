@@ -1558,16 +1558,44 @@ def _bind(cond: bool, what: str) -> None:
     _need(cond, f"{what} disagrees with requested")
 
 
+def _bind_histories(rq: dict[str, Any], run: dict[str, Any], eff: dict[str, Any]) -> None:
+    """Bind ``run.n_histories`` and ``effective.n_histories`` to the requested count. A requested
+    ``null`` is the derived representation of decision 0046 (plan v3-007 A-1 item 1: an omitted
+    count of a beamlet set is the sum of the beamlets' histories): it is admissible only for a
+    ``type = "beamlets"`` source, and then ``run`` and ``effective`` must carry the same positive
+    integer equal to the sum of the persisted beamlet table (reconciliation row
+    ``derived:sum-of-beamlets``). Any other ``null`` is refused."""
+    requested = rq["run"]["n_histories"]
+    if requested is None:
+        src = rq.get("source")
+        _need(isinstance(src, dict) and src.get("type") == "beamlets",
+              "requested.run.n_histories is null but the source is not a beamlet set")  # fmt: skip
+        rows = src.get("beamlets")
+        _need(isinstance(rows, list) and len(rows) >= 1, "requested beamlet table is empty")
+        total = 0
+        for row in rows:
+            n = row.get("n_histories") if isinstance(row, dict) else None
+            _need(isinstance(n, int) and not isinstance(n, bool) and n >= 1,
+                  "requested beamlet n_histories must be a positive integer")  # fmt: skip
+            total += n
+        _bind(run["n_histories"] == total, "run.n_histories (derived: sum of the beamlet table)")
+        _bind(eff["n_histories"] == total,
+              "effective.n_histories (derived: sum of the beamlet table)")  # fmt: skip
+        return
+    _bind(run["n_histories"] == requested, "run.n_histories")
+    _bind(eff["n_histories"] == requested, "effective.n_histories")
+
+
 def _check_run_binding(doc: dict[str, Any]) -> None:
     """Bind run, provenance and statistics scalars to ``requested`` (the configuration) and to
     ``effective``: a field of ``run`` or ``effective`` that is changed without ``requested`` is
     refused."""
     eff, run, rq = doc["effective"], doc["run"], doc["requested"]
     rrun = rq["run"]
-    for k in ("backend", "precision", "seed", "n_histories", "n_batches", "cpu_workers",
-              "chunk_histories"):  # fmt: skip
+    for k in ("backend", "precision", "seed", "n_batches", "cpu_workers", "chunk_histories"):
         _bind(run[k] == rrun[k], f"run.{k}")
         _bind(eff[k] == rrun[k], f"effective.{k}")
+    _bind_histories(rq, run, eff)
     _need(run["production"] == eff["production"], "run.production disagrees with effective")
     rng = frozen.rng_identity(rrun["precision"])  # the frozen schema-1.0 record (Philox4x32-10)
     _need(run["rng"] == rng and eff["rng"] == rng,
