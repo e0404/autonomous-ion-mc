@@ -288,11 +288,10 @@ def _cmd_run(args: argparse.Namespace, out_stream: TextIO) -> int:
 
 
 def _simulation_of(loaded: Any) -> Any:
-    """The validated ``Simulation`` of a loaded TOML configuration, with the provenance of
-    ``n_histories`` (derived for a beamlet file without it) carried into the reconciliation."""
+    """The validated ``Simulation`` of a loaded TOML configuration."""
     from ionmc.simulation import Simulation
 
-    return Simulation(loaded.config, n_histories_origin=loaded.n_histories_origin)
+    return Simulation(loaded.config)
 
 
 def _cmd_check(args: argparse.Namespace, out_stream: TextIO) -> int:

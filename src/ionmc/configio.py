@@ -226,7 +226,7 @@ RUN_FIELDS: Schema = {
     "backend": (_str, True),
     "precision": (_str, True),
     "seed": (_int, True),
-    "n_histories": (_int, True),
+    "n_histories": (_opt(_int), True),  # null: derived from the beamlets (beamlet sets only)
     "n_batches": (_int, False),
     "cpu_workers": (_int, False),
     "max_steps": (_opt(_int), False),
@@ -892,18 +892,12 @@ class OutputOptions:
 
 @dataclass(frozen=True)
 class LoadedConfig:
-    """Result of :func:`load_toml_full`. ``n_histories_derived`` is True when a beamlet
-    configuration omitted ``[run] n_histories`` (derived: sum of the beamlet n_histories)."""
+    """Result of :func:`load_toml_full` (a beamlet file that omits ``[run] n_histories`` loads
+    ``config.run.n_histories = None``: the derivation is part of the configuration value)."""
 
     config: SimulationConfig
     manifest: InputManifest
     output: OutputOptions
-    n_histories_derived: bool = False
-
-    @property
-    def n_histories_origin(self) -> str:
-        """Provenance of ``run.n_histories`` handed to ``Simulation`` (reconciliation evidence)."""
-        return "sum-of-beamlets" if self.n_histories_derived else "explicit"
 
 
 @dataclass(frozen=True)
@@ -1122,7 +1116,6 @@ class _Built:
 
     files: list[tuple[str, str, str]]
     output: OutputOptions
-    n_histories_derived: bool = False
 
 
 def _geometry_from(
@@ -1409,9 +1402,8 @@ def _from_dict(
     if isinstance(source, BeamletSet):  # [run] n_histories is optional: derived = sum of n_j
         total = source.n_histories_total
         if "n_histories" not in run_tbl:
-            run_tbl["n_histories"] = total
-            built.n_histories_derived = True
-        elif run_tbl["n_histories"] != total:
+            run_tbl["n_histories"] = None  # derived: validate records the sum
+        elif run_tbl["n_histories"] is not None and run_tbl["n_histories"] != total:
             raise ConfigError(
                 "run.n_histories",
                 f"is {run_tbl['n_histories']!r} but the beamlet n_histories sum to {total}; "
@@ -1633,7 +1625,7 @@ def load_toml_full(path: str | Path) -> LoadedConfig:
     manifest = _finish_manifest(
         "toml", str(base), ConfigFileRecord(str(resolved), file_sha), files, config
     )
-    return LoadedConfig(config, manifest, built.output, built.n_histories_derived)
+    return LoadedConfig(config, manifest, built.output)
 
 
 def load_toml(path: str | Path) -> tuple[SimulationConfig, InputManifest]:

@@ -30,8 +30,8 @@ def run_range(eff: EffectiveConfig, h0: int, h1: int) -> PartialTransport:
 
 def run_transport(eff: EffectiveConfig) -> RawTransport:
     """Run all histories of ``eff`` and return the reduced raw result."""
-    run = eff.requested.run
-    n = run.n_histories
+    run = eff.run
+    n = eff.n_histories
     if run.cpu_workers > 1:
         from ionmc.transport.pool import run_pool
 

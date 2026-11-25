@@ -844,7 +844,7 @@ def _honoured(result: Result, arrays: list[_Arr]) -> None:
     if d.trace_histories != 0:
         ends = [a for a in arrays if a.origin["kind"] == "diagnostic"
                 and a.origin["array"] == "trace_end_history"]  # fmt: skip
-        _honoured_trace_count(d.trace_histories, cfg.run.n_histories,
+        _honoured_trace_count(d.trace_histories, result.effective_config.n_histories,
                               [int(a.data.shape[0]) for a in ends])  # fmt: skip
     nuclear = cfg.physics.nuclear
     if nuclear != isinstance(result.energy_balance, NuclearEnergyBalance):
@@ -895,7 +895,7 @@ def _check_honoured(doc: dict[str, Any]) -> None:
             ends = [int(e["shape"][0]) for e in doc["arrays"]
                     if e["origin"]["kind"] == "diagnostic"
                     and e["origin"]["array"] == "trace_end_history"]  # fmt: skip
-            _honoured_trace_count(d["trace_histories"], rq["run"]["n_histories"], ends)
+            _honoured_trace_count(d["trace_histories"], eff["n_histories"], ends)
     except ResultFormatError as exc:
         raise _fail(str(exc)) from exc
     nuc = bool(rq["physics"]["nuclear"])

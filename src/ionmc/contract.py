@@ -237,7 +237,7 @@ BEAMLET_ROWS: tuple[Row, ...] = (
         "run.n_histories",
         "/n_histories /source/n_histories_total",
         "equal:sum-equal derived:sum-of-beamlets",
-        "run.n_histories == sum of the beamlet n_histories; derived when the TOML omitted it",
+        "run.n_histories == sum of the beamlet n_histories; derived when requested None",
     ),
     _r(
         "influence",
@@ -413,10 +413,11 @@ def _row_beamlet_source(c: _Ctx, evidence: Mapping[str, Any]) -> None:
     c.add("beamlet-direction", EQUAL if unit else DERIVED,
           "not-applicable" if unit else "normalise-per-beamlet",
           ROWS["beamlet-direction"].pointers)  # fmt: skip
-    if c.rq["run"]["n_histories"] != total:
+    if c.eff["n_histories"] != total:
         raise _differ("run.n_histories (sum of the beamlet n_histories)", total,
-                      c.rq["run"]["n_histories"])  # fmt: skip
-    derived = evidence.get("n_histories_origin") == "sum-of-beamlets"
+                      c.eff["n_histories"])  # fmt: skip
+    # requested None = "derived from the beamlets"; an explicit value must equal the sum
+    derived = c.rq["run"]["n_histories"] is None
     c.add("beamlet-histories", DERIVED if derived else EQUAL,
           "sum-of-beamlets" if derived else "sum-equal",
           ROWS["beamlet-histories"].pointers)  # fmt: skip
@@ -636,6 +637,10 @@ def _row_physics(c: _Ctx, z: int) -> None:
 def _row_run(c: _Ctx, z: int) -> None:
     rr = c.rq["run"]
     for k in ("backend", "precision", "seed", "n_histories", "n_batches", "cpu_workers"):
+        if k == "n_histories" and rr[k] is None:  # derived: row beamlet-histories
+            if c.rq["source"].get("type") != "beamlets":
+                raise _differ("run.n_histories", None, "an integer (None is for beamlet sets)")
+            continue
         c.equal(f"run.{k}", rr[k], f"/{k}")
     c.equal("run.production (rule float32-warp)",
             rr["backend"] != "python" and rr["precision"] == "float32", "/production")  # fmt: skip
@@ -665,7 +670,7 @@ def _row_requests(c: _Ctx) -> None:
                       ("trace_histories", rd["trace_histories"] > 0)):  # fmt: skip
         if bool(ev.get(k)) != want_d:
             raise _differ(f"diagnostics.{k}", want_d, ev.get(k))
-    want_n = requested_trace_count(rd["trace_histories"], c.rq["run"]["n_histories"])
+    want_n = requested_trace_count(rd["trace_histories"], c.eff["n_histories"])
     if ev.get("trace_count") != want_n:  # the exact uncapped count, not its sign
         raise _differ("diagnostics.trace_count", want_n, ev.get("trace_count"))
     c.add("diagnostics", EQUAL, "arrays-present", [])
@@ -715,7 +720,7 @@ def _row_requests(c: _Ctx) -> None:
     if plan.get("quantities") != quantities:
         raise _differ("tallies.quantities (name, kind, channels, units, definition)", quantities,
                       plan.get("quantities"))  # fmt: skip
-    hpb = c.rq["run"]["n_histories"] // c.rq["run"]["n_batches"]
+    hpb = c.eff["n_histories"] // c.rq["run"]["n_batches"]
     sizes = {"n_channels": len(channels), "total_size": total, "n_residual_columns": n_res,
              "histories_per_batch": hpb}  # fmt: skip
     if {k: plan.get(k) for k in sizes} != sizes:
@@ -775,7 +780,7 @@ def evidence_from_effective(effective: _cfg.EffectiveConfig) -> dict[str, Any]:
                         "escape_records": d.escape_records,
                         "trace_histories": d.trace_histories > 0,
                         "trace_count": requested_trace_count(
-                            d.trace_histories, effective.requested.run.n_histories)},
+                            d.trace_histories, effective.n_histories)},
     }  # fmt: skip
 
 
@@ -810,7 +815,7 @@ def reconcile(
                             "trace_histories": requested["diagnostics"]["trace_histories"] > 0,
                             "trace_count": requested_trace_count(
                                 requested["diagnostics"]["trace_histories"],
-                                requested["run"]["n_histories"])},
+                                effective["n_histories"])},
         }  # fmt: skip
     c = _Ctx(requested, effective, evidence)
     try:

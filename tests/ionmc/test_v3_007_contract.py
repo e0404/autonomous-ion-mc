@@ -211,16 +211,11 @@ def test_cap3_beamlet_rows_for_every_new_field(gate_open: None) -> None:
     got = {r.row: (r.cls, r.rule) for r in contract.reconcile(off, validate(off))}
     assert got["influence"] == ("unused", "no-influence")
     assert got["influence-group"] == ("unused", "no-influence")
-    # unit test of _row_beamlet_source with a hand-made evidence dict; the production-path test
-    # (TOML -> the CLI helper -> Simulation.resolutions) is in test_v3_007_beamlets.py
-    dv = contract.reconcile(
-        off,
-        validate(off),
-        {
-            **contract.evidence_from_effective(validate(off)),
-            "n_histories_origin": "sum-of-beamlets",
-        },
-    )
+    # requested run.n_histories None (derived): the row is derived:sum-of-beamlets
+    import dataclasses
+
+    dn = dataclasses.replace(off, run=dataclasses.replace(off.run, n_histories=None))
+    dv = contract.reconcile(dn, validate(dn))
     assert {r.row: (r.cls, r.rule) for r in dv}["beamlet-histories"] == (
         "derived",
         "sum-of-beamlets",

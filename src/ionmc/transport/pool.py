@@ -105,7 +105,7 @@ def run_pool(
     ``_fault`` ("raise", "exit" or "hang") injects a failure into worker 1; it exists only for
     the fail-closed tests.
     """
-    run = eff.requested.run
+    run = eff.run
     workers = run.cpu_workers
     if run.backend == "warp-cuda":
         raise TransportWorkerError("a process pool is not available for the warp-cuda backend")
@@ -121,8 +121,8 @@ def run_pool(
             f"the effective configuration cannot be sent to worker processes: {exc}"
         ) from exc
     ctx = mp.get_context("spawn")
-    lo, hi = h_range if h_range is not None else (0, run.n_histories)
-    if not 0 <= lo < hi <= run.n_histories or workers > hi - lo:
+    lo, hi = h_range if h_range is not None else (0, eff.n_histories)
+    if not 0 <= lo < hi <= eff.n_histories or workers > hi - lo:
         raise TransportWorkerError(f"invalid history range {lo}..{hi} for {workers} workers")
     ranges = [(lo + a, lo + b) for a, b in history_ranges(hi - lo, workers)]
     procs: list[mp.process.BaseProcess] = []

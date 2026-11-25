@@ -405,6 +405,18 @@ A-5 item 1 mention of diagnostic arrays in the "not bounded" list applies to `Be
 (composite beamlet runs), where diagnostics stay available (INF-5 uses traces on such a run). Implemented in S1 as a
 fail-closed `validate` rule with its BEAM-1 twin; CAP-1 counts the combination as `unsupported`. Not a clinical claim.
 
+**Clarification note (2026-11-25, S1 fix 2).** The "absent -> derived" case of Amendment A-1 item 1 is represented
+by the configuration value itself: `RunOptions.n_histories = None` (beamlet sets only; a pencil source with `None` is
+refused by `validate`, naming `run.n_histories`). `validate` derives the effective count N = sum of the beamlet
+`n_histories` (`EffectiveConfig.run.n_histories`, `summary()["n_histories"]`); the reconciliation row
+`beamlet-histories` is `derived:sum-of-beamlets` when the requested value is `None` and `equal:sum-equal` when it equals
+N (a different explicit value is refused). The provenance is therefore part of the `requested` block of every bundle
+(`requested.run.n_histories` is `null`) and of `Simulation(load_toml(path))` without any side channel; the S1 fix 1
+mechanism (`Simulation(n_histories_origin=...)`, `LoadedConfig.n_histories_origin`) is withdrawn. The bundle-level
+save/load test is written and gated on `BEAMLET_TRANSPORT_AVAILABLE` (S2 unskips it); the Tier-1 reader binding
+(`requested.run.n_histories` null or equal to `effective.n_histories`; effective N equals the sum of the persisted
+beamlet table) is enforced by the shared `contract.reconcile` row. Not a clinical claim.
+
 ## C. Seeds and determinism rules (declared before any run)
 
 - CI tests use fixed small seeds written in the tests (not evidence).

@@ -761,22 +761,14 @@ class Simulation:
     """A validated simulation. Construction raises before any transport if the request is
     unsupported (``UnsupportedCombinationError`` / ``BackendUnavailableError``)."""
 
-    def __init__(self, config: SimulationConfig, *, n_histories_origin: str = "explicit") -> None:
-        """``n_histories_origin`` is the provenance of ``run.n_histories`` ("explicit", or
-        "sum-of-beamlets" when a TOML beamlet configuration omitted it, see
-        ``configio.LoadedConfig.n_histories_origin``); it only selects the reconciliation row."""
+    def __init__(self, config: SimulationConfig) -> None:
         t0 = time.perf_counter()
         self.config = config
         self.effective: EffectiveConfig = validate(config)
         # requested -> effective reconciliation (decision 0045 section 4): raises before transport;
         # kept here (not a Result field); results.save recomputes it from the persisted blocks
         self.resolutions: tuple[contract.Resolution, ...] = contract.reconcile(
-            config,
-            self.effective,
-            {
-                **contract.evidence_from_effective(self.effective),
-                "n_histories_origin": n_histories_origin,
-            },
+            config, self.effective, contract.evidence_from_effective(self.effective)
         )
         self._setup_s = time.perf_counter() - t0
 
@@ -904,8 +896,8 @@ def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[s
     assert plan is not None and ch is not None
     cfg = eff.requested
     grid = cfg.scoring[gi]
-    run = cfg.run
-    hpb = run.n_histories // run.n_batches
+    run = eff.run
+    hpb = eff.n_histories // run.n_batches
     mass = voxel_mass_g(grid, eff.geometry).reshape(-1)
     vol = float(np.prod(grid.spacing_mm))
     nvox = grid.n_voxels
@@ -1018,8 +1010,8 @@ def _grid_result(
     valid: bool,
     quantities: Mapping[str, QuantityResult] | None = None,
 ) -> GridResult:
-    run = eff.requested.run
-    stats = reduce_batches(batch_sums, run.n_histories // run.n_batches)
+    run = eff.run
+    stats = reduce_batches(batch_sums, eff.n_histories // run.n_batches)
     shape = grid.shape
     mass = voxel_mass_g(grid, eff.geometry)
     flat_mass = mass.reshape(-1)
@@ -1032,7 +1024,7 @@ def _grid_result(
     dose = np.where(flat_mass > 0.0, mean * scale, np.nan)
     dose_std = np.where(flat_mass > 0.0, std * scale, np.nan)
     sparse = defined & (stats.n_nonzero < 0.5 * run.n_batches)
-    per_batch = (batch_sums / float(run.n_histories // run.n_batches)).reshape(
+    per_batch = (batch_sums / float(eff.n_histories // run.n_batches)).reshape(
         (run.n_batches, *shape)
     )
     return GridResult(
@@ -1105,7 +1097,7 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         precision=eff.precision,
         seed=cfg.run.seed,
         rng=dict(eff.rng),
-        n_histories=cfg.run.n_histories,
+        n_histories=eff.n_histories,
         n_batches=cfg.run.n_batches,
         grids=grids,
         energy_balance=balance,

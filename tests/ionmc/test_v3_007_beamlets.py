@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import dataclasses
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -369,18 +370,25 @@ def test_beam1_dict_round_trip_and_toml_errors(tmp_path: Path) -> None:
     toml_nohist = re.sub(r"n_histories = 8\n(?=n_batches)", "", toml)
     p = tmp_path / "b.toml"
     p.write_text(toml_nohist)
-    loaded = configio.load_toml_full(p)
-    assert loaded.n_histories_derived and loaded.config.run.n_histories == 12
+    # the PUBLIC loader carries the provenance by itself: the omitted key loads as None
+    public, _manifest = configio.load_toml(p)
+    assert public.run.n_histories is None
+    assert configio.load_toml_full(p).config.run.n_histories is None
+    assert validate(public).run.n_histories == 12  # effective N = sum of the n_j
     p.write_text(toml.replace("n_histories = 8\nn_batches", "n_histories = 12\nn_batches"))
-    loaded = configio.load_toml_full(p)
-    assert not loaded.n_histories_derived
+    assert configio.load_toml(p)[0].run.n_histories == 12
     p.write_text(toml.replace("n_histories = 8\nn_batches", "n_histories = 13\nn_batches"))
     with pytest.raises(ConfigError, match="run.n_histories"):
         configio.load_toml_full(p)
+    # a pencil file keeps the key required
+    pencil = (Path(__file__).parent / "data" / "v3_006" / "proton_box.toml").read_text()
+    p.write_text(re.sub(r"n_histories = \d+\n", "", pencil))
+    with pytest.raises(ConfigError, match="n_histories"):
+        configio.load_toml_full(p)
 
-    # production path (finding 2 of REVIEW-f1c83a51): the helper `ionmc check` / `ionmc run` call
-    # builds the Simulation from the loaded file; its reconciliation row carries the provenance
+    # production path: `ionmc check` / `ionmc run` build Simulation(loaded.config)
     from ionmc.cli import _simulation_of
+    from ionmc.simulation import Simulation
 
     def row(sim: Any) -> tuple[str, str]:
         r = {x.row: (x.cls, x.rule) for x in sim.resolutions}["beamlet-histories"]
@@ -388,11 +396,84 @@ def test_beam1_dict_round_trip_and_toml_errors(tmp_path: Path) -> None:
 
     p.write_text(toml_nohist)
     assert row(_simulation_of(configio.load_toml_full(p))) == ("derived", "sum-of-beamlets")
+    assert row(Simulation(configio.load_toml(p)[0])) == ("derived", "sum-of-beamlets")
     p.write_text(toml.replace("n_histories = 8\nn_batches", "n_histories = 12\nn_batches"))
     assert row(_simulation_of(configio.load_toml_full(p))) == ("equal", "sum-equal")
+    assert row(Simulation(cfg())) == ("equal", "sum-equal")  # API-built configuration
+
+
+def _derived(c: SimulationConfig) -> SimulationConfig:
+    return dataclasses.replace(c, run=dataclasses.replace(c.run, n_histories=None))
+
+
+def test_beam1_derived_n_histories_none_effective_and_rows() -> None:
+    from ionmc import contract
+
+    c = _derived(cfg())
+    assert c.run.n_histories is None
+    eff = validate(c)
+    assert eff.run.n_histories == 80 and eff.summary()["n_histories"] == 80
+    rows = {r.row: (r.cls, r.rule) for r in contract.reconcile(c, eff)}  # config objects
+    assert rows["beamlet-histories"] == ("derived", "sum-of-beamlets")
+    d = configio.to_dict(c)  # the dicts a bundle persists
+    assert d["run"]["n_histories"] is None
+    rows = {r.row: (r.cls, r.rule) for r in contract.reconcile(d, eff.summary())}
+    assert rows["beamlet-histories"] == ("derived", "sum-of-beamlets")
+    # explicit equal -> equal:sum-equal; explicit different -> refused (config and dicts)
+    eq = cfg(run={"n_histories": 80})
+    rows = {r.row: (r.cls, r.rule) for r in contract.reconcile(eq, validate(eq))}
+    assert rows["beamlet-histories"] == ("equal", "sum-equal")
+    refused(cfg(run={"n_histories": 81}), "run.n_histories (81)")
+    bad = copy.deepcopy(d)
+    bad["run"]["n_histories"] = 81
+    with pytest.raises(U, match="n_histories"):
+        contract.reconcile(bad, eff.summary())
+    # Simulation(config) carries it with no side channel
     from ionmc.simulation import Simulation
 
-    assert row(Simulation(cfg())) == ("equal", "sum-equal")  # API-built configuration
+    sim = Simulation(c)
+    assert {r.row: r.rule for r in sim.resolutions}["beamlet-histories"] == "sum-of-beamlets"
+    assert not hasattr(sim, "n_histories_origin")
+
+
+def test_beam1_none_n_histories_with_a_pencil_source_is_refused() -> None:
+    from ionmc.sources import PencilBeamSource
+
+    pencil = cfg(
+        source=PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 100.0),
+        run={"n_histories": None},
+    )
+    refused(pencil, "run.n_histories is None")
+    with pytest.raises(U, match="run.n_histories"):
+        validate(pencil)
+
+
+def test_beam1_n_histories_none_dict_round_trip() -> None:
+    c = _derived(cfg(influence=InfluenceOptions("dose", group_size=2)))
+    d = configio.to_dict(c)
+    assert d["run"]["n_histories"] is None
+    back = configio.from_dict(copy.deepcopy(d))
+    assert back.run.n_histories is None and back == c and configio.to_dict(back) == d
+
+
+def test_beam1_derived_n_histories_in_the_bundle_s2_gate(tmp_path: Path) -> None:
+    """Bundle-level save/load of a derived-history run: needs transport (S2 flips the flag)."""
+    if not config.BEAMLET_TRANSPORT_AVAILABLE:
+        pytest.skip("beamlet transport lands in V3-007 S2; S2 unskips this by the flag")
+    import json
+
+    from ionmc import results
+    from ionmc.simulation import Simulation
+
+    result = Simulation(_derived(cfg())).run()
+    out = tmp_path / "bundle"
+    results.save(result, out)
+    doc = json.loads((out / "result.json").read_text())
+    assert doc["requested"]["run"]["n_histories"] is None
+    assert doc["effective"]["n_histories"] == 80
+    rows = {r["row"]: r["rule"] for r in doc["effective_extra"]["resolutions"]}
+    assert rows["beamlet-histories"] == "sum-of-beamlets"
+    results.load(out)  # the reader binds requested null / effective sum
 
 
 # ---- BEAM-3: offsets and batch membership -------------------------------------------------------
@@ -537,6 +618,10 @@ ALLOWLIST: dict[tuple[str, str, str], str] = {
     ("config.py", "_water_table", _PROJ): ENV,
     ("config.py", "effective_e_cut_mev", _PROJ): ENV,
     ("config.py", "effective_end_of_range_model", _PROJ): ENV,
+    ("config.py", "EffectiveConfig.run", "n_histories_total"): PER,  # derived run.n_histories
+    ("config.py", "EffectiveConfig.run", "<alias-passed>"): PER,
+    ("config.py", "_with_derived_histories", "n_histories_total"): PER,  # run.n_histories None
+    ("config.py", "_with_derived_histories", "<bare>"): PER,
     ("config.py", "validate", "<alias-passed>"): ENV,  # _source_members / envelope helpers
     ("config.py", "validate", _PROJ): ENV,
     ("config.py", "validate", "unit_direction"): PER,  # None with status for a set

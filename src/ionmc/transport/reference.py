@@ -137,7 +137,7 @@ def ramp_weight(ta: float, tb: float, s_start: float, s_end: float, s_act: float
 
 def run_reference(eff: EffectiveConfig) -> RawTransport:
     """Transport ``n_histories`` primaries with the Python reference loop (float64)."""
-    n = eff.requested.run.n_histories
+    n = eff.n_histories
     part = run_reference_range(eff, 0, n)
     diag = eff.requested.diagnostics
     raw = merge_partials(

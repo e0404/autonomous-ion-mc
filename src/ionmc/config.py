@@ -283,12 +283,15 @@ class RunOptions:
     ``chunk_histories`` (a power of two, at least 2**10, recorded in the effective
     configuration) bounds the histories per Warp launch; it affects memory only: the deposit grids
     are int64 fixed-point quanta with integer atomic adds, so the result is bit-identical for
-    any chunk size within a precision."""
+    any chunk size within a precision. ``n_histories = None`` means "derived from the beamlets"
+    (sum of the beamlet ``n_histories``); it is admissible with a ``BeamletSet`` only and
+    ``validate`` records the derived count in ``EffectiveConfig.run`` (reconciliation row
+    ``beamlet-histories``: ``derived:sum-of-beamlets``)."""
 
     backend: Literal["python", "warp-cpu", "warp-cuda"]
     precision: Literal["float32", "float64"]
     seed: int
-    n_histories: int
+    n_histories: int | None
     n_batches: int = 20
     cpu_workers: int = 1
     max_steps: int | None = None
@@ -301,7 +304,8 @@ class RunOptions:
         choice("backend", self.backend, BACKENDS)
         choice("precision", self.precision, PRECISIONS)
         integer("seed", self.seed)
-        integer("n_histories", self.n_histories)
+        if self.n_histories is not None:  # None: derived from the beamlets (validate)
+            integer("n_histories", self.n_histories)
         integer("n_batches", self.n_batches)
         integer("cpu_workers", self.cpu_workers, minimum=1)
         if self.max_steps is not None:
@@ -689,6 +693,24 @@ class EffectiveConfig:
     influence_group_size: int | None = None
     influence_group_origin: str | None = None
 
+    @property
+    def run(self) -> RunOptions:
+        """The run options in effect: ``requested.run`` with ``n_histories`` resolved (the sum of
+        the beamlet ``n_histories`` when the request left it ``None``)."""
+        r = self.requested.run
+        if r.n_histories is not None:
+            return r
+        src = self.requested.source
+        assert isinstance(src, BeamletSet)  # validate refuses None for any other source
+        return replace(r, n_histories=src.n_histories_total)
+
+    @property
+    def n_histories(self) -> int:
+        """The number of primaries in effect (see :attr:`run`)."""
+        n = self.run.n_histories
+        assert n is not None
+        return n
+
     def single_unit_direction(self) -> tuple[float, float, float]:
         """The unit direction of a pencil source; a beamlet set has none (use the per-beamlet
         ``requested.source.unit_directions()``)."""
@@ -747,7 +769,7 @@ class EffectiveConfig:
     def summary(self) -> dict[str, Any]:
         """JSON-serialisable summary of the effective configuration."""
         p = self.requested.physics
-        r = self.requested.run
+        r = self.run
         s = self.requested.source
         source_block: dict[str, Any]
         if isinstance(s, BeamletSet):
@@ -993,7 +1015,7 @@ def _compile_tallies(
         projectile=src.projectile,
         e_cut_mev=effective_e_cut_mev(config),
         e_hi_mev=e_hi_mev,
-        n_histories=run.n_histories,
+        n_histories=int(run.n_histories or 0),  # resolved by validate before this call
         n_batches=run.n_batches,
         cpu_workers=run.cpu_workers,
         memory_budget_bytes=run.memory_budget_bytes,
@@ -1481,7 +1503,7 @@ def _finish_beamlet_set(eff: EffectiveConfig) -> EffectiveConfig:
     G = 1 exceeds ``memory_budget_bytes``, check an explicit G, derive the largest feasible G in
     [1, J] otherwise (exhaustive scan: the estimate is not monotone in G for unequal n_j)."""
     cfg = eff.requested
-    src, run, inf = cfg.source, cfg.run, cfg.influence
+    src, run, inf = cfg.source, eff.run, cfg.influence
     assert isinstance(src, BeamletSet)
     offsets = [int(x) for x in src.offsets()]
     j_n = src.n_beamlets
@@ -1490,7 +1512,7 @@ def _finish_beamlet_set(eff: EffectiveConfig) -> EffectiveConfig:
 
     def estimate(g: int) -> int:
         return allocation_estimate(
-            run.backend, run.n_batches, total_v, len(cfg.scoring), eff, run.n_histories,
+            run.backend, run.n_batches, total_v, len(cfg.scoring), eff, eff.n_histories,
             run.chunk_histories, v_inf, g, offsets,
         )  # fmt: skip
 
@@ -1520,6 +1542,20 @@ def _finish_beamlet_set(eff: EffectiveConfig) -> EffectiveConfig:
     )
 
 
+def _with_derived_histories(config: SimulationConfig) -> SimulationConfig:
+    """``config`` with ``run.n_histories = None`` (derived from the beamlets, amendment A-1 item 1)
+    replaced by the sum of the beamlet ``n_histories``; None is refused for a pencil source."""
+    if config.run.n_histories is not None:
+        return config
+    if not isinstance(config.source, BeamletSet):
+        raise fail(
+            "run.n_histories is None (derived from the beamlets), which is admissible for a "
+            "BeamletSet source only; a pencil source needs an explicit run.n_histories"
+        )
+    run = replace(config.run, n_histories=config.source.n_histories_total)
+    return replace(config, run=run)
+
+
 def validate(config: SimulationConfig) -> EffectiveConfig:
     """Check every fail-closed rule and return the effective configuration.
 
@@ -1528,7 +1564,11 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     """
     if not isinstance(config, SimulationConfig):
         raise fail("config must be a SimulationConfig")
+    requested = config
+    config = _with_derived_histories(config)
     src, ph, run = config.source, config.physics, config.run
+    n_hist = run.n_histories
+    assert n_hist is not None  # resolved by _with_derived_histories
     geometry = _resolve_geometry(config.geometry)
     members = _source_members(src)  # per-member energy rules; pencil messages are unchanged
     _influence_checks(config)
@@ -1582,20 +1622,16 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         raise fail("cpu_workers > 1 is meaningless on backend 'warp-cuda'")
     if not 0 <= run.seed < 2**64:
         raise fail(f"seed must be in [0, 2**64), got {run.seed}")
-    if not 1 <= run.n_histories <= 2**32:
-        raise fail(f"n_histories must be in [1, 2**32], got {run.n_histories}")
+    if not 1 <= n_hist <= 2**32:
+        raise fail(f"n_histories must be in [1, 2**32], got {n_hist}")
     if run.n_batches < 2:
         raise fail(f"n_batches must be >= 2 for a variance estimate, got {run.n_batches}")
-    if run.n_histories % run.n_batches != 0:
-        raise fail(
-            f"n_histories ({run.n_histories}) must be a multiple of n_batches ({run.n_batches})"
-        )
+    if n_hist % run.n_batches != 0:
+        raise fail(f"n_histories ({n_hist}) must be a multiple of n_batches ({run.n_batches})")
     if run.cpu_workers > MAX_CPU_WORKERS:
         raise fail(f"cpu_workers must be <= {MAX_CPU_WORKERS}, got {run.cpu_workers}")
-    if run.cpu_workers > run.n_histories:
-        raise fail(
-            f"cpu_workers ({run.cpu_workers}) must not exceed n_histories ({run.n_histories})"
-        )
+    if run.cpu_workers > n_hist:
+        raise fail(f"cpu_workers ({run.cpu_workers}) must not exceed n_histories ({n_hist})")
 
     if not 1 <= len(config.scoring) <= MAX_SCORING_GRIDS:
         raise fail(f"between 1 and {MAX_SCORING_GRIDS} scoring grids are required")
@@ -1659,7 +1695,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
     # the energy bound of a history: a nuclear history may deposit more than its initial energy
     # (decision 0041 section 5, amended 2026-10-08): max(E_hi, the table's per-history bound)
     e_cap = e_hi if nuclear is None else max(e_hi, nuclear.history_energy_bound_mev)
-    per_batch = run.n_histories // run.n_batches
+    per_batch = n_hist // run.n_batches
     if per_batch * e_cap / QUANTUM_MEV >= MAX_QUANTA:
         raise fail(
             f"{per_batch} histories per batch of up to {e_cap:g} MeV exceed the capacity "
@@ -1733,10 +1769,8 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
                 "the per-step trace is only available in float64 (trace_histories > 0 with "
                 f"precision {run.precision!r}); the trace is the trajectory-parity reference"
             )
-        if diag.trace_histories > run.n_histories:
-            raise fail(
-                f"trace_histories ({diag.trace_histories}) exceeds n_histories ({run.n_histories})"
-            )
+        if diag.trace_histories > n_hist:
+            raise fail(f"trace_histories ({diag.trace_histories}) exceeds n_histories ({n_hist})")
         trace_bytes = trace_buffer_bytes(diag.trace_histories, max_steps)
         if trace_bytes > MAX_TRACE_BUFFER_BYTES:
             raise fail(
@@ -1760,7 +1794,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         )
 
     eff = EffectiveConfig(
-        requested=config,
+        requested=requested,
         geometry=geometry,
         unit_direction=src.unit_direction(),
         tables=tables,
