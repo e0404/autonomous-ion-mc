@@ -1,0 +1,139 @@
+{
+ "array_content_sha256": {
+  "geometry__material_index": "e7e10cbf3fd69c45ff3f739c9e3c514e05960d41a7382e2ae9c11afa1e097223",
+  "grid__dose__batch_energy_mev": "9e2122e0e9bdb3f335d9e14a30057d7cefae191b8d825966866421110a4fe52a",
+  "grid__dose__defined_mask": "53544b731ce690b2427efd0c7066f986eade43f15dc3dea2d4f2a50d25c92b0f",
+  "grid__dose__dose_gy": "f2880a4b8d346ed94e9604ebd6180f46f3033f7fc25820124aabfd7e80ce9a3d",
+  "grid__dose__dose_std_gy": "68314a06587a65ca99fa14fd394f064be5ce8b3e6d63e7ea4cac5a319c0f6343",
+  "grid__dose__energy_mev": "11a6b1108e9a3881ef0a16715700b62c4ce27bc1054b9ab0afe9ca3a78dafa81",
+  "grid__dose__energy_std_mev": "d5d8f859be370d74eab6dc86d15450f8654c00bdabaa89e64f62ee9b0f4464b1",
+  "grid__dose__mass_g": "a3c2f3fc2fa19ee85c4c08452630c435ce74063dae54c159367b5c8fac5b3dc2",
+  "grid__dose__n_nonzero_batches": "1f0de32af490f49cb5f451d3bcc981cd61337d9ac03d89d6a31cdb5d013dafe6",
+  "grid__dose__relative_uncertainty": "2f1369303f7e5f3614d779361f86db114c206924736f36a54f80cbd0a14252df",
+  "grid__dose__sparse_mask": "036a8262950f84d792a80cfda333a110a89dedad5e414b8773f998fc305e6646"
+ },
+ "backend": "warp-cpu",
+ "code": {
+  "git_commit": "154fc2da1beaca38d7277ba65642dc03f3b355cf",
+  "git_dirty": false,
+  "ionmc_version": "0.1.0.dev0",
+  "package_tree_oid": "4970c9a4e6899f6e1d73c6a3cfdef8f36c783850",
+  "reason": "",
+  "source": "git",
+  "status": "ok"
+ },
+ "device": "cpu",
+ "durations_s": {
+  "report_check": 0.415,
+  "run": 0.616,
+  "verify": 0.365
+ },
+ "exit_codes": {
+  "report_check": 0,
+  "run": 0,
+  "verify": 0
+ },
+ "files": {
+  "arrays.npz": {
+   "sha256": "da5fd7f8007530a7647af118d11c1d1fc11effa09983b26768d66a61d7332ee1",
+   "size": 3254
+  },
+  "plots/dose__dose.svg": {
+   "sha256": "913630eefa5cd08b5be408b7940484197513b37cb47fb3275de67171e125cc5c",
+   "size": 2659
+  },
+  "plots/energy__dose.svg": {
+   "sha256": "a372325cc337817b486abe5529922050b62364e6c9c81929bf550df5681c5492",
+   "size": 2259
+  },
+  "plots/lateral__dose.svg": {
+   "sha256": "2c223db29231362514d20804388ab292232ffc41272afc364ff159304e8954a2",
+   "size": 2384
+  },
+  "report.md": {
+   "sha256": "381cec748cc7cbb03d009669da220b469805eae0bad7bf6c909e2cdeec78e4ee",
+   "size": 9809
+  }
+ },
+ "k": 0,
+ "n_batches": 4,
+ "n_histories": 32,
+ "nuclear": null,
+ "output_path_persisted": "r4k0",
+ "precision": "float64",
+ "production": false,
+ "r_index": 4,
+ "requested_nuclear_table_id": null,
+ "result_json_sha256": "1f2e4137b28a57db71defd8579726055fb7c8ed439e9f8b02c4869d8d4af9a4b",
+ "schema": "ionmc.out6-summary/1",
+ "seed": 20700404,
+ "stopping": {
+  "circular_rows": [],
+  "content_sha256": null,
+  "data_declared": [],
+  "data_used": [],
+  "decision": "0044",
+  "domain": {
+   "e_max_per_u": {
+    "alpha": 500.0,
+    "carbon12": 500.0,
+    "deuteron": 500.0,
+    "oxygen16": 500.0,
+    "proton": 500.0
+   },
+   "e_min_per_u": {
+    "alpha": 1.0,
+    "carbon12": 1.0,
+    "deuteron": 1.0,
+    "oxygen16": 1.0,
+    "proton": 1.0
+   },
+   "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+   "species": [
+    "alpha",
+    "carbon12",
+    "deuteron",
+    "oxygen16",
+    "proton"
+   ]
+  },
+  "evidence_at_run": [
+   {
+    "graded_at_sha": null,
+    "plan": "validation/plans/v3-008-acceptance.md",
+    "row": null,
+    "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+    "status": "as-graded:0043"
+   }
+  ],
+  "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+  "kind": "analytic",
+  "mcs_proton_path_stopping": "bethe-ionmc-v1",
+  "model_id_effective": "bethe-ionmc-v1",
+  "model_id_requested": "bethe-ionmc-v1",
+  "options": {
+   "barkas": true,
+   "bloch": true,
+   "class": "BetheStoppingSource",
+   "effective_charge": true,
+   "effective_charge_model": "barkas-125",
+   "i_value": "material",
+   "ls": "off",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "mott": true,
+   "points_per_decade": 200,
+   "shell": true,
+   "source_name": "bethe"
+  },
+  "range_construction": "exact-loglog-quadrature-v1",
+  "range_start": "constant-S approximation a*E_min/S(E_min)",
+  "selected_by": "stopping_model",
+  "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+  "species_transported": [
+   "carbon12"
+  ],
+  "version": "1"
+ },
+ "valid": true
+}

@@ -1,0 +1,33 @@
+# out6 case r_index 4 (V3-006 step S8): a carbon-12 beam (100 MeV/u) on a water box, warp-cpu float64.
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[source]
+projectile = "carbon12"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 1200.0
+
+[geometry]
+type = "box"
+lower_mm = [-10.0, -10.0, 0.0]
+size_mm = [20.0, 20.0, 40.0]
+material = "water"
+
+[[scoring]]
+name = "dose"
+origin_mm = [-10.0, -10.0, 0.0]
+spacing_mm = [5.0, 5.0, 2.5]
+shape = [4, 4, 16]
+
+[physics]
+nuclear = false
+stopping_model = "bethe-ionmc-v1"
+multiple_scattering = false
+
+[run]
+backend = "warp-cpu"
+precision = "float64"
+seed = 20700404
+n_histories = 32
+n_batches = 4

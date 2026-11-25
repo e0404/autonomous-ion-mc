@@ -1,0 +1,53 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys\nos.environ.update({'PYTHONPATH': '/workspace/src', 'IONMC_CACHE_DIR': '/workspace/.ionmc-cache/ionmc-data', 'IONMC_REQUIRE_DATA': '1', 'IONMC_LV_TIER': '1', 'IONMC_SINGLE_PROCESS': '1', 'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1', 'MKL_NUM_THREADS': '1', 'NUMEXPR_NUM_THREADS': '1', 'PYTHONUNBUFFERED': '1', 'PYTHONFAULTHANDLER': '1', 'HOME': '/tmp/home'})\nos.makedirs('/tmp/home', exist_ok=True)\ncmd1 = [sys.executable, 'validation/scripts/results/out6_run.py', 'host', '--out', 'validation/generated/out6-hr', '--cache-dir', '/workspace/.ionmc-cache/ionmc-data', '--sha', '154fc2da1beaca38d7277ba65642dc03f3b355cf', '--tree-oid', '4970c9a4e6899f6e1d73c6a3cfdef8f36c783850']\ncmd2 = [sys.executable, 'validation/scripts/stopping/steps_v13.py', 'predict', '--out', 'validation/generated/out6-hr/vc-predictions.json']\nprint('HOST-ARGV-1', cmd1, flush=True)\nrc1 = subprocess.call(cmd1, cwd='/workspace')\nprint('HOST-RC-1', rc1, flush=True)\nprint('HOST-ARGV-2', cmd2, flush=True)\nrc2 = subprocess.call(cmd2, cwd='/workspace')\nprint('HOST-RC-2', rc2, flush=True)\nsys.exit(0 if rc1 == 0 and rc2 == 0 else 1)\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "570e5e0d9de1225df4646cb48db8c09c6a8988cca75731574f0830d3bcfe49ec",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "12084b59a14b1ec766ef868ad3c80df41b0c92f1307638606f57758e8389a68d021924932a0aa6d836d8c21606629dd9012e96d8ff04876c4ebceae8933e720c",
+    "signed_at_utc": "2026-11-25T10:07:40.612954+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-006-self-describing-persisted-results-human-readable-reports-and",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 33.40175912199993,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T100705Z-1cae10a5/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-25T10:07:40.593560+00:00",
+  "input_manifest": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T100705Z-1cae10a5/input-manifest.json",
+  "input_manifest_sha256": "f0c7adb53ce81440a014186e3a835d37d80c0937bd4b06f59bae5a6abdd79f05",
+  "output_manifest_sha256": "f137ac299eaead6b801488e9213740e38e8302db6bd2997572d6c632fa95f099",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-006/validation/generated/RUN-20261125T100705Z-1cae10a5",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-006/benchmarks/generated/RUN-20261125T100705Z-1cae10a5"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T100705Z-1cae10a5",
+  "run_id": "RUN-20261125T100705Z-1cae10a5",
+  "schema_version": 1,
+  "sha": "154fc2da1beaca38d7277ba65642dc03f3b355cf",
+  "sha_after": "154fc2da1beaca38d7277ba65642dc03f3b355cf",
+  "started_at": "2026-11-25T10:07:07.191780+00:00",
+  "stderr": "",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T100705Z-1cae10a5/stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_total_chars": 0,
+  "stderr_truncated": false,
+  "stdout": "HOST-ARGV-1 ['/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python', 'validation/scripts/results/out6_run.py', 'host', '--out', 'validation/generated/out6-hr', '--cache-dir', '/workspace/.ionmc-cache/ionmc-data', '--sha', '154fc2da1beaca38d7277ba65642dc03f3b355cf', '--tree-oid', '4970c9a4e6899f6e1d73c6a3cfdef8f36c783850']\nRESULT RUN-r2 PASS validation/generated/out6-hr/r2k0.summary.json\nRESULT RUN-r0 PASS validation/generated/out6-hr/r0k0.summary.json\nRESULT RUN-r1 PASS validation/generated/out6-hr/r1k0.summary.json\ndiffering pointers [0, 1] 51\n   /accounting/energy_balance/closure_residual_mev\n   /accounting/energy_balance/cutoff_mev\n   /accounting/energy_balance/in_grid_mev/0\n   /accounting/energy_balance/initial_mev\n   /accounting/energy_balance/quantization_mev/0\n   /accounting/energy_balance/step_deposit_mev\n   /arrays/1/content_sha256\n   /arrays/3/content_sha256\n   /arrays/4/content_sha256\n   /arrays/5/content_sha256\n   /arrays/6/content_sha256\n   /arrays/9/content_sha256\n   /effective/backend\n   /effective/precision\n   /effective/production\n   /effective/rng/u01\n   /effective/seed\n   /effective_extra/resolutions/chunk/class\n   /effective_extra/resolutions/chunk/rule\n   /effective_extra/resolutions/run/class\n   /effective_extra/resolutions/run/rule\n   /files/arrays.npz/sha256\n   /files/arrays.npz/size\n   /files/plots/dose__dose.svg/sha256\n   /files/plots/dose__dose.svg/size\n   /files/plots/energy__dose.svg/sha256\n   /files/plots/lateral__dose.svg/sha256\n   /files/plots/lateral__dose.svg/size\n   /files/report.md/sha256\n   /files/report.md/size\n   /input_manifest/config_file/path\n   /input_manifest/config_file/sha256\n   /input_manifest/config_sha256\n   /requested/run/backend\n   /requested/run/precision\n   /requested/run/seed\n   /run/backend\n   /run/device\n   /run/output_path\n   /run/precision\n   /run/production\n   /run/rng/u01\n   /run/seed\n   /run/timings/values_s/compile\n   /run/timings/values_s/reduce\n   /run/timings/values_s/setup\n   /run/timings/values_s/total\n   /run/timings/values_s/transport\n   /statistics/grids/0/dose_max_gy/value\n   /statistics/grids/0/energy_total_mev/value\n   /statistics/grids/0/relative_uncertainty_max/value\ndiffering pointers [0, 2] 50\n   /accounting/energy_balance/cutoff_mev\n   /accounting/energy_balance/in_grid_mev/0\n   /accounting/energy_balance/initial_mev\n   /accounting/energy_balance/quantization_mev/0\n   /accounting/energy_balance/step_deposit_mev\n   /arrays/1/content_sha256\n   /arrays/3/content_sha256\n   /arrays/4/content_sha256\n   /arrays/5/content_sha256\n   /arrays/6/content_sha256\n   /arrays/9/content_sha256\n   /effective/backend\n   /effective/precision\n   /effective/production\n   /effective/rng/u01\n   /effective/seed\n   /effective_extra/resolutions/chunk/class\n   /effective_extra/resolutions/chunk/rule\n   /effective_extra/resolutions/run/class\n   /effective_extra/resolutions/run/rule\n   /files/arrays.npz/sha256\n   /files/arrays.npz/size\n   /files/plots/dose__dose.svg/sha256\n   /files/plots/dose__dose.svg/size\n   /files/plots/energy__dose.svg/sha256\n   /files/plots/lateral__dose.svg/sha256\n   /files/plots/lateral__dose.svg/size\n   /files/report.md/sha256\n   /files/report.md/size\n   /input_manifest/config_file/path\n   /input_manifest/config_file/sha256\n   /input_manifest/config_sha256\n   /requested/run/backend\n   /requested/run/precision\n   /requested/run/seed\n   /run/backend\n   /run/device\n   /run/output_path\n   /run/precision\n   /run/production\n   /run/rng/u01\n   /run/seed\n   /run/timings/values_s/compile\n   /run/timings/values_s/reduce\n   /run/timings/values_s/setup\n   /run/timings/values_s/total\n   /run/timings/values_s/transport\n   /statistics/grids/0/dose_max_gy/value\n   /statistics/grids/0/energy_total_mev/value\n   /statistics/grids/0/relative_uncertainty_max/value\nRESULT CLI-5 PASS validation/generated/out6-hr/compare.json\nRESULT PROV-7 PASS validation/generated/out6-hr/prov7.json\nPYTEST out2 0 ok {'passed': 1}\nPYTEST contract 0 ok {'passed': 90}\nPYTEST trace 0 ok {'passed': 1}\nPYTEST a16 0 ok {'passed': 4}\nRESULT OUT-2-HR PASS validation/generated/out6-hr/host-summary.json\nRESULT CLI-4-HR PASS validation/generated/out6-hr/host-summary.json\nRESULT REG-1-HR PASS validation/generated/out6-hr/host-summary.json\nRESULT CAP-1b-HR PASS validation/generated/out6-hr/host-summary.json\nHOST-RC-1 0\nHOST-ARGV-2 ['/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python', 'validation/scripts/stopping/steps_v13.py', 'predict', '--out', 'validation/generated/out6-hr/vc-predictions.json']\nWarp 1.17.0 initialized:\n   CUDA Toolkit 12.9, Driver 13.5\n   Devices:\n     \"cpu\"      : \"x86_64\"\n     \"cuda:0\"   : \"NVIDIA RTX A6000\" (48 GiB, sm_86, mempool enabled)\n   Kernel cache:\n     /cache/warp/1.17.0\nModule _table_node_kernel__locals__nodes_160cf81d 930f1d7 load on device 'cpu' took 1.06 ms  (cached)\nwrote validation/generated/out6-hr/vc-predictions.json sha256 61df725f6819314a0f6daa87ffb1f2074b122cbe20fd677a8bfb9e6d3cd38ce6\ncase 1 He 75 MeV/u: R_def 46.6896 mm, dR_pred,D +0.00612 mm, V-C2 non-informative (gate for this energy is V-C2-D alone), V-C2-D substitute: CC-T (both backends) + CC-ID + PER-1 for icru90-water-v1\ncase 2 He 125 MeV/u: R_def 115.7041 mm, dR_pred,D +0.05854 mm, V-C2 gating, V-C2-D gating\ncase 3 He 200 MeV/u: R_def 261.9258 mm, dR_pred,D +0.16257 mm, V-C2 gating, V-C2-D gating\nHOST-RC-2 0\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T100705Z-1cae10a5/stdout.txt",
+  "stdout_sha256": "220b0fe32eaacd6d03ff977c67dfa49e5adca4a7157e82ba8ead80fe3444068d",
+  "stdout_total_chars": 5381,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-006",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-006"
+}

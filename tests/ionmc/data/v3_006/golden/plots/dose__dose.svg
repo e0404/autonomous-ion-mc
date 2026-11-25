@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" font-family="sans-serif" font-size="11">
+<title>Depth dose profile, grid dose</title>
+<rect x="0" y="0" width="640" height="400" fill="#ffffff"/>
+<text x="72" y="22" font-size="14">Depth dose profile, grid dose</text>
+<text x="72" y="37" fill="#444444">column through the voxel of maximum dose (indices [0, 5, 0]); band = +-1 standard error</text>
+<line x1="150.286" y1="344" x2="150.286" y2="348" stroke="#000000"/>
+<text x="150.286" y="361" text-anchor="middle">-5</text>
+<line x1="346" y1="344" x2="346" y2="348" stroke="#000000"/>
+<text x="346" y="361" text-anchor="middle">0</text>
+<line x1="541.714" y1="344" x2="541.714" y2="348" stroke="#000000"/>
+<text x="541.714" y="361" text-anchor="middle">5</text>
+<line x1="68" y1="303.725" x2="72" y2="303.725" stroke="#000000"/>
+<line x1="72" y1="303.725" x2="620" y2="303.725" stroke="#e0e0e0"/>
+<text x="65" y="303.725" text-anchor="end" dominant-baseline="middle">1e-08</text>
+<line x1="68" y1="239.524" x2="72" y2="239.524" stroke="#000000"/>
+<line x1="72" y1="239.524" x2="620" y2="239.524" stroke="#e0e0e0"/>
+<text x="65" y="239.524" text-anchor="end" dominant-baseline="middle">2e-08</text>
+<line x1="68" y1="175.322" x2="72" y2="175.322" stroke="#000000"/>
+<line x1="72" y1="175.322" x2="620" y2="175.322" stroke="#e0e0e0"/>
+<text x="65" y="175.322" text-anchor="end" dominant-baseline="middle">3e-08</text>
+<line x1="68" y1="111.121" x2="72" y2="111.121" stroke="#000000"/>
+<line x1="72" y1="111.121" x2="620" y2="111.121" stroke="#e0e0e0"/>
+<text x="65" y="111.121" text-anchor="end" dominant-baseline="middle">4e-08</text>
+<line x1="68" y1="46.9194" x2="72" y2="46.9194" stroke="#000000"/>
+<line x1="72" y1="46.9194" x2="620" y2="46.9194" stroke="#e0e0e0"/>
+<text x="65" y="46.9194" text-anchor="end" dominant-baseline="middle">5e-08</text>
+<rect x="72" y="44" width="548" height="300" fill="none" stroke="#000000"/>
+<text x="346" y="388" text-anchor="middle">y (mm), profile axis</text>
+<text x="14" y="194" text-anchor="middle" transform="rotate(-90 14 194)">dose per history (Gy)</text>
+<polygon points="150.286,340.825 228.571,336.772 306.857,287.272 385.143,153.642 463.429,44 541.714,118.77 541.714,132.99 463.429,88.0539 385.143,181.908 306.857,296.582 228.571,340.497 150.286,344" fill="#9fc5e8" fill-opacity="0.6" stroke="none"/>
+<polyline points="150.286,342.412 228.571,338.634 306.857,291.927 385.143,167.775 463.429,66.0269 541.714,125.88" fill="none" stroke="#1f4e79" stroke-width="1.5"/>
+<line x1="470" y1="54" x2="488" y2="54" stroke="#1f4e79" stroke-width="1.5"/>
+<text x="492" y="58">dose</text>
+</svg>

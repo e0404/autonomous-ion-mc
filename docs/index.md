@@ -9,6 +9,7 @@ The documentation tracks the implementation as it evolves.
 ## Documentation areas
 
 - **Getting started** — installation and first use as the software becomes usable.
+- **Getting started** also covers the [configuration reference](configuration/index.md), the [CLI](cli.md) and the [workflow](workflow.md); persisted results are described under **Results** ([overview](results/index.md), [format](results/format.md)).
 - **Architecture** — transport architecture, execution backends, data flow, and design.
 - **Physics** — implemented physical models and their assumptions.
 - **Validation** — numerical, physical, and cross-backend validation methodology.

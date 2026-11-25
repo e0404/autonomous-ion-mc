@@ -1,0 +1,41 @@
+# Documented example 1 (synthetic, tiny): a proton pencil beam on a water box, python backend.
+# Every table and key of ionmc.config/1 that this example does not use is optional or has the
+# same default as the Python API. There is no transport here: the tests only validate it.
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[source]
+projectile = "proton"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 20.0
+energy_sigma_mev = 0.1
+lateral_sigma_mm = 1.0
+
+[geometry]
+type = "box"
+lower_mm = [-10.0, -10.0, 0.0]
+size_mm = [20.0, 20.0, 20.0]
+material = "water"
+
+[[scoring]]
+name = "dose"
+origin_mm = [-10.0, -10.0, 0.0]
+spacing_mm = [2.0, 2.0, 1.0]
+shape = [10, 10, 20]
+
+[physics]
+nuclear = false
+stopping_model = "bethe-ionmc-v1"
+max_step_mm = 0.5
+
+[run]
+backend = "python"
+precision = "float64"
+seed = 11
+n_histories = 8
+n_batches = 4
+
+[output]
+path = "out/proton_box"
+persist_batches = true

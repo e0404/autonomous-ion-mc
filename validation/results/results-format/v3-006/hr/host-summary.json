@@ -1,0 +1,65 @@
+{
+ "cases": {
+  "r0k0": {
+   "backend": "python",
+   "device": "python (float64)",
+   "exit_codes": {
+    "report_check": 0,
+    "run": 0,
+    "verify": 0
+   },
+   "precision": "float64"
+  },
+  "r1k0": {
+   "backend": "warp-cpu",
+   "device": "cpu",
+   "exit_codes": {
+    "report_check": 0,
+    "run": 0,
+    "verify": 0
+   },
+   "precision": "float32"
+  },
+  "r2k0": {
+   "backend": "warp-cuda",
+   "device": "cuda:0",
+   "exit_codes": {
+    "report_check": 0,
+    "run": 0,
+    "verify": 0
+   },
+   "precision": "float32"
+  }
+ },
+ "compare": "PASS",
+ "no_network": "every run is a child of the controlled host runner (network denied)",
+ "prov7": "PASS",
+ "pytest_counts": {
+  "a16": {
+   "passed": 4
+  },
+  "cap1": {
+   "passed": 90
+  },
+  "out2": {
+   "passed": 1
+  },
+  "trace": {
+   "passed": 1
+  }
+ },
+ "pytest_exit_codes": {
+  "a16": 0,
+  "cap1": 0,
+  "out2": 0,
+  "trace": 0
+ },
+ "pytest_zero_skip_ok": {
+  "a16": true,
+  "cap1": true,
+  "out2": true,
+  "trace": true
+ },
+ "schema": "ionmc.out6-host-summary/1",
+ "sha": "154fc2da1beaca38d7277ba65642dc03f3b355cf"
+}

@@ -73,3 +73,6 @@ docs/experiment/v3/
 
 # Generated from src/ionmc/THIRD_PARTY_NOTICES.md by infrastructure/docs/generate_docs.py
 docs/third-party-notices.md
+
+# Build stamp written into wheels only (decision 0045 section 3); never into the tree
+src/ionmc/_build_info.json

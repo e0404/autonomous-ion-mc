@@ -51,13 +51,54 @@ from numpy.typing import ArrayLike, NDArray
 
 from ionmc.data.nist_star import StarTable
 from ionmc.materials import Material
-from ionmc.physics.lindhard_sorensen import delta_l_ls
+from ionmc.physics.lindhard_sorensen import delta_l_ls as _delta_l_ls_uncached
 from ionmc.physics.projectiles import ELECTRON_MASS_MEV, Projectile
 
 K_MEV_CM2_MOL = 0.307075
 ALPHA_FS = 1.0 / 137.035999084
 E_MIN_PER_U_MEV = 1.0
 ETA_SHELL_MIN = 0.13
+LS_MEMO_ENTRIES = 64
+
+
+class _LsMemo:
+    """Bounded process-level memo of ``delta_l_ls`` keyed by the exact float64 bytes of its two
+    arguments. The Lindhard-Sorensen sum is a deterministic pure function of its inputs and the
+    costliest step of a Bethe table (about 0.7 s per ion table); a table rebuilt from the same
+    inputs (the capability sweep, the identity rebuild check) reuses the value. Each call returns
+    a private copy, so no caller can alter a memoised array; the memo changes no number."""
+
+    def __init__(self, entries: int) -> None:
+        self.entries = entries
+        self._values: dict[tuple[tuple[int, ...], bytes, bytes], NDArray[np.float64]] = {}
+        self.hits = 0
+        self.misses = 0
+
+    def __call__(
+        self, charge: NDArray[np.float64], beta: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        q = np.ascontiguousarray(charge, dtype=np.float64)
+        b = np.ascontiguousarray(beta, dtype=np.float64)
+        if q.shape != b.shape:
+            return _delta_l_ls_uncached(q, b)  # the unbroadcast shapes are not memoised
+        key = (q.shape, q.tobytes(), b.tobytes())
+        hit = self._values.get(key)
+        if hit is not None:
+            self.hits += 1
+            return hit.copy()
+        self.misses += 1
+        value = _delta_l_ls_uncached(q, b)
+        if len(self._values) >= self.entries:
+            self._values.pop(next(iter(self._values)))
+        self._values[key] = value.copy()
+        return value
+
+    def clear(self) -> None:
+        self._values.clear()
+        self.hits = self.misses = 0
+
+
+delta_l_ls_memo = _LsMemo(LS_MEMO_ENTRIES)
 
 # Ashley-Ritchie-Brandt function F(W) as tabulated in G4EmCorrections.cc (Geant4 v11.4.2).
 # This table derives from Geant4 source; see src/ionmc/THIRD_PARTY_NOTICES.md
@@ -282,7 +323,7 @@ def bethe_mass_stopping(
         bracket = bracket + barkas_term(beta2, q, material)
     if use_ls:
         q_ls = q if ls == "eff" else np.full_like(e, float(projectile.z))
-        bracket = bracket + delta_l_ls(q_ls, beta)
+        bracket = bracket + delta_l_ls_memo(q_ls, beta)
     else:
         if bloch:
             bracket = bracket + bloch_term(beta2, q)

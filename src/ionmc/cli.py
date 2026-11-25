@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
+import traceback
 from collections.abc import Sequence
+from pathlib import Path
+from typing import Any, TextIO
 
 from ionmc._version import __version__
 
@@ -45,7 +49,68 @@ def build_parser() -> argparse.ArgumentParser:
     bld.add_argument(
         "--strict", action="store_true", help="fail when a lambda node does not converge to 1e-3"
     )
+    run = sub.add_parser("run", help="run a TOML configuration and write a result bundle")
+    run.add_argument("config", metavar="CONFIG.toml")
+    run.add_argument("--out", default=None, help="bundle directory (default: [output].path)")
+    run.add_argument("--overwrite", action="store_true", help="replace an existing bundle")
+    chk = sub.add_parser(
+        "check", help="load, validate and reconcile a TOML configuration (no transport)"
+    )
+    chk.add_argument("config", metavar="CONFIG.toml")
+    cap = sub.add_parser("capabilities", help="print the capability report as JSON")
+    cap.add_argument("--nuclear", action="store_true", help="the report for physics.nuclear = true")
+    ver = sub.add_parser("verify", help="verify a result bundle (tier 1; --rederive adds tier 2)")
+    ver.add_argument("bundle", metavar="DIR")
+    _add_budget_options(ver)
+    ver.add_argument(
+        "--rederive", action="store_true", help="tier 2: re-derive the effective block"
+    )
+    ver.add_argument("--cache-dir", default=None, help="data cache (required with --rederive)")
+    ver.add_argument(
+        "--inputs", action="append", default=[], metavar="ROLE=PATH", help="trusted input file"
+    )
+    rep = sub.add_parser("report", help="print the regenerated report of a bundle")
+    rep.add_argument("bundle", metavar="DIR")
+    _add_budget_options(rep)
+    rep.add_argument(
+        "--check", action="store_true", help="compare the bytes on disk, write nothing"
+    )
     return parser
+
+
+# The configurable budgets of the untrusted-bundle reader (decision 0045 section 1 and amendment
+# A-4): one option per keyword of ``results.load``; absent options keep the module defaults.
+BUDGET_OPTIONS = (
+    ("--max-total-bytes", "max_total_bytes", "arrays.npz and all arrays together"),
+    ("--max-array-bytes", "max_array_bytes", "one array"),
+    ("--max-json-bytes", "max_json_bytes", "result.json"),
+    ("--max-central-directory-bytes", "max_central_directory_bytes", "the npz central directory"),
+    ("--max-json-tokens", "max_json_tokens", "JSON tokens of result.json"),
+    ("--max-json-depth", "max_json_depth", "JSON nesting depth of result.json"),
+    ("--max-derived-bytes", "max_derived_bytes", "report.md and plots/*.svg, each and together"),
+)
+
+
+def _positive_int(text: str) -> int:
+    try:
+        value = int(text, 10)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {text!r}") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {text!r}")
+    return value
+
+
+def _add_budget_options(parser: argparse.ArgumentParser) -> None:
+    for flag, dest, what in BUDGET_OPTIONS:
+        parser.add_argument(
+            flag, dest=dest, type=_positive_int, default=None, metavar="N",
+            help=f"reader budget for {what} (default: the ionmc.results value)",
+        )  # fmt: skip
+
+
+def _budgets(args: argparse.Namespace) -> dict[str, int]:
+    return {d: getattr(args, d) for _f, d, _w in BUDGET_OPTIONS if getattr(args, d) is not None}
 
 
 def _build_nuclear(args: argparse.Namespace) -> int:
@@ -121,6 +186,203 @@ def _run_data(args: argparse.Namespace) -> int:
     return 0
 
 
+# Exception -> exit code (decision 0045 section 7, frozen; the first matching row wins, so
+# subclasses precede their bases). The "run completed with valid = false" row (exit 3, bundle
+# written) and success (0) are not exceptions and are handled in ``_cmd_run``. ``_UsageError`` is
+# the pre-check form of row 1 (argparse usage error); ``VerificationError`` is a tier-2 failure of
+# ``verify --rederive`` (amendment A-2) and shares row 8's code.
+
+
+class _UsageError(Exception):
+    """A command-line misuse found after parsing (for example ``run`` without an output path)."""
+
+
+def _cache_cause(exc: BaseException) -> bool:
+    from ionmc.data.acquire import OfflineError
+    from ionmc.data.cache import IntegrityError
+
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if isinstance(cur, IntegrityError | OfflineError | FileNotFoundError):
+            return True
+        cur = cur.__cause__
+    return False
+
+
+def _exit_code(exc: BaseException) -> int:
+    """The frozen exception -> exit-code table of decision 0045 section 7 (first match wins)."""
+    from ionmc.configio import ConfigError, DatasetError
+    from ionmc.errors import (
+        BackendUnavailableError,
+        TransportLimitError,
+        UnsupportedCombinationError,
+    )
+    from ionmc.results import ResultFormatError, VerificationError
+
+    table: tuple[tuple[Any, int], ...] = (
+        (lambda e: isinstance(e, _UsageError), 2),  # 1: usage error
+        (lambda e: isinstance(e, ConfigError), 2),  # 2: before its base class
+        (lambda e: isinstance(e, DatasetError), 1),  # 3
+        (lambda e: isinstance(e, UnsupportedCombinationError) and _cache_cause(e), 1),  # 3
+        (lambda e: isinstance(e, UnsupportedCombinationError), 4),  # 4
+        (lambda e: isinstance(e, BackendUnavailableError), 5),  # 5
+        (lambda e: isinstance(e, TransportLimitError), 3),  # 6
+        (lambda e: isinstance(e, ResultFormatError | VerificationError), 6),  # 8
+    )
+    for matches, code in table:
+        if matches(exc):
+            return int(code)
+    return 70  # 9: any other exception (a defect)
+
+
+def _canonical(obj: Any) -> str:
+    from ionmc.configio import canonical_json
+
+    return canonical_json(obj)
+
+
+def _report_previous(kept: Path | None) -> None:
+    if kept is None:
+        print("previous bundle: moved by another process; location unknown", file=sys.stderr)
+    else:
+        print(f"previous bundle kept at {kept}", file=sys.stderr)
+
+
+def _cmd_run(args: argparse.Namespace, out_stream: TextIO) -> int:
+    from pathlib import Path
+
+    from ionmc.configio import load_toml_full, verify_datasets
+    from ionmc.results import save
+    from ionmc.simulation import Simulation
+
+    loaded = load_toml_full(args.config)
+    out = args.out if args.out is not None else loaded.output.path
+    if out is None:
+        raise _UsageError("no output directory: pass --out DIR or set [output].path")
+    dest = Path(out)
+    if dest.parent.exists() and not dest.parent.is_dir():
+        raise _UsageError(f"parent of {dest.name!r} is not a directory")
+    if dest.exists() and not args.overwrite:
+        raise _UsageError(f"{dest.name!r} exists (pass --overwrite)")
+    verify_datasets(loaded.config)
+    sim = Simulation(loaded.config)  # validate and reconcile; raises before any transport
+    result = sim.run()
+    dest.parent.mkdir(parents=True, exist_ok=True)  # nothing is created before this point
+    bundle = save(
+        result,
+        dest,
+        manifest=loaded.manifest,
+        persist_batches=loaded.output.persist_batches,
+        overwrite=args.overwrite,
+        on_replaced=_report_previous,
+    )
+    print(f"bundle {bundle}", file=out_stream)
+    if not result.valid:
+        print(
+            "run completed with valid = false (allow_invalid_result); see the banner in report.md",
+            file=sys.stderr,
+        )
+        return 3
+    return 0
+
+
+def _cmd_check(args: argparse.Namespace, out_stream: TextIO) -> int:
+    from ionmc.configio import load_toml_full, verify_datasets
+    from ionmc.simulation import Simulation
+
+    loaded = load_toml_full(args.config)
+    verify_datasets(loaded.config)
+    sim = Simulation(loaded.config)
+    print(_canonical(sim.effective.summary()), file=out_stream)
+    return 0
+
+
+def _cmd_capabilities(args: argparse.Namespace, out_stream: TextIO) -> int:
+    from ionmc import capabilities
+
+    print(_canonical(capabilities(args.nuclear)), file=out_stream)
+    return 0
+
+
+def _cmd_verify(args: argparse.Namespace, out_stream: TextIO) -> int:
+    import dataclasses
+
+    from ionmc.results import load, verify_effective
+
+    if args.rederive and args.cache_dir is None:
+        raise _UsageError("--rederive needs --cache-dir")
+    if (args.cache_dir is not None or args.inputs) and not args.rederive:
+        raise _UsageError("--cache-dir and --inputs apply to --rederive only")
+    files: dict[str, str] = {}
+    for item in args.inputs:
+        role, sep, path = item.partition("=")
+        if not sep or not role or not path:
+            raise _UsageError(f"--inputs expects ROLE=PATH, got {item!r}")
+        files[role] = path
+    loaded = load(args.bundle, **_budgets(args))
+    out: dict[str, Any] = {"tier1": "ok", "binding_limits": list(loaded.binding_limits)}
+    code = 0
+    if args.rederive:
+        rep = verify_effective(loaded, cache_dir=args.cache_dir, input_files=files or None)
+        out["tier2"] = dataclasses.asdict(rep)
+        code = 0 if rep.ok else 6
+    print(_canonical(out), file=out_stream)
+    return code
+
+
+def _cmd_report(args: argparse.Namespace, out_stream: TextIO) -> int:
+    from pathlib import Path
+
+    from ionmc.report import regenerate_report
+    from ionmc.results import ResultFormatError
+
+    files = regenerate_report(args.bundle, **_budgets(args))
+    if not args.check:
+        out_stream.write(files["report.md"].decode("utf-8"))
+        return 0
+    bad = []
+    for name, data in sorted(files.items()):
+        try:
+            on_disk = (Path(args.bundle) / name).read_bytes()
+        except OSError:
+            on_disk = None
+        if on_disk != data:
+            bad.append(name)
+    if bad:
+        raise ResultFormatError(f"derived files differ from their regeneration: {bad}")
+    print(f"report ok ({len(files)} files)", file=out_stream)
+    return 0
+
+
+_COMMANDS = {
+    "run": _cmd_run,
+    "check": _cmd_check,
+    "capabilities": _cmd_capabilities,
+    "verify": _cmd_verify,
+    "report": _cmd_report,
+}
+
+
+def _dispatch(args: argparse.Namespace) -> int:
+    """Run a V3-006 subcommand; every failure maps through :func:`_exit_code`."""
+    out_stream = sys.stdout
+    try:
+        # Warp prints its banner and kernel-load messages on stdout: keep stdout for the result
+        # (JSON, report text) by sending everything else to stderr.
+        with contextlib.redirect_stdout(sys.stderr):
+            return _COMMANDS[args.command](args, out_stream)
+    except Exception as exc:
+        code = _exit_code(exc)
+        if code == 70:
+            traceback.print_exc()
+        print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        for note in getattr(exc, "__notes__", []):  # e.g. where a failed write left its files
+            print(f"note: {note}", file=sys.stderr)
+        return code
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return a process exit code."""
     parser = build_parser()
@@ -146,5 +408,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if code == 2:
             parser.print_usage(sys.stderr)
         return code
+    if args.command in _COMMANDS:
+        return _dispatch(args)
     parser.print_usage(sys.stderr)
     return 2

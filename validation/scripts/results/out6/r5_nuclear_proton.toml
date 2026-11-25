@@ -1,0 +1,36 @@
+# out6 case r_index 5 (V3-006 step S8): a 100 MeV proton pencil beam on a water box with
+# nuclear = true (python float64). "@TABLE_ID@" is replaced by write_config with the id of a built
+# nuclear table of the cache (it fails when there is none); not loadable unsubstituted.
+schema = "ionmc.config"
+schema_version = "1.0"
+
+[source]
+projectile = "proton"
+position_mm = [0.0, 0.0, -5.0]
+direction = [0.0, 0.0, 1.0]
+kinetic_energy_mev = 100.0
+
+[geometry]
+type = "box"
+lower_mm = [-10.0, -10.0, 0.0]
+size_mm = [20.0, 20.0, 100.0]
+material = "water"
+
+[[scoring]]
+name = "dose"
+origin_mm = [-10.0, -10.0, 0.0]
+spacing_mm = [10.0, 10.0, 12.5]
+shape = [2, 2, 8]
+
+[physics]
+nuclear = true
+nuclear_table_id = "@TABLE_ID@"
+stopping_model = "bethe-ionmc-v1"
+multiple_scattering = false
+
+[run]
+backend = "python"
+precision = "float64"
+seed = 20700504
+n_histories = 16
+n_batches = 4

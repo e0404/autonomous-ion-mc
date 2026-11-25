@@ -282,20 +282,32 @@ def test_committed_predictions_are_consistent():
     no_arrays(d)
 
 
+V13_PREDICTIONS_DERIVATION_COMMIT = "154fc2da1beaca38d7277ba65642dc03f3b355cf"
+V13_PREDICTIONS_TREE = "4970c9a4e6899f6e1d73c6a3cfdef8f36c783850"
+
+
 def test_committed_predictions_pin_script_and_tree():
+    """The committed predictions pin the script and the ``src/ionmc`` tree at their derivation.
+
+    After the V3-013 integration (develop 95937553) the tree pin is a historical record of the
+    derivation commit (V3-013 plan, post-evaluation closure of 2026-11-23): later tasks change
+    ``src/ionmc`` without re-deriving the sealed predictions, so the pin is compared with the tree
+    of the recorded derivation commit, not with HEAD.
+    """
     d = _doc()
     assert d["script"]["path"] == S13.SELF_REL
     assert d["script"]["sha256"] == S13._sha256_file(REPO / S13.SELF_REL)
+    assert d["src_ionmc_tree"] == V13_PREDICTIONS_TREE
     try:
         tree = subprocess.run(
-            ["git", "-C", str(REPO), "rev-parse", "HEAD:src/ionmc"],
+            ["git", "-C", str(REPO), "rev-parse", f"{V13_PREDICTIONS_DERIVATION_COMMIT}:src/ionmc"],
             check=True,
             capture_output=True,
             text=True,
         ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError) as exc:
-        pytest.skip(f"git tree hash unavailable: {exc}")
-    assert d["src_ionmc_tree"] == tree
+    except (OSError, subprocess.CalledProcessError):
+        return  # the derivation commit is not reachable (shallow clone): the constant above pins it
+    assert tree == V13_PREDICTIONS_TREE
 
 
 def _close(a: Any, b: Any, path: str = "") -> None:

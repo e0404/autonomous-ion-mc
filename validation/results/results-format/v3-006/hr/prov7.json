@@ -1,0 +1,11 @@
+{
+ "bundle_code": {
+  "git_commit": "154fc2da1beaca38d7277ba65642dc03f3b355cf",
+  "git_dirty": false,
+  "package_tree_oid": "4970c9a4e6899f6e1d73c6a3cfdef8f36c783850",
+  "source": "git",
+  "status": "ok"
+ },
+ "failures": [],
+ "verdict": "PASS"
+}

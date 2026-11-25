@@ -1,0 +1,1885 @@
+{
+  "base_commit": "95937553",
+  "cases": {
+    "alpha_box_icru90_warp_cpu": {
+      "params": {},
+      "requires": [
+        "icru90-water-v1"
+      ],
+      "summary": {
+        "backend": "warp-cpu",
+        "chunk_histories": 262144,
+        "cpu_workers": 1,
+        "geometry": {
+          "materials": [
+            "water"
+          ],
+          "origin_mm": [
+            -10.0,
+            -10.0,
+            0.0
+          ],
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "spacing_mm": [
+            20.0,
+            20.0,
+            40.0
+          ],
+          "z_exit_mm": null
+        },
+        "max_steps": 1820,
+        "max_steps_origin": "computed",
+        "mcs_mapping": {
+          "depth_fractions": [
+            0.001,
+            0.01,
+            0.1,
+            0.25,
+            0.5,
+            0.75,
+            0.9,
+            0.97
+          ],
+          "evaluation": "table",
+          "fdm_domain_edge_mev": 300.0,
+          "fdm_extrapolated": false,
+          "mapping": "exact-Omega b-matching (decision 0043 section 3)",
+          "p1v1_eq_kinetic_energy_hi_mev": 297.3106459356603,
+          "p1v1_eq_kinetic_energy_mev": 297.3106459356603,
+          "proton_table_edge_mev": 4000.0,
+          "table": {
+            "bracket_factor": 10.0,
+            "bracket_half_width_per_material": [
+              0.002775635796246519
+            ],
+            "bracket_min": 1e-05,
+            "contract": "mapping evaluation = exact root solve on every step (Illinois iteration of b_p(pv_eq, pv_eq r) = b_ion(pv, p1v1) to |residual| <= 1e-13 or a step/bracket <= 1e-14 in ln pv_eq, float64, the root path's tolerance and status codes); the pv_eq/pv table only supplies the starting bracket (half-width max(10 x the table's interpolation estimate, 1e-5) around the bilinear guess, widened once x10, else the full proton-path bracket, counted as mcs_table_bracket_miss); a state outside the table or in a cell with an invalid node (no root at a node) has no guess and uses the full proton-path bracket from the start, as mcs_mapping_eval 'root' (not counted as a miss); the fraction of covered cells is recorded (table_coverage, 1.0 for every validated run: validation fails closed when a reachable node has no root, in both modes); the interpolation error of the table is a performance diagnostic (build-time estimate recorded), not a correctness claim",
+            "estimated_cells": 379,
+            "interp_estimate": 0.0002775635796246519,
+            "interp_estimate_note": "build-time estimate of |ln pv_eq(table) - ln pv_eq(root)| (bilinear bound from second differences on a 2x-refined root-solve grid, safety factor 2): a performance diagnostic, not a correctness claim",
+            "interp_estimate_per_material": [
+              0.0002775635796246519
+            ],
+            "kind": "pv_eq/pv, bilinear in (ln pv, ln(p1v1/pv)) (decision 0043 section 3)",
+            "ln_pv_range": [
+              2.751335994033482,
+              6.63593993447288
+            ],
+            "ln_r_range": [
+              9.999995000003334e-07,
+              3.8846049404388987
+            ],
+            "n_materials": 1,
+            "n_pv": 128,
+            "n_r": 128,
+            "p1v1_max_mev": 761.9957166467682,
+            "p1v1_min_mev": 760.4740081564473,
+            "pv_lo_mev": 15.663544313383198,
+            "refined_points": 2025,
+            "root_residual_tol": 1e-13,
+            "root_step_tol": 1e-14,
+            "safety_factor": 2.0,
+            "sha256": "136584e986dec213e0388565946683bcbb7ea689acda7f5c2f3a72460c5ab6f5",
+            "table_coverage": 1.0,
+            "table_coverage_note": "fraction of the table cells meeting the band of initial states with four valid nodes; 1.0 for every validated run (validate fails closed when a reachable node has no root, in both evaluations); a state outside the table or in an uncovered cell has no starting guess and uses the full proton-path bracket, as mcs_mapping_eval 'root'; interp_estimate is None for a material without an estimated cell",
+            "table_coverage_per_material": [
+              1.0
+            ]
+          }
+        },
+        "n_batches": 4,
+        "n_histories": 8,
+        "physics": {
+          "delta_electrons": "local",
+          "e_cut_effective_mev": 8.0,
+          "e_cut_ion_mev_per_u": 2.0,
+          "e_cut_mev": 2.0,
+          "end_of_range_model": "default",
+          "end_of_range_model_effective": "continuous_residual_v1",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "max_energy_loss_fraction": 0.02,
+          "max_rejection_attempts": 64,
+          "max_step_mm": 1.0,
+          "mcs_model": "differential_moliere",
+          "multiple_scattering": true,
+          "nuclear": false,
+          "range_alpha": 0.2,
+          "range_rho_f_mm": 0.1,
+          "scattering_E_s_mev": 15.0,
+          "short_step_fraction": 0.01,
+          "straggling": true,
+          "straggling_model": "bohr_gamma_v1",
+          "truncated_hinge_diagnostic": false
+        },
+        "precision": "float64",
+        "production": false,
+        "rng": {
+          "counter": "(history, genealogy id, block, purpose)",
+          "generator": "philox4x32-10",
+          "key": "seed low/high 32 bits",
+          "u01": "((w >> 8) + 0.5) * 2**-24"
+        },
+        "scattering_length_g_cm2": [
+          46.88050454803533
+        ],
+        "scoring": [
+          {
+            "name": "dose",
+            "origin_mm": [
+              -10.0,
+              -10.0,
+              0.0
+            ],
+            "shape": [
+              4,
+              4,
+              20
+            ],
+            "spacing_mm": [
+              5.0,
+              5.0,
+              2.0
+            ]
+          }
+        ],
+        "scoring_pieces": 7,
+        "seed": 5,
+        "source": {
+          "a": 4,
+          "energy_sigma_mev": 0.0,
+          "kinetic_energy_mev": 400.0,
+          "lateral_sigma_mm": 0.0,
+          "mass_mev": 3727.3794066,
+          "position_mm": [
+            0.0,
+            0.0,
+            -5.0
+          ],
+          "projectile": "alpha",
+          "z": 2
+        },
+        "stopping": {
+          "cache_dir": "<cache_dir>",
+          "circular_rows": [
+            "geant4-icru90-stopping-11.4.2",
+            "I2 (ICRU 90 part)",
+            "decision-0038 ICRU 90 comparisons"
+          ],
+          "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+          "data_declared": [
+            {
+              "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+              "dataset_id": "geant4-icru90-stopping-11.4.2",
+              "licence": "Geant4 Software License",
+              "member": null,
+              "member_sha256": null,
+              "parser": "icru90",
+              "use_role": "construction-permitted"
+            }
+          ],
+          "data_used": [
+            {
+              "cache_dir": "<cache_dir>",
+              "pin": {
+                "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+                "dataset_id": "geant4-icru90-stopping-11.4.2",
+                "licence": "Geant4 Software License",
+                "member": null,
+                "member_sha256": null,
+                "parser": "icru90",
+                "use_role": "construction-permitted"
+              },
+              "role_in_this_run": "construction",
+              "table": [
+                "alpha",
+                "water"
+              ]
+            }
+          ],
+          "decision": "0044",
+          "domain": {
+            "e_max_per_u": {
+              "alpha": 250.0,
+              "proton": 500.0
+            },
+            "e_min_per_u": {
+              "alpha": 1.0,
+              "proton": 1.0
+            },
+            "material_rule": "structural liquid water (composition and density, not the name) and requested I = 78 eV (any other requested I fails closed)",
+            "species": [
+              "alpha",
+              "proton"
+            ]
+          },
+          "domain_resolved": {
+            "alpha": {
+              "e_max_per_u": 250.0,
+              "e_min_per_u": 1.0
+            }
+          },
+          "evidence_at_run": [
+            {
+              "graded_at_sha": null,
+              "plan": "validation/plans/v3-013-acceptance.md",
+              "row": null,
+              "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+              "status": "consistency-only"
+            },
+            {
+              "graded_at_sha": "9f1fa8ecae082307776e8001fb0708038a3eef2c",
+              "plan": "validation/plans/v3-013-acceptance.md",
+              "row": "V-C1",
+              "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+              "status": "topas-agreement-shared-lineage:V-C1:PASS"
+            }
+          ],
+          "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
+          "kind": "tabulated",
+          "mcs_proton_path_stopping": "bethe-ionmc-v1",
+          "model_id_effective": "icru90-water-v1",
+          "model_id_requested": "icru90-water-v1",
+          "options": {
+            "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
+            "class": "Icru90WaterSource",
+            "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
+            "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
+            "i_value": "78 eV required: any other requested water I fails closed",
+            "ls_effective": "off",
+            "ls_requested": "off",
+            "points_per_decade": 200,
+            "source_name": "icru90",
+            "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
+          },
+          "range_construction": "exact-loglog-quadrature-v1",
+          "range_start": "icru90-integrated-from-lowest-node-v1",
+          "selected_by": "stopping_model",
+          "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+          "species_transported": [
+            "alpha"
+          ],
+          "version": "1"
+        },
+        "tables": {
+          "materials": [
+            {
+              "I_eV_effective": 78.0,
+              "I_eV_requested": 78.0,
+              "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+              "dataset_id": "geant4-icru90-stopping-11.4.2",
+              "e_max_mev": 1000.0,
+              "e_min_mev": 4.0,
+              "energy_axis": "total_kinetic_mev",
+              "material": "water",
+              "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+              "metadata": {
+                "I_eV": 78.0,
+                "I_eV_model": 78.0,
+                "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+                "dataset_id": "geant4-icru90-stopping-11.4.2",
+                "dataset_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+                "dataset_version": "Geant4 v11.4.2 G4ICRU90StoppingData.cc",
+                "decision": "0044",
+                "file_content_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+                "material": "water",
+                "material_density_g_cm3": 1.0,
+                "material_mass_fractions": {
+                  "H": 0.11189834407236524,
+                  "O": 0.8881016559276347
+                },
+                "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+                "model_id": "icru90-water-v1",
+                "projectile": "alpha",
+                "range_construction": "exact-loglog-quadrature-v1",
+                "retrieved_at": "2026-10-03T18:29:05+00:00",
+                "source": "tabulated",
+                "source_name": "icru90",
+                "start_range": "icru90-integrated-from-lowest-node-v1",
+                "version": "1"
+              },
+              "projectile": "alpha",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "tabulated",
+              "source_sha256": null
+            }
+          ],
+          "n_e": 481,
+          "n_r": 3313,
+          "sha256": "39ac44e005771bc5c17c69ee6987a9ed26351ab318d6aaffb6bfbefb68d29c49",
+          "stopping_source": "icru90"
+        },
+        "tallies": null,
+        "unit_direction": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "carbon_box_warp_cpu": {
+      "params": {},
+      "requires": [],
+      "summary": {
+        "backend": "warp-cpu",
+        "chunk_histories": 262144,
+        "cpu_workers": 1,
+        "geometry": {
+          "materials": [
+            "water"
+          ],
+          "origin_mm": [
+            -10.0,
+            -10.0,
+            0.0
+          ],
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "spacing_mm": [
+            20.0,
+            20.0,
+            40.0
+          ],
+          "z_exit_mm": null
+        },
+        "max_steps": 1564,
+        "max_steps_origin": "computed",
+        "mcs_mapping": {
+          "depth_fractions": [
+            0.001,
+            0.01,
+            0.1,
+            0.25,
+            0.5,
+            0.75,
+            0.9,
+            0.97
+          ],
+          "evaluation": "table",
+          "fdm_domain_edge_mev": 300.0,
+          "fdm_extrapolated": true,
+          "mapping": "exact-Omega b-matching (decision 0043 section 3)",
+          "p1v1_eq_kinetic_energy_hi_mev": 347.0252180504389,
+          "p1v1_eq_kinetic_energy_mev": 347.0252180504389,
+          "proton_table_edge_mev": 4000.0,
+          "table": {
+            "bracket_factor": 10.0,
+            "bracket_half_width_per_material": [
+              0.0009725038028646055
+            ],
+            "bracket_min": 1e-05,
+            "contract": "mapping evaluation = exact root solve on every step (Illinois iteration of b_p(pv_eq, pv_eq r) = b_ion(pv, p1v1) to |residual| <= 1e-13 or a step/bracket <= 1e-14 in ln pv_eq, float64, the root path's tolerance and status codes); the pv_eq/pv table only supplies the starting bracket (half-width max(10 x the table's interpolation estimate, 1e-5) around the bilinear guess, widened once x10, else the full proton-path bracket, counted as mcs_table_bracket_miss); a state outside the table or in a cell with an invalid node (no root at a node) has no guess and uses the full proton-path bracket from the start, as mcs_mapping_eval 'root' (not counted as a miss); the fraction of covered cells is recorded (table_coverage, 1.0 for every validated run: validation fails closed when a reachable node has no root, in both modes); the interpolation error of the table is a performance diagnostic (build-time estimate recorded), not a correctness claim",
+            "estimated_cells": 379,
+            "interp_estimate": 9.725038028646056e-05,
+            "interp_estimate_note": "build-time estimate of |ln pv_eq(table) - ln pv_eq(root)| (bilinear bound from second differences on a 2x-refined root-solve grid, safety factor 2): a performance diagnostic, not a correctness claim",
+            "interp_estimate_per_material": [
+              9.725038028646056e-05
+            ],
+            "kind": "pv_eq/pv, bilinear in (ln pv, ln(p1v1/pv)) (decision 0043 section 3)",
+            "ln_pv_range": [
+              3.8499476002012702,
+              7.734522284967541
+            ],
+            "ln_r_range": [
+              9.999995000003334e-07,
+              3.884575684765771
+            ],
+            "n_materials": 1,
+            "n_pv": 128,
+            "n_r": 128,
+            "p1v1_max_mev": 2285.9187126849565,
+            "p1v1_min_mev": 2281.3537238834665,
+            "pv_lo_mev": 46.99060086903847,
+            "refined_points": 2025,
+            "root_residual_tol": 1e-13,
+            "root_step_tol": 1e-14,
+            "safety_factor": 2.0,
+            "sha256": "bfb4c514dc8a9741134f6d968e1a76b7a113f87c73eddd943a81f7a77c016475",
+            "table_coverage": 1.0,
+            "table_coverage_note": "fraction of the table cells meeting the band of initial states with four valid nodes; 1.0 for every validated run (validate fails closed when a reachable node has no root, in both evaluations); a state outside the table or in an uncovered cell has no starting guess and uses the full proton-path bracket, as mcs_mapping_eval 'root'; interp_estimate is None for a material without an estimated cell",
+            "table_coverage_per_material": [
+              1.0
+            ]
+          }
+        },
+        "n_batches": 4,
+        "n_histories": 8,
+        "physics": {
+          "delta_electrons": "local",
+          "e_cut_effective_mev": 24.0,
+          "e_cut_ion_mev_per_u": 2.0,
+          "e_cut_mev": 2.0,
+          "end_of_range_model": "default",
+          "end_of_range_model_effective": "continuous_residual_v1",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "max_energy_loss_fraction": 0.02,
+          "max_rejection_attempts": 64,
+          "max_step_mm": 1.0,
+          "mcs_model": "differential_moliere",
+          "multiple_scattering": true,
+          "nuclear": false,
+          "range_alpha": 0.2,
+          "range_rho_f_mm": 0.1,
+          "scattering_E_s_mev": 15.0,
+          "short_step_fraction": 0.01,
+          "straggling": true,
+          "straggling_model": "bohr_gamma_v1",
+          "truncated_hinge_diagnostic": false
+        },
+        "precision": "float64",
+        "production": false,
+        "rng": {
+          "counter": "(history, genealogy id, block, purpose)",
+          "generator": "philox4x32-10",
+          "key": "seed low/high 32 bits",
+          "u01": "((w >> 8) + 0.5) * 2**-24"
+        },
+        "scattering_length_g_cm2": [
+          46.88050454803533
+        ],
+        "scoring": [
+          {
+            "name": "dose",
+            "origin_mm": [
+              -10.0,
+              -10.0,
+              0.0
+            ],
+            "shape": [
+              4,
+              4,
+              20
+            ],
+            "spacing_mm": [
+              5.0,
+              5.0,
+              2.0
+            ]
+          }
+        ],
+        "scoring_pieces": 7,
+        "seed": 5,
+        "source": {
+          "a": 12,
+          "energy_sigma_mev": 0.0,
+          "kinetic_energy_mev": 1200.0,
+          "lateral_sigma_mm": 0.0,
+          "mass_mev": 11174.86323534,
+          "position_mm": [
+            0.0,
+            0.0,
+            -5.0
+          ],
+          "projectile": "carbon12",
+          "z": 6
+        },
+        "stopping": {
+          "cache_dir": null,
+          "circular_rows": [],
+          "content_sha256": null,
+          "data_declared": [],
+          "data_used": [],
+          "decision": "0044",
+          "domain": {
+            "e_max_per_u": {
+              "alpha": 500.0,
+              "carbon12": 500.0,
+              "deuteron": 500.0,
+              "oxygen16": 500.0,
+              "proton": 500.0
+            },
+            "e_min_per_u": {
+              "alpha": 1.0,
+              "carbon12": 1.0,
+              "deuteron": 1.0,
+              "oxygen16": 1.0,
+              "proton": 1.0
+            },
+            "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+            "species": [
+              "alpha",
+              "carbon12",
+              "deuteron",
+              "oxygen16",
+              "proton"
+            ]
+          },
+          "evidence_at_run": [
+            {
+              "graded_at_sha": null,
+              "plan": "validation/plans/v3-008-acceptance.md",
+              "row": null,
+              "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+              "status": "as-graded:0043"
+            }
+          ],
+          "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+          "kind": "analytic",
+          "mcs_proton_path_stopping": "bethe-ionmc-v1",
+          "model_id_effective": "bethe-ionmc-v1",
+          "model_id_requested": "bethe-ionmc-v1",
+          "options": {
+            "barkas": true,
+            "bloch": true,
+            "class": "BetheStoppingSource",
+            "effective_charge": true,
+            "effective_charge_model": "barkas-125",
+            "i_value": "material",
+            "ls": "off",
+            "ls_effective": "off",
+            "ls_requested": "off",
+            "mott": true,
+            "points_per_decade": 200,
+            "shell": true,
+            "source_name": "bethe"
+          },
+          "range_construction": "exact-loglog-quadrature-v1",
+          "range_start": "constant-S approximation a*E_min/S(E_min)",
+          "selected_by": "stopping_model",
+          "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+          "species_transported": [
+            "carbon12"
+          ],
+          "version": "1"
+        },
+        "tables": {
+          "materials": [
+            {
+              "I_eV_effective": 78.0,
+              "I_eV_requested": 78.0,
+              "content_sha256": null,
+              "dataset_id": null,
+              "e_max_mev": 6000.0,
+              "e_min_mev": 12.0,
+              "energy_axis": "total_kinetic_mev",
+              "material": "water",
+              "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+              "metadata": {
+                "I_eV": 78.0,
+                "material": "water",
+                "material_density_g_cm3": 1.0,
+                "material_mass_fractions": {
+                  "H": 0.11189834407236524,
+                  "O": 0.8881016559276347
+                },
+                "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+                "options": {
+                  "barkas": true,
+                  "bloch": true,
+                  "effective_charge": true,
+                  "mott": true,
+                  "shell": true
+                },
+                "projectile": "carbon12",
+                "range_construction": "exact-loglog-quadrature-v1",
+                "source": "bethe",
+                "start_range": "constant-S approximation a*E_min/S(E_min)"
+              },
+              "projectile": "carbon12",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "source_sha256": null
+            }
+          ],
+          "n_e": 541,
+          "n_r": 3438,
+          "sha256": "be61c1fcc006572c9d6644a79075ae02cea73ff3deda0bf8b9dc83b0fdffcddd",
+          "stopping_source": "bethe"
+        },
+        "tallies": null,
+        "unit_direction": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "nuclear_proton_python": {
+      "params": {
+        "nuclear_table_id": "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb"
+      },
+      "requires": [
+        "nuclear table"
+      ],
+      "summary": {
+        "backend": "python",
+        "chunk_histories": 262144,
+        "cpu_workers": 1,
+        "geometry": {
+          "materials": [
+            "water"
+          ],
+          "origin_mm": [
+            -10.0,
+            -10.0,
+            0.0
+          ],
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "spacing_mm": [
+            20.0,
+            20.0,
+            40.0
+          ],
+          "z_exit_mm": null
+        },
+        "max_steps": 1816,
+        "max_steps_origin": "computed",
+        "mcs_mapping": {
+          "depth_fractions": [],
+          "fdm_domain_edge_mev": 300.0,
+          "fdm_extrapolated": false,
+          "mapping": "none (proton f_dM)",
+          "p1v1_eq_kinetic_energy_hi_mev": null,
+          "p1v1_eq_kinetic_energy_mev": null,
+          "proton_table_edge_mev": 4000.0
+        },
+        "n_batches": 4,
+        "n_histories": 8,
+        "nuclear": {
+          "builder_version": "ionmc-nuclear-proton-builder-5",
+          "deuteron_tables_sha256": "da03e50c7b9a15db13c11c4a6d7b0ce1949f5637e122a4af6ce6bb40e40a2e20",
+          "e_cut_deuteron_mev": 4.0,
+          "elements": {
+            "O": {
+              "sigma_scale": 1.0,
+              "surrogate": false,
+              "target": "O-16"
+            }
+          },
+          "grid_size": 604,
+          "history_energy_bound_mev": 3154.4290578347286,
+          "majorant_factor": 1.02,
+          "majorant_window_f_e": 0.02,
+          "multiplicity_model": "floor+Bernoulli per species n p d a g, cap 16, <= 64 attempts, residual-existence acceptance",
+          "npz_sha256": "d4c6dcba29cc47c049c0c8ab75f2ae42b5667948e12eb650988d409b5303e0ac",
+          "producible": [
+            {
+              "generation": "secondary",
+              "species": "deuteron"
+            },
+            {
+              "generation": "secondary",
+              "species": "nuclear_local"
+            },
+            {
+              "generation": "primary",
+              "species": "proton"
+            },
+            {
+              "generation": "secondary",
+              "species": "proton"
+            }
+          ],
+          "q_plus_table_mev": 11.584904105111491,
+          "recoil_t_max_mev": 6.25429673381234,
+          "schema": "ionmc-nuclear-proton-table-3",
+          "source_sha256": {
+            "ame2020-mass": "e8599c6d7f724fac91934e59f1b9de8fb8f63e820f4b39456b790665ed2a3307",
+            "endf-b8.0-protons": "27bcafb89cf0444c53c6b9f3dd17618c62e2e6b3694f70d31c4f502399f103f7",
+            "nist-astar-water-2005": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f"
+          },
+          "table_id": "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb",
+          "transport_energy_bound_mev": 262.08419077889084,
+          "transport_path_bound_terms": {
+            "a": {
+              "n_max": 3.0,
+              "t_lab_max_mev": 257.38944876426376
+            },
+            "d": {
+              "n_max": 1.0,
+              "t_lab_max_mev": 246.23339014734142
+            },
+            "g": {
+              "n_max": 3.0,
+              "t_lab_max_mev": 278.9441345005554
+            },
+            "n": {
+              "n_max": 2.0,
+              "t_lab_max_mev": 253.34402441122245
+            },
+            "p": {
+              "n_max": 3.0,
+              "t_lab_max_mev": 262.08419077889084
+            }
+          }
+        },
+        "physics": {
+          "delta_electrons": "local",
+          "e_cut_deuteron_mev": 4.0,
+          "e_cut_effective_mev": 2.0,
+          "e_cut_ion_mev_per_u": 2.0,
+          "e_cut_mev": 2.0,
+          "end_of_range_model": "default",
+          "end_of_range_model_effective": "point_v1",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "max_energy_loss_fraction": 0.02,
+          "max_rejection_attempts": 64,
+          "max_step_mm": 1.0,
+          "mcs_model": "differential_moliere",
+          "multiple_scattering": true,
+          "nuclear": true,
+          "range_alpha": 0.2,
+          "range_rho_f_mm": 0.1,
+          "scattering_E_s_mev": 15.0,
+          "short_step_fraction": 0.01,
+          "straggling": true,
+          "straggling_model": "bohr_gamma_v1",
+          "truncated_hinge_diagnostic": false
+        },
+        "precision": "float64",
+        "production": false,
+        "rng": {
+          "counter": "(history, genealogy id, block, purpose)",
+          "generator": "philox4x32-10",
+          "key": "seed low/high 32 bits",
+          "u01": "((w >> 8) + 0.5) * 2**-24"
+        },
+        "scattering_length_g_cm2": [
+          46.88050454803533
+        ],
+        "scoring": [
+          {
+            "name": "dose",
+            "origin_mm": [
+              -10.0,
+              -10.0,
+              0.0
+            ],
+            "shape": [
+              4,
+              4,
+              20
+            ],
+            "spacing_mm": [
+              5.0,
+              5.0,
+              2.0
+            ]
+          }
+        ],
+        "scoring_pieces": 7,
+        "seed": 5,
+        "source": {
+          "a": 1,
+          "energy_sigma_mev": 0.0,
+          "kinetic_energy_mev": 100.0,
+          "lateral_sigma_mm": 0.0,
+          "mass_mev": 938.27208816,
+          "position_mm": [
+            0.0,
+            0.0,
+            -5.0
+          ],
+          "projectile": "proton",
+          "z": 1
+        },
+        "stopping": {
+          "cache_dir": null,
+          "circular_rows": [],
+          "content_sha256": null,
+          "data_declared": [],
+          "data_used": [],
+          "decision": "0044",
+          "domain": {
+            "e_max_per_u": {
+              "alpha": 500.0,
+              "carbon12": 500.0,
+              "deuteron": 500.0,
+              "oxygen16": 500.0,
+              "proton": 500.0
+            },
+            "e_min_per_u": {
+              "alpha": 1.0,
+              "carbon12": 1.0,
+              "deuteron": 1.0,
+              "oxygen16": 1.0,
+              "proton": 1.0
+            },
+            "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+            "species": [
+              "alpha",
+              "carbon12",
+              "deuteron",
+              "oxygen16",
+              "proton"
+            ]
+          },
+          "evidence_at_run": [
+            {
+              "graded_at_sha": null,
+              "plan": "validation/plans/v3-008-acceptance.md",
+              "row": null,
+              "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+              "status": "as-graded:0043"
+            }
+          ],
+          "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+          "kind": "analytic",
+          "model_id_effective": "bethe-ionmc-v1",
+          "model_id_requested": "bethe-ionmc-v1",
+          "options": {
+            "barkas": true,
+            "bloch": true,
+            "class": "BetheStoppingSource",
+            "effective_charge": true,
+            "effective_charge_model": "barkas-125",
+            "i_value": "material",
+            "ls": "off",
+            "ls_effective": "off",
+            "ls_requested": "off",
+            "mott": true,
+            "points_per_decade": 200,
+            "shell": true,
+            "source_name": "bethe"
+          },
+          "range_construction": "exact-loglog-quadrature-v1",
+          "range_start": "constant-S approximation a*E_min/S(E_min)",
+          "selected_by": "stopping_model",
+          "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+          "species_transported": [
+            "proton",
+            "deuteron"
+          ],
+          "version": "1"
+        },
+        "tables": {
+          "materials": [
+            {
+              "I_eV_effective": 78.0,
+              "I_eV_requested": 78.0,
+              "content_sha256": null,
+              "dataset_id": null,
+              "e_max_mev": 500.0,
+              "e_min_mev": 1.0,
+              "material": "water",
+              "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+              "metadata": {
+                "I_eV": 78.0,
+                "material": "water",
+                "material_density_g_cm3": 1.0,
+                "material_mass_fractions": {
+                  "H": 0.11189834407236524,
+                  "O": 0.8881016559276347
+                },
+                "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+                "options": {
+                  "barkas": true,
+                  "bloch": true,
+                  "effective_charge": true,
+                  "mott": true,
+                  "shell": true
+                },
+                "projectile": "proton",
+                "range_construction": "exact-loglog-quadrature-v1",
+                "source": "bethe",
+                "start_range": "constant-S approximation a*E_min/S(E_min)"
+              },
+              "projectile": "proton",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "source_sha256": null
+            }
+          ],
+          "n_e": 541,
+          "n_r": 3596,
+          "sha256": "fb18e5e56087c86425c6cddc6b99464e2df4339ab885643157f58e57691916e9",
+          "stopping_source": "bethe"
+        },
+        "tallies": null,
+        "unit_direction": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "proton_box_python": {
+      "params": {},
+      "requires": [],
+      "summary": {
+        "backend": "python",
+        "chunk_histories": 262144,
+        "cpu_workers": 1,
+        "geometry": {
+          "materials": [
+            "water"
+          ],
+          "origin_mm": [
+            -10.0,
+            -10.0,
+            0.0
+          ],
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "spacing_mm": [
+            20.0,
+            20.0,
+            40.0
+          ],
+          "z_exit_mm": null
+        },
+        "max_steps": 1816,
+        "max_steps_origin": "computed",
+        "mcs_mapping": {
+          "depth_fractions": [],
+          "fdm_domain_edge_mev": 300.0,
+          "fdm_extrapolated": false,
+          "mapping": "none (proton f_dM)",
+          "p1v1_eq_kinetic_energy_hi_mev": null,
+          "p1v1_eq_kinetic_energy_mev": null,
+          "proton_table_edge_mev": 4000.0
+        },
+        "n_batches": 4,
+        "n_histories": 8,
+        "physics": {
+          "delta_electrons": "local",
+          "e_cut_effective_mev": 2.0,
+          "e_cut_ion_mev_per_u": 2.0,
+          "e_cut_mev": 2.0,
+          "end_of_range_model": "default",
+          "end_of_range_model_effective": "point_v1",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "max_energy_loss_fraction": 0.02,
+          "max_rejection_attempts": 64,
+          "max_step_mm": 1.0,
+          "mcs_model": "differential_moliere",
+          "multiple_scattering": true,
+          "nuclear": false,
+          "range_alpha": 0.2,
+          "range_rho_f_mm": 0.1,
+          "scattering_E_s_mev": 15.0,
+          "short_step_fraction": 0.01,
+          "straggling": true,
+          "straggling_model": "bohr_gamma_v1",
+          "truncated_hinge_diagnostic": false
+        },
+        "precision": "float64",
+        "production": false,
+        "rng": {
+          "counter": "(history, genealogy id, block, purpose)",
+          "generator": "philox4x32-10",
+          "key": "seed low/high 32 bits",
+          "u01": "((w >> 8) + 0.5) * 2**-24"
+        },
+        "scattering_length_g_cm2": [
+          46.88050454803533
+        ],
+        "scoring": [
+          {
+            "name": "dose",
+            "origin_mm": [
+              -10.0,
+              -10.0,
+              0.0
+            ],
+            "shape": [
+              4,
+              4,
+              20
+            ],
+            "spacing_mm": [
+              5.0,
+              5.0,
+              2.0
+            ]
+          }
+        ],
+        "scoring_pieces": 7,
+        "seed": 5,
+        "source": {
+          "a": 1,
+          "energy_sigma_mev": 0.0,
+          "kinetic_energy_mev": 100.0,
+          "lateral_sigma_mm": 0.0,
+          "mass_mev": 938.27208816,
+          "position_mm": [
+            0.0,
+            0.0,
+            -5.0
+          ],
+          "projectile": "proton",
+          "z": 1
+        },
+        "stopping": {
+          "cache_dir": null,
+          "circular_rows": [],
+          "content_sha256": null,
+          "data_declared": [],
+          "data_used": [],
+          "decision": "0044",
+          "domain": {
+            "e_max_per_u": {
+              "alpha": 500.0,
+              "carbon12": 500.0,
+              "deuteron": 500.0,
+              "oxygen16": 500.0,
+              "proton": 500.0
+            },
+            "e_min_per_u": {
+              "alpha": 1.0,
+              "carbon12": 1.0,
+              "deuteron": 1.0,
+              "oxygen16": 1.0,
+              "proton": 1.0
+            },
+            "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+            "species": [
+              "alpha",
+              "carbon12",
+              "deuteron",
+              "oxygen16",
+              "proton"
+            ]
+          },
+          "evidence_at_run": [
+            {
+              "graded_at_sha": null,
+              "plan": "validation/plans/v3-008-acceptance.md",
+              "row": null,
+              "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+              "status": "as-graded:0043"
+            }
+          ],
+          "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+          "kind": "analytic",
+          "model_id_effective": "bethe-ionmc-v1",
+          "model_id_requested": "bethe-ionmc-v1",
+          "options": {
+            "barkas": true,
+            "bloch": true,
+            "class": "BetheStoppingSource",
+            "effective_charge": true,
+            "effective_charge_model": "barkas-125",
+            "i_value": "material",
+            "ls": "off",
+            "ls_effective": "off",
+            "ls_requested": "off",
+            "mott": true,
+            "points_per_decade": 200,
+            "shell": true,
+            "source_name": "bethe"
+          },
+          "range_construction": "exact-loglog-quadrature-v1",
+          "range_start": "constant-S approximation a*E_min/S(E_min)",
+          "selected_by": "stopping_model",
+          "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+          "species_transported": [
+            "proton"
+          ],
+          "version": "1"
+        },
+        "tables": {
+          "materials": [
+            {
+              "I_eV_effective": 78.0,
+              "I_eV_requested": 78.0,
+              "content_sha256": null,
+              "dataset_id": null,
+              "e_max_mev": 500.0,
+              "e_min_mev": 1.0,
+              "material": "water",
+              "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+              "metadata": {
+                "I_eV": 78.0,
+                "material": "water",
+                "material_density_g_cm3": 1.0,
+                "material_mass_fractions": {
+                  "H": 0.11189834407236524,
+                  "O": 0.8881016559276347
+                },
+                "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+                "options": {
+                  "barkas": true,
+                  "bloch": true,
+                  "effective_charge": true,
+                  "mott": true,
+                  "shell": true
+                },
+                "projectile": "proton",
+                "range_construction": "exact-loglog-quadrature-v1",
+                "source": "bethe",
+                "start_range": "constant-S approximation a*E_min/S(E_min)"
+              },
+              "projectile": "proton",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "source_sha256": null
+            }
+          ],
+          "n_e": 541,
+          "n_r": 3596,
+          "sha256": "fb18e5e56087c86425c6cddc6b99464e2df4339ab885643157f58e57691916e9",
+          "stopping_source": "bethe"
+        },
+        "tallies": null,
+        "unit_direction": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "proton_box_warp_cpu_float32": {
+      "params": {},
+      "requires": [],
+      "summary": {
+        "backend": "warp-cpu",
+        "chunk_histories": 262144,
+        "cpu_workers": 1,
+        "geometry": {
+          "materials": [
+            "water"
+          ],
+          "origin_mm": [
+            -10.0,
+            -10.0,
+            0.0
+          ],
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "spacing_mm": [
+            20.0,
+            20.0,
+            40.0
+          ],
+          "z_exit_mm": null
+        },
+        "max_steps": 1816,
+        "max_steps_origin": "computed",
+        "mcs_mapping": {
+          "depth_fractions": [],
+          "fdm_domain_edge_mev": 300.0,
+          "fdm_extrapolated": false,
+          "mapping": "none (proton f_dM)",
+          "p1v1_eq_kinetic_energy_hi_mev": null,
+          "p1v1_eq_kinetic_energy_mev": null,
+          "proton_table_edge_mev": 4000.0
+        },
+        "n_batches": 4,
+        "n_histories": 8,
+        "physics": {
+          "delta_electrons": "local",
+          "e_cut_effective_mev": 2.0,
+          "e_cut_ion_mev_per_u": 2.0,
+          "e_cut_mev": 2.0,
+          "end_of_range_model": "default",
+          "end_of_range_model_effective": "point_v1",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "max_energy_loss_fraction": 0.02,
+          "max_rejection_attempts": 64,
+          "max_step_mm": 1.0,
+          "mcs_model": "differential_moliere",
+          "multiple_scattering": true,
+          "nuclear": false,
+          "range_alpha": 0.2,
+          "range_rho_f_mm": 0.1,
+          "scattering_E_s_mev": 15.0,
+          "short_step_fraction": 0.01,
+          "straggling": true,
+          "straggling_model": "bohr_gamma_v1",
+          "truncated_hinge_diagnostic": false
+        },
+        "precision": "float32",
+        "production": true,
+        "rng": {
+          "counter": "(history, genealogy id, block, purpose)",
+          "generator": "philox4x32-10",
+          "key": "seed low/high 32 bits",
+          "u01": "((w >> 9) + 0.5) * 2**-23"
+        },
+        "scattering_length_g_cm2": [
+          46.88050454803533
+        ],
+        "scoring": [
+          {
+            "name": "dose",
+            "origin_mm": [
+              -10.0,
+              -10.0,
+              0.0
+            ],
+            "shape": [
+              4,
+              4,
+              20
+            ],
+            "spacing_mm": [
+              5.0,
+              5.0,
+              2.0
+            ]
+          }
+        ],
+        "scoring_pieces": 7,
+        "seed": 5,
+        "source": {
+          "a": 1,
+          "energy_sigma_mev": 0.0,
+          "kinetic_energy_mev": 100.0,
+          "lateral_sigma_mm": 0.0,
+          "mass_mev": 938.27208816,
+          "position_mm": [
+            0.0,
+            0.0,
+            -5.0
+          ],
+          "projectile": "proton",
+          "z": 1
+        },
+        "stopping": {
+          "cache_dir": null,
+          "circular_rows": [],
+          "content_sha256": null,
+          "data_declared": [],
+          "data_used": [],
+          "decision": "0044",
+          "domain": {
+            "e_max_per_u": {
+              "alpha": 500.0,
+              "carbon12": 500.0,
+              "deuteron": 500.0,
+              "oxygen16": 500.0,
+              "proton": 500.0
+            },
+            "e_min_per_u": {
+              "alpha": 1.0,
+              "carbon12": 1.0,
+              "deuteron": 1.0,
+              "oxygen16": 1.0,
+              "proton": 1.0
+            },
+            "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+            "species": [
+              "alpha",
+              "carbon12",
+              "deuteron",
+              "oxygen16",
+              "proton"
+            ]
+          },
+          "evidence_at_run": [
+            {
+              "graded_at_sha": null,
+              "plan": "validation/plans/v3-008-acceptance.md",
+              "row": null,
+              "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+              "status": "as-graded:0043"
+            }
+          ],
+          "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+          "kind": "analytic",
+          "model_id_effective": "bethe-ionmc-v1",
+          "model_id_requested": "bethe-ionmc-v1",
+          "options": {
+            "barkas": true,
+            "bloch": true,
+            "class": "BetheStoppingSource",
+            "effective_charge": true,
+            "effective_charge_model": "barkas-125",
+            "i_value": "material",
+            "ls": "off",
+            "ls_effective": "off",
+            "ls_requested": "off",
+            "mott": true,
+            "points_per_decade": 200,
+            "shell": true,
+            "source_name": "bethe"
+          },
+          "range_construction": "exact-loglog-quadrature-v1",
+          "range_start": "constant-S approximation a*E_min/S(E_min)",
+          "selected_by": "stopping_model",
+          "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+          "species_transported": [
+            "proton"
+          ],
+          "version": "1"
+        },
+        "tables": {
+          "materials": [
+            {
+              "I_eV_effective": 78.0,
+              "I_eV_requested": 78.0,
+              "content_sha256": null,
+              "dataset_id": null,
+              "e_max_mev": 500.0,
+              "e_min_mev": 1.0,
+              "material": "water",
+              "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+              "metadata": {
+                "I_eV": 78.0,
+                "material": "water",
+                "material_density_g_cm3": 1.0,
+                "material_mass_fractions": {
+                  "H": 0.11189834407236524,
+                  "O": 0.8881016559276347
+                },
+                "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+                "options": {
+                  "barkas": true,
+                  "bloch": true,
+                  "effective_charge": true,
+                  "mott": true,
+                  "shell": true
+                },
+                "projectile": "proton",
+                "range_construction": "exact-loglog-quadrature-v1",
+                "source": "bethe",
+                "start_range": "constant-S approximation a*E_min/S(E_min)"
+              },
+              "projectile": "proton",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "source_sha256": null
+            }
+          ],
+          "n_e": 541,
+          "n_r": 3596,
+          "sha256": "fb18e5e56087c86425c6cddc6b99464e2df4339ab885643157f58e57691916e9",
+          "stopping_source": "bethe"
+        },
+        "tallies": null,
+        "unit_direction": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "voxel_slab_let_lookup_warp_cpu": {
+      "params": {},
+      "requires": [],
+      "summary": {
+        "backend": "warp-cpu",
+        "chunk_histories": 262144,
+        "cpu_workers": 1,
+        "geometry": {
+          "materials": [
+            "water",
+            "pmma"
+          ],
+          "origin_mm": [
+            -6.0,
+            -6.0,
+            0.0
+          ],
+          "shape": [
+            3,
+            3,
+            8
+          ],
+          "spacing_mm": [
+            4.0,
+            4.0,
+            4.0
+          ],
+          "z_exit_mm": null
+        },
+        "max_steps": 1124,
+        "max_steps_origin": "computed",
+        "mcs_mapping": {
+          "depth_fractions": [],
+          "fdm_domain_edge_mev": 300.0,
+          "fdm_extrapolated": false,
+          "mapping": "none (proton f_dM)",
+          "p1v1_eq_kinetic_energy_hi_mev": null,
+          "p1v1_eq_kinetic_energy_mev": null,
+          "proton_table_edge_mev": 4000.0
+        },
+        "n_batches": 4,
+        "n_histories": 8,
+        "physics": {
+          "delta_electrons": "local",
+          "e_cut_effective_mev": 2.0,
+          "e_cut_ion_mev_per_u": 2.0,
+          "e_cut_mev": 2.0,
+          "end_of_range_model": "default",
+          "end_of_range_model_effective": "point_v1",
+          "ls_effective": "off",
+          "ls_requested": "off",
+          "max_energy_loss_fraction": 0.02,
+          "max_rejection_attempts": 64,
+          "max_step_mm": 1.0,
+          "mcs_model": "differential_moliere",
+          "multiple_scattering": true,
+          "nuclear": false,
+          "range_alpha": 0.2,
+          "range_rho_f_mm": 0.1,
+          "scattering_E_s_mev": 15.0,
+          "short_step_fraction": 0.01,
+          "straggling": true,
+          "straggling_model": "bohr_gamma_v1",
+          "truncated_hinge_diagnostic": false
+        },
+        "precision": "float64",
+        "production": false,
+        "rng": {
+          "counter": "(history, genealogy id, block, purpose)",
+          "generator": "philox4x32-10",
+          "key": "seed low/high 32 bits",
+          "u01": "((w >> 8) + 0.5) * 2**-24"
+        },
+        "scattering_length_g_cm2": [
+          46.88050454803533,
+          53.763010401768334
+        ],
+        "scoring": [
+          {
+            "name": "dose",
+            "origin_mm": [
+              -6.0,
+              -6.0,
+              0.0
+            ],
+            "shape": [
+              3,
+              3,
+              8
+            ],
+            "spacing_mm": [
+              4.0,
+              4.0,
+              4.0
+            ]
+          }
+        ],
+        "scoring_pieces": 7,
+        "seed": 5,
+        "source": {
+          "a": 1,
+          "energy_sigma_mev": 0.0,
+          "kinetic_energy_mev": 30.0,
+          "lateral_sigma_mm": 0.0,
+          "mass_mev": 938.27208816,
+          "position_mm": [
+            0.0,
+            0.0,
+            -5.0
+          ],
+          "projectile": "proton",
+          "z": 1
+        },
+        "stopping": {
+          "cache_dir": null,
+          "circular_rows": [],
+          "content_sha256": null,
+          "data_declared": [],
+          "data_used": [],
+          "decision": "0044",
+          "domain": {
+            "e_max_per_u": {
+              "alpha": 500.0,
+              "carbon12": 500.0,
+              "deuteron": 500.0,
+              "oxygen16": 500.0,
+              "proton": 500.0
+            },
+            "e_min_per_u": {
+              "alpha": 1.0,
+              "carbon12": 1.0,
+              "deuteron": 1.0,
+              "oxygen16": 1.0,
+              "proton": 1.0
+            },
+            "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+            "species": [
+              "alpha",
+              "carbon12",
+              "deuteron",
+              "oxygen16",
+              "proton"
+            ]
+          },
+          "evidence_at_run": [
+            {
+              "graded_at_sha": null,
+              "plan": "validation/plans/v3-008-acceptance.md",
+              "row": null,
+              "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+              "status": "as-graded:0043"
+            }
+          ],
+          "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+          "kind": "analytic",
+          "model_id_effective": "bethe-ionmc-v1",
+          "model_id_requested": "bethe-ionmc-v1",
+          "options": {
+            "barkas": true,
+            "bloch": true,
+            "class": "BetheStoppingSource",
+            "effective_charge": true,
+            "effective_charge_model": "barkas-125",
+            "i_value": "material",
+            "ls": "off",
+            "ls_effective": "off",
+            "ls_requested": "off",
+            "mott": true,
+            "points_per_decade": 200,
+            "shell": true,
+            "source_name": "bethe"
+          },
+          "range_construction": "exact-loglog-quadrature-v1",
+          "range_start": "constant-S approximation a*E_min/S(E_min)",
+          "selected_by": "stopping_model",
+          "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+          "species_transported": [
+            "proton"
+          ],
+          "version": "1"
+        },
+        "tables": {
+          "materials": [
+            {
+              "I_eV_effective": 78.0,
+              "I_eV_requested": 78.0,
+              "content_sha256": null,
+              "dataset_id": null,
+              "e_max_mev": 500.0,
+              "e_min_mev": 1.0,
+              "material": "water",
+              "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+              "metadata": {
+                "I_eV": 78.0,
+                "material": "water",
+                "material_density_g_cm3": 1.0,
+                "material_mass_fractions": {
+                  "H": 0.11189834407236524,
+                  "O": 0.8881016559276347
+                },
+                "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+                "options": {
+                  "barkas": true,
+                  "bloch": true,
+                  "effective_charge": true,
+                  "mott": true,
+                  "shell": true
+                },
+                "projectile": "proton",
+                "range_construction": "exact-loglog-quadrature-v1",
+                "source": "bethe",
+                "start_range": "constant-S approximation a*E_min/S(E_min)"
+              },
+              "projectile": "proton",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "source_sha256": null
+            },
+            {
+              "I_eV_effective": 74.0,
+              "I_eV_requested": 74.0,
+              "content_sha256": null,
+              "dataset_id": null,
+              "e_max_mev": 500.0,
+              "e_min_mev": 1.0,
+              "material": "pmma",
+              "material_sha256": "b617334ba8f2b151d31c8d24106d0a9ee811c7e0d90c6c129b4b68a5cccb8293",
+              "metadata": {
+                "I_eV": 74.0,
+                "material": "pmma",
+                "material_density_g_cm3": 1.19,
+                "material_mass_fractions": {
+                  "C": 0.5998402650050711,
+                  "H": 0.08054191635248056,
+                  "O": 0.3196178186424483
+                },
+                "material_source": "G4NistMaterialBuilder v11.4.2: G4_PLEXIGLASS (C5H8O2)",
+                "options": {
+                  "barkas": true,
+                  "bloch": true,
+                  "effective_charge": true,
+                  "mott": true,
+                  "shell": true
+                },
+                "projectile": "proton",
+                "range_construction": "exact-loglog-quadrature-v1",
+                "source": "bethe",
+                "start_range": "constant-S approximation a*E_min/S(E_min)"
+              },
+              "projectile": "proton",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "source_sha256": null
+            }
+          ],
+          "n_e": 541,
+          "n_r": 3600,
+          "sha256": "96f54d9f257d71ee5e1d1a24a84ef808a57b8a4fe73f51d12066490643c688f3",
+          "stopping_source": "bethe",
+          "water_row": {
+            "I_eV_effective": 78.0,
+            "content_sha256": null,
+            "dataset_id": null,
+            "e_max_mev": 500.0,
+            "e_min_mev": 1.0,
+            "material": "water",
+            "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+            "metadata": {
+              "I_eV": 78.0,
+              "material": "water",
+              "material_density_g_cm3": 1.0,
+              "material_mass_fractions": {
+                "H": 0.11189834407236524,
+                "O": 0.8881016559276347
+              },
+              "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+              "options": {
+                "barkas": true,
+                "bloch": true,
+                "effective_charge": true,
+                "mott": true,
+                "shell": true
+              },
+              "projectile": "proton",
+              "range_construction": "exact-loglog-quadrature-v1",
+              "source": "bethe",
+              "start_range": "constant-S approximation a*E_min/S(E_min)"
+            },
+            "n_points": 541,
+            "projectile": "proton",
+            "role": "LET medium (decision 0040)",
+            "source": "bethe",
+            "source_sha256": null
+          }
+        },
+        "tallies": {
+          "bounds": {
+            "B_ES": 1353.958170228593,
+            "B_LS2": 22726.958284469016,
+            "B_LS_mev": 503.567069888842,
+            "B_L_mm": 11.157665302255754,
+            "B_L_truncation_mm": 1124.001124,
+            "E_hi_mev": 30.0,
+            "S_w_max_mev_per_mm": 45.13193900761976,
+            "S_w_min_mev_per_mm": 0.35809999030287165,
+            "S_w_ref_mev_per_mm": 1.8639348689909088,
+            "f_max": 11.0,
+            "gamma_max": 0.8103163080547884,
+            "r_max": 1.8103163080547884,
+            "ramp_amplification": 0.8103163080547884
+          },
+          "channels": [
+            {
+              "bound_per_history": 22726.958284469016,
+              "class_mask": 1,
+              "generation": [
+                0,
+                2147483647
+              ],
+              "grid": 0,
+              "k": 40,
+              "kind": "LS2",
+              "lookup": -1,
+              "offset": 0,
+              "size": 72,
+              "species": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ],
+              "spectrum": null
+            },
+            {
+              "bound_per_history": 503.567069888842,
+              "class_mask": 1,
+              "generation": [
+                0,
+                2147483647
+              ],
+              "grid": 0,
+              "k": 40,
+              "kind": "LS",
+              "lookup": -1,
+              "offset": 72,
+              "size": 72,
+              "species": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ],
+              "spectrum": null
+            },
+            {
+              "bound_per_history": 330.0,
+              "class_mask": 1,
+              "generation": [
+                0,
+                2147483647
+              ],
+              "grid": 0,
+              "k": 26,
+              "kind": "FE",
+              "lookup": 0,
+              "offset": 144,
+              "size": 72,
+              "species": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ],
+              "spectrum": null
+            },
+            {
+              "bound_per_history": 15736.0,
+              "class_mask": 1,
+              "generation": [
+                0,
+                2147483647
+              ],
+              "grid": 0,
+              "k": 0,
+              "kind": "N",
+              "lookup": -1,
+              "offset": 216,
+              "size": 72,
+              "species": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ],
+              "spectrum": null
+            },
+            {
+              "bound_per_history": 15736.0,
+              "class_mask": 2,
+              "generation": [
+                0,
+                2147483647
+              ],
+              "grid": 0,
+              "k": 0,
+              "kind": "N",
+              "lookup": -1,
+              "offset": 288,
+              "size": 72,
+              "species": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                64
+              ],
+              "spectrum": null
+            },
+            {
+              "bound_per_history": 30.0,
+              "class_mask": 2,
+              "generation": [
+                0,
+                2147483647
+              ],
+              "grid": 0,
+              "k": 30,
+              "kind": "E",
+              "lookup": -1,
+              "offset": 360,
+              "size": 72,
+              "species": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                64
+              ],
+              "spectrum": null
+            }
+          ],
+          "histories_per_batch": 2,
+          "lookups": [
+            {
+              "axis": "let_water_kev_um",
+              "axis_range": [
+                0.0,
+                100.0
+              ],
+              "axis_spacing": "linear",
+              "citation": "none: mathematical test function written for the IonMC test suite (SYNTHETIC; not a measurement, not a biological model)",
+              "content_sha256": "96f11ccb29c8712bb7b3e5967eeaa2ee39cdd6f47a1dbf246f909ce2e2dbd84d",
+              "file_sha256": "626b09d6db8e98c736bdcbb53747d4c9b5bd88886d4265e31028c7f2473eae71",
+              "license": "CC0-1.0",
+              "n_points": 101,
+              "name": "synthetic_let_linear",
+              "quantity": "synthetic test factor f = 1 + 0.1 L (no biological meaning)",
+              "resampling": null,
+              "source": "tests/data/synthetic_lookup.json (generated by hand, f = 1 + 0.1 L)",
+              "species": [
+                "proton"
+              ],
+              "synthetic": true,
+              "units": "1"
+            }
+          ],
+          "memory_bytes": 16128,
+          "n_channels": 6,
+          "n_residual_columns": 4,
+          "quantities": [
+            {
+              "definition": "sum(l S^2)/sum(l S), S in water",
+              "denominator": 1,
+              "kind": "ratio",
+              "name": "let",
+              "numerator": 0,
+              "units": "MeV/mm"
+            },
+            {
+              "definition": "sum(eps f)",
+              "denominator": null,
+              "kind": "linear",
+              "name": "weighted",
+              "numerator": 2,
+              "units": "MeV*[1]"
+            }
+          ],
+          "total_size": 432
+        },
+        "unit_direction": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    }
+  },
+  "normalisation": "the value of every cache_dir key is replaced by '<cache_dir>'"
+}

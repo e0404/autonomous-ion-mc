@@ -2,25 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import platform
-from pathlib import Path
 from typing import Any
 
 import numpy
 
 from ionmc._version import __version__
-
-_BUILD_INFO = Path(__file__).with_name("_build_info.json")
-
-
-def _read_build_info() -> dict[str, Any]:
-    """Return the tracked build info (git SHA and dirty flag) if present, else empty."""
-    try:
-        data = json.loads(_BUILD_INFO.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
+from ionmc.provenance import code_identity, environment_block
 
 
 def _describe_warp() -> dict[str, Any]:
@@ -48,10 +36,12 @@ def _describe_warp() -> dict[str, Any]:
 def describe_environment() -> dict[str, Any]:
     """Describe the software environment as a JSON-serialisable dictionary.
 
-    Git information is read from the tracked ``_build_info.json`` file if it exists;
-    git is never executed.
+    Code identity comes from :func:`ionmc.provenance.code_identity` (decision 0045 section 3): the
+    build stamp ``ionmc/_build_info.json`` of an installed wheel, else exactly one read-only,
+    timeout-bounded ``git`` query with every inherited ``GIT_*`` variable removed, else unknown.
+    That query is the only subprocess the library runs; it never uses the network.
     """
-    build = _read_build_info()
+    code = code_identity()
     warp_info = _describe_warp()
     return {
         "ionmc_version": __version__,
@@ -60,6 +50,8 @@ def describe_environment() -> dict[str, Any]:
         "warp_version": warp_info["version"],
         "warp_error": warp_info["error"],
         "warp_devices": warp_info["devices"],
-        "git_sha": build.get("git_sha"),
-        "git_dirty": build.get("git_dirty"),
+        "git_sha": code["git_commit"],
+        "git_dirty": code["git_dirty"],
+        # the complete provenance snapshot of this run; persisted unchanged by results.save
+        "provenance_snapshot": {"code": code, "environment": environment_block()},
     }

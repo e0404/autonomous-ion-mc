@@ -1,0 +1,1895 @@
+{
+  "accounting": {
+    "channel_counters": {
+      "lookup_out_of_domain": 0,
+      "path_bound_exceeded": 0
+    },
+    "counters": {
+      "accumulator_overflow": 0,
+      "energy_inversion": 0,
+      "genealogy_overflow": 0,
+      "queue_overflow": 0,
+      "scoring_pieces_overflow": 0,
+      "source_energy_out_of_range": 0,
+      "stall": 0,
+      "step_truncation": 0,
+      "straggling_rejection": 0
+    },
+    "energy_balance": {
+      "closure_residual_mev": 0.0,
+      "cutoff_mev": 0.5,
+      "escaped_mev": 0.25,
+      "in_grid_mev": [
+        232.52757613314824
+      ],
+      "initial_mev": 233.77757613314824,
+      "outside_mev": [
+        1.0
+      ],
+      "quantization_mev": [],
+      "step_deposit_mev": 233.02757613314824,
+      "truncated_mev": 0.0,
+      "unaccounted_mev": 0.0
+    },
+    "reasons": [],
+    "valid": true
+  },
+  "arrays": [
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "e7e10cbf3fd69c45ff3f739c9e3c514e05960d41a7382e2ae9c11afa1e097223",
+      "definition": "index of the voxel material in the geometry material list",
+      "dtype": "<i4",
+      "grid": null,
+      "name": "geometry__material_index",
+      "origin": {
+        "array": "material_index",
+        "kind": "geometry"
+      },
+      "shape": [
+        1,
+        1,
+        1
+      ],
+      "units": "1"
+    },
+    {
+      "axes": [
+        "batch",
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "6e666d5b15a398da5db727f05cd78acdad7d5ea026d7fdc580ddb85b67722d85",
+      "definition": "per-batch energy estimates E_b / (N/B)",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__batch_energy_mev",
+      "origin": {
+        "array": "batch_energy_mev",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        4,
+        2,
+        8,
+        2
+      ],
+      "units": "MeV"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "3ac1ec598d74cab75e04eec466e004dee6d0269c7aae9454df7d2aae8038085d",
+      "definition": "positive mean energy and positive voxel mass",
+      "dtype": "|b1",
+      "grid": "dose",
+      "name": "grid__dose__defined_mask",
+      "origin": {
+        "array": "defined_mask",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "bool"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "542cf6e547e890d253d8da3c34be28004cb6d7548b42ce97d30df437e97b1a1b",
+      "definition": "dose per primary history (NaN where the voxel mass is 0)",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__dose_gy",
+      "origin": {
+        "array": "dose_gy",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "Gy"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "5898fea810d64e950c6342e0cfcd20e07e63221cccb6070bee25faa979598a74",
+      "definition": "standard error of the mean of dose_gy",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__dose_std_gy",
+      "origin": {
+        "array": "dose_std_gy",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "Gy"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "83de6cb6a131b9f488c64a3c96102b7bd34f936c51557fbb07168bef063a2015",
+      "definition": "mean deposited energy per primary history",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__energy_mev",
+      "origin": {
+        "array": "energy_mev",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "MeV"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "d530a24c7a3f9176add216173a8cba225a2cec5a346854c382e57c6782ee383e",
+      "definition": "standard error of the mean of energy_mev (batch statistics)",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__energy_std_mev",
+      "origin": {
+        "array": "energy_std_mev",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "MeV"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "ff879018006d1638d1defb720130c0fa82021d3a9066e2e797b62b8364457959",
+      "definition": "exact voxel mass",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__mass_g",
+      "origin": {
+        "array": "mass_g",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "g"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "2d3ac394ae6c8dfaac1c986735425c6fa2d7a44163038091b6581c1795ad8f02",
+      "definition": "batches with a nonzero sum",
+      "dtype": "<i4",
+      "grid": "dose",
+      "name": "grid__dose__n_nonzero_batches",
+      "origin": {
+        "array": "n_nonzero_batches",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "count"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "45eb2cebb4d9cfae16fef7434c0b423ce565b54425ea87bba5910040dea07790",
+      "definition": "energy of cutoff and zero-length deposits, excluded from LET and lookups [defined_mask]",
+      "dtype": "|b1",
+      "grid": "dose",
+      "name": "grid__dose__q__edep_excluded_from_l__defined_mask",
+      "origin": {
+        "array": "defined_mask",
+        "grid": "dose",
+        "index": 1,
+        "kind": "quantity",
+        "name": "edep_excluded_from_let",
+        "quantity": "edep"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "bool"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "d1216e6077cf62f2c4e152203a5bbae91df59f7c9e3c1db70fe6db150b31c676",
+      "definition": "energy of cutoff and zero-length deposits, excluded from LET and lookups [mean]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__edep_excluded_from_l__mean",
+      "origin": {
+        "array": "mean",
+        "grid": "dose",
+        "index": 1,
+        "kind": "quantity",
+        "name": "edep_excluded_from_let",
+        "quantity": "edep"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "MeV"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "ece1434debcdebde8279d527b42257ff40c728f4030a1a694d6f9823a8a5592a",
+      "definition": "energy of cutoff and zero-length deposits, excluded from LET and lookups [n_nonzero]",
+      "dtype": "<i4",
+      "grid": "dose",
+      "name": "grid__dose__q__edep_excluded_from_l__n_nonzero",
+      "origin": {
+        "array": "n_nonzero",
+        "grid": "dose",
+        "index": 1,
+        "kind": "quantity",
+        "name": "edep_excluded_from_let",
+        "quantity": "edep"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "count"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "704e56cc30dc9d8744c7550e401e4c9ca1659badb59f376b2c894652fa11e47b",
+      "definition": "energy of cutoff and zero-length deposits, excluded from LET and lookups [rounding_bound]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__edep_excluded_from_l__rounding_bound",
+      "origin": {
+        "array": "rounding_bound",
+        "grid": "dose",
+        "index": 1,
+        "kind": "quantity",
+        "name": "edep_excluded_from_let",
+        "quantity": "edep"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "MeV"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "704e56cc30dc9d8744c7550e401e4c9ca1659badb59f376b2c894652fa11e47b",
+      "definition": "energy of cutoff and zero-length deposits, excluded from LET and lookups [std]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__edep_excluded_from_l__std",
+      "origin": {
+        "array": "std",
+        "grid": "dose",
+        "index": 1,
+        "kind": "quantity",
+        "name": "edep_excluded_from_let",
+        "quantity": "edep"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "MeV"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "00b547005ca6403c696a0b8dc90c8c818df9d8870fac41e12746d5a38aec4a59",
+      "definition": "sum(l S^2)/sum(l S), S in water [defined_mask]",
+      "dtype": "|b1",
+      "grid": "dose",
+      "name": "grid__dose__q__let__defined_mask",
+      "origin": {
+        "array": "defined_mask",
+        "grid": "dose",
+        "index": 0,
+        "kind": "quantity",
+        "name": "let",
+        "quantity": "let_d"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "bool"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "708e0d08047f6cb1e5191bcd745958bc33305cb1c664f1b7349b755c3a9af871",
+      "definition": "sum(l S^2)/sum(l S), S in water [mean]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__let__mean",
+      "origin": {
+        "array": "mean",
+        "grid": "dose",
+        "index": 0,
+        "kind": "quantity",
+        "name": "let",
+        "quantity": "let_d"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "MeV/mm"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "9cdfec385ce04c07a62f452b129d6639cabc183345c78d4cddb56a181fe11b7a",
+      "definition": "sum(l S^2)/sum(l S), S in water [n_nonzero]",
+      "dtype": "<i4",
+      "grid": "dose",
+      "name": "grid__dose__q__let__n_nonzero",
+      "origin": {
+        "array": "n_nonzero",
+        "grid": "dose",
+        "index": 0,
+        "kind": "quantity",
+        "name": "let",
+        "quantity": "let_d"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "count"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "abc5c698292a6fc59c83d7f22305f4ea73026be41c5adf6bda4b738a4544f4fe",
+      "definition": "sum(l S^2)/sum(l S), S in water [rounding_bound]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__let__rounding_bound",
+      "origin": {
+        "array": "rounding_bound",
+        "grid": "dose",
+        "index": 0,
+        "kind": "quantity",
+        "name": "let",
+        "quantity": "let_d"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "MeV/mm"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "2336bb461d3d44e924692a03e420f5a2ded2e24a8f1a9450773c699d8bd5c12e",
+      "definition": "sum(l S^2)/sum(l S), S in water [std]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__let__std",
+      "origin": {
+        "array": "std",
+        "grid": "dose",
+        "index": 0,
+        "kind": "quantity",
+        "name": "let",
+        "quantity": "let_d"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "MeV/mm"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "45eb2cebb4d9cfae16fef7434c0b423ce565b54425ea87bba5910040dea07790",
+      "definition": "scoring pieces of class step per primary [defined_mask]",
+      "dtype": "|b1",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces__defined_mask",
+      "origin": {
+        "array": "defined_mask",
+        "grid": "dose",
+        "index": 2,
+        "kind": "quantity",
+        "name": "scoring_pieces",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "bool"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "d1216e6077cf62f2c4e152203a5bbae91df59f7c9e3c1db70fe6db150b31c676",
+      "definition": "scoring pieces of class step per primary [mean]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces__mean",
+      "origin": {
+        "array": "mean",
+        "grid": "dose",
+        "index": 2,
+        "kind": "quantity",
+        "name": "scoring_pieces",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "1"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "ece1434debcdebde8279d527b42257ff40c728f4030a1a694d6f9823a8a5592a",
+      "definition": "scoring pieces of class step per primary [n_nonzero]",
+      "dtype": "<i4",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces__n_nonzero",
+      "origin": {
+        "array": "n_nonzero",
+        "grid": "dose",
+        "index": 2,
+        "kind": "quantity",
+        "name": "scoring_pieces",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "count"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "704e56cc30dc9d8744c7550e401e4c9ca1659badb59f376b2c894652fa11e47b",
+      "definition": "scoring pieces of class step per primary [rounding_bound]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces__rounding_bound",
+      "origin": {
+        "array": "rounding_bound",
+        "grid": "dose",
+        "index": 2,
+        "kind": "quantity",
+        "name": "scoring_pieces",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "1"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "704e56cc30dc9d8744c7550e401e4c9ca1659badb59f376b2c894652fa11e47b",
+      "definition": "scoring pieces of class step per primary [std]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces__std",
+      "origin": {
+        "array": "std",
+        "grid": "dose",
+        "index": 2,
+        "kind": "quantity",
+        "name": "scoring_pieces",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "1"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "45eb2cebb4d9cfae16fef7434c0b423ce565b54425ea87bba5910040dea07790",
+      "definition": "scoring pieces of class local (point deposits) per primary [defined_mask]",
+      "dtype": "|b1",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces_local__defined_mask",
+      "origin": {
+        "array": "defined_mask",
+        "grid": "dose",
+        "index": 3,
+        "kind": "quantity",
+        "name": "scoring_pieces_local",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "bool"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "d1216e6077cf62f2c4e152203a5bbae91df59f7c9e3c1db70fe6db150b31c676",
+      "definition": "scoring pieces of class local (point deposits) per primary [mean]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces_local__mean",
+      "origin": {
+        "array": "mean",
+        "grid": "dose",
+        "index": 3,
+        "kind": "quantity",
+        "name": "scoring_pieces_local",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "1"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "ece1434debcdebde8279d527b42257ff40c728f4030a1a694d6f9823a8a5592a",
+      "definition": "scoring pieces of class local (point deposits) per primary [n_nonzero]",
+      "dtype": "<i4",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces_local__n_nonzero",
+      "origin": {
+        "array": "n_nonzero",
+        "grid": "dose",
+        "index": 3,
+        "kind": "quantity",
+        "name": "scoring_pieces_local",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "count"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "704e56cc30dc9d8744c7550e401e4c9ca1659badb59f376b2c894652fa11e47b",
+      "definition": "scoring pieces of class local (point deposits) per primary [rounding_bound]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces_local__rounding_bound",
+      "origin": {
+        "array": "rounding_bound",
+        "grid": "dose",
+        "index": 3,
+        "kind": "quantity",
+        "name": "scoring_pieces_local",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "1"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "704e56cc30dc9d8744c7550e401e4c9ca1659badb59f376b2c894652fa11e47b",
+      "definition": "scoring pieces of class local (point deposits) per primary [std]",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__q__scoring_pieces_local__std",
+      "origin": {
+        "array": "std",
+        "grid": "dose",
+        "index": 3,
+        "kind": "quantity",
+        "name": "scoring_pieces_local",
+        "quantity": "count"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "1"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "3f0d922375edd4670bacf49d64abc7481521923cef68f54b1c42902505a7538c",
+      "definition": "std / mean (NaN where the mean is 0)",
+      "dtype": "<f8",
+      "grid": "dose",
+      "name": "grid__dose__relative_uncertainty",
+      "origin": {
+        "array": "relative_uncertainty",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "1"
+    },
+    {
+      "axes": [
+        "x",
+        "y",
+        "z"
+      ],
+      "content_sha256": "416048da103cd34c3d1cfbaa01cc5438cbd905af5fb0e31d9eedc3ea21b4ba91",
+      "definition": "defined voxels with fewer than B/2 nonzero batches",
+      "dtype": "|b1",
+      "grid": "dose",
+      "name": "grid__dose__sparse_mask",
+      "origin": {
+        "array": "sparse_mask",
+        "grid": "dose",
+        "kind": "grid"
+      },
+      "shape": [
+        2,
+        8,
+        2
+      ],
+      "units": "bool"
+    }
+  ],
+  "effective": {
+    "backend": "python",
+    "chunk_histories": 262144,
+    "cpu_workers": 1,
+    "geometry": {
+      "materials": [
+        "water"
+      ],
+      "origin_mm": [
+        -2.0,
+        -8.0,
+        0.0
+      ],
+      "shape": [
+        1,
+        1,
+        1
+      ],
+      "spacing_mm": [
+        4.0,
+        14.0,
+        4.0
+      ],
+      "z_exit_mm": null
+    },
+    "max_steps": 952,
+    "max_steps_origin": "computed",
+    "mcs_mapping": {
+      "depth_fractions": [],
+      "fdm_domain_edge_mev": 300.0,
+      "fdm_extrapolated": false,
+      "mapping": "none (proton f_dM)",
+      "p1v1_eq_kinetic_energy_hi_mev": null,
+      "p1v1_eq_kinetic_energy_mev": null,
+      "proton_table_edge_mev": 4000.0
+    },
+    "n_batches": 4,
+    "n_histories": 8,
+    "physics": {
+      "delta_electrons": "local",
+      "e_cut_effective_mev": 2.0,
+      "e_cut_ion_mev_per_u": 2.0,
+      "e_cut_mev": 2.0,
+      "end_of_range_model": "default",
+      "end_of_range_model_effective": "point_v1",
+      "ls_effective": "off",
+      "ls_requested": "off",
+      "max_energy_loss_fraction": 0.02,
+      "max_rejection_attempts": 64,
+      "max_step_mm": 1.0,
+      "mcs_model": "differential_moliere",
+      "multiple_scattering": true,
+      "nuclear": false,
+      "range_alpha": 0.2,
+      "range_rho_f_mm": 0.1,
+      "scattering_E_s_mev": 15.0,
+      "short_step_fraction": 0.01,
+      "straggling": true,
+      "straggling_model": "bohr_gamma_v1",
+      "truncated_hinge_diagnostic": false
+    },
+    "precision": "float64",
+    "production": false,
+    "rng": {
+      "counter": "(history, genealogy id, block, purpose)",
+      "generator": "philox4x32-10",
+      "key": "seed low/high 32 bits",
+      "u01": "((w >> 8) + 0.5) * 2**-24"
+    },
+    "scattering_length_g_cm2": [
+      46.88050454803533
+    ],
+    "scoring": [
+      {
+        "name": "dose",
+        "origin_mm": [
+          -2.0,
+          -8.0,
+          0.0
+        ],
+        "shape": [
+          2,
+          8,
+          2
+        ],
+        "spacing_mm": [
+          2.0,
+          2.0,
+          2.0
+        ]
+      }
+    ],
+    "scoring_pieces": 7,
+    "seed": 11,
+    "source": {
+      "a": 1,
+      "energy_sigma_mev": 0.0,
+      "kinetic_energy_mev": 20.0,
+      "lateral_sigma_mm": 0.0,
+      "mass_mev": 938.27208816,
+      "position_mm": [
+        0.0,
+        -12.0,
+        2.0
+      ],
+      "projectile": "proton",
+      "z": 1
+    },
+    "stopping": {
+      "cache_dir": null,
+      "circular_rows": [],
+      "content_sha256": null,
+      "data_declared": [],
+      "data_used": [],
+      "decision": "0044",
+      "domain": {
+        "e_max_per_u": {
+          "alpha": 500.0,
+          "carbon12": 500.0,
+          "deuteron": 500.0,
+          "oxygen16": 500.0,
+          "proton": 500.0
+        },
+        "e_min_per_u": {
+          "alpha": 1.0,
+          "carbon12": 1.0,
+          "deuteron": 1.0,
+          "oxygen16": 1.0,
+          "proton": 1.0
+        },
+        "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+        "species": [
+          "alpha",
+          "carbon12",
+          "deuteron",
+          "oxygen16",
+          "proton"
+        ]
+      },
+      "evidence_at_run": [
+        {
+          "graded_at_sha": null,
+          "plan": "validation/plans/v3-008-acceptance.md",
+          "row": null,
+          "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+          "status": "as-graded:0043"
+        }
+      ],
+      "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+      "kind": "analytic",
+      "model_id_effective": "bethe-ionmc-v1",
+      "model_id_requested": "bethe-ionmc-v1",
+      "options": {
+        "barkas": true,
+        "bloch": true,
+        "class": "BetheStoppingSource",
+        "effective_charge": true,
+        "effective_charge_model": "barkas-125",
+        "i_value": "material",
+        "ls": "off",
+        "ls_effective": "off",
+        "ls_requested": "off",
+        "mott": true,
+        "points_per_decade": 200,
+        "shell": true,
+        "source_name": "bethe"
+      },
+      "range_construction": "exact-loglog-quadrature-v1",
+      "range_start": "constant-S approximation a*E_min/S(E_min)",
+      "selected_by": "stopping_model",
+      "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+      "species_transported": [
+        "proton"
+      ],
+      "version": "1"
+    },
+    "tables": {
+      "materials": [
+        {
+          "I_eV_effective": 78.0,
+          "I_eV_requested": 78.0,
+          "content_sha256": null,
+          "dataset_id": null,
+          "e_max_mev": 500.0,
+          "e_min_mev": 1.0,
+          "material": "water",
+          "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+          "metadata": {
+            "I_eV": 78.0,
+            "material": "water",
+            "material_density_g_cm3": 1.0,
+            "material_mass_fractions": {
+              "H": 0.11189834407236524,
+              "O": 0.8881016559276347
+            },
+            "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+            "options": {
+              "barkas": true,
+              "bloch": true,
+              "effective_charge": true,
+              "mott": true,
+              "shell": true
+            },
+            "projectile": "proton",
+            "range_construction": "exact-loglog-quadrature-v1",
+            "source": "bethe",
+            "start_range": "constant-S approximation a*E_min/S(E_min)"
+          },
+          "projectile": "proton",
+          "range_construction": "exact-loglog-quadrature-v1",
+          "source": "bethe",
+          "source_sha256": null
+        }
+      ],
+      "n_e": 541,
+      "n_r": 3596,
+      "sha256": "20d74f7cab0b7411b227dbbf303f294feedf73f769ea09dc245187c331c5dd19",
+      "stopping_source": "bethe",
+      "water_row": {
+        "I_eV_effective": 78.0,
+        "content_sha256": null,
+        "dataset_id": null,
+        "e_max_mev": 500.0,
+        "e_min_mev": 1.0,
+        "material": "water",
+        "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+        "metadata": {
+          "I_eV": 78.0,
+          "material": "water",
+          "material_density_g_cm3": 1.0,
+          "material_mass_fractions": {
+            "H": 0.11189834407236524,
+            "O": 0.8881016559276347
+          },
+          "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+          "options": {
+            "barkas": true,
+            "bloch": true,
+            "effective_charge": true,
+            "mott": true,
+            "shell": true
+          },
+          "projectile": "proton",
+          "range_construction": "exact-loglog-quadrature-v1",
+          "source": "bethe",
+          "start_range": "constant-S approximation a*E_min/S(E_min)"
+        },
+        "n_points": 541,
+        "projectile": "proton",
+        "role": "LET medium (decision 0040)",
+        "source": "bethe",
+        "source_sha256": null
+      }
+    },
+    "tallies": {
+      "bounds": {
+        "B_ES": 902.6387801523953,
+        "B_LS2": 10952.944135961276,
+        "B_LS_mev": 242.6872050436844,
+        "B_L_mm": 5.377282926016336,
+        "B_L_truncation_mm": 952.0009519999999,
+        "E_hi_mev": 20.0,
+        "S_w_max_mev_per_mm": 45.13193900761976,
+        "S_w_min_mev_per_mm": 0.4911642399265584,
+        "S_w_ref_mev_per_mm": 2.5882287151815317,
+        "f_max": 0.0,
+        "gamma_max": 0.8102315158449552,
+        "r_max": 1.8102315158449553,
+        "ramp_amplification": 0.8102315158449552
+      },
+      "channels": [
+        {
+          "bound_per_history": 10952.944135961276,
+          "class_mask": 1,
+          "generation": [
+            0,
+            2147483647
+          ],
+          "grid": 0,
+          "k": 40,
+          "kind": "LS2",
+          "lookup": -1,
+          "offset": 0,
+          "size": 32,
+          "species": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "spectrum": null
+        },
+        {
+          "bound_per_history": 242.6872050436844,
+          "class_mask": 1,
+          "generation": [
+            0,
+            2147483647
+          ],
+          "grid": 0,
+          "k": 40,
+          "kind": "LS",
+          "lookup": -1,
+          "offset": 32,
+          "size": 32,
+          "species": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "spectrum": null
+        },
+        {
+          "bound_per_history": 13328.0,
+          "class_mask": 1,
+          "generation": [
+            0,
+            2147483647
+          ],
+          "grid": 0,
+          "k": 0,
+          "kind": "N",
+          "lookup": -1,
+          "offset": 64,
+          "size": 32,
+          "species": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "spectrum": null
+        },
+        {
+          "bound_per_history": 13328.0,
+          "class_mask": 2,
+          "generation": [
+            0,
+            2147483647
+          ],
+          "grid": 0,
+          "k": 0,
+          "kind": "N",
+          "lookup": -1,
+          "offset": 96,
+          "size": 32,
+          "species": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            64
+          ],
+          "spectrum": null
+        },
+        {
+          "bound_per_history": 20.0,
+          "class_mask": 2,
+          "generation": [
+            0,
+            2147483647
+          ],
+          "grid": 0,
+          "k": 30,
+          "kind": "E",
+          "lookup": -1,
+          "offset": 128,
+          "size": 32,
+          "species": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            64
+          ],
+          "spectrum": null
+        }
+      ],
+      "histories_per_batch": 2,
+      "lookups": [],
+      "memory_bytes": 6144,
+      "n_channels": 5,
+      "n_residual_columns": 3,
+      "quantities": [
+        {
+          "definition": "sum(l S^2)/sum(l S), S in water",
+          "denominator": 1,
+          "kind": "ratio",
+          "name": "let",
+          "numerator": 0,
+          "units": "MeV/mm"
+        }
+      ],
+      "total_size": 160
+    },
+    "unit_direction": [
+      0.204926207831424,
+      0.973399487199264,
+      0.102463103915712
+    ]
+  },
+  "effective_extra": {
+    "geometry_arrays": {
+      "density_g_cm3": null,
+      "material_index": "geometry__material_index"
+    },
+    "grid_convention": "origin = corner of voxel (0,0,0); C order [ix, iy, iz]; lengths in mm (decision 0037)",
+    "lookup_plan": [],
+    "materials": [
+      {
+        "I_eV_effective": 78.0,
+        "I_eV_requested": 78.0,
+        "density_g_cm3": 1.0,
+        "mass_fractions": {
+          "H": 0.11189834407236524,
+          "O": 0.8881016559276347
+        },
+        "name": "water",
+        "source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+        "sternheimer": {
+          "a": 0.09116,
+          "cbar": 3.5017,
+          "m": 3.4773,
+          "x0": 0.24,
+          "x1": 2.8004
+        }
+      }
+    ],
+    "profile_axis": 1,
+    "resolutions": [
+      {
+        "class": "equal",
+        "effective": [
+          "/source/projectile",
+          "/source/z",
+          "/source/a",
+          "/source/mass_mev",
+          "/source/position_mm",
+          "/source/kinetic_energy_mev",
+          "/source/energy_sigma_mev",
+          "/source/lateral_sigma_mm"
+        ],
+        "reason": "",
+        "requested": [
+          "source.projectile",
+          "source.position_mm",
+          "source.kinetic_energy_mev",
+          "source.energy_sigma_mev",
+          "source.lateral_sigma_mm"
+        ],
+        "row": "source",
+        "rule": "equal"
+      },
+      {
+        "class": "derived",
+        "effective": [
+          "/unit_direction"
+        ],
+        "reason": "",
+        "requested": [
+          "source.direction"
+        ],
+        "row": "direction",
+        "rule": "normalise"
+      },
+      {
+        "class": "derived",
+        "effective": [
+          "/geometry/origin_mm",
+          "/geometry/spacing_mm",
+          "/geometry/shape",
+          "/geometry/materials",
+          "/geometry/z_exit_mm"
+        ],
+        "reason": "",
+        "requested": [
+          "geometry"
+        ],
+        "row": "geometry-box",
+        "rule": "box-to-voxel"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/scoring"
+        ],
+        "reason": "",
+        "requested": [
+          "scoring"
+        ],
+        "row": "scoring",
+        "rule": "equal"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/stopping/model_id_requested",
+          "/stopping/model_id_effective"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.stopping_model",
+          "physics.stopping"
+        ],
+        "row": "stopping-model",
+        "rule": "equal"
+      },
+      {
+        "class": "derived",
+        "effective": [
+          "/stopping/species_transported",
+          "/tables/materials",
+          "/tables/water_row"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.nuclear",
+          "tallies"
+        ],
+        "row": "stopping-identity",
+        "rule": "deuteron-and-water-row"
+      },
+      {
+        "class": "derived",
+        "effective": [
+          "/physics/ls_requested",
+          "/physics/ls_effective"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.stopping.options.ls"
+        ],
+        "row": "ls",
+        "rule": "ls-z1-off"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/physics/nuclear",
+          "/physics/straggling",
+          "/physics/multiple_scattering",
+          "/physics/delta_electrons"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.nuclear",
+          "physics.straggling",
+          "physics.multiple_scattering",
+          "physics.delta_electrons"
+        ],
+        "row": "physics-flags",
+        "rule": "equal"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/physics/straggling_model"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.straggling_model"
+        ],
+        "row": "straggling-model",
+        "rule": "equal"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/physics/mcs_model"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.mcs_model"
+        ],
+        "row": "mcs-model",
+        "rule": "equal"
+      },
+      {
+        "class": "unused",
+        "effective": [],
+        "reason": "",
+        "requested": [
+          "physics.mcs_mapping_eval"
+        ],
+        "row": "mcs-mapping",
+        "rule": "proton-has-no-mapping"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/physics/e_cut_effective_mev"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.e_cut_mev"
+        ],
+        "row": "e-cut",
+        "rule": "equal"
+      },
+      {
+        "class": "unused",
+        "effective": [],
+        "reason": "",
+        "requested": [
+          "physics.e_cut_ion_mev_per_u"
+        ],
+        "row": "e-cut-ion",
+        "rule": "proton-uses-total"
+      },
+      {
+        "class": "unused",
+        "effective": [],
+        "reason": "",
+        "requested": [
+          "physics.e_cut_deuteron_mev",
+          "physics.nuclear_table_id"
+        ],
+        "row": "nuclear-options",
+        "rule": "nuclear-off"
+      },
+      {
+        "class": "derived",
+        "effective": [
+          "/physics/end_of_range_model_effective"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.end_of_range_model"
+        ],
+        "row": "end-of-range",
+        "rule": "default-by-z"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/physics/max_step_mm",
+          "/physics/max_energy_loss_fraction",
+          "/physics/range_alpha",
+          "/physics/range_rho_f_mm",
+          "/physics/short_step_fraction",
+          "/physics/truncated_hinge_diagnostic"
+        ],
+        "reason": "",
+        "requested": [
+          "physics.max_step_mm",
+          "physics.max_energy_loss_fraction",
+          "physics.range_alpha",
+          "physics.range_rho_f_mm",
+          "physics.short_step_fraction",
+          "physics.truncated_hinge_diagnostic"
+        ],
+        "row": "physics-numerics",
+        "rule": "equal"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/backend",
+          "/precision",
+          "/seed",
+          "/n_histories",
+          "/n_batches",
+          "/cpu_workers",
+          "/production"
+        ],
+        "reason": "",
+        "requested": [
+          "run.backend",
+          "run.precision",
+          "run.seed",
+          "run.n_histories",
+          "run.n_batches",
+          "run.cpu_workers"
+        ],
+        "row": "run",
+        "rule": "equal"
+      },
+      {
+        "class": "derived",
+        "effective": [
+          "/max_steps",
+          "/max_steps_origin"
+        ],
+        "reason": "",
+        "requested": [
+          "run.max_steps"
+        ],
+        "row": "max-steps",
+        "rule": "computed"
+      },
+      {
+        "class": "unused",
+        "effective": [
+          "/chunk_histories"
+        ],
+        "reason": "",
+        "requested": [
+          "run.chunk_histories"
+        ],
+        "row": "chunk",
+        "rule": "python-backend"
+      },
+      {
+        "class": "requested-only",
+        "effective": [],
+        "reason": "",
+        "requested": [
+          "run.allow_invalid_result",
+          "run.worker_timeout_s",
+          "run.memory_budget_bytes"
+        ],
+        "row": "run-only",
+        "rule": "execution-option"
+      },
+      {
+        "class": "equal",
+        "effective": [],
+        "reason": "",
+        "requested": [
+          "diagnostics"
+        ],
+        "row": "diagnostics",
+        "rule": "arrays-present"
+      },
+      {
+        "class": "equal",
+        "effective": [
+          "/tallies/channels",
+          "/tallies/quantities"
+        ],
+        "reason": "",
+        "requested": [
+          "tallies"
+        ],
+        "row": "tallies",
+        "rule": "in-channel-plan"
+      },
+      {
+        "class": "equal",
+        "effective": [],
+        "reason": "",
+        "requested": [
+          "lookups"
+        ],
+        "row": "lookups",
+        "rule": "in-channel-plan"
+      }
+    ],
+    "resolutions_status": "computed: contract.reconcile(requested, effective)"
+  },
+  "files": {
+    "arrays.npz": {
+      "sha256": "736829cc9f03b3ff174b09f0f7c3c6bda45548642349973530b9447afa665892",
+      "size": 15339
+    },
+    "plots/dose__dose.svg": {
+      "sha256": "2a9750ccfc5675251051dc00160c68146ca9775c1ff20cbba96a7be248a5b1f2",
+      "size": 2669
+    },
+    "plots/energy__dose.svg": {
+      "sha256": "745d880939ed38807192acd67eb6e391cb90b857261fc08b5a1f8ecff95c6410",
+      "size": 2163
+    },
+    "plots/lateral__dose.svg": {
+      "sha256": "4d2665fdb6ccdf60a0cbd96e00026e672f97fbc1d6a521be18440c1d6e40fab4",
+      "size": 2626
+    },
+    "plots/let__dose__let.svg": {
+      "sha256": "3356f9a95cb71a2a4b84204602f942692a4ac2846b1da0879a5c54b119c64d70",
+      "size": 1701
+    },
+    "report.md": {
+      "sha256": "378b3c2e67149250a91ccf826194bdd226acb96b027c98bc1a6bc3483fbb5871",
+      "size": 10297
+    }
+  },
+  "input_manifest": {
+    "base_dir": {
+      "reason": "constructed in process",
+      "status": "unavailable"
+    },
+    "config_file": {
+      "reason": "constructed in process",
+      "status": "unavailable"
+    },
+    "config_sha256": "00a6403c912182ce1b486032cc3ec0df38fcd7b6864c63adcee776b7241990d0",
+    "files": [],
+    "source": "api"
+  },
+  "kind": "transport",
+  "provenance": {
+    "code": {
+      "git_commit": null,
+      "git_dirty": null,
+      "ionmc_version": "0.1.0.dev0",
+      "package_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+      "reason": "synthetic golden fixture: not produced by a code version",
+      "source": "unavailable",
+      "status": "unknown"
+    },
+    "data": {
+      "lookups": [],
+      "nuclear": null,
+      "stopping_content_sha256": null,
+      "stopping_data_used": [],
+      "table_materials": [
+        {
+          "I_eV_effective": 78.0,
+          "I_eV_requested": 78.0,
+          "content_sha256": null,
+          "dataset_id": null,
+          "e_max_mev": 500.0,
+          "e_min_mev": 1.0,
+          "material": "water",
+          "material_sha256": "a31084e702cb614a25836280707ea4062973c9845c22e6848235b9a5bf58889f",
+          "metadata": {
+            "I_eV": 78.0,
+            "material": "water",
+            "material_density_g_cm3": 1.0,
+            "material_mass_fractions": {
+              "H": 0.11189834407236524,
+              "O": 0.8881016559276347
+            },
+            "material_source": "G4NistMaterialBuilder v11.4.2: G4_WATER; I and Sternheimer parameters as cited in module docstring",
+            "options": {
+              "barkas": true,
+              "bloch": true,
+              "effective_charge": true,
+              "mott": true,
+              "shell": true
+            },
+            "projectile": "proton",
+            "range_construction": "exact-loglog-quadrature-v1",
+            "source": "bethe",
+            "start_range": "constant-S approximation a*E_min/S(E_min)"
+          },
+          "projectile": "proton",
+          "range_construction": "exact-loglog-quadrature-v1",
+          "source": "bethe",
+          "source_sha256": null
+        }
+      ],
+      "table_sha256": "20d74f7cab0b7411b227dbbf303f294feedf73f769ea09dc245187c331c5dd19",
+      "table_stopping_source": "bethe"
+    },
+    "environment": {
+      "numpy_version": "0",
+      "platform": "synthetic-golden-fixture",
+      "python_version": "3.12.0",
+      "warp_devices": [],
+      "warp_error": null,
+      "warp_version": null
+    },
+    "models": {
+      "delta_electrons": "local",
+      "end_of_range_model": "point_v1",
+      "evidence_at_run": [
+        {
+          "graded_at_sha": null,
+          "plan": "validation/plans/v3-008-acceptance.md",
+          "row": null,
+          "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+          "status": "as-graded:0043"
+        }
+      ],
+      "mcs_model": "differential_moliere",
+      "nuclear_table_id": null,
+      "stopping_model_id_effective": "bethe-ionmc-v1",
+      "stopping_spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+      "stopping_version": "1",
+      "straggling_model": "bohr_gamma_v1"
+    }
+  },
+  "requested": {
+    "diagnostics": {
+      "escape_records": false,
+      "trace_histories": 0,
+      "track_end_positions": false
+    },
+    "geometry": {
+      "lower_mm": [
+        -2.0,
+        -8.0,
+        0.0
+      ],
+      "material": "water",
+      "size_mm": [
+        4.0,
+        14.0,
+        4.0
+      ],
+      "type": "box"
+    },
+    "lookups": [],
+    "materials": [
+      {
+        "name": "water"
+      }
+    ],
+    "physics": {
+      "delta_electrons": "local",
+      "e_cut_deuteron_mev": 4.0,
+      "e_cut_ion_mev_per_u": 2.0,
+      "e_cut_mev": 2.0,
+      "end_of_range_model": "default",
+      "max_energy_loss_fraction": 0.02,
+      "max_step_mm": 1.0,
+      "mcs_mapping_eval": "table",
+      "mcs_model": "differential_moliere",
+      "multiple_scattering": true,
+      "nuclear": false,
+      "nuclear_table_id": null,
+      "range_alpha": 0.2,
+      "range_rho_f_mm": 0.1,
+      "short_step_fraction": 0.01,
+      "stopping_model": "bethe-ionmc-v1",
+      "straggling": true,
+      "straggling_model": "bohr_gamma_v1",
+      "truncated_hinge_diagnostic": false
+    },
+    "run": {
+      "allow_invalid_result": false,
+      "backend": "python",
+      "chunk_histories": 262144,
+      "cpu_workers": 1,
+      "max_steps": null,
+      "memory_budget_bytes": 2147483648,
+      "n_batches": 4,
+      "n_histories": 8,
+      "precision": "float64",
+      "seed": 11,
+      "worker_timeout_s": null
+    },
+    "schema": "ionmc.config",
+    "schema_version": "1.0",
+    "scoring": [
+      {
+        "name": "dose",
+        "origin_mm": [
+          -2.0,
+          -8.0,
+          0.0
+        ],
+        "shape": [
+          2,
+          8,
+          2
+        ],
+        "spacing_mm": [
+          2.0,
+          2.0,
+          2.0
+        ]
+      }
+    ],
+    "source": {
+      "direction": [
+        0.2,
+        0.95,
+        0.1
+      ],
+      "energy_sigma_mev": 0.0,
+      "kinetic_energy_mev": 20.0,
+      "lateral_sigma_mm": 0.0,
+      "position_mm": [
+        0.0,
+        -12.0,
+        2.0
+      ],
+      "projectile": "proton"
+    },
+    "tallies": [
+      {
+        "dose_reference": "medium",
+        "energy_edges_mev_per_u": null,
+        "generation": "all",
+        "grid": "dose",
+        "let_medium": "water",
+        "lookup": null,
+        "name": "let",
+        "quantity": "let_d",
+        "species": null
+      }
+    ]
+  },
+  "run": {
+    "backend": "python",
+    "cache_dir": null,
+    "cache_dir_source": "not-used",
+    "chunk_histories": 262144,
+    "cpu_workers": 1,
+    "device": "cpu",
+    "histories_per_batch": 2,
+    "n_batches": 4,
+    "n_histories": 8,
+    "output_path": "golden",
+    "precision": "float64",
+    "production": false,
+    "rng": {
+      "counter": "(history, genealogy id, block, purpose)",
+      "generator": "philox4x32-10",
+      "key": "seed low/high 32 bits",
+      "u01": "((w >> 8) + 0.5) * 2**-24"
+    },
+    "seed": 11,
+    "timings": {
+      "deterministic": false,
+      "values_s": {
+        "total": 0.1
+      }
+    }
+  },
+  "schema": "ionmc.result",
+  "schema_version": "1.0",
+  "statistics": {
+    "batch_arrays": {
+      "status": "persisted"
+    },
+    "defined_mask": "positive mean energy and positive voxel mass",
+    "grids": [
+      {
+        "dose_max_gy": {
+          "units": "Gy",
+          "value": 4.702380652724817e-08
+        },
+        "energy_total_mev": {
+          "units": "MeV",
+          "value": 29.06594701664353
+        },
+        "low_batch_count": true,
+        "n_defined_voxels": 27,
+        "n_sparse_voxels": 0,
+        "name": "dose",
+        "relative_uncertainty_max": {
+          "units": "1",
+          "value": 0.08768630669595494
+        },
+        "shape": [
+          2,
+          8,
+          2
+        ],
+        "valid": true
+      }
+    ],
+    "normalisation": "per primary history",
+    "quantity_batch_arrays": {
+      "reason": "the result carries no channel accumulators",
+      "status": "not-persisted"
+    },
+    "sparse_mask": "defined voxels with fewer than B/2 nonzero batches",
+    "uncertainty": "batch standard error of the mean over B batches (history h in batch h mod B); ratio quantities by the delta method (decision 0040)"
+  },
+  "units": {
+    "counts": "count",
+    "density": "g/cm3",
+    "dimensionless": "1",
+    "dose": "Gy",
+    "energy": "MeV",
+    "fluence": "mm^-2",
+    "length": "mm",
+    "let": "keV/um",
+    "mask": "bool",
+    "mass": "g"
+  },
+  "valid": true
+}

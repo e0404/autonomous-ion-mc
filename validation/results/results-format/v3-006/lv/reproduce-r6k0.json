@@ -1,0 +1,10 @@
+{
+ "arrays_equal": true,
+ "child_exit_code": 0,
+ "differing_array_names": [],
+ "duration_s": 0.867,
+ "effective_differing_pointers": [],
+ "method": "configio.from_dict + API",
+ "requested_equal": true,
+ "verdict": "PASS"
+}

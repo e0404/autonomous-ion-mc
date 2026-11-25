@@ -680,3 +680,24 @@ OPEN. Not a clinical claim."
   the sealed pins (identity blocks with the single `consistency-only` record), which is the binding comparison; the
   frozen manifest is kept as the record of seal 15 and no longer matches this file on disk, so the sealed evaluator
   fails closed at this state by design (no run or evaluation follows; any re-run is a new seal). Not a clinical claim.
+- 2026-11-23 (orchestrator, integration): V3-013 integrated at `v3/develop` 95937553 (PR #92; Codex REVIEW-27a299c8 at
+  99d12246, VAL-20261123-021844-C66EB6, CI run 45098470647; the PR title kept its draft wording because the
+  integration tool cannot retitle an existing PR, as for PR #84). The V3-013 worktree is retired; its branch is
+  preserved. Not a clinical claim.
+- 2026-11-23 (orchestrator, post-integration maintenance, recorded by V3-006): the test
+  `tests/ionmc/test_steps_v13.py::test_committed_predictions_pin_script_and_tree` compared the committed
+  `vc-predictions.json` tree pin with the `src/ionmc` tree at HEAD, which every later task changes; it now compares
+  the pin with the tree of the recorded derivation commit 53d779ae (c5b33495…) and, when that commit is reachable,
+  verifies the constant against `git rev-parse`. The sealed predictions and the evaluation are unchanged. Not a
+  clinical claim.
+- 2026-11-25 (orchestrator, post-integration maintenance, recorded by V3-006): V3-006 changes the `src/ionmc` tree
+  (c5b33495… → 4970c9a4…: the LS memo of the Bethe tables, the result writer/reader with its bounded snapshot loader, the contract, the CLI; no spec,
+  hash, registry or table change), so `tests/ionmc/test_steps_v13.py::test_predictions_reproduce_from_the_committed_inputs`
+  failed in the V3-006 local-validation tier at f0665109 (logged run `20261125T090433Z-final-head-fullsuite-f0665109`:
+  the recomputed predictions differ from the committed file in `/src_ionmc_tree` only). Following the closure note of
+  2026-11-23, `vc-predictions.json` was re-derived on the host at the V3-006 commit 154fc2da
+  (RUN-20261125T100705Z-1cae10a5, signed record under `validation/results/results-format/v3-006/hr/host-records/`;
+  sha256 61df725f…, replacing fc255f06…): the tree pin is now 4970c9a4… and every energy, R_def, ΔR_pred, ΔR_pred,D,
+  informativeness flag, spec_sha256, content_sha256 and table identity is unchanged; the derivation-commit constants of
+  the pin test now name 154fc2da / 4970c9a4…. The sealed predictions, the grading of the 18 samples at 9f1fa8ec and the
+  evaluation are unchanged. Not a clinical claim.

@@ -1,0 +1,158 @@
+{
+ "array_content_sha256": {
+  "geometry__material_index": "e7e10cbf3fd69c45ff3f739c9e3c514e05960d41a7382e2ae9c11afa1e097223",
+  "grid__dose__batch_energy_mev": "104e9ee56cb272a1e33d37986fa65531bf6cddc0b4b4f8f3f3227b134a1b0e92",
+  "grid__dose__defined_mask": "8f5436876bb868db62a4b377b9370592bb85bca9bd0c9eb5da5b561a61bb5e37",
+  "grid__dose__dose_gy": "81c2406fa4a6e2a54a6dd8e87666f657046ab38ce6dfd2c4e76641c9f6b21ef7",
+  "grid__dose__dose_std_gy": "4a4926b88ec92fe74bbc4d6e0b74f0a3bdefe19b461e556e2e1b3c294f6d32e1",
+  "grid__dose__energy_mev": "7edacc84c34364384e487e884b4d901204015075373a28875c476b72fbc72dce",
+  "grid__dose__energy_std_mev": "f284c6acda6ce5b37b57fad95b5fe4d841fe1e40e158a1207eb35c634c67bef3",
+  "grid__dose__mass_g": "44a2e5a5ac59e3a98d9d4f39e3030e24e816d595a1ffe57aa3cff7b6ed9259b4",
+  "grid__dose__n_nonzero_batches": "121ce04a9787be10dbd7c33bbc02f71088f4d48a180c1c4927714a4995c6c91f",
+  "grid__dose__relative_uncertainty": "1fde1238c80331273917fc32ae47362a70c9029c481c0a47f76e05e6649e75ee",
+  "grid__dose__sparse_mask": "8249f6c431196b142d71426dadb030c5a5c4001d747729db863c2cc898142ae3"
+ },
+ "backend": "python",
+ "code": {
+  "git_commit": "154fc2da1beaca38d7277ba65642dc03f3b355cf",
+  "git_dirty": false,
+  "ionmc_version": "0.1.0.dev0",
+  "package_tree_oid": "4970c9a4e6899f6e1d73c6a3cfdef8f36c783850",
+  "reason": "",
+  "source": "git",
+  "status": "ok"
+ },
+ "device": "python (float64)",
+ "durations_s": {
+  "report_check": 0.366,
+  "run": 0.918,
+  "verify": 0.367
+ },
+ "exit_codes": {
+  "report_check": 0,
+  "run": 0,
+  "verify": 0
+ },
+ "files": {
+  "arrays.npz": {
+   "sha256": "ebe45540a4098d93fa79cea6fab510aafc2b6dfccf8832c081899d5ae6e1b69f",
+   "size": 2817
+  },
+  "plots/dose__dose.svg": {
+   "sha256": "38d57d49857439a370f1088e4255316208448a8e3937809f7a02e0fbc905d783",
+   "size": 2629
+  },
+  "plots/energy__dose.svg": {
+   "sha256": "5e19a4f04a4654190bd087b84f249681e19631d6809dd42d8be55547d789b489",
+   "size": 2511
+  },
+  "plots/lateral__dose.svg": {
+   "sha256": "e87d0778b9db1e8a6702d9db01d9db9c263d5d7f65b1a97ac64689ae184b0875",
+   "size": 2153
+  },
+  "report.md": {
+   "sha256": "9563d614c8d947157928302079cd913a47a850882f56ec60a56885eb51c0db65",
+   "size": 10361
+  }
+ },
+ "k": 0,
+ "n_batches": 4,
+ "n_histories": 16,
+ "nuclear": {
+  "builder_version": "ionmc-nuclear-proton-builder-5",
+  "deuteron_tables_sha256": "da03e50c7b9a15db13c11c4a6d7b0ce1949f5637e122a4af6ce6bb40e40a2e20",
+  "elements": {
+   "O": {
+    "sigma_scale": 1.0,
+    "surrogate": false,
+    "target": "O-16"
+   }
+  },
+  "grid_size": 604,
+  "npz_sha256": "d4c6dcba29cc47c049c0c8ab75f2ae42b5667948e12eb650988d409b5303e0ac",
+  "schema": "ionmc-nuclear-proton-table-3",
+  "source_sha256": {
+   "ame2020-mass": "e8599c6d7f724fac91934e59f1b9de8fb8f63e820f4b39456b790665ed2a3307",
+   "endf-b8.0-protons": "27bcafb89cf0444c53c6b9f3dd17618c62e2e6b3694f70d31c4f502399f103f7",
+   "nist-astar-water-2005": "dd4a2e504e19beca1f893ca1e2a7d75629bcabc04e002d8e62ef176f3b69b46f"
+  },
+  "table_id": "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb"
+ },
+ "output_path_persisted": "r5k0",
+ "precision": "float64",
+ "production": false,
+ "r_index": 5,
+ "requested_nuclear_table_id": "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb",
+ "result_json_sha256": "7ba991bca73d2cfae1d752c9fb19a8c115fc299a61723b752a9cafb623a833f3",
+ "schema": "ionmc.out6-summary/1",
+ "seed": 20700504,
+ "stopping": {
+  "circular_rows": [],
+  "content_sha256": null,
+  "data_declared": [],
+  "data_used": [],
+  "decision": "0044",
+  "domain": {
+   "e_max_per_u": {
+    "alpha": 500.0,
+    "carbon12": 500.0,
+    "deuteron": 500.0,
+    "oxygen16": 500.0,
+    "proton": 500.0
+   },
+   "e_min_per_u": {
+    "alpha": 1.0,
+    "carbon12": 1.0,
+    "deuteron": 1.0,
+    "oxygen16": 1.0,
+    "proton": 1.0
+   },
+   "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+   "species": [
+    "alpha",
+    "carbon12",
+    "deuteron",
+    "oxygen16",
+    "proton"
+   ]
+  },
+  "evidence_at_run": [
+   {
+    "graded_at_sha": null,
+    "plan": "validation/plans/v3-008-acceptance.md",
+    "row": null,
+    "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+    "status": "as-graded:0043"
+   }
+  ],
+  "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+  "kind": "analytic",
+  "model_id_effective": "bethe-ionmc-v1",
+  "model_id_requested": "bethe-ionmc-v1",
+  "options": {
+   "barkas": true,
+   "bloch": true,
+   "class": "BetheStoppingSource",
+   "effective_charge": true,
+   "effective_charge_model": "barkas-125",
+   "i_value": "material",
+   "ls": "off",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "mott": true,
+   "points_per_decade": 200,
+   "shell": true,
+   "source_name": "bethe"
+  },
+  "range_construction": "exact-loglog-quadrature-v1",
+  "range_start": "constant-S approximation a*E_min/S(E_min)",
+  "selected_by": "stopping_model",
+  "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+  "species_transported": [
+   "proton",
+   "deuteron"
+  ],
+  "version": "1"
+ },
+ "valid": true
+}
