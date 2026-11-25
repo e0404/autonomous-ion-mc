@@ -415,3 +415,51 @@ def test_tier1_derived_histories_bind_to_the_persisted_beamlet_table() -> None:
     for (rq, run, eff), needle in bad:
         with pytest.raises(ResultFormatError, match=needle):
             results._bind_histories(rq, run, eff)
+
+
+# ---- fix 4: persistence gate (S5) and source.type structural validation -------------------------
+
+
+def test_beamlet_persistence_gate_is_closed_and_skip_is_conditioned() -> None:
+    import inspect
+
+    assert config.BEAMLET_PERSISTENCE_AVAILABLE is False
+    src = inspect.getsource(b7.test_beam1_derived_n_histories_in_the_bundle_s2_gate)
+    assert "BEAMLET_PERSISTENCE_AVAILABLE" in src  # S5 un-skips by the constant
+
+
+def test_beamlet_result_bundle_entry_points_refuse_naming_s5(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from ionmc import report, results
+
+    fake = SimpleNamespace(requested_config=cfg(), effective_config=None)
+    with pytest.raises(U, match=r"V3-007 S5"):
+        results.build_document(fake, None, [], True, "x")  # type: ignore[arg-type]
+    with pytest.raises(U, match=r"result bundles of a beamlet set are not yet available"):
+        results.save(fake, tmp_path / "b")  # type: ignore[arg-type]
+    assert not (tmp_path / "b").exists()
+    doc = {"requested": {"source": {"type": "beamlets"}}}
+    with pytest.raises(U, match=r"V3-007 S5"):
+        report.render_all(doc, {})  # type: ignore[arg-type]
+
+
+def test_validate_dict_structure_checks_source_type() -> None:
+    """Tier 1 (``results._check_structure``) wraps this exact call for ``doc["requested"]``; a
+    full minimal result document needs a transport run, so the check is exercised directly."""
+    from ionmc import configio
+    from ionmc.configio import ConfigError
+
+    d = copy.deepcopy(to_dict(cfg()))
+    assert d["source"]["type"] == "beamlets"
+    configio.validate_dict_structure(d)
+    p = copy.deepcopy(to_dict(next(iter(fixed.fixed_configs().values()))))
+    assert p["source"].get("type", "pencil") == "pencil"
+    configio.validate_dict_structure(p)
+    p["source"]["type"] = "pencil"
+    configio.validate_dict_structure(p)
+    for dd in (d, p):
+        for bad in ("spots", 3, None, ["beamlets"]):
+            dd["source"]["type"] = bad
+            with pytest.raises(ConfigError, match="source.type"):
+                configio.validate_dict_structure(dd)

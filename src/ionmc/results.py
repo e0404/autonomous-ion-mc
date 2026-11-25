@@ -49,6 +49,7 @@ import numpy as np
 
 from ionmc import _result_schema_1_0 as frozen
 from ionmc import _result_shapes as shapes
+from ionmc import config as config_mod
 from ionmc import contract
 from ionmc import provenance as prov
 from ionmc import report as report_mod
@@ -91,6 +92,7 @@ from ionmc.simulation import (
     TransportCounters,
     _channel_sums,
 )
+from ionmc.sources import BeamletSet
 from ionmc.species import producible, species_by_name
 from ionmc.transport.channels import (
     CLASS_LOCAL,
@@ -675,6 +677,15 @@ def _snap_or(result: Result, key: str, fallback: Callable[[], dict[str, Any]]) -
     return copy.deepcopy(dict(snap)) if isinstance(snap, Mapping) else fallback()
 
 
+def _refuse_beamlet_bundle(is_beamlet: bool) -> None:
+    """Fail-closed gate (V3-007 S1): beamlet-set bundles are S5 work (see
+    ``config.BEAMLET_PERSISTENCE_AVAILABLE``)."""
+    if is_beamlet and not config_mod.BEAMLET_PERSISTENCE_AVAILABLE:
+        raise UnsupportedCombinationError(
+            "result bundles of a beamlet set are not yet available (V3-007 S5)"
+        )
+
+
 def build_document(
     result: Result,
     manifest: InputManifest | None,
@@ -683,6 +694,7 @@ def build_document(
     output_path: str,
 ) -> dict[str, Any]:
     """The result.json document without the ``files`` block."""
+    _refuse_beamlet_bundle(isinstance(result.requested_config.source, BeamletSet))
     eff = result.effective_config
     summary = _snapshot(result).get("effective_summary") or eff.summary()
     cfg = result.requested_config
@@ -979,6 +991,7 @@ def save(
     deletes nothing: a write that fails after its temporary directory exists leaves it as
     ``<path>.failed-<token>`` and says so in a note of the exception (decision 0045 amendment
     A-5)."""
+    _refuse_beamlet_bundle(isinstance(result.requested_config.source, BeamletSet))
     dest = Path(path)
     parent = dest.parent
     if not parent.is_dir():
@@ -1568,15 +1581,16 @@ def _bind_histories(rq: dict[str, Any], run: dict[str, Any], eff: dict[str, Any]
     requested = rq["run"]["n_histories"]
     if requested is None:
         src = rq.get("source")
-        _need(isinstance(src, dict) and src.get("type") == "beamlets",
-              "requested.run.n_histories is null but the source is not a beamlet set")  # fmt: skip
+        if not isinstance(src, dict) or src.get("type") != "beamlets":
+            raise _fail("requested.run.n_histories is null but the source is not a beamlet set")
         rows = src.get("beamlets")
-        _need(isinstance(rows, list) and len(rows) >= 1, "requested beamlet table is empty")
+        if not isinstance(rows, list) or not rows:
+            raise _fail("requested beamlet table is empty")
         total = 0
         for row in rows:
             n = row.get("n_histories") if isinstance(row, dict) else None
-            _need(isinstance(n, int) and not isinstance(n, bool) and n >= 1,
-                  "requested beamlet n_histories must be a positive integer")  # fmt: skip
+            if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+                raise _fail("requested beamlet n_histories must be a positive integer")
             total += n
         _bind(run["n_histories"] == total, "run.n_histories (derived: sum of the beamlet table)")
         _bind(eff["n_histories"] == total,

@@ -458,8 +458,10 @@ def test_beam1_n_histories_none_dict_round_trip() -> None:
 
 def test_beam1_derived_n_histories_in_the_bundle_s2_gate(tmp_path: Path) -> None:
     """Bundle-level save/load of a derived-history run: needs transport (S2 flips the flag)."""
-    if not config.BEAMLET_TRANSPORT_AVAILABLE:
-        pytest.skip("beamlet transport lands in V3-007 S2; S2 unskips this by the flag")
+    if not (config.BEAMLET_TRANSPORT_AVAILABLE and config.BEAMLET_PERSISTENCE_AVAILABLE):
+        pytest.skip(
+            "beamlet transport (S2) and bundles (S5) are not yet available; the flags unskip"
+        )
     import json
 
     from ionmc import results

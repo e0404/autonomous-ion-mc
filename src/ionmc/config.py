@@ -127,6 +127,13 @@ BEAMLET_TRANSPORT_AVAILABLE = False
 S2 commit ``validate`` refuses every ``BeamletSet`` run with "beamlet transport not yet available
 (V3-007 S2)". TODO(V3-007 S2): remove this switch, its rule in ``_check_beamlet_set`` and the
 declaration ``beamlet-transport-not-available`` in ``ionmc.contract``."""
+BEAMLET_PERSISTENCE_AVAILABLE = False
+"""TEMPORARY (V3-007 S1): the beamlet-set result bundle (schema 1.1 writer/reader, influence arrays)
+is S5 work. Until then ``results.build_document``/``results.save`` and
+``report.render_all``/``report.regenerate_report`` refuse a beamlet-set result with
+"result bundles of a beamlet set are not yet available (V3-007 S5)" instead of crashing on the
+pencil-only ``unit_direction``/energy fields. TODO(V3-007 S5): remove this switch and the guards
+once plan rows PER-1..PER-10 pass."""
 INFLUENCE_GROUP_ORIGIN_MEMORY = "memory-budget"
 """Reconciliation rule name of an automatic ``InfluenceOptions.group_size``."""
 

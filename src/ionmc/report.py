@@ -588,8 +588,21 @@ def render_report(doc: Doc, arrays: Arrays) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _refuse_beamlet_doc(doc: Doc) -> None:
+    """Fail-closed gate (V3-007 S1): beamlet-set documents are S5 work."""
+    from ionmc import config as config_mod
+    from ionmc.errors import UnsupportedCombinationError
+
+    src = doc.get("requested", {}).get("source", {}) if isinstance(doc, Mapping) else {}
+    if src.get("type") == "beamlets" and not config_mod.BEAMLET_PERSISTENCE_AVAILABLE:
+        raise UnsupportedCombinationError(
+            "result bundles of a beamlet set are not yet available (V3-007 S5)"
+        )
+
+
 def render_all(doc: Doc, arrays: Arrays) -> dict[str, str]:
     """Every derived file of a bundle: ``report.md`` and ``plots/*.svg``."""
+    _refuse_beamlet_doc(doc)
     return {"report.md": render_report(doc, arrays), **render_plots(doc, arrays)}
 
 

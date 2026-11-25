@@ -1528,7 +1528,10 @@ def validate_dict_structure(d: Any) -> None:
                 st = _table(kw["sternheimer"], f"materials[{i}].sternheimer")
                 _read(st, f"materials[{i}].sternheimer", STERNHEIMER_FIELDS)
     st = _table(top["source"], "source")
-    if st.get("type", "pencil") == "beamlets":
+    kind = st.get("type", "pencil")
+    if not isinstance(kind, str) or kind not in SOURCE_TYPES:
+        raise ConfigError("source.type", f"must be one of {SOURCE_TYPES}, got {kind!r}")
+    if kind == "beamlets":
         proj, rows = _beamlets_table(st)
         for i, t in enumerate(rows):
             _read_beamlet(t, f"source.beamlets[{i}]")
