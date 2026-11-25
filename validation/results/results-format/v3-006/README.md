@@ -13,7 +13,7 @@ because its signature covers those bytes.
 Produced at the clean commit 154fc2da (every summary's `code` block: `source = git`, `git_dirty = false`,
 `git_commit = 154fc2da…`, `package_tree_oid = 4970c9a4…` = `git rev-parse 154fc2da:src/ionmc`) by the logged run
 `20261125T100614Z-out6-lv-evidence-154fc2da` (`telemetry/test-logs`). Earlier sets of the same rows at 48b782bf,
-cebd9109 and 154fc2da (all PASS) were superseded by the reader and driver corrections of the final review rounds.
+cebd9109 and 93f7d68f (all PASS) were superseded by the reader and driver corrections of the final review rounds.
 
 | file | row(s) | verdict |
 |---|---|---|
