@@ -91,8 +91,12 @@ performance targets.
    `numpy()` is a view and nothing is copied): the current chunk's tally and counter rows read back inside the chunk
    loop (`tally_rows.numpy()`, `counter_rows.numpy()`, `warp_driver.py` 244–245: 8·chunk·W_t + 4·chunk·W_c) and the
    ONE host copy of the current group's influence accumulators during the device→host transfer (8·G·B·V_inf); the
-   two readbacks belong to different phases (chunk loop vs. end of group) and never coexist — S3 must release the
-   chunk readbacks before the group copy (an obligation MEM-1 checks), so the cuda term is their maximum. Symbols: B = `n_batches`; S = `total_vox` (all scoring grids); n_g =
+   two readbacks belong to different phases (chunk loop vs. end of group) and never coexist, and one chunk's
+   readbacks never coexist with the next chunk's: S3 must release (`del`) the chunk's host rows right after their
+   exact reduction, before the next `numpy()` readback and before the group copy (A-8: the current loop keeps `trows`
+   and `crows` referenced across iterations, `warp_driver.py` 244–250, which would peak at T + C + max(T, C)); MEM-1
+   observes allocation AND release lifetimes (the instrumentation records both events and takes the running sum's
+   peak), so a lingering copy fails the audit. The cuda term is therefore the maximum of the two phases. Symbols: B = `n_batches`; S = `total_vox` (all scoring grids); n_g =
    number of scoring grids; V_inf = voxels of the influence grid; N = Σ_j n_j; J = beamlets; groups are the
    consecutive beamlet ranges [g·G, (g+1)·G) ∩ [0, J); L_G = max_g Σ_{j in group g} n_j (the longest group range);
    chunk = min(`RunOptions.chunk_histories`, L_G) — the worst case over the groups that G implies, so the selection
@@ -385,6 +389,15 @@ important and one minor finding, both adopted).** The frozen text is edited in p
 
 Not a clinical claim.
 
+**Amendment A-8 (2026-11-25, S0, before any code; Codex REVIEW-9c2b978b on e19168f1, changes_required; one
+important finding adopted).** Cross-iteration lifetime of the cuda host readbacks: the existing loop keeps `trows`
+and `crows` referenced across chunk iterations, so the next `numpy()` readback would overlap the previous copies
+(peak T + C + max(T, C)). §B.3 item (iv) now requires S3 to release the chunk's host rows right after their exact
+reduction, before the next readback and before the group copy, and MEM-1 observes allocation and release events
+(running-sum peak), so the formula `estimate_warp_cuda = estimate_warp_cpu + max(8·chunk·W_t + 4·chunk·W_c,
+8·G·B·V_inf)` is exact for an implementation that honours the release rule and a lingering copy fails the audit.
+Not a clinical claim.
+
 ## C. Seeds and determinism rules (declared before any run)
 
 - CI tests use fixed small seeds written in the tests (not evidence).
@@ -522,7 +535,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
-| MEM-1 | Instrumented allocation audit: the accumulator-payload class (i)–(iv) of §B.3 (A-6 item 1: grid accumulators, the tally and counter rows a backend holds at one time — one chunk on warp, the whole range on python —, influence accumulators and, on cuda, one host copy; NOT F, end-state/end-phase arrays, diagnostics, retained output, Python overhead or the kernel cache) is measured as the peak over chunks of the sum of the byte sizes of its arrays, with the estimate computed for the current group's range; every such array (numpy `ndarray.nbytes` of arrays created by the driver and `wp.array` sizes, recorded through a test hook on the allocation helpers) is instrumented and its peak sum is at most `allocation_estimate(...)` (§B.3); the peak is taken over chunks and groups (warp) or over the range (python); the estimate must not exceed the measured peak by more than a factor 1.5 (an estimate that is too loose is also a fail, recorded) | measured peak ≤ estimate ≤ 1.5 × measured peak, for each of the python, warp-cpu f64 and f32 variants, with and without ions/nuclear where the backend supports them, and for G ∈ {1, 2, J} | CI (python, warp-cpu); LV (warp-cpu); HR (warp-cuda) |
+| MEM-1 | Instrumented allocation audit: the accumulator-payload class (i)–(iv) of §B.3 (A-6 item 1: grid accumulators, the tally and counter rows a backend holds at one time — one chunk on warp, the whole range on python —, influence accumulators and, on cuda, one host copy; NOT F, end-state/end-phase arrays, diagnostics, retained output, Python overhead or the kernel cache) is measured as the peak over chunks of the sum of the byte sizes of its arrays, with the estimate computed for the current group's range; every such array (numpy `ndarray.nbytes` of arrays created by the driver and `wp.array` sizes, recorded through a test hook on the allocation helpers) is instrumented with its allocation AND release events (the audit takes the peak of the running sum, so transient lifetimes across chunk iterations are observed, A-8) and its peak sum is at most `allocation_estimate(...)` (§B.3); the peak is taken over chunks and groups (warp) or over the range (python); the estimate must not exceed the measured peak by more than a factor 1.5 (an estimate that is too loose is also a fail, recorded) | measured peak ≤ estimate ≤ 1.5 × measured peak, for each of the python, warp-cpu f64 and f32 variants, with and without ions/nuclear where the backend supports them, and for G ∈ {1, 2, J} | CI (python, warp-cpu); LV (warp-cpu); HR (warp-cuda) |
 
 **CLI, reuse, performance, regression, docs**
 
@@ -629,3 +642,6 @@ None. Cache-backed CAP-1 rows use datasets already cached; no download.
 - 2026-11-25 (S0 fix 7, Codex REVIEW-5780f9aa on c7f386d3, changes_required; one important and one minor finding
   adopted, see Amendment A-7 after A-6): (1) the cuda chunk readbacks of tally/counter rows join the payload class;
   (2) SPA-4 non-finite explicit weight vectors. Not a clinical claim.
+- 2026-11-25 (S0 fix 8, Codex REVIEW-9c2b978b on e19168f1, changes_required; one important finding adopted, see
+  Amendment A-8 after A-7): cuda chunk readbacks must be released before the next readback; MEM-1 observes
+  allocation and release lifetimes. Not a clinical claim.

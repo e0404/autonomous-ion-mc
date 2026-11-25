@@ -2,6 +2,8 @@
 
 - Status: Accepted (frozen with plan `validation/plans/v3-007-acceptance.md` at the S0 commit, 2026-11-25). Later
   changes are dated amendments. Not a clinical claim.
+- Amended 2026-11-25 (S0 fix 8, Codex REVIEW-9c2b978b on e19168f1): cuda chunk readbacks released before the next
+  readback; MEM-1 observes lifetimes (§2).
 - Amended 2026-11-25 (S0 fix 7, Codex REVIEW-5780f9aa on c7f386d3): cuda chunk readbacks in the payload class
   (§2); non-finite explicit weight vectors refused (§1, plan SPA-4).
 - Amended 2026-11-25 (S0 fix 6, Codex REVIEW-0d4bb5f6 on 8db925e7): (1) one consistent accumulator-payload
@@ -123,7 +125,8 @@ channel_columns`, + `len(NUCLEAR_TALLY_NAMES)` on python with nuclear) and count
 `len(ION_COUNTER_NAMES)` for ions, + `len(NUCLEAR_COUNTER_NAMES)` on python with nuclear) a backend holds at one time
 (one chunk on warp, the whole range N on python), (iv) on warp-cuda the host copies `numpy()` allocates while the device arrays stay live — the
 current chunk's tally/counter rows and the current group's influence accumulators, in different phases, so their
-maximum (A-7 item 1); chunk = min(`chunk_histories`, longest group range that G implies). The formulas are
+maximum (A-7 item 1; A-8: each chunk's host rows are released right after their reduction, before the next readback,
+and MEM-1 observes allocation and release lifetimes); chunk = min(`chunk_histories`, longest group range that G implies). The formulas are
 in plan §B.3. Not in the class and not bounded: geometry/tables/descriptors/parameter arrays, end-state arrays and
 end-phase `edep` copies, reduction temporaries, diagnostic arrays, the retained CSC/batch output of earlier groups
 and the assembled `Result` (bounded at `save` by the 0045 budgets), Python object overhead, the Warp kernel/module
