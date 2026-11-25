@@ -72,3 +72,8 @@ summary).
   measurement archive. Ten independent review rounds were needed; the
   recurring theme was that every quoted number must be reproducible from
   committed scripts and archived raw outputs at a clean SHA.
+
+Dated note (2026-11-25): V3-007 started; its acceptance plan (`validation/plans/v3-007-acceptance.md`) and decision
+0046 are frozen at the S0 commit. M1 will not be declared reached by V3-007 alone: the M1 wording is end-to-end
+beamlet/influence runs on three backends with electromagnetic physics, with nuclear interactions on the python backend
+only (V3-005B deferred by the operator).

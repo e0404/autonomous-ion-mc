@@ -500,3 +500,9 @@ option explicitly.
   0 skipped) all PASS. The earlier sets at 48b782bf/a79f3333, cebd9109 and 93f7d68f (all PASS; preserved in the task's
   validation records) are superseded. The same host run re-derived the V3-013 predictions tree pin (note of
   2026-11-25 in plan v3-013). Not a clinical claim.
+
+**Dated note (2026-11-25; V3-007, decision 0046) — row OUT-4 unknown-version control.** Row OUT-4's unknown-version
+negative control uses "1.1" and "2.0". Because decision 0046 defines schema 1.1 (MINOR, optional blocks,
+`kind = "influence"`), the control moves to "1.2" and "2.0" from the V3-007 step that introduces 1.1 (S5). The
+control's intent (an unknown MINOR/MAJOR version is refused) is unchanged; this is not a re-grade; the V3-006 outcome
+stands as recorded. Not a clinical claim.
