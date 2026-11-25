@@ -573,6 +573,8 @@ class _Package:
         self.roots: dict[Key, set[str]] = {}
         self.labels: dict[Key, set[str]] = {}
         self.rets: set[Key] = set()
+        self.fields: set[tuple[str, str, str]] = set()  # (module, class, attribute) source fields
+        self._inst: dict[Key, dict[str, Key]] = {}
         self._callee: dict[int, tuple[Key, int] | None] = {}
         for mod, text in texts.items():
             parts = list(Path(mod).with_suffix("").parts)
@@ -606,7 +608,9 @@ class _Package:
     @staticmethod
     def _bindings(n: ast.AST) -> list[tuple[ast.AST, ast.AST]]:
         """(target, value) element pairs of an assignment (tuple targets paired elementwise)."""
-        if not isinstance(n, ast.Assign | ast.AnnAssign | ast.NamedExpr) or n.value is None:
+        if not isinstance(n, ast.Assign | ast.AnnAssign | ast.AugAssign | ast.NamedExpr):
+            return []
+        if n.value is None:
             return []
         pairs: list[tuple[ast.AST, ast.AST]] = []
         for t in n.targets if isinstance(n, ast.Assign) else [n.target]:
@@ -716,12 +720,75 @@ class _Package:
             return tgt, 0
         return None
 
+    def _class_of_call(self, call: ast.Call, key: Key) -> Key | None:
+        """The package class constructed by ``Class(...)`` / ``mod.Class(...)``, else None."""
+        mod, q = key
+        f = call.func
+        if isinstance(f, ast.Name):
+            hit = self._resolve_name(mod, q, f.id)
+            return hit[1] if hit is not None and hit[0] == "class" else None
+        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+            hit = self._resolve_name(mod, q, f.value.id)
+            if hit is not None and hit[0] == "module":
+                k = (hit[1][0], f.attr)
+                return k if k in self.defs and self._is_class(k) else None
+        return None
+
+    def instances(self, key: Key) -> dict[str, Key]:
+        """Names of the scope (own, enclosing-function and module-level bindings) bound to an
+        instance of a package class (``x = Class(...)``), plus ``self``/``cls`` of a method."""
+        if key not in self._inst:
+            mod, q = key
+            parts = [] if q == "<module>" else q.split(".")
+            scopes = [(mod, "<module>")] + [
+                (mod, ".".join(parts[:i])) for i in range(1, len(parts))
+            ]
+            out: dict[str, Key] = {}
+            for sk in [*scopes, key]:
+                for t, v in self.binds.get(sk, ()):
+                    if isinstance(t, ast.Name) and isinstance(v, ast.Call):
+                        c = self._class_of_call(v, sk)
+                        if c is not None:
+                            out[t.id] = c
+            cq = self._enclosing_class(mod, q)
+            if cq is not None:
+                out["self"] = out["cls"] = (mod, cq)
+            self._inst[key] = out
+        return self._inst[key]
+
+    def _field_owner(self, n: ast.AST, key: Key) -> tuple[Key, str] | None:
+        """(class-or-scope, attribute) of ``<name>.<attr>``: the class of the instance name, else
+        the scope-local pseudo class of an unresolvable base name (documented limit)."""
+        if not (isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)):
+            return None
+        cls = self.instances(key).get(n.value.id)
+        return (cls or (key[0], f"<scope>:{key[1]}:{n.value.id}")), n.attr
+
+    def fieldread(self, n: ast.AST, key: Key) -> str | None:
+        """``Class.attr`` label when ``n`` reads a stored source field, else None."""
+        if isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Load):
+            own = self._field_owner(n, key)
+            if own is not None and (*own[0], own[1]) in self.fields:
+                return f"{own[0][1]}.{own[1]}"
+        return None
+
+    def _dataclass_fields(self, ck: Key) -> list[str]:
+        return [
+            st.target.id
+            for st in self.defs[ck][0].body  # type: ignore[attr-defined]
+            if isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name)
+        ]
+
     # -- provenance --------------------------------------------------------------------------------
     def srcval(self, n: ast.AST, alias: set[str], key: Key) -> bool:
         if isinstance(n, ast.Attribute):
-            return n.attr == "source"
+            return n.attr == "source" or self.fieldread(n, key) is not None
         if isinstance(n, ast.Name):
             return n.id in alias
+        if isinstance(n, ast.IfExp):
+            return self.srcval(n.body, alias, key) or self.srcval(n.orelse, alias, key)
+        if isinstance(n, ast.BoolOp):
+            return any(self.srcval(v, alias, key) for v in n.values)
         if isinstance(n, ast.Call):
             c = self.callee(n, key)
             return c is not None and c[0] in self.rets
@@ -771,6 +838,26 @@ class _Package:
                     out.append((ck, str(kw.arg)))
         return out
 
+    def _ctor_fields(self, call: ast.Call, alias: set[str], key: Key) -> bool:
+        """A source passed to the generated ``__init__`` of a dataclass-like class (no explicit
+        ``__init__``) marks the receiving annotated field as a source field of that class."""
+        ck = self._class_of_call(call, key)
+        if ck is None or (ck[0], f"{ck[1]}.__init__") in self.defs:
+            return False
+        names = self._dataclass_fields(ck)
+        recv = [
+            names[i]
+            for i, a in enumerate(call.args)
+            if i < len(names) and not isinstance(a, ast.Starred) and self.srcval(a, alias, key)
+        ] + [
+            str(kw.arg)
+            for kw in call.keywords
+            if kw.arg in names and self.srcval(kw.value, alias, key)
+        ]
+        new = {(*ck, r) for r in recv} - self.fields
+        self.fields |= new
+        return bool(new)
+
     def solve(self) -> None:
         changed = True
         while changed:
@@ -787,10 +874,18 @@ class _Package:
                 ):
                     self.rets.add(key)
                     changed = True
+                for t, v in self.binds[key]:  # object-field provenance: ``obj.x = <source>``
+                    own = self._field_owner(t, key)
+                    if own is not None and self.srcval(v, al, key):
+                        fk = (*own[0], own[1])
+                        if fk not in self.fields:
+                            self.fields.add(fk)
+                            changed = True
                 for n in nodes:
                     if isinstance(n, ast.Call):
                         for ck, p in self._pass_edges(n, al, key):
                             changed |= self._add_root(ck, p, f"<param>:{ck[1]}.{p}")
+                        changed |= self._ctor_fields(n, al, key)
                 pk = (mod, q.rpartition(".")[0])
                 if (
                     "." in q
@@ -828,10 +923,17 @@ class _Package:
             for n in nodes:
                 par = parents.get(id(n))
                 base = isinstance(par, ast.Attribute) and par.value is n
-                bound = isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n
+                bound = isinstance(par, ast.Assign | ast.AnnAssign | ast.AugAssign) and (
+                    par.value is n
+                )
                 is_src = isinstance(n, ast.Attribute) and n.attr == "source"
                 if isinstance(n, ast.Attribute) and self.srcval(n.value, alias, key):
                     add(n, (mod, q, n.attr))
+                fld = self.fieldread(n, key)
+                if fld is not None:
+                    add(n, (mod, q, f"<field>:{fld}"))
+                    if not base and not bound and not is_src:
+                        add(n, (mod, q, "<alias-passed>"))
                 if is_src:
                     add(n, (mod, q, f"<root>:{ast.unparse(n)}"))
                     if not base and not bound:
@@ -953,7 +1055,25 @@ ALLOWLIST: dict[Event, tuple[str, int]] = {
     ("results.py", "save", "<bare>"): (S1, 1),
     ("transport/reference.py", "_Reference.__init__", _PROJ): (ENV, 4),  # 4 occurrences
     # V3-007 S2: the beamlet-set handle (offsets, directions) and the per-beamlet sampling reads
-    ("transport/reference.py", "_Reference.__init__", "<alias-passed>"): (PER, 2),  # 2 occurrences
+    ("transport/reference.py", "_Reference.__init__", "<alias-passed>"): (PER, 3),  # 3 occurrences
+    # object-field provenance (S2 fix 1): `self.beamlet_set = src0 ...` stores the set; readers of
+    # the stored field are per-beamlet (offsets, unit directions, beamlet count, accumulators)
+    ("transport/reference.py", "_Reference.__init__", "<field>:_Reference.beamlet_set"): (PER, 3),
+    ("transport/reference.py", "_Reference.__init__", "beamlets"): (PER, 1),
+    ("transport/reference.py", "_Reference.__init__", "offsets"): (PER, 1),
+    ("transport/reference.py", "_Reference._flush_group", "<alias-passed>"): (PER, 1),
+    ("transport/reference.py", "_Reference._flush_group", "<field>:_Reference.beamlet_set"): (
+        PER,
+        2,
+    ),
+    ("transport/reference.py", "_Reference._flush_group", "n_beamlets"): (PER, 1),
+    ("transport/reference.py", "_Reference.run_range", "<alias-passed>"): (
+        PER,
+        3,
+    ),  # `bs is not None`
+    ("transport/reference.py", "_Reference.run_range", "<field>:_Reference.beamlet_set"): (PER, 1),
+    # a materials citation field `Material.source` stored by the dataclass constructor
+    ("materials.py", "Material.with_I", "<field>:Material.source"): (NOT, 1),
     ("transport/reference.py", "_Reference._source_parameters", "<alias-passed>"): (PER, 1),
     ("transport/reference.py", "_Reference._source_parameters", "beamlets"): (PER, 1),
     ("transport/reference.py", "_Reference._source_parameters", "energy_sigma_mev"): (PER, 1),
@@ -1175,7 +1295,7 @@ def test_beam2_audit_inventory_equals_the_allowlist() -> None:
 
 def test_beam2_inventory_size_is_pinned() -> None:
     """Decision 0046 quotes the inventory size (occurrences counted per key)."""
-    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (185, 294)
+    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (194, 309)
 
 
 def test_beam2_a_duplicate_occurrence_in_the_repository_fails_naming_the_scope() -> None:
@@ -1423,3 +1543,50 @@ def test_beam2_the_audit_runtime_over_the_package_is_small() -> None:
     t0 = time.perf_counter()
     audit_readers(SRC)
     assert time.perf_counter() - t0 < 5.0
+
+
+def test_beam2_object_field_provenance_controls() -> None:
+    """S2 fix 1 (REVIEW-b795ade2): a source stored in an object field is a source field; a later
+    read through ``self`` / an instance name, an alias of it, or a pass of it is an event."""
+    cls = "class Sim:\n    def __init__(self, cfg):\n        self.src = cfg.source\n"
+    # (a) another method reads the stored field
+    a = audit_text(cls + "    def run(self):\n        return self.src.kinetic_energy_mev\n")
+    assert a[("mod.py", "Sim.run", "<field>:Sim.src")] == 1
+    assert a[("mod.py", "Sim.run", "kinetic_energy_mev")] == 1
+    # (b) the same through an alias of the field
+    b = audit_text(cls + "    def run(self):\n        s = self.src\n        return s.position_mm\n")
+    assert b[("mod.py", "Sim.run", "position_mm")] == 1
+    assert b[("mod.py", "Sim.run", "<field>:Sim.src")] == 1
+    # (c) a pass of the field reaches the callee parameter
+    c = audit_text(
+        cls + "    def run(self):\n        return self.helper(self.src)\n"
+        "    def helper(self, s):\n        return s.weight\n"
+    )
+    assert c[("mod.py", "Sim.helper", "weight")] == 1
+    assert c[("mod.py", "Sim.helper", "<param>:Sim.helper.s")] == 1
+    assert c[("mod.py", "Sim.run", "<alias-passed>")] == 1
+    # (d) a module-level instance read from the module and from a function
+    d = audit_text(cls + "sim = Sim(cfg)\nx = sim.src.energy\ndef f():\n    return sim.src.angle\n")
+    assert d[("mod.py", "<module>", "energy")] == 1 and d[("mod.py", "f", "angle")] == 1
+    assert (
+        d[("mod.py", "<module>", "<field>:Sim.src")] == 1
+        and d[("mod.py", "f", "<field>:Sim.src")] == 1
+    )
+    # (e) a dataclass constructed with the source (keyword and positional) and read later
+    dc = "class Holder:\n    source: object\n    n: int = 0\n"
+    e = audit_text(
+        dc + "def f(cfg):\n    h = Holder(source=cfg.source)\n    return h.source.direction\n"
+    )
+    assert e[("mod.py", "f", "direction")] == 1 and e[("mod.py", "f", "<field>:Holder.source")] == 1
+    e2 = audit_text(dc + "def f(cfg):\n    h = Holder(cfg.source)\n    return h.source.direction\n")
+    assert e2[("mod.py", "f", "direction")] == 1
+    # an attribute store on a plain object, augmented and tuple targets
+    g = audit_text("def f(cfg, o):\n    o.x, o.y = cfg.source, 1\n    return o.x.energy, o.y.z\n")
+    assert g[("mod.py", "f", "energy")] == 1 and ("mod.py", "f", "z") not in g
+    # (f) specificity: a stored NON-source field read later produces no event
+    f = audit_text(
+        "class Sim:\n    def __init__(self, cfg):\n        self.src = cfg.source\n"
+        "        self.k = 5\n        self.name = cfg.name\n"
+        "    def run(self):\n        return self.k.real, self.name.upper\n"
+    )
+    assert set(f) == {("mod.py", "Sim.__init__", "<root>:cfg.source")}
