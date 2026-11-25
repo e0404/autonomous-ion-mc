@@ -266,14 +266,10 @@ def test_s1fix5_every_beamlet_request_path_resolves_and_the_report_prints_it(
         rq, eff = _rq_eff(c)
         res = contract.reconcile(c, validate(c))
         pairs = [(r.row, p) for r in res for p in r.requested]
-        assert len(pairs) == len(set(pairs))  # unique per (row, path)
         for row, path in pairs:
             if path.split(".")[:2] == ["physics", "stopping"]:  # inherited V3-006 object form
                 continue
-            cur: Any = rq
-            for part in path.split("."):
-                assert isinstance(cur, dict) and part in cur, (row, path)
-                cur = cur[part]
+            assert contract.request_path_get(rq, path) is not contract._ABSENT, (row, path)
         doc = {
             "requested": rq,
             "effective": eff,
@@ -289,6 +285,54 @@ def test_s1fix5_every_beamlet_request_path_resolves_and_the_report_prints_it(
             for ln in text.splitlines()
             if "physics.stopping" not in ln  # inherited V3-006 optional stopping-object form
         )
+
+
+def test_s1fix6_request_paths_are_globally_unique(gate_open: None) -> None:
+    """Every path claimed by a V3-007 row occurs in exactly one row of every beamlet fixed config;
+    the only repeated paths are the V3-006 inherited ones (``physics.nuclear``, ``tallies`` of the
+    row stopping-identity), identical for every pencil fixed config (unchanged table)."""
+    inherited = {"physics.nuclear", "tallies"}
+    v7 = {p for r in contract.BEAMLET_ROWS for p in r.requested}
+    for c in [*_beamlet_cfgs(), *fixed.fixed_configs().values()]:
+        res = contract.reconcile(c, validate(c))
+        paths = [p for r in res for p in r.requested]
+        assert {p for p in paths if paths.count(p) > 1} <= inherited
+        assert all(paths.count(p) <= 1 for p in v7)
+
+
+def test_s1fix6_non_unit_direction_is_one_derived_row_and_the_table_stays_equal(
+    gate_open: None,
+) -> None:
+    Beamlet = b7.Beamlet  # noqa: N806
+
+    odd = Beamlet((0.0, 0.0, -5.0), (0.0, 0.0, 3.0), 100.0, n_histories=40)
+    c = cfg(beamlets=(bl(), odd))
+    res = contract.reconcile(c, validate(c))
+    d = [r for r in res if any(p.endswith("].direction") for p in r.requested)]
+    assert [(r.row, r.cls) for r in d] == [("beamlet-direction", "derived")]
+    assert d[0].requested == ("source.beamlets[*].direction",)
+    table = next(r for r in res if r.row == "beamlet-set")
+    assert table.cls == "equal" and "source.beamlets" in table.requested
+    assert sum("source.beamlets" in r.requested for r in res) == 1
+    unit = contract.reconcile(
+        cfg(beamlets=(bl(), bl(1.0))), validate(cfg(beamlets=(bl(), bl(1.0))))
+    )
+    assert next(r for r in unit if r.row == "beamlet-direction").cls == "equal"
+
+
+def test_s1fix6_the_star_segment_resolves_to_a_list_and_a_missing_field_fails_loudly() -> None:
+    from ionmc import report
+
+    doc = {"source": {"beamlets": [{"direction": [0, 0, 1], "n": 1}, {"direction": [0, 1, 0]}]}}
+    assert contract.request_path_get(doc, "source.beamlets[*].direction") == [[0, 0, 1], [0, 1, 0]]
+    assert len(contract.request_path_get(doc, "source.beamlets[*]")) == 2
+    assert contract.request_path_get(doc, "source.nothing[*].x") is contract._ABSENT
+    with pytest.raises(UnsupportedCombinationError, match="element 1"):
+        contract.request_path_get(doc, "source.beamlets[*].n")
+    with pytest.raises(UnsupportedCombinationError, match="list"):
+        contract.request_path_get({"source": {"beamlets": 3}}, "source.beamlets[*].n")
+    cell = report._requested_cell({"requested": doc}, "source.beamlets[*].direction")
+    assert "per beamlet (2 values)" in cell and "not given" not in cell
 
 
 @pytest.mark.parametrize(

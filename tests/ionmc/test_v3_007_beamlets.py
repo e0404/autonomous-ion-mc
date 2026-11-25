@@ -522,17 +522,28 @@ def test_beam3_canonical_table_and_hash() -> None:
 
 # ---- BEAM-2: AST source-consumer audit ---------------------------------------------------------
 
-ROOTS = {"config", "cfg", "self.requested", "self.config", "eff.requested", "e.requested"}
+# A configuration-source root is an attribute chain ``<base>.source`` whose base is a configuration,
+# effective-configuration or result object: the last identifier of the base is one of these names
+# (``cfg.source``, ``eff.source``, ``eff.requested.source``, ``result.requested_config.source``,
+# ``self.config.source``, ``loaded.config.source``, ``self.requested.source``, ...). Subscript reads
+# of a stored document (``doc["requested"]["source"]``) are not object reads and are out of scope;
+# the TOML/dict readers of configio are inventoried through ``to_dict``/``from_dict`` instead.
+ROOT_BASES = {"config", "cfg", "requested", "requested_config", "eff", "effective"}
 
 
-def audit_readers(root: Path) -> set[tuple[str, str, str]]:
-    """Every (module, scope, attribute) read from ``<config>.source``: direct accesses, accesses
-    through aliases bound in the same scope (``src = cfg.source``, tuple unpacking included) and
-    pass-through of the source or an alias (``<bare>`` / ``<alias-passed>``)."""
+def audit_text(text: str, mod: str = "mod.py") -> set[tuple[str, str, str]]:
+    """Every (module, scope, attribute) read from a configuration-source root in ``text``: direct
+    accesses, accesses through aliases bound in the same scope (``src = cfg.source``, tuple
+    unpacking, and TRANSITIVE aliases ``src2 = src``; the alias set is a fixpoint) and pass-through
+    of the source or an alias, positional or by keyword (``<bare>`` / ``<alias-passed>``)."""
     events: set[tuple[str, str, str]] = set()
 
     def is_src(n: ast.AST) -> bool:
-        return isinstance(n, ast.Attribute) and n.attr == "source" and ast.unparse(n.value) in ROOTS
+        if not (isinstance(n, ast.Attribute) and n.attr == "source"):
+            return False
+        base = n.value
+        last = base.attr if isinstance(base, ast.Attribute) else getattr(base, "id", None)
+        return last in ROOT_BASES
 
     def collect(node: ast.AST, qual: list[str], out: dict[str, list[ast.AST]]) -> None:
         for ch in ast.iter_child_nodes(node):
@@ -542,50 +553,69 @@ def audit_readers(root: Path) -> set[tuple[str, str, str]]:
                 out.setdefault(".".join(qual) or "<module>", []).append(ch)
                 collect(ch, qual, out)
 
-    for p in sorted(root.rglob("*.py")):
-        mod = str(p.relative_to(root))
-        scopes: dict[str, list[ast.AST]] = {}
-        collect(ast.parse(p.read_text()), [], scopes)
-        for q, nodes in scopes.items():
-            alias: set[str] = set()
-            parents: dict[int, ast.AST] = {}
+    def bindings(n: ast.AST) -> list[tuple[ast.AST, ast.AST]]:
+        """(target, value) element pairs of an assignment (tuple targets paired elementwise)."""
+        if not isinstance(n, ast.Assign | ast.AnnAssign | ast.NamedExpr) or n.value is None:
+            return []
+        pairs: list[tuple[ast.AST, ast.AST]] = []
+        for t in n.targets if isinstance(n, ast.Assign) else [n.target]:
+            if isinstance(t, ast.Tuple) and isinstance(n.value, ast.Tuple):
+                if len(t.elts) == len(n.value.elts):
+                    pairs += list(zip(t.elts, n.value.elts, strict=True))
+            else:
+                pairs.append((t, n.value))
+        return pairs
+
+    scopes: dict[str, list[ast.AST]] = {}
+    collect(ast.parse(text), [], scopes)
+    for q, nodes in scopes.items():
+        alias: set[str] = set()
+        parents: dict[int, ast.AST] = {}
+        for n in nodes:
+            for ch in ast.iter_child_nodes(n):
+                parents[id(ch)] = n
+        grew = True
+        while grew:  # transitive aliases: src2 = src, s = src2, ...
+            grew = False
             for n in nodes:
-                for ch in ast.iter_child_nodes(n):
-                    parents[id(ch)] = n
-                if isinstance(n, ast.Assign | ast.AnnAssign | ast.NamedExpr):
-                    tg = n.targets if isinstance(n, ast.Assign) else [n.target]
-                    val = n.value
-                    for t in tg:
-                        if (
-                            isinstance(t, ast.Tuple)
-                            and isinstance(val, ast.Tuple)
-                            and len(t.elts) == len(val.elts)
-                        ):
-                            for a, b in zip(t.elts, val.elts, strict=True):
-                                if val is not None and is_src(b) and isinstance(a, ast.Name):
-                                    alias.add(a.id)
-                        elif val is not None and is_src(val) and isinstance(t, ast.Name):
-                            alias.add(t.id)
-            for n in nodes:
-                par = parents.get(id(n))
-                if isinstance(n, ast.Attribute):
-                    if is_src(n.value) or (isinstance(n.value, ast.Name) and n.value.id in alias):
-                        events.add((mod, q, n.attr))
-                if (
-                    is_src(n)
-                    and not (isinstance(par, ast.Attribute) and par.value is n)
-                    and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
-                    and not isinstance(par, ast.Tuple)
-                ):
-                    events.add((mod, q, "<bare>"))
-                if (
-                    isinstance(n, ast.Name)
-                    and n.id in alias
-                    and isinstance(n.ctx, ast.Load)
-                    and not (isinstance(par, ast.Attribute) and par.value is n)
-                ):
-                    events.add((mod, q, "<alias-passed>"))
+                for t, v in bindings(n):
+                    if (
+                        isinstance(t, ast.Name)
+                        and t.id not in alias
+                        and (is_src(v) or (isinstance(v, ast.Name) and v.id in alias))
+                    ):
+                        alias.add(t.id)
+                        grew = True
+        for n in nodes:
+            par = parents.get(id(n))
+            if isinstance(n, ast.Attribute):
+                if is_src(n.value) or (isinstance(n.value, ast.Name) and n.value.id in alias):
+                    events.add((mod, q, n.attr))
+            if (
+                is_src(n)
+                and not (isinstance(par, ast.Attribute) and par.value is n)
+                and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
+                and not isinstance(par, ast.Tuple)
+            ):
+                events.add((mod, q, "<bare>"))
+            if (
+                isinstance(n, ast.Name)
+                and n.id in alias
+                and isinstance(n.ctx, ast.Load)
+                and not (isinstance(par, ast.Attribute) and par.value is n)
+                and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
+                and not isinstance(par, ast.Tuple)
+            ):
+                events.add((mod, q, "<alias-passed>"))
     return events
+
+
+def audit_readers(root: Path) -> set[tuple[str, str, str]]:
+    """``audit_text`` over every module of ``root``."""
+    out: set[tuple[str, str, str]] = set()
+    for p in sorted(root.rglob("*.py")):
+        out |= audit_text(p.read_text(), str(p.relative_to(root)))
+    return out
 
 
 ENV, PER, S1, NOT = "envelope", "per-beamlet", "refused-in-S1", "not-a-source"
@@ -631,6 +661,9 @@ ALLOWLIST: dict[tuple[str, str, str], str] = {
     ("configio.py", "to_dict", "beamlets"): PER,
     ("configio.py", "to_dict", _PROJ): ENV,
     ("results.py", "_lookup_plan", _PROJ): ENV,
+    # V3-007 S1 fix 4: isinstance(result.requested_config.source, BeamletSet) persistence gate
+    ("results.py", "build_document", "<bare>"): S1,  # refused until S5
+    ("results.py", "save", "<bare>"): S1,
     ("transport/reference.py", "_Reference.__init__", _PROJ): ENV,
     ("transport/reference.py", "_Reference._history", "<alias-passed>"): S1,  # isinstance guard
     ("transport/reference.py", "_Reference._history", "energy_sigma_mev"): S1,  # S2
@@ -662,7 +695,7 @@ def test_beam2_the_refused_in_s1_readers_cannot_see_a_beamlet_set() -> None:
         assert not hasattr(b, attr)
     refused_attrs = {a for (_m, _q, a), v in ALLOWLIST.items() if v == S1}
     pencil_only = {"kinetic_energy_mev", "energy_sigma_mev", "lateral_sigma_mm", "position_mm"}
-    assert refused_attrs == pencil_only | {"<alias-passed>"}
+    assert refused_attrs == pencil_only | {"<alias-passed>", "<bare>"}
 
 
 def test_beam2_the_audit_finds_an_unlisted_reader(tmp_path: Path) -> None:
@@ -685,3 +718,29 @@ def test_beam2_envelope_consumers_use_extremes_not_one_beamlet() -> None:
     two = BeamletSet(PROTON, (bl(e=50.0), bl(2.0, e=140.0, energy_sigma_mev=1.0)))
     assert config._source_e_hi(two) == 146.0
     assert config._source_e_hi(PencilBeamSource(PROTON, (0, 0, 0), (0, 0, 1), 50.0, 1.0)) == 56.0
+
+
+def test_beam2_the_analyser_finds_every_root_alias_and_keyword_form() -> None:
+    """Negative controls on synthetic text: (i) a result-rooted read, (ii) a chained alias, (iii) a
+    keyword pass, plus eff/loaded roots; a non-config ``x.source`` and a subscripted document read
+    are not roots."""
+    text = (
+        "def a(result):\n    return result.requested_config.source.kinetic_energy_mev\n"
+        "def b(cfg):\n    src = cfg.source\n    src2 = src\n    s = src2\n"
+        "    return src2.position_mm, s.weight\n"
+        "def c(cfg):\n    return f(source=cfg.source)\n"
+        "def d(eff, loaded):\n    return eff.source.projectile, eff.requested.source.label,"
+        " loaded.config.source.direction\n"
+        "def e(self):\n    x, y = self.config.source, 0\n    z = x\n    return g(z), y\n"
+        "def n(x, doc):\n    return x.source.kinetic_energy_mev, doc['requested']['source']\n"
+    )
+    assert audit_text(text) == {
+        ("mod.py", "a", "kinetic_energy_mev"),
+        ("mod.py", "b", "position_mm"),
+        ("mod.py", "b", "weight"),
+        ("mod.py", "c", "<bare>"),
+        ("mod.py", "d", "projectile"),
+        ("mod.py", "d", "label"),
+        ("mod.py", "d", "direction"),
+        ("mod.py", "e", "<alias-passed>"),
+    }

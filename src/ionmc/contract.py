@@ -227,11 +227,12 @@ BEAMLET_ROWS: tuple[Row, ...] = (
     ),
     _r(
         "beamlet-direction",
-        "source.beamlets",
+        "source.beamlets[*].direction",
         "/unit_direction /unit_direction_status",
         "equal:not-applicable derived:normalise-per-beamlet",
         "a set has one direction per beamlet (in the digest); the single unit direction is null; "
-        "the request path is the beamlet TABLE (per-beamlet fields are not addressable by a path)",
+        "the request path maps over the beamlets ('[*]': one value per beamlet); the table as a "
+        "whole is the row beamlet-set",
     ),
     _r(
         "beamlet-histories",
@@ -295,6 +296,34 @@ def pointer_get(doc: Any, pointer: str) -> Any:
         except (KeyError, IndexError, TypeError, ValueError):
             return _ABSENT
     return cur
+
+
+def request_path_get(doc: Any, path: str) -> Any:
+    """Value at a dotted request path of nested mappings, or ``_ABSENT``. A ``name[*]`` segment
+    maps over the list ``name``: the result is the list of the per-element values of the
+    remaining path (the SAME resolver is used by the report); a missing field in one element or
+    a non-list raises ``UnsupportedCombinationError`` naming the element."""
+    parts = path.split(".")
+    for i, part in enumerate(parts):
+        star = part.endswith("[*]")
+        key = part[:-3] if star else part
+        if not isinstance(doc, Mapping) or key not in doc:
+            return _ABSENT
+        doc = doc[key]
+        if star:
+            if not isinstance(doc, list | tuple):
+                raise _differ(path, "a list at " + key, doc)
+            rest = ".".join(parts[i + 1 :])
+            if not rest:
+                return list(doc)
+            out = []
+            for j, el in enumerate(doc):
+                v = request_path_get(el, rest)
+                if v is _ABSENT:
+                    raise _differ(f"{path} (element {j})", "a value", v)
+                out.append(v)
+            return out
+    return doc
 
 
 def pointer_resolves(effective: Any, pointer: str) -> bool:
