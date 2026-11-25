@@ -291,6 +291,16 @@ def test_out3_reproduction_passes_and_fails_on_a_mutated_digest(
     mutated = copy.deepcopy(b)
     mutated["effective"]["seed"] += 1
     assert RUN.reproduction_verdict(a, mutated)["effective_differing_pointers"] == ["/seed"]
+    # the evidence runs pass the ORIGINAL bundle as a path relative to the repository root while
+    # the child runs with cwd = out: the driver resolves it (the LV run of 2026-11-25 failed here)
+    rel = Path(os.path.relpath(bundle, Path.cwd()))
+    assert not rel.is_absolute()
+    path2 = RUN.cmd_reproduce(rel, tmp_path / "rel", tmp_path / "cache")
+    v2 = json.loads(path2.read_text())
+    assert v2["verdict"] == "PASS" and v2["child_exit_code"] == 0, v2
+    assert results.load(tmp_path / "rel" / f"r0k{K_TEST}-repro").doc["run"]["output_path"] == (
+        f"r0k{K_TEST}-repro"
+    )
 
 
 def test_prov7_fails_on_a_non_git_code_block() -> None:

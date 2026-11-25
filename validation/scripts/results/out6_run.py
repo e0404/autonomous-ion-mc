@@ -522,9 +522,11 @@ def cmd_reproduce(bundle: Path, out: Path, cache_dir: Path, timeout: float = 180
     name = f"{bundle.name}-repro"
     if (out / name).exists():
         raise SystemExit(f"{name} exists under --out: every run writes to a fresh path")
+    # the child runs with cwd = out (its bundle path is then the relative name, so the persisted
+    # output_path carries no absolute path): the ORIGINAL bundle must be passed resolved
     code, dur = _child(
-        [sys.executable, str(Path(__file__).resolve()), "_reproduce-child", "--bundle", str(bundle),
-         "--out", name, "--cache-dir", str(cache_dir)],
+        [sys.executable, str(Path(__file__).resolve()), "_reproduce-child", "--bundle",
+         str(bundle.resolve()), "--out", name, "--cache-dir", str(cache_dir)],
         out, out, cache_dir, timeout,
     )  # fmt: skip
     verdict: dict[str, Any] = {"child_exit_code": code, "method": "configio.from_dict + API"}
