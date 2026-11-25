@@ -217,11 +217,15 @@ RECONCILIATION_TABLE: tuple[Row, ...] = (
 BEAMLET_ROWS: tuple[Row, ...] = (
     _r(
         "beamlet-set",
-        "source.type source.projectile source.beamlets",
+        "source.type source.projectile "
+        "source.beamlets[*].position_mm source.beamlets[*].kinetic_energy_mev "
+        "source.beamlets[*].energy_sigma_mev source.beamlets[*].lateral_sigma_mm "
+        "source.beamlets[*].n_histories source.beamlets[*].weight source.beamlets[*].label",
         "/source/type /source/projectile /source/z /source/a /source/mass_mev /source/n_beamlets "
         "/source/n_histories_total /source/envelope /source/beamlets_sha256",
         "equal:equal",
-        "V3-007: a beamlet set replaces the rows source and direction; the canonical-table digest "
+        "V3-007: a beamlet set replaces the rows source and direction; owns the leaf paths of the "
+        "table except the direction leaves (row beamlet-direction); the canonical-table digest "
         "(positions, unit directions, energies, spreads, n_histories, weights, labels) is "
         "recomputed from the requested rows",
     ),
@@ -231,8 +235,8 @@ BEAMLET_ROWS: tuple[Row, ...] = (
         "/unit_direction /unit_direction_status",
         "equal:not-applicable derived:normalise-per-beamlet",
         "a set has one direction per beamlet (in the digest); the single unit direction is null; "
-        "the request path maps over the beamlets ('[*]': one value per beamlet); the table as a "
-        "whole is the row beamlet-set",
+        "the request path maps over the beamlets ('[*]': one value per beamlet); the other leaves "
+        "of the table are the row beamlet-set (no row claims 'source.beamlets' itself)",
     ),
     _r(
         "beamlet-histories",

@@ -312,8 +312,8 @@ def test_s1fix6_non_unit_direction_is_one_derived_row_and_the_table_stays_equal(
     assert [(r.row, r.cls) for r in d] == [("beamlet-direction", "derived")]
     assert d[0].requested == ("source.beamlets[*].direction",)
     table = next(r for r in res if r.row == "beamlet-set")
-    assert table.cls == "equal" and "source.beamlets" in table.requested
-    assert sum("source.beamlets" in r.requested for r in res) == 1
+    assert table.cls == "equal" and "source.beamlets[*].direction" not in table.requested
+    assert sum("source.beamlets" in r.requested for r in res) == 0
     unit = contract.reconcile(
         cfg(beamlets=(bl(), bl(1.0))), validate(cfg(beamlets=(bl(), bl(1.0))))
     )
@@ -568,3 +568,33 @@ def test_validate_dict_structure_checks_source_type() -> None:
             dd["source"]["type"] = bad
             with pytest.raises(ConfigError, match="source.type"):
                 configio.validate_dict_structure(dd)
+
+
+def _leaves(v: Any, prefix: str) -> set[str]:
+    if isinstance(v, dict):
+        return {leaf for k, x in v.items() for leaf in _leaves(x, f"{prefix}.{k}")}
+    if isinstance(v, list | tuple) and v and all(isinstance(x, dict) for x in v):
+        sets = [_leaves(x, f"{prefix}[*]") for x in v]
+        assert all(s == sets[0] for s in sets)  # every element has the same leaves
+        return sets[0]
+    return {prefix}  # scalars and coordinate vectors are leaves
+
+
+def test_s1fix7_beamlet_leaves_are_each_owned_by_exactly_one_row(gate_open: None) -> None:
+    """Partition of the requested source into leaf paths: one owner each, no row claims an
+    ancestor of another row's leaf; the pencil tables are unchanged."""
+    from ionmc import configio
+
+    assert contract.ROWS["beamlet-set"].requested[:2] == ("source.type", "source.projectile")
+    for c in _beamlet_cfgs():
+        leaves = _leaves(configio.to_dict(c)["source"], "source")
+        res = contract.reconcile(c, validate(c))
+        claimed = [(r.row, p) for r in res for p in r.requested if p.startswith("source")]
+        for leaf in leaves:
+            assert [row for row, p in claimed if p == leaf].__len__() == 1, leaf
+        assert {p for _r, p in claimed} == leaves
+        for _r, p in claimed:
+            assert not any(q != p and q.startswith(p) for _r2, q in claimed)  # no ancestor claims
+        assert "source.beamlets" not in {p for _r, p in claimed}
+    pencil = [r for r in contract.RECONCILIATION_TABLE if r.id in ("source", "direction")]
+    assert all("[*]" not in p for r in pencil for p in r.requested)

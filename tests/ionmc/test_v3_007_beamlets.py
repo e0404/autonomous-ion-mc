@@ -522,28 +522,27 @@ def test_beam3_canonical_table_and_hash() -> None:
 
 # ---- BEAM-2: AST source-consumer audit ---------------------------------------------------------
 
-# A configuration-source root is an attribute chain ``<base>.source`` whose base is a configuration,
-# effective-configuration or result object: the last identifier of the base is one of these names
-# (``cfg.source``, ``eff.source``, ``eff.requested.source``, ``result.requested_config.source``,
-# ``self.config.source``, ``loaded.config.source``, ``self.requested.source``, ...). Subscript reads
-# of a stored document (``doc["requested"]["source"]``) are not object reads and are out of scope;
-# the TOML/dict readers of configio are inventoried through ``to_dict``/``from_dict`` instead.
-ROOT_BASES = {"config", "cfg", "requested", "requested_config", "eff", "effective"}
+# Every attribute access ``<expr>.source`` on ANY expression (a name, an attribute chain, a call
+# result, a subscript) is a candidate root; there is no vocabulary of base names. Each root
+# occurrence is an event ``(module, scope, "<root>:<expression>")`` that the allowlist classifies
+# (occurrences whose ``.source`` is not a configuration source, such as a lookup-file "source",
+# are classified ``not-a-source``); the attribute reads, aliases and pass-through of a root are
+# further events. Subscript reads of a stored document (``doc["requested"]["source"]``) are not
+# attribute accesses and are out of scope; the TOML/dict readers of configio are inventoried
+# through ``to_dict``/``from_dict`` instead.
 
 
 def audit_text(text: str, mod: str = "mod.py") -> set[tuple[str, str, str]]:
-    """Every (module, scope, attribute) read from a configuration-source root in ``text``: direct
-    accesses, accesses through aliases bound in the same scope (``src = cfg.source``, tuple
-    unpacking, and TRANSITIVE aliases ``src2 = src``; the alias set is a fixpoint) and pass-through
-    of the source or an alias, positional or by keyword (``<bare>`` / ``<alias-passed>``)."""
+    """Every (module, scope, event) of a ``.source`` root in ``text``: the root occurrence itself
+    (``<root>:<expression text>``, stable under line drift), direct attribute reads, reads through
+    aliases bound in the same scope (``src = cfg.source``, tuple unpacking, TRANSITIVE aliases
+    ``src2 = src``; the alias set is a fixpoint) and pass-through of the source or an alias, in any
+    position, by keyword, inside a tuple/list/set/dict literal or a return (``<bare>`` /
+    ``<alias-passed>``)."""
     events: set[tuple[str, str, str]] = set()
 
     def is_src(n: ast.AST) -> bool:
-        if not (isinstance(n, ast.Attribute) and n.attr == "source"):
-            return False
-        base = n.value
-        last = base.attr if isinstance(base, ast.Attribute) else getattr(base, "id", None)
-        return last in ROOT_BASES
+        return isinstance(n, ast.Attribute) and n.attr == "source"
 
     def collect(node: ast.AST, qual: list[str], out: dict[str, list[ast.AST]]) -> None:
         for ch in ast.iter_child_nodes(node):
@@ -591,11 +590,12 @@ def audit_text(text: str, mod: str = "mod.py") -> set[tuple[str, str, str]]:
             if isinstance(n, ast.Attribute):
                 if is_src(n.value) or (isinstance(n.value, ast.Name) and n.value.id in alias):
                     events.add((mod, q, n.attr))
+            if is_src(n):
+                events.add((mod, q, f"<root>:{ast.unparse(n)}"))
             if (
                 is_src(n)
                 and not (isinstance(par, ast.Attribute) and par.value is n)
                 and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
-                and not isinstance(par, ast.Tuple)
             ):
                 events.add((mod, q, "<bare>"))
             if (
@@ -604,7 +604,6 @@ def audit_text(text: str, mod: str = "mod.py") -> set[tuple[str, str, str]]:
                 and isinstance(n.ctx, ast.Load)
                 and not (isinstance(par, ast.Attribute) and par.value is n)
                 and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
-                and not isinstance(par, ast.Tuple)
             ):
                 events.add((mod, q, "<alias-passed>"))
     return events
@@ -676,6 +675,70 @@ ALLOWLIST: dict[tuple[str, str, str], str] = {
     ("transport/warp_driver.py", "run_warp_range", "lateral_sigma_mm"): S1,
     ("transport/warp_driver.py", "run_warp_range", "position_mm"): S1,
     ("transport/warp_driver.py", "run_warp_range", _PROJ): ENV,
+    # V3-007 S1 fix 7: root occurrences (every `.source` access) and tuple pass-through
+    ("config.py", "EffectiveConfig.is_ion", "<root>:self.requested.source"): ENV,
+    ("config.py", "EffectiveConfig.ls_effective", "<root>:self.requested.source"): ENV,
+    ("config.py", "EffectiveConfig.run", "<root>:self.requested.source"): PER,
+    ("config.py", "EffectiveConfig.stopping_identity", "<root>:self.requested.source"): ENV,
+    ("config.py", "EffectiveConfig.summary", "<root>:self.requested.source"): PER,
+    ("config.py", "PhysicsOptions.stopping_source", "<bare>"): NOT,
+    ("config.py", "PhysicsOptions.stopping_source", "<root>:self.selection.source"): NOT,
+    ("config.py", "SimulationConfig.__post_init__", "<bare>"): ENV,
+    ("config.py", "SimulationConfig.__post_init__", "<root>:self.source"): ENV,
+    ("config.py", "_beamlet_set_checks", "<bare>"): PER,
+    ("config.py", "_beamlet_set_checks", "<root>:config.source"): PER,
+    ("config.py", "_check_stopping_domain", "<root>:config.source"): ENV,
+    ("config.py", "_compile_tallies", "<bare>"): ENV,
+    ("config.py", "_compile_tallies", "<root>:config.source"): ENV,
+    ("config.py", "_computed_max_steps", "<bare>"): ENV,
+    ("config.py", "_computed_max_steps", "<root>:config.source"): ENV,
+    ("config.py", "_finish_beamlet_set", "<bare>"): PER,
+    ("config.py", "_finish_beamlet_set", "<root>:cfg.source"): PER,
+    ("config.py", "_influence_checks", "<root>:config.source"): PER,
+    ("config.py", "_ion_mapping_data", "<root>:config.source"): PER,
+    ("config.py", "_nuclear_setup_checks", "<bare>"): ENV,
+    ("config.py", "_nuclear_setup_checks", "<root>:config.source"): ENV,
+    ("config.py", "_nuclear_tables", "<root>:config.source"): ENV,
+    ("config.py", "_water_table", "<root>:config.source"): ENV,
+    ("config.py", "_with_derived_histories", "<root>:config.source"): PER,
+    ("config.py", "effective_e_cut_mev", "<root>:config.source"): ENV,
+    ("config.py", "effective_end_of_range_model", "<root>:config.source"): ENV,
+    ("config.py", "validate", "<bare>"): ENV,
+    ("config.py", "validate", "<root>:config.source"): ENV,
+    ("configio.py", "InputManifest.__post_init__", "<bare>"): NOT,
+    ("configio.py", "InputManifest.__post_init__", "<root>:self.source"): NOT,
+    ("configio.py", "InputManifest.to_dict", "<bare>"): NOT,
+    ("configio.py", "InputManifest.to_dict", "<root>:self.source"): NOT,
+    ("configio.py", "_material_dict", "<bare>"): NOT,
+    ("configio.py", "_material_dict", "<root>:m.source"): NOT,
+    ("configio.py", "to_dict", "<root>:config.source"): PER,
+    ("lookup.py", "LookupTable.provenance", "<bare>"): NOT,
+    ("lookup.py", "LookupTable.provenance", "<root>:self.source"): NOT,
+    ("materials.py", "Material.with_I", "<bare>"): NOT,
+    ("materials.py", "Material.with_I", "<root>:self.source"): NOT,
+    ("physics/stopping.py", "BetheStoppingSource.table", "<bare>"): NOT,
+    ("physics/stopping.py", "BetheStoppingSource.table", "<root>:material.source"): NOT,
+    ("physics/stopping_selection.py", "assert_identity_stable", "<bare>"): NOT,
+    ("physics/stopping_selection.py", "assert_identity_stable", "<root>:sel.source"): NOT,
+    ("physics/stopping_selection.py", "check_window", "<bare>"): NOT,
+    ("physics/stopping_selection.py", "check_window", "<root>:sel.source"): NOT,
+    ("physics/stopping_selection.py", "identity_block", "<alias-passed>"): NOT,
+    ("physics/stopping_selection.py", "identity_block", "<root>:sel.source"): NOT,
+    ("physics/stopping_tabulated.py", "TabulatedStoppingSource.table", "<bare>"): NOT,
+    (
+        "physics/stopping_tabulated.py",
+        "TabulatedStoppingSource.table",
+        "<root>:material.source",
+    ): NOT,
+    ("results.py", "_lookup_plan", "<root>:cfg.source"): ENV,
+    ("results.py", "_material_def", "<bare>"): NOT,
+    ("results.py", "_material_def", "<root>:m.source"): NOT,
+    ("results.py", "build_document", "<root>:result.requested_config.source"): S1,
+    ("results.py", "save", "<root>:result.requested_config.source"): S1,
+    ("transport/reference.py", "_Reference.__init__", "<root>:cfg.source"): ENV,
+    ("transport/reference.py", "_Reference._history", "<root>:cfg.source"): S1,
+    ("transport/warp_driver.py", "run_warp_range", "<bare>"): S1,
+    ("transport/warp_driver.py", "run_warp_range", "<root>:cfg.source"): S1,
 }
 SRC = Path(__file__).resolve().parents[2] / "src" / "ionmc"
 
@@ -695,7 +758,10 @@ def test_beam2_the_refused_in_s1_readers_cannot_see_a_beamlet_set() -> None:
         assert not hasattr(b, attr)
     refused_attrs = {a for (_m, _q, a), v in ALLOWLIST.items() if v == S1}
     pencil_only = {"kinetic_energy_mev", "energy_sigma_mev", "lateral_sigma_mm", "position_mm"}
-    assert refused_attrs == pencil_only | {"<alias-passed>", "<bare>"}
+    assert {a for a in refused_attrs if not a.startswith("<root>:")} == pencil_only | {
+        "<alias-passed>",
+        "<bare>",
+    }
 
 
 def test_beam2_the_audit_finds_an_unlisted_reader(tmp_path: Path) -> None:
@@ -707,9 +773,15 @@ def test_beam2_the_audit_finds_an_unlisted_reader(tmp_path: Path) -> None:
     )
     ev = audit_readers(tmp_path)
     assert ev == {
+        ("mod.py", "f", "<root>:cfg.source"),
         ("mod.py", "f", "kinetic_energy_mev"),
         ("mod.py", "g", "<bare>"),
+        ("mod.py", "g", "<root>:config.source"),
+        ("mod.py", "k", "<bare>"),
+        ("mod.py", "k", "<root>:self.requested.source"),
         ("mod.py", "k", "position_mm"),
+        ("mod.py", "other", "<root>:x.source"),  # any `.source` is a candidate root
+        ("mod.py", "other", "kinetic_energy_mev"),
     }
 
 
@@ -720,10 +792,52 @@ def test_beam2_envelope_consumers_use_extremes_not_one_beamlet() -> None:
     assert config._source_e_hi(PencilBeamSource(PROTON, (0, 0, 0), (0, 0, 1), 50.0, 1.0)) == 56.0
 
 
+def test_beam2_every_source_attribute_access_is_a_candidate_root() -> None:
+    """Synthetic negative controls of the rule: any expression may precede ``.source``; tuple, list
+    and return pass-through produce an event (no suppression)."""
+    cases = {
+        "def f(c):\n    return c.source.projectile\n": {
+            ("mod.py", "f", "<root>:c.source"),
+            ("mod.py", "f", "projectile"),
+        },
+        "def f(result):\n    return result.effective_config.source\n": {
+            ("mod.py", "f", "<root>:result.effective_config.source"),
+            ("mod.py", "f", "<bare>"),
+        },
+        "def f():\n    return foo().source.x\n": {
+            ("mod.py", "f", "<root>:foo().source"),
+            ("mod.py", "f", "x"),
+        },
+        "def f(cfg):\n    consume((cfg.source,))\n": {
+            ("mod.py", "f", "<root>:cfg.source"),
+            ("mod.py", "f", "<bare>"),
+        },
+        "def f(cfg):\n    return cfg.source, 1\n": {
+            ("mod.py", "f", "<root>:cfg.source"),
+            ("mod.py", "f", "<bare>"),
+        },
+        "def f(cfg):\n    return [cfg.source]\n": {
+            ("mod.py", "f", "<root>:cfg.source"),
+            ("mod.py", "f", "<bare>"),
+        },
+        "def f(cfg):\n    (a, b) = (cfg.source, 1)\n    return a.position_mm\n": {
+            ("mod.py", "f", "<root>:cfg.source"),
+            ("mod.py", "f", "<bare>"),
+            ("mod.py", "f", "position_mm"),
+        },
+        "def f(xs):\n    return xs[0].source.label\n": {
+            ("mod.py", "f", "<root>:xs[0].source"),
+            ("mod.py", "f", "label"),
+        },
+    }
+    for text, want in cases.items():
+        assert audit_text(text) == want, text
+
+
 def test_beam2_the_analyser_finds_every_root_alias_and_keyword_form() -> None:
     """Negative controls on synthetic text: (i) a result-rooted read, (ii) a chained alias, (iii) a
-    keyword pass, plus eff/loaded roots; a non-config ``x.source`` and a subscripted document read
-    are not roots."""
+    keyword pass, plus eff/loaded roots; ``x.source`` is a root too, a subscripted document read
+    is not an attribute access."""
     text = (
         "def a(result):\n    return result.requested_config.source.kinetic_energy_mev\n"
         "def b(cfg):\n    src = cfg.source\n    src2 = src\n    s = src2\n"
@@ -735,12 +849,22 @@ def test_beam2_the_analyser_finds_every_root_alias_and_keyword_form() -> None:
         "def n(x, doc):\n    return x.source.kinetic_energy_mev, doc['requested']['source']\n"
     )
     assert audit_text(text) == {
+        ("mod.py", "a", "<root>:result.requested_config.source"),
         ("mod.py", "a", "kinetic_energy_mev"),
+        ("mod.py", "b", "<root>:cfg.source"),
         ("mod.py", "b", "position_mm"),
         ("mod.py", "b", "weight"),
         ("mod.py", "c", "<bare>"),
+        ("mod.py", "c", "<root>:cfg.source"),
+        ("mod.py", "d", "<root>:eff.source"),
+        ("mod.py", "d", "<root>:eff.requested.source"),
+        ("mod.py", "d", "<root>:loaded.config.source"),
         ("mod.py", "d", "projectile"),
         ("mod.py", "d", "label"),
         ("mod.py", "d", "direction"),
         ("mod.py", "e", "<alias-passed>"),
+        ("mod.py", "e", "<bare>"),
+        ("mod.py", "e", "<root>:self.config.source"),
+        ("mod.py", "n", "<root>:x.source"),  # a non-config `.source` is still a root: the
+        ("mod.py", "n", "kinetic_energy_mev"),  # allowlist classifies it not-a-source
     }
