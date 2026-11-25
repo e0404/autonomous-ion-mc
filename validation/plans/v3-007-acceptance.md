@@ -87,9 +87,12 @@ performance targets.
    (i) the grid accumulators `edep` int64[B, S] (8·B·S bytes); (ii) the influence accumulators int64[G·B, V_inf]
    (8·G·B·V_inf; device on warp, host on python); (iii) the per-history tally rows float64[L, W_t] (8·L·W_t) and
    counter rows int32[L, W_c] (4·L·W_c) that a backend holds at one time: L = chunk on the warp paths (one chunk at a
-   time), L = N on the python path (the whole range, existing behaviour); (iv) on warp-cuda only, the ONE host copy
-   of the current group's influence accumulators during the device→host transfer (8·G·B·V_inf; on warp-cpu
-   `numpy()` is a view and nothing is copied). Symbols: B = `n_batches`; S = `total_vox` (all scoring grids); n_g =
+   time), L = N on the python path (the whole range, existing behaviour); (iv) on warp-cuda only, the host copies that `numpy()` allocates while the device arrays stay live (on warp-cpu
+   `numpy()` is a view and nothing is copied): the current chunk's tally and counter rows read back inside the chunk
+   loop (`tally_rows.numpy()`, `counter_rows.numpy()`, `warp_driver.py` 244–245: 8·chunk·W_t + 4·chunk·W_c) and the
+   ONE host copy of the current group's influence accumulators during the device→host transfer (8·G·B·V_inf); the
+   two readbacks belong to different phases (chunk loop vs. end of group) and never coexist — S3 must release the
+   chunk readbacks before the group copy (an obligation MEM-1 checks), so the cuda term is their maximum. Symbols: B = `n_batches`; S = `total_vox` (all scoring grids); n_g =
    number of scoring grids; V_inf = voxels of the influence grid; N = Σ_j n_j; J = beamlets; groups are the
    consecutive beamlet ranges [g·G, (g+1)·G) ∩ [0, J); L_G = max_g Σ_{j in group g} n_j (the longest group range);
    chunk = min(`RunOptions.chunk_histories`, L_G) — the worst case over the groups that G implies, so the selection
@@ -104,7 +107,7 @@ performance targets.
      `ION_COUNTER_NAMES` for an ion, + `NUCLEAR_COUNTER_NAMES` (3) when nuclear is on.
 
    Formulas: `estimate_warp_cpu = 8·B·S + 8·chunk·W_t + 4·chunk·W_c + 8·G·B·V_inf`;
-   `estimate_warp_cuda = estimate_warp_cpu + 8·G·B·V_inf`; `estimate_python = 8·B·S + 8·N·W_t + 4·N·W_c +
+   `estimate_warp_cuda = estimate_warp_cpu + max(8·chunk·W_t + 4·chunk·W_c, 8·G·B·V_inf)` (A-7 item 1); `estimate_python = 8·B·S + 8·N·W_t + 4·N·W_c +
    8·G·B·V_inf`. **Not in the class and not bounded** (the documentation, S7, says so): geometry, tables, grid
    descriptors, per-beamlet parameter/offset arrays and dummy arrays (F); the end-state arrays of the python path
    and the end-phase `edep_all`/`edep_grids` copies of the warp path; reduction temporaries (`astype` copies);
@@ -369,6 +372,19 @@ important findings, both adopted).** The frozen text is edited in place as befor
 
 Not a clinical claim.
 
+**Amendment A-7 (2026-11-25, S0, before any code; Codex REVIEW-5780f9aa on c7f386d3, changes_required; one
+important and one minor finding, both adopted).** The frozen text is edited in place as before.
+
+1. **CUDA row readbacks are in the payload class (finding 1).** Class item (iv) now names BOTH host copies that
+   `numpy()` allocates on warp-cuda while the device arrays stay live: the current chunk's tally and counter rows
+   (`warp_driver.py` 244–245; 8·chunk·W_t + 4·chunk·W_c) and the group's influence accumulator copy (8·G·B·V_inf).
+   They belong to different phases and never coexist (S3 obligation, audited by MEM-1), so
+   `estimate_warp_cuda = estimate_warp_cpu + max(8·chunk·W_t + 4·chunk·W_c, 8·G·B·V_inf)`.
+2. **Explicit weight vectors (finding 2).** SPA-4 provokes +inf, −inf, NaN, wrong length, negative and non-numeric
+   elements separately for both `plan_dose` and `plan_uncertainty` (`ValueError` each).
+
+Not a clinical claim.
+
 ## C. Seeds and determinism rules (declared before any run)
 
 - CI tests use fixed small seeds written in the tests (not evidence).
@@ -454,7 +470,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 | SPA-1 | τ = 0 round trip dense ↔ CSC (`to_dense`, `from_dense`) | bitwise; nnz = count of nonzero integer accumulators summed over batches | CI |
 | SPA-2 | Canonical form: indptr monotone, voxel strictly increasing per column, dtypes, no explicit zeros at τ = 0 | exact | CI |
 | SPA-3 | Threshold accounting, τ ∈ {1e-4, 1e-2, 0.1}: every kept entry ≥ τ·max_j, every dropped < τ·max_j; dense − kept = discarded per beamlet (energy, rel 1e-12); reported fraction = discarded/in-grid energy; counts exact; τ = 0 reports exactly 0 for every column with positive in-grid energy; a transported zero-deposition column reports undefined (NaN + mask false) at every τ, with counts 0, which R-INF-Z exercises at τ = 0 AND τ = 0.1 (A-2 item 4, A-3 item 4, A-4 item 6); per-beamlet quantities are per primary of beamlet j and need no n_j/N weight | exact | CI, LV |
-| SPA-4 | Helpers: `matvec(w)` vs `to_dense() @ w`, `rmatvec(y)` vs `to_dense().T @ y`, `plan_dose(weights)`; (A-6 item 2) `plan_dose()` without a vector uses the stored weights (a set with non-None weights 0.5 / 2 / 0 / 1.25) and equals `to_dense() @ stored`; with any stored weight `None` it raises `ValueError`; an explicit vector of wrong length / NaN / negative raises `ValueError`; the same for `plan_uncertainty` | relative 1e-12; refusals exact | CI |
+| SPA-4 | Helpers: `matvec(w)` vs `to_dense() @ w`, `rmatvec(y)` vs `to_dense().T @ y`, `plan_dose(weights)`; (A-6 item 2) `plan_dose()` without a vector uses the stored weights (a set with non-None weights 0.5 / 2 / 0 / 1.25) and equals `to_dense() @ stored`; with any stored weight `None` it raises `ValueError`; an explicit vector of wrong length / NaN / +inf / −inf / negative / non-numeric (a string element, an object array) raises `ValueError`, each provoked separately; the same for `plan_uncertainty` (A-7 item 2) | relative 1e-12; refusals exact | CI |
 | WGT-1 | Weights are metadata only (A-6 item 2): two R-INF runs identical except the stored weights (None vs 0.5 / 2 / 0 / 1.25) give bitwise identical influence columns, batch values, std, composite grids, balances and counters; `config_sha256` differs; the persisted beamlet table carries the weights; a bundle whose stored weights were edited to NaN fails `load` (tier 1 re-validates the weight domain) | bitwise / exact | CI |
 | SPA-5 | Threshold is never silent: τ appears in requested/effective/report; changing τ changes `config_sha256`; a bundle whose discarded arrays are removed fails `load` | exact | CI |
 
@@ -610,3 +626,6 @@ None. Cache-backed CAP-1 rows use datasets already cached; no download.
   Amendment A-6 after A-5): (1) one consistent allocation contract (class (i)–(iv), worst-case group range, F and
   end-phase terms excluded); (2) `Beamlet.weight` contract. Rows BEAM-1, SPA-4, PER-1, MEM-1 updated; WGT-1 added.
   Not a clinical claim.
+- 2026-11-25 (S0 fix 7, Codex REVIEW-5780f9aa on c7f386d3, changes_required; one important and one minor finding
+  adopted, see Amendment A-7 after A-6): (1) the cuda chunk readbacks of tally/counter rows join the payload class;
+  (2) SPA-4 non-finite explicit weight vectors. Not a clinical claim.

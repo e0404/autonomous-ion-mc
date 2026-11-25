@@ -2,6 +2,8 @@
 
 - Status: Accepted (frozen with plan `validation/plans/v3-007-acceptance.md` at the S0 commit, 2026-11-25). Later
   changes are dated amendments. Not a clinical claim.
+- Amended 2026-11-25 (S0 fix 7, Codex REVIEW-5780f9aa on c7f386d3): cuda chunk readbacks in the payload class
+  (§2); non-finite explicit weight vectors refused (§1, plan SPA-4).
 - Amended 2026-11-25 (S0 fix 6, Codex REVIEW-0d4bb5f6 on 8db925e7): (1) one consistent accumulator-payload
   contract (§2); (2) `Beamlet.weight` contract (§1).
 - Amended 2026-11-25 (S0 fix 5, Codex REVIEW-54588747 on a783ac8a): (1) the memory rule is an accumulator-payload
@@ -119,8 +121,9 @@ implemented in S1 and bounding exactly the accumulator-payload class (A-6 item 1
 `8·B·S`, (ii) influence accumulators `8·G·B·V_inf`, (iii) the tally rows (width `N_FIXED_TALLIES + 2·n_g +
 channel_columns`, + `len(NUCLEAR_TALLY_NAMES)` on python with nuclear) and counter rows (width `len(COUNTER_NAMES)` +
 `len(ION_COUNTER_NAMES)` for ions, + `len(NUCLEAR_COUNTER_NAMES)` on python with nuclear) a backend holds at one time
-(one chunk on warp, the whole range N on python), (iv) on warp-cuda one host copy of the current group's influence
-accumulators during transfer; chunk = min(`chunk_histories`, longest group range that G implies). The formulas are
+(one chunk on warp, the whole range N on python), (iv) on warp-cuda the host copies `numpy()` allocates while the device arrays stay live — the
+current chunk's tally/counter rows and the current group's influence accumulators, in different phases, so their
+maximum (A-7 item 1); chunk = min(`chunk_histories`, longest group range that G implies). The formulas are
 in plan §B.3. Not in the class and not bounded: geometry/tables/descriptors/parameter arrays, end-state arrays and
 end-phase `edep` copies, reduction temporaries, diagnostic arrays, the retained CSC/batch output of earlier groups
 and the assembled `Result` (bounded at `save` by the 0045 budgets), Python object overhead, the Warp kernel/module
