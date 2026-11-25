@@ -2,8 +2,8 @@
 validation rules (each provoked separately with its positive twin), the source-consumer audit and
 the offsets / batch membership. Only ``validate`` runs here; no transport. Not a clinical claim.
 
-``BEAMLET_TRANSPORT_AVAILABLE`` is the temporary S1 gate (V3-007 S2 removes it); the tests of the
-rules switch it on, one test pins the gate itself.
+``config.BEAMLET_TRANSPORT_BACKENDS`` is the temporary transport gate (S2: python only, S3 adds the
+Warp backends); the tests of the rules open it for every backend, one test pins the gate itself.
 """
 
 from __future__ import annotations
@@ -51,7 +51,9 @@ GRID = ScoringGrid((-10.0, -10.0, 0.0), (5.0, 5.0, 5.0), (4, 4, 4))  # name "dos
 @pytest.fixture(autouse=True)
 def _transport_gate_open(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     if "gate" not in request.node.name:
-        monkeypatch.setattr(config, "BEAMLET_TRANSPORT_AVAILABLE", True)
+        monkeypatch.setattr(
+            config, "BEAMLET_TRANSPORT_BACKENDS", ("python", "warp-cpu", "warp-cuda")
+        )
 
 
 def bl(x: float = 0.0, e: float = 100.0, n: int = 40, **kw: Any) -> Beamlet:
@@ -106,10 +108,14 @@ def test_beam1_positive_twin_and_effective_summary() -> None:
         eff.single_unit_direction()
 
 
-def test_beam1_gate_beamlet_transport_not_yet_available() -> None:
-    """The temporary S1 rule: every beamlet run is refused until S2 (TODO: removed by S2)."""
-    assert config.BEAMLET_TRANSPORT_AVAILABLE is False
-    refused(cfg(), "beamlet transport not yet available (V3-007 S2)")
+def test_beam1_gate_beamlet_transport_python_only_until_s3() -> None:
+    """The temporary transport gate (S2): the python backend transports beamlet sets, the Warp
+    backends are refused naming S3 (TODO: removed by S3); pencil sources are unaffected."""
+    assert config.BEAMLET_TRANSPORT_BACKENDS == ("python",)
+    validate(cfg())
+    for backend in ("warp-cpu", "warp-cuda"):
+        refused(cfg(run={"backend": backend}), r"not yet available on the " + backend)
+        refused(cfg(run={"backend": backend}), r"V3-007 S3")
     pencil = PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 100.0)
     validate(cfg(beamlets=(bl(),), source=pencil, run={"n_histories": 40}))  # pencil unaffected
 
@@ -459,10 +465,8 @@ def test_beam1_n_histories_none_dict_round_trip() -> None:
 
 def test_beam1_derived_n_histories_in_the_bundle_s2_gate(tmp_path: Path) -> None:
     """Bundle-level save/load of a derived-history run: needs transport (S2 flips the flag)."""
-    if not (config.BEAMLET_TRANSPORT_AVAILABLE and config.BEAMLET_PERSISTENCE_AVAILABLE):
-        pytest.skip(
-            "beamlet transport (S2) and bundles (S5) are not yet available; the flags unskip"
-        )
+    if not ("python" in config.BEAMLET_TRANSPORT_BACKENDS and config.BEAMLET_PERSISTENCE_AVAILABLE):
+        pytest.skip("beamlet bundles (S5) are not yet available; the flag unskips")
     import json
 
     from ionmc import results
@@ -948,17 +952,14 @@ ALLOWLIST: dict[Event, tuple[str, int]] = {
     ("results.py", "build_document", "<bare>"): (S1, 1),  # refused until S5
     ("results.py", "save", "<bare>"): (S1, 1),
     ("transport/reference.py", "_Reference.__init__", _PROJ): (ENV, 4),  # 4 occurrences
-    ("transport/reference.py", "_Reference._history", "<alias-passed>"): (
-        S1,
-        1,
-    ),  # isinstance guard
-    ("transport/reference.py", "_Reference._history", "energy_sigma_mev"): (
-        S1,
-        2,
-    ),  # 2 occurrences; S2
-    ("transport/reference.py", "_Reference._history", "kinetic_energy_mev"): (S1, 1),
-    ("transport/reference.py", "_Reference._history", "lateral_sigma_mm"): (S1, 2),  # 2 occurrences
-    ("transport/reference.py", "_Reference._history", "position_mm"): (S1, 1),
+    # V3-007 S2: the beamlet-set handle (offsets, directions) and the per-beamlet sampling reads
+    ("transport/reference.py", "_Reference.__init__", "<alias-passed>"): (PER, 2),  # 2 occurrences
+    ("transport/reference.py", "_Reference._source_parameters", "<alias-passed>"): (PER, 1),
+    ("transport/reference.py", "_Reference._source_parameters", "beamlets"): (PER, 1),
+    ("transport/reference.py", "_Reference._source_parameters", "energy_sigma_mev"): (PER, 1),
+    ("transport/reference.py", "_Reference._source_parameters", "kinetic_energy_mev"): (PER, 1),
+    ("transport/reference.py", "_Reference._source_parameters", "lateral_sigma_mm"): (PER, 1),
+    ("transport/reference.py", "_Reference._source_parameters", "position_mm"): (PER, 1),
     ("transport/warp_driver.py", "run_warp_range", "<alias-passed>"): (S1, 1),  # isinstance guard
     ("transport/warp_driver.py", "run_warp_range", "energy_sigma_mev"): (S1, 1),  # S3
     ("transport/warp_driver.py", "run_warp_range", "kinetic_energy_mev"): (S1, 1),
@@ -1039,9 +1040,9 @@ ALLOWLIST: dict[Event, tuple[str, int]] = {
     ("results.py", "save", "<root>:result.requested_config.source"): (S1, 1),
     ("transport/reference.py", "_Reference.__init__", "<root>:cfg.source"): (
         ENV,
-        4,
-    ),  # 4 occurrences
-    ("transport/reference.py", "_Reference._history", "<root>:cfg.source"): (S1, 1),
+        5,
+    ),  # 5 occurrences (4 projectile reads + the beamlet-set handle)
+    ("transport/reference.py", "_Reference._source_parameters", "<root>:self.cfg.source"): (PER, 1),
     ("transport/warp_driver.py", "run_warp_range", "<bare>"): (S1, 1),
     ("transport/warp_driver.py", "run_warp_range", "<root>:cfg.source"): (S1, 1),
     # ---- interprocedural fix 9: parameter / closure / return roots of the callees reached.
@@ -1174,7 +1175,7 @@ def test_beam2_audit_inventory_equals_the_allowlist() -> None:
 
 def test_beam2_inventory_size_is_pinned() -> None:
     """Decision 0046 quotes the inventory size (occurrences counted per key)."""
-    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (183, 292)
+    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (185, 294)
 
 
 def test_beam2_a_duplicate_occurrence_in_the_repository_fails_naming_the_scope() -> None:

@@ -34,7 +34,7 @@ bl, cfg = b7.bl, b7.cfg
 
 @pytest.fixture
 def gate_open(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(config, "BEAMLET_TRANSPORT_AVAILABLE", True)
+    monkeypatch.setattr(config, "BEAMLET_TRANSPORT_BACKENDS", ("python", "warp-cpu", "warp-cuda"))
 
 
 def _bad(out: list[contract.Outcome]) -> list[contract.Outcome]:
@@ -83,16 +83,22 @@ def test_cap1_sweep_source_kind_x_influence(gate_open: None) -> None:
     )
 
 
-def test_cap1_sweep_with_the_s1_gate_counts_every_beamlet_cell_unsupported() -> None:
-    assert config.BEAMLET_TRANSPORT_AVAILABLE is False
+def test_cap1_sweep_with_the_s2_gate_python_only_declared_equals_enforced() -> None:
+    """S2 opens the gate for the python backend only; the Warp cells stay unsupported (naming
+    the rule ``beamlet-transport-not-available``) until S3, and declared == enforced."""
+    assert config.BEAMLET_TRANSPORT_BACKENDS == ("python",)
     m = contract.Matrix(
         species=(PROTON,), models=(v6.BETHE,), domain_classes=("inside",), tallies=("none",),
         trace=(False,), sources=("beamlets",), influence=(False, True),
     )  # fmt: skip
     out = contract.sweep(m)
     assert out and _bad(out) == []
-    assert {o.actual for o in out} == {contract.UNSUPPORTED}
-    assert {o.rule for o in out} == {"beamlet-transport-not-available"}
+    warp = [o for o in out if o.backend != "python"]
+    assert warp and {o.actual for o in warp} == {contract.UNSUPPORTED}
+    assert {o.rule for o in warp} == {"beamlet-transport-not-available"}
+    py = [o for o in out if o.backend == "python"]
+    assert py and any(o.actual == contract.OK for o in py)
+    assert all(o.rule != "beamlet-transport-not-available" for o in py)
 
 
 def test_cap1_sweep_ions_and_nuclear_cells(
@@ -159,9 +165,9 @@ def test_cap2_beamlet_declaration_follows_the_constants(monkeypatch: pytest.Monk
         p for p in v6._paths(base, capabilities()) if p.startswith("/declared/beamlets/run_comb")
     }
     monkeypatch.undo()
-    monkeypatch.setattr(config, "BEAMLET_TRANSPORT_AVAILABLE", True)
+    monkeypatch.setattr(config, "BEAMLET_TRANSPORT_BACKENDS", ("python", "warp-cpu"))
     got = v6._paths(base, capabilities())
-    assert "/declared/beamlets/transport_available" in got
+    assert any(p.startswith("/declared/beamlets/transport_backends") for p in got)
     assert all(p.startswith("/declared/beamlets/") for p in got), got
     monkeypatch.undo()
     monkeypatch.setattr(config, "INFLUENCE_THRESHOLD_BOUNDS", (0.0, 0.5))
@@ -419,7 +425,6 @@ def test_cap4_an_influence_request_without_its_effective_object_raises(
     with pytest.raises(U, match="influence"):
         Simulation(c)
     monkeypatch.undo()
-    monkeypatch.setattr(config, "BEAMLET_TRANSPORT_AVAILABLE", True)
     Simulation(c)  # the honest effective configuration is accepted
 
 

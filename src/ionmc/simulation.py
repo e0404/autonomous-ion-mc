@@ -78,7 +78,7 @@ from ionmc.transport.channels import (
     PIECE_COUNT_NAME,
 )
 from ionmc.transport.run import run_transport
-from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, ChannelRaw, RawTransport
+from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, BeamletRaw, ChannelRaw, RawTransport
 
 
 @dataclass(frozen=True)
@@ -334,6 +334,9 @@ class Result:
     transport_report: dict[str, Any] = field(default_factory=dict)
     channel_raw: ChannelRaw | None = None
     lookups: tuple[dict[str, Any], ...] = ()
+    beamlet_raw: BeamletRaw | None = None
+    """Raw per-beamlet balances and influence accumulators of a beamlet run (V3-007 S2; python
+    backend; the CSC conversion and persistence are S4/S5), else None."""
 
     def channel_batches(self, index: int) -> NDArray[np.int64]:
         """Integer per-batch accumulators ``[B, size]`` of channel ``index`` of the compiled plan
@@ -859,6 +862,7 @@ def _with_timings(result: Result, timings: dict[str, float]) -> Result:
         transport_report=result.transport_report,
         channel_raw=result.channel_raw,
         lookups=result.lookups,
+        beamlet_raw=result.beamlet_raw,
     )
 
 
@@ -1108,4 +1112,5 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         transport_report=raw.meta,
         channel_raw=raw.channels,
         lookups=lookups,
+        beamlet_raw=raw.beamlets,
     )

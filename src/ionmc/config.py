@@ -122,11 +122,10 @@ BEAMLET_MAX_CPU_WORKERS = 1
 """Beamlet runs are single-process (operator directive): ``cpu_workers`` must not exceed this."""
 INFLUENCE_THRESHOLD_BOUNDS = (0.0, 1.0)
 """``InfluenceOptions.threshold_rel`` must lie in ``[0, 1)`` (0 is lossless)."""
-BEAMLET_TRANSPORT_AVAILABLE = False
-"""TEMPORARY (V3-007 S1): beamlet transport is implemented in S2 (python) and S3 (Warp). Until the
-S2 commit ``validate`` refuses every ``BeamletSet`` run with "beamlet transport not yet available
-(V3-007 S2)". TODO(V3-007 S2): remove this switch, its rule in ``_check_beamlet_set`` and the
-declaration ``beamlet-transport-not-available`` in ``ionmc.contract``."""
+BEAMLET_TRANSPORT_BACKENDS: tuple[str, ...] = ("python",)
+"""Backends that transport a ``BeamletSet`` (V3-007 S2: the python reference backend; the Warp
+backends follow in S3 and are refused by ``validate`` with a message naming S3 until then).
+TODO(V3-007 S3): add ``"warp-cpu"`` and ``"warp-cuda"``."""
 BEAMLET_PERSISTENCE_AVAILABLE = False
 """TEMPORARY (V3-007 S1): the beamlet-set result bundle (schema 1.1 writer/reader, influence arrays)
 is S5 work. Until then ``results.build_document``/``results.save`` and
@@ -1378,8 +1377,11 @@ def _beamlet_set_checks(config: SimulationConfig) -> None:
             "tallies and lookups are not supported with a beamlet set (beamlet-resolved tally "
             "channels are not implemented; a tally is never silently ignored)"
         )
-    if not BEAMLET_TRANSPORT_AVAILABLE:  # TODO(V3-007 S2): remove with the switch
-        raise fail("beamlet transport not yet available (V3-007 S2): a BeamletSet cannot be run")
+    if run.backend not in BEAMLET_TRANSPORT_BACKENDS:  # TODO(V3-007 S3): remove with the switch
+        raise fail(
+            f"beamlet transport is not yet available on the {run.backend} backend (V3-007 S3); "
+            f"backends with beamlet transport: {list(BEAMLET_TRANSPORT_BACKENDS)}"
+        )
 
 
 def _influence_checks(config: SimulationConfig) -> None:

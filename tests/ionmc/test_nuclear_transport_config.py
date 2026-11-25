@@ -428,7 +428,7 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
 # the stopping section; digest db8e79c0...) and decision 0045 adds the "declared" and "informative"
 # sections of the capability contract (digest at ae4fe3ec and after: 021c3c3d...).
 # V3-007 S1 (decision 0046): the beamlet entries of "sources"/"declared" change the digest.
-CAPABILITIES_SHA256 = "2dc1cbbcc8afbadfca61616d4228330fa2b5d68cf17fa85503b23532a70e5670"
+CAPABILITIES_SHA256 = "27a2f1246f75eecc71a65c74922e9d3d0910253710614bcf5f61ce8abafa851c"
 
 
 def test_capacity_bounds_follow_decision_0041_section_5(

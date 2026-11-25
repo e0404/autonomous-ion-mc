@@ -54,4 +54,5 @@ def run_transport(eff: EffectiveConfig) -> RawTransport:
         "workers": run.cpu_workers,
         "partials": [dict(p.meta) for p in sorted(parts, key=lambda q: q.h0)],
     }
+    raw.beamlets = parts[0].beamlets  # beamlet runs are single-process: one part
     return raw

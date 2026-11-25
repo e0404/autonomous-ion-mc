@@ -975,7 +975,7 @@ def beamlet_combination_status(
         return UNSUPPORTED, "beamlet-tallies"
     if influence and trace:
         return UNSUPPORTED, "influence-diagnostics"
-    if not _cfg.BEAMLET_TRANSPORT_AVAILABLE:  # TODO(V3-007 S2): remove with the switch
+    if backend not in _cfg.BEAMLET_TRANSPORT_BACKENDS:  # TODO(V3-007 S3): remove with the switch
         return UNSUPPORTED, "beamlet-transport-not-available"
     return run_combination_status(backend, precision, nuclear, tallies, trace, workers, species)
 
@@ -997,7 +997,7 @@ def declared_beamlets() -> dict[str, Any]:
         "max_cpu_workers": _cfg.BEAMLET_MAX_CPU_WORKERS,
         "influence_threshold_rel_range": list(_cfg.INFLUENCE_THRESHOLD_BOUNDS),
         "influence_threshold_upper_exclusive": True,
-        "transport_available": _cfg.BEAMLET_TRANSPORT_AVAILABLE,
+        "transport_backends": list(_cfg.BEAMLET_TRANSPORT_BACKENDS),
         "run_combinations": combos,
         "refused_with_beamlets": ["tallies", "lookups"],
         "refused_with_influence": ["tallies", "lookups", "diagnostics", "pencil-source"],

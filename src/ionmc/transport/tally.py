@@ -143,6 +143,82 @@ class ChannelRaw:
     path_bound_exceeded: int = 0
 
 
+@dataclass(frozen=True)
+class BeamletBalance:
+    """Exact energy balance of beamlet ``beamlet_id`` (V3-007): the totals of the per-history
+    tally rows of ``h in [s_j, s_j + n_j)``, each the correctly rounded exact sum
+    (:func:`exact_components` + ``math.fsum``), so that they are independent of any grouping.
+
+    ``tallies`` holds ``TALLY_NAMES`` (+ ``NUCLEAR_TALLY_NAMES`` when nuclear); ``outside_mev``
+    and ``quantization_mev`` one value per scoring grid, ``counters`` the int64 counter sums.
+    ``in_grid_mev`` is ``(sum of all quanta of the influence grid) * QUANTUM_MEV`` (None without
+    influence). The nuclear signed terms are in ``tallies`` (secondaries are booked to the history
+    of their primary, so to this beamlet)."""
+
+    beamlet_id: int
+    n_histories: int
+    tallies: dict[str, float]
+    outside_mev: tuple[float, ...]
+    quantization_mev: tuple[float, ...]
+    counters: dict[str, int]
+    in_grid_mev: float | None = None
+
+    @property
+    def deposited_mev(self) -> float:
+        """``step_deposit + cutoff`` (+ ``nuclear_local`` of a nuclear run): what the grids of this
+        beamlet receive or lose outside, before quantization."""
+        return (
+            self.tallies["step_deposit"]
+            + self.tallies["cutoff"]
+            + self.tallies.get("nuclear_local", 0.0)
+        )
+
+    @property
+    def closure_residual_mev(self) -> float:
+        """``initial`` minus every destination (``step_deposit``, ``cutoff``, ``escaped``,
+        ``truncated``, ``unaccounted`` and the nuclear destinations of a nuclear run)."""
+        t = self.tallies
+        nuc = sum(
+            t.get(k, 0.0)
+            for k in (
+                "nuclear_local",
+                "nuclear_escaped_neutron",
+                "nuclear_escaped_gamma",
+                "nuclear_binding",
+                "nuclear_imbalance",
+            )
+        )
+        dest = (
+            t["step_deposit"] + t["cutoff"] + t["escaped"] + t["truncated"] + t["unaccounted"] + nuc
+        )
+        return t["initial"] - dest
+
+
+@dataclass(frozen=True)
+class BeamletAccumulation:
+    """Raw per-beamlet influence data (the hand-over to the CSC conversion, V3-007 S4): the int64
+    accumulators ``batch_quanta[B, V_inf]`` (quanta of ``QUANTUM_MEV``, row = batch ``h mod B``)
+    of beamlet ``beamlet_id`` over the flat C-order voxels of the influence grid. They hold the
+    integer sums of exactly the ``n_j`` histories of the beamlet (per-batch ``n_j / B``)."""
+
+    beamlet_id: int
+    batch_quanta: NDArray[np.int64]
+
+
+@dataclass
+class BeamletRaw:
+    """Per-beamlet output of a beamlet run: ``offsets`` (int64, ``s_j``), the effective
+    ``group_size`` (None without influence), one :class:`BeamletBalance` per beamlet and, with
+    influence, one :class:`BeamletAccumulation` per beamlet (in beamlet order, produced group by
+    group; ``influence_grid`` is its name)."""
+
+    offsets: NDArray[np.int64]
+    group_size: int | None
+    balances: tuple[BeamletBalance, ...]
+    accumulations: tuple[BeamletAccumulation, ...] = ()
+    influence_grid: str | None = None
+
+
 @dataclass
 class RawTransport:
     """Raw reduced output of a transport run (float64).
@@ -159,6 +235,7 @@ class RawTransport:
     diagnostics: dict[str, Any] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
     channels: ChannelRaw | None = None
+    beamlets: BeamletRaw | None = None
 
 
 @dataclass
@@ -200,6 +277,7 @@ class PartialTransport:
     diagnostics: HistoryDiagnostics | None
     meta: dict[str, Any] = field(default_factory=dict)
     channel_acc: NDArray[np.int64] | None = None
+    beamlets: BeamletRaw | None = None
 
 
 def exact_components(values: NDArray[np.float64]) -> list[float]:
