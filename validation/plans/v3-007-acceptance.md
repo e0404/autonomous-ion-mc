@@ -78,7 +78,13 @@ performance targets.
    stored). A user threshold τ ∈ (0, 1) drops entries with `dose_gy < τ · max_v dose_gy[:, j]` per beamlet; it is a
    requested field, reconciled `equal`, persisted, and the per-beamlet discarded energy (MeV/primary), discarded
    fraction of in-grid energy, discarded entry count and maximum discarded dose are persisted arrays and reported.
-   No statistical (relative-uncertainty) threshold (biased).
+       No statistical (relative-uncertainty) threshold (biased). **Zero-deposition columns (A-2 item 4):** a transported
+    beamlet with no deposit in the influence grid (outside or non-intersecting source) is legal: nnz = 0,
+    `beamlet__transported = True`, no threshold applies (column maximum 0), per-beamlet `discarded_energy_mev`,
+    `discarded_count`, `discarded_max_dose_gy`, `discarded_var_gy2` are 0 and `discarded_fraction` is UNDEFINED,
+    persisted as NaN with the mask `influence__discarded_fraction_defined` (decision 0040); the report prints
+    "undefined (no deposition in the influence grid)" and "undefined (no entries)" (median relative uncertainty); the
+    per-beamlet energy balance still closes (outside the grid / escaped).
 6. **Per-beamlet uncertainty.** Batch standard error per entry (decision 0040 `reduce_batches`, hpb_j = n_j/B);
    `defined`/`sparse` masks as for grids. Beamlets use disjoint counter ranges and are statistically independent,
    so for plan weights x: `Var(D_v) = Σ_j x_j² σ_vj²` (`plan_uncertainty`); no cross-beamlet covariance is persisted
@@ -106,8 +112,13 @@ performance targets.
    (intent preserved, not a re-grade).
 9. **CLI.** `ionmc run` with `[source] type = "beamlets"`, inline `[[source.beamlets]]` or `spots = {file, sha256}`
    (CSV with a fixed header, read by `numpy.loadtxt` on bytes read once, recorded in the `InputManifest` as role
-   `spots`; bounds before parsing: `lstat` size ≤ 1 MiB, line count ≤ 4 097, sha256 over exactly the bytes read;
-   violation → `ConfigError`, exit 2; A-1 item 3; `[run] n_histories` is optional and derived = Σ n_j, A-1 item 1),
+   `spots`; read bound to one descriptor (A-2 item 3): opened with `O_NOFOLLOW | O_RDONLY | O_CLOEXEC` (a symbolic
+    link is refused, `ConfigError` "symbolic link"), `fstat` on the descriptor must report a regular file of size
+    ≤ 1 MiB,
+    exactly `st_size` bytes are read from THAT descriptor (the V3-006 `_read_exact` pattern: a shrink fails, nothing
+    beyond `st_size` is read), the sha256 is computed over those bytes, line count ≤ 4 097, then `numpy.loadtxt`
+    parses the in-memory bytes; violation → `ConfigError`, exit 2; A-1 item 3; `[run] n_histories` is optional and
+    derived = Σ n_j, A-1 item 1),
    `[influence]
    grid, threshold_rel, group_size, persist_batches`. `ionmc report`: beamlet table (id, label, E, position,
    n_histories, nnz, discarded fraction, median relative uncertainty of entries ≥ 50 % of the column maximum) and SVGs
@@ -118,9 +129,14 @@ performance targets.
     streams, so columns reproduce bit-identically; results of runs with the same seed are never merged — `merge` is not
     offered in V3-007). **Subset semantics (A-1 item 4):** the result's `requested` is the full configuration plus the
     requested-only field `run.beamlet_subset` (sorted unique ids; carried into `effective.run.beamlet_subset`);
-    `run.n_histories` = Σ_{j ∈ subset} n_j while `beamlets.offsets` stay the original full-set offsets; composite
-    grids, balances, accounting and statistics are those of the transported subset only (normalised per transported
-    primary); the matrix keeps J columns, untransported ones empty (nnz = 0, `beamlet__transported = False`,
+    `run.n_histories` stays the CONFIGURED count Σ_j n_j (also in `requested`, so `from_dict(requested)` validates and
+    `run(beamlets=requested.run.beamlet_subset)` reproduces the subset in a clean process; A-2 item 1) and the
+    separate persisted field `run.histories_transported` = Σ_{j ∈ subset} n_j (= `n_histories` without a subset)
+    while `beamlets.offsets` stay the original full-set offsets; composite grids, balances, accounting and statistics
+    are those of the transported subset only (normalised per transported primary); `config_sha256` hashes `requested`
+    and therefore differs between the full run and a subset run (different request); invalid subsets (empty,
+    duplicate ids, ids outside [0, J), non-integers) are refused before transport (`UnsupportedCombinationError`);
+    the matrix keeps J columns, untransported ones empty (nnz = 0, `beamlet__transported = False`,
     per-beamlet balances NaN with mask); `save` persists `influence.subset` with `kind = "influence"`; a subset
     bundle and a full bundle are never merged.
 
@@ -155,7 +171,34 @@ so the frozen text above is edited in place; this amendment records what changed
    composite results are those of the transported subset; the matrix keeps J columns with untransported columns
    empty; `save` persists `influence.subset`, `kind = "influence"`; tier 1 binds Σ_{transported} n_j =
    `run.n_histories` and "untransported columns are empty"; subset and full bundles are never merged (no merge API).
-   Rows: INF-4, PER-4, CAP-3.
+      Rows: INF-4, PER-4, CAP-3.
+
+**Amendment A-2 (2026-11-25, S0, before any code; Codex REVIEW-15a83983 on 0901763, changes_required; four
+important findings, all adopted).** The frozen text is edited in place as for A-1; where it conflicts with A-1 item 4
+(`run.n_histories` = Σ_{transported} n_j) or the A-1 item 3 spot-file rule, A-2 supersedes.
+
+1. **Configured vs. transported history counts (finding 1).** `RunOptions.n_histories` == Σ_{all j} n_j always, also
+   in the `requested` configuration of a subset result (so `from_dict(requested)` validates and
+   `run(beamlets=requested.run.beamlet_subset)` reproduces it in a clean process). The transported count is the
+   separate persisted field `run.histories_transported` (= Σ_{j ∈ subset} n_j; equal to `n_histories` without a
+   subset); composite grids, balances, accounting and statistics are normalised per transported primary and tier 1
+   binds `histories_transported` = Σ_{transported} n_j. `config_sha256` hashes `requested` and therefore differs
+   between the full run and a subset run. Invalid subsets (empty, duplicate ids, ids outside [0, J), non-integers)
+   are refused before transport (`UnsupportedCombinationError`). Rows: §B.10, INF-4, PER-4, PER-6.
+2. **AST-based source-consumer audit (finding 2).** BEAM-2's grep rule is replaced by an exhaustive `ast` audit with
+   alias following and a static allowlist (`envelope` / `per-beamlet` / `refused-in-S1` / `not-a-source`) that is
+   the inventory. Additions: `config.py` 844, 1163, 1214–1229, `warp_driver.py` 187; `configio.py` 1162 moves to
+   `not-a-source`. The allowlist is re-derived (and the decision's Context updated) whenever S2/S3 add readers.
+   Row: BEAM-2.
+3. **Spot-file read bound to a descriptor (finding 3).** §B.9 and CLI-2: `O_NOFOLLOW | O_RDONLY | O_CLOEXEC`,
+   `fstat` regular file ≤ 1 MiB, exactly `st_size` bytes read from that descriptor, sha256 over those bytes, line
+   count ≤ 4 097, `numpy.loadtxt` on the in-memory bytes; four adversarial controls (symlink, sparse oversized,
+   rename between open and read, growth after `fstat`).
+4. **Zero-deposition transported columns (finding 4).** Legal: nnz = 0, `beamlet__transported = True`, discarded
+   counts/energy/max dose/variance 0, `discarded_fraction` undefined (NaN + mask
+   `influence__discarded_fraction_defined`), report strings "undefined (no deposition in the influence grid)" and
+   "undefined (no entries)"; the per-beamlet energy balance still closes; UNC-2/UNC-3 entry sets exclude such
+   beamlets. New variant R-INF-Z. Rows: §B.5, SPA-3, PER-1, PER-4, CLI-3, UNC-2/UNC-3.
 
 Not a clinical claim.
 
@@ -211,14 +254,15 @@ rule; REG-4: no bundle in Git).
 Reference configuration **R-INF** (used where a row says "R-INF"): water box 60×60×200 mm, influence grid 2 mm
 (30×30×100), protons, 4 beamlets at (−10, 0), (+10, 0), (0, −10), (0, +10) mm lateral, energies 70 / 90 / 110 /
 130 MeV, σ_E = 0.5 MeV, σ_lat = 3 mm, direction +z, B = 10, n_j = 2 000 (CI: 200, B = 4). Default physics,
-`bethe-ionmc-v1`, nuclear off unless stated.
+`bethe-ionmc-v1`, nuclear off unless stated. Fifth variant **R-INF-Z** (A-2 item 4): R-INF plus one beamlet aimed
+outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4, CLI-3.
 
 **BEAM — beamlet model and mapping**
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | BEAM-1 | Config validation: each fail-closed rule of §B.1 and §B.7 provoked separately | `UnsupportedCombinationError` (or `ConfigError` for TOML) before transport, message names the field; each positive twin passes; includes (A-1) `n_histories` ≠ Σ n_j refused (message names both values), absent TOML value derived, equal value accepted; label of 65 characters / with a control character / duplicate refused; the converted ion-mapping failure branch (`config.py` 498) provoked with a BeamletSet and naming the beamlet | CI |
-| BEAM-2 | Source-consumer audit: a test enumerates every reader of `config.source` (static list checked against `grep` of `src/ionmc`, reviewed; FACT at 3f3736a6, complete after A-1 item 2: `config.py` (348; 471–498 ion-mapping path, its failure branch at 498 converted to per-beamlet values; 526; 564; 588; 1016; max_steps E_hi 755–756; channel compile 807; nuclear bounds 921–943; the decision-0044 stopping-model window check 1035–1064; ion domain 1127–1153; sigma rules and ion mapping 1237–1294 incl. `fdm_domain_status(proj, mats, e0, σ)` at 1287; stopping identity species 594–611; summary 624; `unit_direction=src.unit_direction()` 1351), `reference.py` (projectile 193–260, sampling 840–860), `warp_driver.py` (ctl source fields 121–135, `ctl.dir` at 135), `kernels.py` (source sampling), `results.py` (producible 403; profile axis from `unit_direction` 725 and 1626; binding 1668–1675; stopping-window check on E0 + 6σ 1806; tally E_hi bound 2093), `_result_shapes.py` 335–345, `contract.py` 78–87, 308–320, 701 (`SOURCE_TYPES`), 939, `simulation.py` 736 (`capabilities()["sources"]`), `report.py` 335, `configio.py` 590 and 1162) and asserts for a beamlet set the envelope rules: `max_steps`, channel `E_hi`, nuclear energy bounds, ion mapping domain and energy-sigma rules use min/max over beamlets | every consumer covered; a beamlet with E above the domain is refused although the mean energy is inside; every reader, including exceptional/failure paths, is in the list: a grep check (`config.source`, `.source.`, `source.kinetic_energy_mev`, `source.unit_direction`, `source.projectile`, `source.energy_sigma_mev`, `source.lateral_sigma_mm`, `source.position_mm`) finds no reader outside it | CI |
+| BEAM-2 | Source-consumer audit: a test enumerates every reader of `config.source` (static list checked against `grep` of `src/ionmc`, reviewed; FACT at 3f3736a6, complete after A-1 item 2: `config.py` (348; 471–498 ion-mapping path, its failure branch at 498 converted to per-beamlet values; 526; 564; 588; 1016; max_steps E_hi 755–756; channel compile 807; nuclear bounds 921–943; the decision-0044 stopping-model window check 1035–1064; ion domain 1127–1153; sigma rules and ion mapping 1237–1294 incl. `fdm_domain_status(proj, mats, e0, σ)` at 1287; stopping identity species 594–611; summary 624; `unit_direction=src.unit_direction()` 1351), `reference.py` (projectile 193–260, sampling 840–860), `warp_driver.py` (ctl source fields 121–135, `ctl.dir` at 135), `kernels.py` (source sampling), `results.py` (producible 403; profile axis from `unit_direction` 725 and 1626; binding 1668–1675; stopping-window check on E0 + 6σ 1806; tally E_hi bound 2093), `_result_shapes.py` 335–345, `contract.py` 78–87, 308–320, 701 (`SOURCE_TYPES`), 939, `simulation.py` 736 (`capabilities()["sources"]`), `report.py` 335, `configio.py` 590; A-2 item 2 additions `config.py` 844, 1163, 1214–1229, `warp_driver.py` 187; `configio.py` 1162 is a lookup-file source, not `SimulationConfig.source`, listed as `not-a-source`) and asserts for a beamlet set the envelope rules: `max_steps`, channel `E_hi`, nuclear energy bounds, ion mapping domain and energy-sigma rules use min/max over beamlets | every consumer covered; a beamlet with E above the domain is refused although the mean energy is inside; exhaustive AST audit (A-2 item 2, replaces the grep rule): a test parses every module of `src/ionmc` with `ast`, follows attribute accesses rooted at `.source` of a config / effective-config value AND every alias binding in the same scope (`src = cfg.source`, `source = eff.source`; tuple/keyword passing is recorded as a reader at the call site) and asserts every (module, line, attribute) is in the static allowlist annotated `envelope` / `per-beamlet` / `refused-in-S1` / `not-a-source` (the allowlist is the inventory); any access outside it fails; the allowlist is re-derived (and the decision's Context updated) whenever S2/S3 add readers; exceptional/failure paths included | CI |
 | BEAM-3 | Offsets: `s_j`, batch membership and per-batch count n_j/B for unequal n_j | exact | CI |
 | BEAM-4 | Stream disjointness: the (c0, c3) pairs used by source sampling over all beamlets of R-INF are unique and equal `range(Σ n_j)` (instrumented reference run) | exact | CI |
 | BEAM-5 | Source sampling: the sampled energy/position of the first history of every beamlet equals a direct evaluation of the shared source functions with that beamlet's parameters and counter | bitwise (python), float32 class (warp) | CI |
@@ -231,7 +275,7 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 | INF-1 | J = 1 `BeamletSet` vs the equal `PencilBeamSource`, same seed/backend/precision | every grid array, balance and counter **bitwise** equal; influence column (τ = 0) equals the composite grid's nonzero entries bitwise | CI (python, warp-cpu), LV (all), HR (cuda) |
 | INF-2 | **Composite identity**: R-INF with influence vs the same spot list without influence | (a) Σ_j integer accumulators `[B, V]` of the columns equal the composite run's integer accumulators **bitwise**; (b) float64: composite `energy_mev` vs Σ_j (n_j/N)·column energy (τ = 0) within relative 1e-12 per voxel (only float64 summation-order rounding; J ≤ 100 terms); (c) composite grid of the influence run bitwise equal to the composite-only run | CI, LV, HR |
 | INF-3 | Group and chunk invariance: G ∈ {1, 2, J}; CI: J = 4, n_j = 600 (B = 4), `chunk_histories` ∈ {2¹⁰, 2¹¹}, so chunk boundaries fall inside beamlets; LV/HR keep R-INF with `chunk_histories` ∈ {2¹⁰, 2¹⁴} | per-beamlet integer accumulators and balances bitwise equal across all variants | CI (warp-cpu), LV, HR (cuda) |
-| INF-4 | Column independence: `run(beamlets=[2])` and `run(beamlets=[0, 3])` reproduce those columns of the full run | bitwise; the reconciliation table of the subset result has exactly one `requested-only` row (`beamlet_subset`), its accounting closes on the transported histories (`run.n_histories` = Σ_{j ∈ subset} n_j), untransported columns are empty (nnz = 0, `beamlet__transported = False`), `save`/`load` round-trips it and `verify` exits 0 (A-1 item 4) | CI |
+| INF-4 | Column independence: `run(beamlets=[2])` and `run(beamlets=[0, 3])` reproduce those columns of the full run | bitwise; the reconciliation table of the subset result has exactly one `requested-only` row (`beamlet_subset`), its accounting closes on the transported histories (`run.histories_transported` = Σ_{j ∈ subset} n_j; `run.n_histories` = Σ_j n_j), untransported columns are empty (nnz = 0, `beamlet__transported = False`), `save`/`load` round-trips it and `verify` exits 0 (A-1 item 4); clean-process reproduction (`python -I`) of the subset bundle from its `requested` reproduces every content digest; `config_sha256` of the subset bundle ≠ full bundle; invalid subsets (empty, duplicate, out of range, non-integer) refused (A-2 item 1) | CI |
 | INF-5 | Trajectory parity python vs warp-cpu float64 for the first 3 histories of beamlets 0, 1 and J−1 (across beamlet boundaries) | decision-0037 trajectory class (existing T1 tolerances) | CI |
 | INF-6 | **Negative controls** (patched in the test): (i) `c0` reset per beamlet → BEAM-4 and INF-4 fail; (ii) beamlet id off by one at a boundary, or an accumulator row error with correct source parameters → INF-2(a) still passes; INF-7 fails (BEAM-5 and INF-1 catch only a wrong source assignment; shows INF-2 alone is not sufficient); (iii) accumulator row stride B±1 → INF-2(a) fails | each detected by the named row | CI |
 | INF-7 | **Per-beamlet closure**: Σ_v column_j quanta·Q + outside_j + quantization_j = deposited_j, reduced from the tally rows of h ∈ [s_j, s_j + n_j), for every j; negative controls "accumulator row off by one" and "columns permuted" must FAIL this row | exact (rel 1e-12) | CI, LV, HR |
@@ -242,7 +286,7 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 |---|---|---|---|
 | SPA-1 | τ = 0 round trip dense ↔ CSC (`to_dense`, `from_dense`) | bitwise; nnz = count of nonzero integer accumulators summed over batches | CI |
 | SPA-2 | Canonical form: indptr monotone, voxel strictly increasing per column, dtypes, no explicit zeros at τ = 0 | exact | CI |
-| SPA-3 | Threshold accounting, τ ∈ {1e-4, 1e-2, 0.1}: every kept entry ≥ τ·max_j, every dropped < τ·max_j; dense − kept = discarded per beamlet (energy, rel 1e-12); reported fraction = discarded/in-grid energy; counts exact; τ = 0 reports exactly 0 | exact | CI, LV |
+| SPA-3 | Threshold accounting, τ ∈ {1e-4, 1e-2, 0.1}: every kept entry ≥ τ·max_j, every dropped < τ·max_j; dense − kept = discarded per beamlet (energy, rel 1e-12); reported fraction = discarded/in-grid energy; counts exact; τ = 0 reports exactly 0; on R-INF-Z at τ = 0.1 the zero-deposition column has fraction undefined with mask and counts 0 (A-2 item 4) | exact | CI, LV |
 | SPA-4 | Helpers: `matvec(w)` vs `to_dense() @ w`, `rmatvec(y)` vs `to_dense().T @ y`, `plan_dose(weights)` | relative 1e-12 | CI |
 | SPA-5 | Threshold is never silent: τ appears in requested/effective/report; changing τ changes `config_sha256`; a bundle whose discarded arrays are removed fails `load` | exact | CI |
 
@@ -251,7 +295,7 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | UNC-1 | Entry std = batch standard error recomputed from the persisted `[B, nnz]` batch values; masks per decision 0040 rules | relative 1e-9 (reader tolerance of 0045 A-1) | CI |
-| UNC-2 | *statistical*, **coverage between independent replicas** (r = 4, k = 0/1 compared; HR r = 5): R-INF variant with J = 16 beamlets (4 energies × 4 positions), n_j = 10 000, B = 20. Entry set S_j is fixed by an independent pilot replica (r = 4, k = 2; HR r = 5, k = 2): defined, n_nonzero = B and relative uncertainty ≤ 0.05 in the pilot; the compared replicas are k = 0 and k = 1. z = Δ/√(s₁² + s₂²); per-beamlet coverage c_j(1) = fraction |z| ≤ 1, c_j(2) = fraction |z| ≤ 2. Reference p(1), p(2) = P(\|T_ν\| ≤ 1, 2) with ν = 2(B − 1) = 38 (computed by numpy quadrature in the test) | for both levels L ∈ {1, 2}: \|mean_j c_j(L) − p(L)\| ≤ max(3·sd_j(c_j(L))/√J, 0.03) (beamlets independent; 0.03 = declared margin for non-normal low-count batches, fixed now). **Power control:** recomputing with s scaled by 0.8 must FAIL the same criterion; if it passes, the row is INCONCLUSIVE (gating fail) | LV, HR |
+| UNC-2 | *statistical*, **coverage between independent replicas** (r = 4, k = 0/1 compared; HR r = 5): R-INF variant with J = 16 beamlets (4 energies × 4 positions), n_j = 10 000, B = 20. Entry set S_j is fixed by an independent pilot replica (r = 4, k = 2; HR r = 5, k = 2; beamlets without entries are simply excluded, A-2 item 4): defined, n_nonzero = B and relative uncertainty ≤ 0.05 in the pilot; the compared replicas are k = 0 and k = 1. z = Δ/√(s₁² + s₂²); per-beamlet coverage c_j(1) = fraction |z| ≤ 1, c_j(2) = fraction |z| ≤ 2. Reference p(1), p(2) = P(\|T_ν\| ≤ 1, 2) with ν = 2(B − 1) = 38 (computed by numpy quadrature in the test) | for both levels L ∈ {1, 2}: \|mean_j c_j(L) − p(L)\| ≤ max(3·sd_j(c_j(L))/√J, 0.03) (beamlets independent; 0.03 = declared margin for non-normal low-count batches, fixed now). **Power control:** recomputing with s scaled by 0.8 must FAIL the same criterion; if it passes, the row is INCONCLUSIVE (gating fail) | LV, HR |
 | UNC-3 | *statistical*, history scaling (r = 6): R-INF J = 4, n_j = 4 000 (k = 0) vs 16 000 (k = 1) (B = 20); entry set S fixed by an independent pilot replica (r = 6, k = 2; same criteria as UNC-2) | median over S of s(16 000)/s(4 000) ∈ [0.45, 0.55] (expected 0.5) | LV |
 | UNC-4 | `plan_uncertainty(x)` = √(Σ_j x_j² σ_vj²) exactly (rel 1e-12); docstring and results-format page state the independence argument (disjoint counters, decision 0037) | exact | CI |
 
@@ -260,12 +304,12 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | OUT-0-INF | Clause map: geometry, beamlet mapping (offsets, labels, parameters), units, histories per beamlet, normalisation, threshold, discarded accounting, uncertainty definition → JSON pointer/array | every clause resolved | CI |
-| PER-1 | In-process round trip `load(save(r))` for R-INF (python, warp-cpu f64), τ = 0 and τ = 1e-2, `persist_batches` on/off (off recorded `not-persisted`); includes a bundle whose `requested.run` carries the derived N = Σ n_j (A-1 item 1) | arrays bitwise, JSON equal | CI |
+| PER-1 | In-process round trip `load(save(r))` for R-INF (python, warp-cpu f64), τ = 0 and τ = 1e-2, `persist_batches` on/off (off recorded `not-persisted`); includes a bundle whose `requested.run` carries the derived N = Σ n_j (A-1 item 1) and an R-INF-Z bundle with a zero-deposition column (A-2 item 4) | arrays bitwise, JSON equal | CI |
 | PER-2 | Clean-process round trip (`python -I`) | canonical dump equal | CI; LV/HR on three backends |
 | PER-3 | Version handling: the frozen V3-006 1.0 golden fixture loads unchanged; a 1.1 golden synthetic fixture (KB-scale) loads and regenerates its report byte-identically; "1.2"/"2.0" refused; `kind = "influence"` with schema 1.0 refused | exact | CI |
-| PER-4 | Tier-1 negative controls, one each: indptr non-monotone or ≠ nnz; voxel index ≥ V or unsorted or duplicate; nnz arrays of unequal length; negative std; batch values not reproducing mean/std; discarded accounting inconsistent; beamlet table ≠ `requested`; offsets ≠ cumulative n_j; columns swapped with balances unchanged and digests recomputed (fails through the INF-7 identity); `Σ_j (n_j/N)·column + discarded` ≠ composite in-grid energy (rel 1e-9); influence block missing for `kind = "influence"`; subset bundle with a non-empty untransported column; Σ_{transported} n_j ≠ `run.n_histories` | each `ResultFormatError` naming the defect | CI |
+| PER-4 | Tier-1 negative controls, one each: indptr non-monotone or ≠ nnz; voxel index ≥ V or unsorted or duplicate; nnz arrays of unequal length; negative std; batch values not reproducing mean/std; discarded accounting inconsistent; beamlet table ≠ `requested`; offsets ≠ cumulative n_j; columns swapped with balances unchanged and digests recomputed (fails through the INF-7 identity); `Σ_j (n_j/N)·column + discarded` ≠ composite in-grid energy (rel 1e-9); influence block missing for `kind = "influence"`; subset bundle with a non-empty untransported column; Σ_{transported} n_j ≠ `run.histories_transported`; `histories_transported` ≠ Σ transported n_j (A-2 item 1); zero column with nonzero discarded count or a defined fraction (A-2 item 4) | each `ResultFormatError` naming the defect | CI |
 | PER-5 | Budgets: a catalogue declaring nnz = 2⁴⁰ or a 3-D batch array beyond `max_array_bytes` refused before allocation (V3-006 OUT-10 method, RSS bound 64 MiB) | exact | CI |
-| PER-6 | Reproduction from the bundle (r = 11): `from_dict(requested)` + seed → every content digest equal | exact | CI (small), LV |
+| PER-6 | Reproduction from the bundle (r = 11): `from_dict(requested)` + seed → every content digest equal; subset variant (r = 11, k = 1): `from_dict(requested)` validates and `run(beamlets=requested.run.beamlet_subset)` reproduces every digest (A-2 item 1) | exact | CI (small), LV |
 | PER-7 | Tier 2 `verify_effective` re-derives `effective` for a beamlet bundle | exact | CI (default model), LV |
 | PER-8 | No table values (allowlist extended only by `influence__*`, `beamlet__*`) | exact | CI |
 | PER-9 | Honoured check: influence requested ⇒ influence arrays present; absent request ⇒ none | exact | CI |
@@ -295,8 +339,8 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | CLI-1 | `ionmc run beamlets.toml` (inline) and with a spot file → bundle; `verify` 0; `report --check` 0 | exact | CI |
-| CLI-2 | Spot file: sha256 mismatch → 2; malformed header/row → 2 naming the line; recorded in `InputManifest` role `spots`; a file above 1 MiB (sparse file, nothing read) and one above 4 097 lines refused with exit 2 before parsing, naming the bound; the sha256 is computed over the bytes read once (A-1 item 3) | exact | CI |
-| CLI-3 | Report content: beamlet table, threshold line, discarded summary, "Not a clinical claim.", no `\bvalidated\b` in generated text | exact | CI |
+| CLI-2 | Spot file: sha256 mismatch → 2; malformed header/row → 2 naming the line; recorded in `InputManifest` role `spots`; a file above 1 MiB (sparse file, nothing read) and one above 4 097 lines refused with exit 2 before parsing, naming the bound; the sha256 is computed over the bytes read once (A-1 item 3); adversarial controls (A-2 item 3): symlink to a valid file → refused; oversized sparse regular file → refused by `fstat` before any read; file replaced at its name between open and read (the test patches the open helper to rename after opening) → bytes and sha256 are those of the opened descriptor; file grown after `fstat` → only `st_size` bytes read, sha256 mismatch → refused | exact | CI |
+| CLI-3 | Report content: beamlet table, threshold line, discarded summary, the strings "undefined (no deposition in the influence grid)" and "undefined (no entries)" for an R-INF-Z zero column (A-2 item 4), "Not a clinical claim.", no `\bvalidated\b` in generated text | exact | CI |
 | CLI-4 | Offline host run (r = 10) on warp-cuda; bundle verifies | exact | HR |
 | CLI-5 | r = 0..3 bundles verify and differ only in backend/device/precision fields and array contents | exact | LV, HR |
 | REUSE-1 | A second `run()` on the same `Simulation` performs no table construction and no geometry/table upload (instrumented counters), results bitwise equal to a fresh object's | exact | CI; HR measurement of setup time |
@@ -370,3 +414,7 @@ None. Cache-backed CAP-1 rows use datasets already cached; no download.
   Amendment A-1 after §B): (1) `n_histories` = Σ n_j invariant; (2) complete `config.source` reader inventory incl.
   the ion-mapping failure branch; (3) label and spot-file bounds before allocation; (4) subset-run semantics. Rows
   BEAM-1, BEAM-2, CAP-3, CLI-2, INF-4, PER-1, PER-4, PER-10 updated. Not a clinical claim.
+- 2026-11-25 (S0 fix 2, Codex REVIEW-15a83983 on 0901763, changes_required; four important findings adopted, see
+  Amendment A-2 after A-1): (1) configured vs. transported history counts, subset validation; (2) AST-based
+  source-consumer audit; (3) descriptor-bound spot-file read; (4) zero-deposition columns and R-INF-Z. Rows BEAM-2,
+  CLI-2, CLI-3, INF-4, PER-1, PER-4, PER-6, SPA-3, UNC-2, UNC-3 updated. Not a clinical claim.

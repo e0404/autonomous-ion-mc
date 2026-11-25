@@ -4,6 +4,10 @@
   changes are dated amendments. Not a clinical claim.
 - Amended 2026-11-25 (S0 fix 1, Codex REVIEW-1652a7c1 on 9805dfdb): (1) `n_histories` = Σ n_j for a `BeamletSet`;
   (2) reader inventory completed; (3) label and spot-file bounds; (4) subset-run semantics. See plan Amendment A-1.
+- Amended 2026-11-25 (S0 fix 2, Codex REVIEW-15a83983 on 0901763): (1) configured `n_histories` = Σ_all j n_j versus
+  the persisted `run.histories_transported`; (3) descriptor-bound spot-file read; (4) zero-deposition columns. See
+  plan Amendment A-2.
+
 - Limits: 1 ≤ J ≤ 4 096 beamlets (ESTIMATE-justified: ≈ 300 B per beamlet inline in `requested` ≈ 1.2 MiB, within the
   0045 `max_json_bytes` and token budgets; the frozen workload has 100). Envelope rules: quanta capacity
   `e_cap = max_j (E_j + 6σ_j)`; `max_steps` from the envelope E_hi; `fdm_domain_status` and the σ ≤ fraction·E0 rule per
@@ -37,6 +41,9 @@ beamlet mapping, units, history and normalisation metadata; V2-CAP forbids influ
   (`SOURCE_TYPES`), 939, `simulation.py` 736 (`capabilities()["sources"]`), `report.py` 335, `configio.py` 590 and
   1162. Amended list (REVIEW-1652a7c1): `config.py` also 348, 471–498 (ion-mapping path; its failure branch at 498
   reads the singular `source.kinetic_energy_mev` and is converted to per-beamlet values), 526, 564, 588 and 1016.
+  Amended again (REVIEW-15a83983): `config.py` also 844, 1163, 1214–1229 and `warp_driver.py` 187; `configio.py` 1162
+  is a lookup-file source, not `SimulationConfig.source` (kept in the audit allowlist as `not-a-source`); the
+  inventory is the allowlist of the AST-based audit of plan row BEAM-2 and is re-derived whenever S2/S3 add readers.
   Every reader, including exceptional paths, is in the list; the plan's grep check finds none outside it.
 - `run_warp_range(eff, h0, h1, device)` rebuilds kernel handle, uploads tables, geometry and grids, and allocates
   `edep int64[B, ΣV]` on every call; source parameters are scalars in the `ctl` struct; launches chunks of
@@ -66,9 +73,13 @@ beamlet mapping, units, history and normalisation metadata; V2-CAP forbids influ
 Normalisation: columns in MeV and Gy **per primary of beamlet j**; plan dose `D = A·x` with x in primaries.
 
 Amendment (REVIEW-1652a7c1): for a `BeamletSet`, `RunOptions.n_histories` MUST equal Σ_j n_j; `validate` refuses a
-mismatch, and TOML `[run] n_histories` is optional (absent → derived Σ n_j, different → `ConfigError`). `label` is
-optional, ≤ 64 printable characters, unique within the set. A spot file is bounded before parsing (`lstat` size
-≤ 1 MiB, ≤ 4 097 lines, sha256 over the bytes read once; violation → `ConfigError`).
+mismatch, and TOML `[run] n_histories` is optional (absent → derived Σ n_j, different → `ConfigError`); this is
+the CONFIGURED count and holds also in the `requested` configuration of a subset result, whereas the transported
+count is the separate persisted `run.histories_transported`
+(A-2). `label` is optional, ≤ 64 printable characters, unique within the set. A spot file is opened with
+`O_NOFOLLOW | O_RDONLY | O_CLOEXEC` (a symbolic link is refused), `fstat` on the descriptor must report a regular
+file ≤ 1 MiB, exactly `st_size` bytes are read from that descriptor, sha256 over those bytes, ≤ 4 097 lines
+(violation → `ConfigError`).
 
 ### 2. Execution and batching
 
@@ -108,6 +119,9 @@ normalisation-dependent), thresholds on relative uncertainty (selects on noise �
 Batch standard error per entry (decision 0040, hpb_j = n_j/B; every s_j and n_j a multiple of B so each batch has
 exactly n_j/B histories of beamlet j). Beamlets use disjoint counter ranges (0037) and are statistically
 independent; hence `Var(Σ_j x_j d_vj) = Σ_j x_j² σ_vj²` and no cross-beamlet covariance needs persisting.
+Zero-deposition columns (A-2): a transported beamlet without deposit in the influence grid has nnz = 0, no
+threshold applies, its discarded counts, energy, maximum dose and variance are 0 and its discarded fraction is
+undefined (NaN with an explicit mask, decision 0040); such beamlets have no uncertainty entries.
 `plan_uncertainty` excludes entries dropped by a threshold; the persisted
 per-beamlet `influence__discarded_var_gy2` (Σ σ² over dropped entries) quantifies the omission. Batch values
 per entry `[B, nnz]` are persisted by default (O3, tier-1 recomputation), opt-out recorded. Per-beamlet energy
@@ -147,8 +161,11 @@ its device context (tables, geometry, grids, kernel, nuclear setup); `Simulation
 subset with the original offsets (bit-identical columns). No merge of runs sharing a seed is offered.
 
 Amendment (REVIEW-1652a7c1), subset semantics: the result's `requested` is the full configuration plus the
-requested-only field `run.beamlet_subset`; `run.n_histories` = Σ over the subset while `beamlets.offsets` stay the
-original full-set offsets; composite grids, balances and statistics are those of the transported subset; the matrix
+requested-only field `run.beamlet_subset`; `run.n_histories` stays the configured Σ_j n_j and
+`run.histories_transported` = Σ over the subset (A-2) while `beamlets.offsets` stay the original full-set offsets;
+invalid subsets (empty, duplicate, out of range,
+non-integer) are refused before transport and `config_sha256` differs between full and subset runs; composite
+grids, balances and statistics are those of the transported subset; the matrix
 keeps J columns with untransported ones empty; the saved bundle records `influence.subset`, and subset and full
 bundles are never merged.
 
