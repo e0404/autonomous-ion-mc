@@ -10,6 +10,8 @@ tested (an influence request without its effective implementation raises).
 from __future__ import annotations
 
 import copy
+import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -83,22 +85,19 @@ def test_cap1_sweep_source_kind_x_influence(gate_open: None) -> None:
     )
 
 
-def test_cap1_sweep_with_the_s2_gate_python_only_declared_equals_enforced() -> None:
-    """S2 opens the gate for the python backend only; the Warp cells stay unsupported (naming
-    the rule ``beamlet-transport-not-available``) until S3, and declared == enforced."""
-    assert config.BEAMLET_TRANSPORT_BACKENDS == ("python",)
+def test_cap1_sweep_with_the_s3_gate_all_backends_declared_equals_enforced() -> None:
+    """S3 opens the gate for warp-cpu and warp-cuda: no beamlet cell is refused by the gate rule,
+    and declared == enforced."""
+    assert config.BEAMLET_TRANSPORT_BACKENDS == ("python", "warp-cpu", "warp-cuda")
     m = contract.Matrix(
         species=(PROTON,), models=(v6.BETHE,), domain_classes=("inside",), tallies=("none",),
         trace=(False,), sources=("beamlets",), influence=(False, True),
     )  # fmt: skip
     out = contract.sweep(m)
     assert out and _bad(out) == []
-    warp = [o for o in out if o.backend != "python"]
-    assert warp and {o.actual for o in warp} == {contract.UNSUPPORTED}
-    assert {o.rule for o in warp} == {"beamlet-transport-not-available"}
-    py = [o for o in out if o.backend == "python"]
-    assert py and any(o.actual == contract.OK for o in py)
-    assert all(o.rule != "beamlet-transport-not-available" for o in py)
+    assert all(o.rule != "beamlet-transport-not-available" for o in out)
+    for b in ("python", "warp-cpu"):  # warp-cuda cells need a CUDA host
+        assert any(o.backend == b and o.actual == contract.OK for o in out)
 
 
 def test_cap1_sweep_ions_and_nuclear_cells(
@@ -444,9 +443,29 @@ GOLDEN = {  # (summary sha256, to_dict sha256) computed from the 3f3736a6 tree w
 }  # fmt: skip
 
 
+_REG2_FIXTURE = Path(__file__).parent / "data" / "v3_007" / "reg2_summaries_3f3736a6.json"
+
+
 def test_reg2_pencil_summary_and_request_are_byte_identical_to_3f3736a6() -> None:
+    """REG-2. In the local-validation tier (IONMC_LV_TIER=1) the pencil summaries and requests are
+    byte-identical to 3f3736a6 (digests). Elsewhere (the hosted CI runner, whose hardware differs
+    between runs) the table-derived leaves of a summary vary in their last bits, so the CI
+    tolerance rule of plan v3-006 (note 2026-11-23) applies: the summaries are compared
+    structurally with the 3f3736a6 fixture, table digests exempt and table-derived numbers
+    within 1e-9 relative; the request digests stay strict (CI run 45650086640 at 3b9a411f)."""
     got = fixed.digests()
-    assert got == GOLDEN
+    if os.environ.get("IONMC_LV_TIER") == "1":
+        assert got == GOLDEN
+    else:
+        from test_v3_006_report import _foreign_differences
+
+        base = json.loads(_REG2_FIXTURE.read_text())
+        assert set(base) == set(got) == set(GOLDEN)
+        for name, c in fixed.fixed_configs().items():
+            assert got[name][1] == GOLDEN[name][1], name  # the request never varies
+            cur = json.loads(json.dumps(validate(c).summary(), sort_keys=True, default=str))
+            foreign = _foreign_differences({"effective": base[name]}, {"effective": cur})
+            assert foreign == [], (name, foreign)
     for c in fixed.fixed_configs().values():
         s = validate(c).summary()
         assert "influence" not in s and "unit_direction_status" not in s

@@ -19,7 +19,14 @@ from typing import Any
 import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
-__all__ = ["AllocationRecorder", "alloc_zeros", "record_allocations", "release"]
+__all__ = [
+    "AllocationRecorder",
+    "alloc_device_zeros",
+    "alloc_zeros",
+    "note_alloc",
+    "record_allocations",
+    "release",
+]
 
 
 @dataclass
@@ -71,7 +78,30 @@ def alloc_zeros(tag: str, shape: tuple[int, ...], dtype: DTypeLike) -> NDArray[A
     return arr
 
 
-def release(tag: str, arr: NDArray[Any]) -> None:
-    """Announce that the caller drops the payload array ``arr`` now (recorded with its nbytes)."""
+def alloc_device_zeros(tag: str, shape: tuple[int, ...], dtype: Any, device: str) -> Any:
+    """``warp.zeros`` of a payload array on ``device`` (``dtype`` a Warp scalar type), recorded as
+    an allocation of its byte size (V3-007 S3: the Warp driver's device payload)."""
+    import warp as wp
+
+    arr = wp.zeros(shape, dtype=dtype, device=device)
     if _ACTIVE is not None:
-        _ACTIVE.events.append(("release", tag, int(arr.nbytes)))
+        _ACTIVE.events.append(("alloc", tag, int(arr.capacity)))
+    return arr
+
+
+def note_alloc(tag: str, arr: Any) -> None:
+    """Record an allocation made by a library call (a CUDA ``numpy()`` host copy)."""
+    if _ACTIVE is not None:
+        _ACTIVE.events.append(("alloc", tag, _nbytes(arr)))
+
+
+def _nbytes(arr: Any) -> int:
+    n = getattr(arr, "nbytes", None)
+    return int(arr.capacity if n is None else n)  # a Warp array has ``capacity`` (bytes), no nbytes
+
+
+def release(tag: str, arr: Any) -> None:
+    """Announce that the caller drops the payload array ``arr`` now (recorded with its nbytes;
+    ``arr`` is a ``numpy`` or a Warp array)."""
+    if _ACTIVE is not None:
+        _ACTIVE.events.append(("release", tag, _nbytes(arr)))

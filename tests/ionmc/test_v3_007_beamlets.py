@@ -31,7 +31,7 @@ from ionmc.config import (
     validate,
 )
 from ionmc.configio import ConfigError
-from ionmc.errors import UnsupportedCombinationError
+from ionmc.errors import BackendUnavailableError, UnsupportedCombinationError
 from ionmc.geometry import BoxPhantom
 from ionmc.materials import WATER
 from ionmc.physics.projectiles import ALPHA, PROTON
@@ -108,14 +108,16 @@ def test_beam1_positive_twin_and_effective_summary() -> None:
         eff.single_unit_direction()
 
 
-def test_beam1_gate_beamlet_transport_python_only_until_s3() -> None:
-    """The temporary transport gate (S2): the python backend transports beamlet sets, the Warp
-    backends are refused naming S3 (TODO: removed by S3); pencil sources are unaffected."""
-    assert config.BEAMLET_TRANSPORT_BACKENDS == ("python",)
+def test_beam1_gate_beamlet_transport_on_every_backend_since_s3() -> None:
+    """The transport gate (S3): python, warp-cpu and warp-cuda transport beamlet sets; pencil
+    sources are unaffected."""
+    assert config.BEAMLET_TRANSPORT_BACKENDS == ("python", "warp-cpu", "warp-cuda")
     validate(cfg())
-    for backend in ("warp-cpu", "warp-cuda"):
-        refused(cfg(run={"backend": backend}), r"not yet available on the " + backend)
-        refused(cfg(run={"backend": backend}), r"V3-007 S3")
+    validate(cfg(run={"backend": "warp-cpu"}))
+    try:  # warp-cuda: never refused by the gate (a host without CUDA says so differently)
+        validate(cfg(run={"backend": "warp-cuda"}))
+    except BackendUnavailableError:
+        pass
     pencil = PencilBeamSource(PROTON, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), 100.0)
     validate(cfg(beamlets=(bl(),), source=pencil, run={"n_histories": 40}))  # pencil unaffected
 
@@ -1080,12 +1082,24 @@ ALLOWLIST: dict[Event, tuple[str, int]] = {
     ("transport/reference.py", "_Reference._source_parameters", "kinetic_energy_mev"): (PER, 1),
     ("transport/reference.py", "_Reference._source_parameters", "lateral_sigma_mm"): (PER, 1),
     ("transport/reference.py", "_Reference._source_parameters", "position_mm"): (PER, 1),
-    ("transport/warp_driver.py", "run_warp_range", "<alias-passed>"): (S1, 1),  # isinstance guard
-    ("transport/warp_driver.py", "run_warp_range", "energy_sigma_mev"): (S1, 1),  # S3
-    ("transport/warp_driver.py", "run_warp_range", "kinetic_energy_mev"): (S1, 1),
-    ("transport/warp_driver.py", "run_warp_range", "lateral_sigma_mm"): (S1, 1),
-    ("transport/warp_driver.py", "run_warp_range", "position_mm"): (S1, 1),
-    ("transport/warp_driver.py", "run_warp_range", _PROJ): (ENV, 4),  # 4 occurrences
+    # V3-007 S3: the Warp driver's device context reads the beamlet set per beamlet (parameter and
+    # offset arrays, unit directions); the control struct reads a pencil's own parameters
+    ("transport/warp_driver.py", "WarpContext.__init__", "<alias-passed>"): (PER, 3),
+    ("transport/warp_driver.py", "WarpContext.__init__", "<field>:WarpContext.beamlets"): (PER, 3),
+    ("transport/warp_driver.py", "WarpContext.__init__", "beamlets"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext.__init__", "offsets"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "<alias-passed>"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "energy_sigma_mev"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "kinetic_energy_mev"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "lateral_sigma_mm"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "n_beamlets"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "position_mm"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "projectile"): (ENV, 2),
+    ("transport/warp_driver.py", "WarpContext._groups", "<alias-passed>"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._groups", "<field>:WarpContext.beamlets"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext.run_range", "<alias-passed>"): (PER, 3),
+    ("transport/warp_driver.py", "WarpContext.run_range", "<field>:WarpContext.beamlets"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext.run_range", "projectile"): (ENV, 2),
     # V3-007 S1 fix 7: root occurrences (every `.source` access) and tuple pass-through
     ("config.py", "EffectiveConfig.is_ion", "<root>:self.requested.source"): (ENV, 1),
     ("config.py", "EffectiveConfig.ls_effective", "<root>:self.requested.source"): (ENV, 1),
@@ -1163,8 +1177,10 @@ ALLOWLIST: dict[Event, tuple[str, int]] = {
         5,
     ),  # 5 occurrences (4 projectile reads + the beamlet-set handle)
     ("transport/reference.py", "_Reference._source_parameters", "<root>:self.cfg.source"): (PER, 1),
-    ("transport/warp_driver.py", "run_warp_range", "<bare>"): (S1, 1),
-    ("transport/warp_driver.py", "run_warp_range", "<root>:cfg.source"): (S1, 1),
+    ("transport/warp_driver.py", "WarpContext.__init__", "<root>:cfg.source"): (ENV, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "<bare>"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext._control", "<root>:cfg.source"): (PER, 1),
+    ("transport/warp_driver.py", "WarpContext.run_range", "<root>:cfg.source"): (ENV, 2),
     # ---- interprocedural fix 9: parameter / closure / return roots of the callees reached.
     # Classification: _source_members reads each member (per-beamlet); _source_e_hi,
     # _source_description and the beamlet summary use the envelope / set-level fields; the
@@ -1295,7 +1311,7 @@ def test_beam2_audit_inventory_equals_the_allowlist() -> None:
 
 def test_beam2_inventory_size_is_pinned() -> None:
     """Decision 0046 quotes the inventory size (occurrences counted per key)."""
-    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (194, 309)
+    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (206, 327)
 
 
 def test_beam2_a_duplicate_occurrence_in_the_repository_fails_naming_the_scope() -> None:
@@ -1326,7 +1342,8 @@ def test_beam2_the_refused_in_s1_readers_cannot_see_a_beamlet_set() -> None:
         assert not hasattr(b, attr)
     refused_attrs = {a for (_m, _q, a), (v, _n) in ALLOWLIST.items() if v == S1}
     pencil_only = {"kinetic_energy_mev", "energy_sigma_mev", "lateral_sigma_mm", "position_mm"}
-    assert {a for a in refused_attrs if not a.startswith("<root>:")} == pencil_only | {
+    # S3 converted the Warp driver: only the persistence readers of results.py (S5) remain
+    assert {a for a in refused_attrs if not a.startswith("<root>:")} <= pencil_only | {
         "<alias-passed>",
         "<bare>",
     }

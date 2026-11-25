@@ -117,6 +117,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         "ion": int,  # 1 for z >= 2: f_dM through the exact-Omega mapping
         "n_sub": int,  # sub-steps of the continuous_residual_v1 segment (RESIDUAL_SUBSTEPS)
         "eor": int,  # end of range: 0 point_v1 (point deposit), 1 continuous_residual_v1
+        "n_beamlets": int,  # 0: a pencil source (the fields below), else the beamlet arrays
+        "infl_grid": int,  # index of the influence grid, -1 without influence
+        "j0": int,  # first beamlet of the group being launched
         "pos0": v3,
         "dir": v3,
         "origin": v3,
@@ -287,6 +290,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
     @named_func(name)
     def deposit_voxel(
         edep: wp.array2d(dtype=wp.int64),
+        infl: wp.array2d(dtype=wp.int64),
+        irow: int,
+        ig: int,
         tally_rows: wp.array2d(dtype=wp.float64),
         tid: int,
         batch: int,
@@ -307,6 +313,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         if ix >= 0 and ix < nxg and iy >= 0 and iy < nyg and iz >= 0 and iz < nzg:
             n = wp.int64(wp.floor(d64 * q_scale + wp.float64(0.5)))
             wp.atomic_add(edep, batch, off + (ix * nyg + iy) * nzg + iz, n)
+            if irow >= 0 and g == ig:  # influence accumulator of the beamlet (V3-007)
+                wp.atomic_add(infl, irow, (ix * nyg + iy) * nzg + iz, n)
             c = n_fixed + n_grids + g
             tally_rows[tid, c] = tally_rows[tid, c] + (d64 - wp.float64(n) * q_mev)
         else:
@@ -315,6 +323,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
     @named_func(name)
     def deposit_point(
         edep: wp.array2d(dtype=wp.int64),
+        infl: wp.array2d(dtype=wp.int64),
+        irow: int,
+        ig: int,
         tally_rows: wp.array2d(dtype=wp.float64),
         tid: int,
         batch: int,
@@ -339,7 +350,23 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             nzg = g_shape[g, 2]
             ix, iy, iz, inside = F.grid_index(p, go, gi, nxg, nyg, nzg)
             deposit_voxel(
-                edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids, de
+                edep,
+                infl,
+                irow,
+                ig,
+                tally_rows,
+                tid,
+                batch,
+                g,
+                ix,
+                iy,
+                iz,
+                nxg,
+                nyg,
+                nzg,
+                g_off[g],
+                n_grids,
+                de,
             )
             score_local(chan, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, de)
 
@@ -354,6 +381,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
     @named_func(name)
     def deposit_leg(
         edep: wp.array2d(dtype=wp.int64),
+        infl: wp.array2d(dtype=wp.int64),
+        irow: int,
+        ig: int,
         tally_rows: wp.array2d(dtype=wp.float64),
         tid: int,
         batch: int,
@@ -409,7 +439,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                 tb = tcur + D(piece)
                 eps_p = deposit * ramp_weight(tcur, tb, s_start, s_end, D(s_act))
                 deposit_voxel(
-                    edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids, eps_p
+                    edep, infl, irow, ig,
+                    tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids, eps_p
                 )  # fmt: skip
                 if chan.n_ch > 0:
                     if ix >= 0 and ix < nxg and iy >= 0 and iy < nyg and iz >= 0 and iz < nzg:
@@ -448,7 +479,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
             overflow = 1
             eps_r = deposit * ramp_weight(tcur, tcur + D(remaining), s_start, s_end, D(s_act))
             deposit_voxel(
-                edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids, eps_r
+                edep, infl, irow, ig,
+                tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, off, n_grids, eps_r
             )  # fmt: skip
             if chan.n_ch > 0:
                 if ix >= 0 and ix < nxg and iy >= 0 and iy < nyg and iz >= 0 and iz < nzg:
@@ -462,6 +494,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
     @named_func(name)
     def deposit_step(
         edep: wp.array2d(dtype=wp.int64),
+        infl: wp.array2d(dtype=wp.int64),
+        irow: int,
+        ig: int,
         tally_rows: wp.array2d(dtype=wp.float64),
         tid: int,
         batch: int,
@@ -494,13 +529,15 @@ def make_kernel_support(real: type) -> SimpleNamespace:
         for g in range(n_grids):
             if s_act > R(0.0):
                 ovf = ovf + deposit_leg(
-                    edep, tally_rows, tid, batch, g, p0[0], p0[1], p0[2], d0[0], d0[1], d0[2],
+                    edep, infl, irow, ig,
+                    tally_rows, tid, batch, g, p0[0], p0[1], p0[2], d0[0], d0[1], d0[2],
                     leg1, deposit, s_act, D(0.0), s_start, s_end, g_origin, g_spacing, g_inv,
                     g_shape, g_off, n_grids, max_pieces, chan, s_mid, k_ramp, e_mid, e_dot,
                     cls_step,
                 )  # fmt: skip
                 ovf = ovf + deposit_leg(
-                    edep, tally_rows, tid, batch, g, hinge[0], hinge[1], hinge[2], d1[0], d1[1],
+                    edep, infl, irow, ig,
+                    tally_rows, tid, batch, g, hinge[0], hinge[1], hinge[2], d1[0], d1[1],
                     d1[2], leg2, deposit, s_act, D(leg1), s_start, s_end, g_origin, g_spacing,
                     g_inv, g_shape, g_off, n_grids, max_pieces, chan, s_mid, k_ramp, e_mid, e_dot,
                     cls_step,
@@ -513,7 +550,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                 nzg = g_shape[g, 2]
                 ix, iy, iz, inside = F.grid_index(p0, go, gi, nxg, nyg, nzg)
                 deposit_voxel(
-                    edep, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids,
+                    edep, infl, irow, ig,
+                    tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, g_off[g], n_grids,
                     deposit,
                 )  # fmt: skip
                 score_local(chan, tally_rows, tid, batch, g, ix, iy, iz, nxg, nyg, nzg, deposit)
@@ -575,6 +613,9 @@ def make_kernel_support(real: type) -> SimpleNamespace:
     @named_func(name)
     def deposit_residual(
         edep: wp.array2d(dtype=wp.int64),
+        infl: wp.array2d(dtype=wp.int64),
+        irow: int,
+        ig: int,
         tally_rows: wp.array2d(dtype=wp.float64),
         tid: int,
         batch: int,
@@ -747,7 +788,8 @@ def make_kernel_support(real: type) -> SimpleNamespace:
                             ss_mid, ss_k, ss_dot = step_state(chan, ss_e, de, l_sub)
                     for g in range(ctl.n_grids):
                         ovf = ovf + deposit_leg(
-                            edep, tally_rows, tid, batch, g, pk[0], pk[1], pk[2], d0[0], d0[1],
+                            edep, infl, irow, ig,
+                            tally_rows, tid, batch, g, pk[0], pk[1], pk[2], d0[0], d0[1],
                             d0[2], R(l_sub), de, R(l_sub), D(0.0), D(1.0), D(1.0), g_origin,
                             g_spacing, g_inv, g_shape, g_off, ctl.n_grids, ctl.max_pieces, chan,
                             ss_mid, ss_k, ss_e, ss_dot, cls,
@@ -923,7 +965,14 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
         g_inv: wp.array2d(dtype=R),
         g_shape: wp.array2d(dtype=int),
         g_off: wp.array(dtype=int),
+        b_off: wp.array(dtype=wp.int64),
+        b_e0: wp.array(dtype=D),
+        b_sigma_e: wp.array(dtype=D),
+        b_sigma_lat: wp.array(dtype=D),
+        b_pos: wp.array2d(dtype=D),
+        b_dir: wp.array2d(dtype=R),
         edep: wp.array2d(dtype=wp.int64),
+        infl: wp.array2d(dtype=wp.int64),
         tally_rows: wp.array2d(dtype=wp.float64),
         counter_rows: wp.array2d(dtype=wp.int32),
         end_state: wp.array2d(dtype=R),
@@ -969,16 +1018,44 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
         w = PH.philox_block(h, u_zero, u_zero, p_source, key)
         z1, z2 = F.gauss_pair(PH.u01(w[0]), PH.u01(w[1]))
         z3 = F.gauss_one(PH.u01(w[2]), PH.u01(w[3]))
+        # beamlet of the history (V3-007): j = (last j with s_j <= h), a bisection on the offsets;
+        # a pencil source (n_beamlets = 0) reads the control fields, a beamlet its own parameters
+        # through the same expressions below
+        jb = int(0)
+        if ctl.n_beamlets > 0:
+            j_lo = int(0)
+            j_hi = ctl.n_beamlets
+            while j_hi - j_lo > 1:
+                j_mid = (j_lo + j_hi) >> 1
+                if b_off[j_mid] <= wp.int64(h):
+                    j_lo = j_mid
+                else:
+                    j_hi = j_mid
+            jb = j_lo
+        irow = int(-1)
+        if ctl.infl_grid >= 0:
+            irow = (jb - ctl.j0) * ctl.n_batches + batch
+        ig = ctl.infl_grid
         d = ctl.dir
+        e0_src = ctl.e0
+        sigma_e_src = ctl.sigma_e
+        sigma_lat_src = ctl.sigma_lat
+        pos_src = ctl.pos0
+        if ctl.n_beamlets > 0:
+            d = v3(b_dir[jb, 0], b_dir[jb, 1], b_dir[jb, 2])
+            e0_src = b_e0[jb]
+            sigma_e_src = b_sigma_e[jb]
+            sigma_lat_src = R(b_sigma_lat[jb])
+            pos_src = v3(R(b_pos[jb, 0]), R(b_pos[jb, 1]), R(b_pos[jb, 2]))
         e1v, e2v = F.orthonormal_basis(d)
-        energy = D(ctl.e0)
-        if ctl.sigma_e > zd:
-            energy = energy + ctl.sigma_e * D(z3)
-        px = R(ctl.pos0[0])
-        py = R(ctl.pos0[1])
-        pz = R(ctl.pos0[2])
-        if ctl.sigma_lat > zero:
-            sg = ctl.sigma_lat
+        energy = D(e0_src)
+        if sigma_e_src > zd:
+            energy = energy + sigma_e_src * D(z3)
+        px = R(pos_src[0])
+        py = R(pos_src[1])
+        pz = R(pos_src[2])
+        if sigma_lat_src > zero:
+            sg = sigma_lat_src
             px = px + sg * (z1 * e1v[0] + z2 * e2v[0])
             py = py + sg * (z1 * e1v[1] + z2 * e2v[1])
             pz = pz + sg * (z1 * e1v[2] + z2 * e2v[2])
@@ -1033,7 +1110,8 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
                     if uz > zero:
                         l_in = wp.min(l_in, D((ctl.z_clip - pz) / uz))
                     e_esc, l_res, ovf_c = deposit_residual(
-                        edep, tally_rows, tid, batch, ctl, mat, dens, ix, iy, iz, v3(px, py, pz),
+                        edep, infl, irow, ig,
+                        tally_rows, tid, batch, ctl, mat, dens, ix, iy, iz, v3(px, py, pz),
                         v3(ux, uy, uz), energy, l_in, r_mass, f_mass, d_f, ln_e0, inv_dln_e, ln_er,
                         ln_r0, inv_dln_r, g_origin, g_spacing, g_inv, g_shape, g_off, chan,
                     )  # fmt: skip
@@ -1056,7 +1134,8 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
                 else:
                     t_cutoff = t_cutoff + wp.float64(energy)
                     deposit_point(
-                        edep, tally_rows, tid, batch, px, py, pz, energy, g_origin, g_inv, g_shape,
+                        edep, infl, irow, ig,
+                        tally_rows, tid, batch, px, py, pz, energy, g_origin, g_inv, g_shape,
                         g_off, ctl.n_grids, chan,
                     )  # fmt: skip
                 alive = 0
@@ -1288,7 +1367,8 @@ def make_transport_kernel(real: type, diag: bool, ion: bool = False, ion_eval: s
                         ss_e = energy - D(0.5) * mean
                         ss_mid, ss_k, ss_dot = step_state(chan, ss_e, mean, s_act_d)
                     c_pieces = c_pieces + deposit_step(
-                        edep, tally_rows, tid, batch, v3(px, py, pz), v3(ux, uy, uz), leg1,
+                        edep, infl, irow, ig,
+                        tally_rows, tid, batch, v3(px, py, pz), v3(ux, uy, uz), leg1,
                         v3(hx, hy, hz), v3(d1x, d1y, d1z), leg2, deposit, s_act, s0, s_end_pw,
                         g_origin, g_spacing, g_inv, g_shape, g_off, ctl.n_grids, ctl.max_pieces,
                         chan, ss_mid, ss_k, ss_e, ss_dot,

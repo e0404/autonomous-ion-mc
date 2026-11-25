@@ -773,13 +773,14 @@ class Simulation:
         self.resolutions: tuple[contract.Resolution, ...] = contract.reconcile(
             config, self.effective, contract.evidence_from_effective(self.effective)
         )
+        self._device_context: dict[str, Any] = {}  # Warp device context, reused across runs
         self._setup_s = time.perf_counter() - t0
 
     def run(self) -> Result:
         """Run the transport and return the result (raises on invalid results unless allowed)."""
         t_start = time.perf_counter()
         eff = self.effective
-        raw = run_transport(eff)
+        raw = run_transport(eff, self._device_context)
         t_transport = time.perf_counter()
         result = _assemble(eff, raw)
         t_end = time.perf_counter()

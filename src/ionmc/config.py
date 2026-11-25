@@ -122,10 +122,9 @@ BEAMLET_MAX_CPU_WORKERS = 1
 """Beamlet runs are single-process (operator directive): ``cpu_workers`` must not exceed this."""
 INFLUENCE_THRESHOLD_BOUNDS = (0.0, 1.0)
 """``InfluenceOptions.threshold_rel`` must lie in ``[0, 1)`` (0 is lossless)."""
-BEAMLET_TRANSPORT_BACKENDS: tuple[str, ...] = ("python",)
-"""Backends that transport a ``BeamletSet`` (V3-007 S2: the python reference backend; the Warp
-backends follow in S3 and are refused by ``validate`` with a message naming S3 until then).
-TODO(V3-007 S3): add ``"warp-cpu"`` and ``"warp-cuda"``."""
+BEAMLET_TRANSPORT_BACKENDS: tuple[str, ...] = ("python", "warp-cpu", "warp-cuda")
+"""Backends that transport a ``BeamletSet`` (V3-007 S3: the python reference backend and both
+Warp backends; nuclear beamlet runs on Warp stay refused by the V3-005B rule)."""
 BEAMLET_PERSISTENCE_AVAILABLE = False
 """TEMPORARY (V3-007 S1): the beamlet-set result bundle (schema 1.1 writer/reader, influence arrays)
 is S5 work. Until then ``results.build_document``/``results.save`` and
