@@ -1,0 +1,53 @@
+{
+  "argv": [
+    "python",
+    "-c",
+    "import os, subprocess, sys\nos.environ.update({'PYTHONPATH': '/workspace/src', 'IONMC_CACHE_DIR': '/workspace/.ionmc-cache/ionmc-data', 'IONMC_REQUIRE_DATA': '1', 'IONMC_LV_TIER': '1', 'IONMC_SINGLE_PROCESS': '1', 'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1', 'MKL_NUM_THREADS': '1', 'NUMEXPR_NUM_THREADS': '1', 'PYTHONUNBUFFERED': '1', 'PYTHONFAULTHANDLER': '1', 'HOME': '/tmp/home'})\nos.makedirs('/tmp/home', exist_ok=True)\ncmd = [sys.executable, 'validation/scripts/results/out6_run.py', 'host', '--out', 'validation/generated/out6-hr', '--cache-dir', '/workspace/.ionmc-cache/ionmc-data', '--sha', 'a79f3333dc9495159e983c99ce6cb9c951b1bdac', '--tree-oid', '2be42e2a055e45f1988e194b26c313f81fd015f6']\nprint('HOST-ARGV', cmd, flush=True)\nsys.exit(subprocess.call(cmd, cwd='/workspace'))\n"
+  ],
+  "attestation": {
+    "alg": "ed25519",
+    "key_id": "4d02f521f3fb9344",
+    "payload_sha256": "9e48d848dc45aaa3260011fa33d9b03e8cb19a6b0e641674dabad72e4ffc6edc",
+    "public_key": "fbd70c036026c9dc84362645df51dd86bc689713b590a5d4b858dc87cdee263e",
+    "schema": "ionmc-attestation-1",
+    "signature": "58234ceb18e183d622e18e4049e6b798889f2ffc897bbbb96927595ef6229459ceb4e94ee5f54470b5aada9294da26dd74c57224f88b97480e25e787e1694b05",
+    "signed_at_utc": "2026-11-25T08:56:26.457271+00:00",
+    "signer": "host-runner"
+  },
+  "branch": "task/v3-006-self-describing-persisted-results-human-readable-reports-and",
+  "committed_state_unchanged": true,
+  "dirty_after": false,
+  "dirty_before": false,
+  "duration_seconds": 46.90469675700024,
+  "execution_snapshot": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T085537Z-1caf6349/snapshot",
+  "exit_code": 0,
+  "finished_at": "2026-11-25T08:56:26.438033+00:00",
+  "input_manifest": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T085537Z-1caf6349/input-manifest.json",
+  "input_manifest_sha256": "b1915b3cf53632dae4e17087ed979837ca544122f24654bbefa1b247658c2ce8",
+  "output_manifest_sha256": "a5f5869d4e2bc2906e01bd0345bfb0ed0598b74de157cd0cc0d6aa938989881a",
+  "output_paths": [
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-006/validation/generated/RUN-20261125T085537Z-1caf6349",
+    "/home/wahln/aiprojects/ion-mc-worktrees/v3-006/benchmarks/generated/RUN-20261125T085537Z-1caf6349"
+  ],
+  "output_publication_error": null,
+  "run_directory": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T085537Z-1caf6349",
+  "run_id": "RUN-20261125T085537Z-1caf6349",
+  "schema_version": 1,
+  "sha": "a79f3333dc9495159e983c99ce6cb9c951b1bdac",
+  "sha_after": "a79f3333dc9495159e983c99ce6cb9c951b1bdac",
+  "started_at": "2026-11-25T08:55:39.533317+00:00",
+  "stderr": "",
+  "stderr_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T085537Z-1caf6349/stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_total_chars": 0,
+  "stderr_truncated": false,
+  "stdout": "HOST-ARGV ['/home/wahln/.cache/ionmc-experiment/experiment-v3/host-runner/venv/bin/python', 'validation/scripts/results/out6_run.py', 'host', '--out', 'validation/generated/out6-hr', '--cache-dir', '/workspace/.ionmc-cache/ionmc-data', '--sha', 'a79f3333dc9495159e983c99ce6cb9c951b1bdac', '--tree-oid', '2be42e2a055e45f1988e194b26c313f81fd015f6']\nRESULT RUN-r2 PASS validation/generated/out6-hr/r2k0.summary.json\nRESULT RUN-r0 PASS validation/generated/out6-hr/r0k0.summary.json\nRESULT RUN-r1 PASS validation/generated/out6-hr/r1k0.summary.json\ndiffering pointers [0, 1] 51\n   /accounting/energy_balance/closure_residual_mev\n   /accounting/energy_balance/cutoff_mev\n   /accounting/energy_balance/in_grid_mev/0\n   /accounting/energy_balance/initial_mev\n   /accounting/energy_balance/quantization_mev/0\n   /accounting/energy_balance/step_deposit_mev\n   /arrays/1/content_sha256\n   /arrays/3/content_sha256\n   /arrays/4/content_sha256\n   /arrays/5/content_sha256\n   /arrays/6/content_sha256\n   /arrays/9/content_sha256\n   /effective/backend\n   /effective/precision\n   /effective/production\n   /effective/rng/u01\n   /effective/seed\n   /effective_extra/resolutions/chunk/class\n   /effective_extra/resolutions/chunk/rule\n   /effective_extra/resolutions/run/class\n   /effective_extra/resolutions/run/rule\n   /files/arrays.npz/sha256\n   /files/arrays.npz/size\n   /files/plots/dose__dose.svg/sha256\n   /files/plots/dose__dose.svg/size\n   /files/plots/energy__dose.svg/sha256\n   /files/plots/lateral__dose.svg/sha256\n   /files/plots/lateral__dose.svg/size\n   /files/report.md/sha256\n   /files/report.md/size\n   /input_manifest/config_file/path\n   /input_manifest/config_file/sha256\n   /input_manifest/config_sha256\n   /requested/run/backend\n   /requested/run/precision\n   /requested/run/seed\n   /run/backend\n   /run/device\n   /run/output_path\n   /run/precision\n   /run/production\n   /run/rng/u01\n   /run/seed\n   /run/timings/values_s/compile\n   /run/timings/values_s/reduce\n   /run/timings/values_s/setup\n   /run/timings/values_s/total\n   /run/timings/values_s/transport\n   /statistics/grids/0/dose_max_gy/value\n   /statistics/grids/0/energy_total_mev/value\n   /statistics/grids/0/relative_uncertainty_max/value\ndiffering pointers [0, 2] 50\n   /accounting/energy_balance/cutoff_mev\n   /accounting/energy_balance/in_grid_mev/0\n   /accounting/energy_balance/initial_mev\n   /accounting/energy_balance/quantization_mev/0\n   /accounting/energy_balance/step_deposit_mev\n   /arrays/1/content_sha256\n   /arrays/3/content_sha256\n   /arrays/4/content_sha256\n   /arrays/5/content_sha256\n   /arrays/6/content_sha256\n   /arrays/9/content_sha256\n   /effective/backend\n   /effective/precision\n   /effective/production\n   /effective/rng/u01\n   /effective/seed\n   /effective_extra/resolutions/chunk/class\n   /effective_extra/resolutions/chunk/rule\n   /effective_extra/resolutions/run/class\n   /effective_extra/resolutions/run/rule\n   /files/arrays.npz/sha256\n   /files/arrays.npz/size\n   /files/plots/dose__dose.svg/sha256\n   /files/plots/dose__dose.svg/size\n   /files/plots/energy__dose.svg/sha256\n   /files/plots/lateral__dose.svg/sha256\n   /files/plots/lateral__dose.svg/size\n   /files/report.md/sha256\n   /files/report.md/size\n   /input_manifest/config_file/path\n   /input_manifest/config_file/sha256\n   /input_manifest/config_sha256\n   /requested/run/backend\n   /requested/run/precision\n   /requested/run/seed\n   /run/backend\n   /run/device\n   /run/output_path\n   /run/precision\n   /run/production\n   /run/rng/u01\n   /run/seed\n   /run/timings/values_s/compile\n   /run/timings/values_s/reduce\n   /run/timings/values_s/setup\n   /run/timings/values_s/total\n   /run/timings/values_s/transport\n   /statistics/grids/0/dose_max_gy/value\n   /statistics/grids/0/energy_total_mev/value\n   /statistics/grids/0/relative_uncertainty_max/value\nRESULT CLI-5 PASS validation/generated/out6-hr/compare.json\nRESULT PROV-7 PASS validation/generated/out6-hr/prov7.json\nPYTEST out2 0 ok {'passed': 1}\nPYTEST contract 0 ok {'passed': 90}\nPYTEST trace 0 ok {'passed': 1}\nPYTEST a16 0 ok {'passed': 4}\nRESULT OUT-2-HR PASS validation/generated/out6-hr/host-summary.json\nRESULT CLI-4-HR PASS validation/generated/out6-hr/host-summary.json\nRESULT REG-1-HR PASS validation/generated/out6-hr/host-summary.json\nRESULT CAP-1b-HR PASS validation/generated/out6-hr/host-summary.json\n",
+  "stdout_file": "/home/wahln/.local/share/ionmc-experiment/experiment-v3/host-runs/V3-006/RUN-20261125T085537Z-1caf6349/stdout.txt",
+  "stdout_sha256": "e2146bad7d813d097412171d5e808239280ecb8a01f82e7b0a85c0ed4752346f",
+  "stdout_total_chars": 4329,
+  "stdout_truncated": false,
+  "succeeded": true,
+  "task_id": "V3-006",
+  "timed_out": false,
+  "worktree": "/home/wahln/aiprojects/ion-mc-worktrees/v3-006"
+}

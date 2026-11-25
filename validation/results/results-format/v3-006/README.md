@@ -29,9 +29,9 @@ and no row definition changed.
 
 ## `hr/` — host-runner tier (controlled GPU host, read-only snapshot, no network)
 
-Filled by the controlled host run of `out6_run.py host` (r2 on warp-cuda/float32 with OUT-2-HR, the three-way
-CLI-5 comparison r0/r1/r2 on the host, PROV-7 of the r2 bundle, CAP-1a/CAP-1b with CUDA present, the trace baseline
-and the A16 digest for REG-1); see `hr/README.md` once present. Rows not covered by `lv/`: OUT-2 HR, CLI-4 HR
-(network denied by the host sandbox), CLI-5 (three-way), PROV-7, REG-1 host, CAP-1b HR.
+Filled by the controlled host run RUN-20261125T085537Z-1caf6349 at the clean commit a79f3333 (signed record in
+`hr/host-records/`, verified with `validation/scripts/transport/attest_verify.py`): RUN-r2 (warp-cuda, `cuda:0`,
+float32), RUN-r0 and RUN-r1 on the host, CLI-5 (three-way r0/r1/r2) PASS, PROV-7 PASS, OUT-2-HR PASS, CLI-4-HR PASS,
+REG-1-HR PASS and CAP-1b-HR PASS (90 contract tests with CUDA present, 0 skipped). See `hr/README.md`.
 
 Not a clinical claim.

@@ -482,3 +482,12 @@ option explicitly.
   passed the original bundle as a repository-relative path to a child running in the output directory; corrected at
   48b782bf, no row definition or tolerance changed. HR rows (OUT-2 HR, CLI-4 HR, CLI-5 three-way, PROV-7, REG-1
   host, CAP-1b HR) follow with the controlled host run. Not a clinical claim.
+- 2026-11-25 (S8, HR tier): controlled host run RUN-20261125T085537Z-1caf6349 at the clean commit a79f3333
+  (`validation/results/results-format/v3-006/hr/`, signed record verified against the committed trusted keys):
+  RUN-r2 (warp-cuda `cuda:0`, float32), RUN-r0, RUN-r1 PASS; CLI-5 three-way r0/r1/r2 PASS; PROV-7 PASS
+  (`code.source = git`, `git_dirty = false`, `git_commit` = a79f3333, tree oid 2be42e2a = `git rev-parse
+  a79f3333:src/ionmc`); OUT-2-HR PASS (exit codes and `test_out2_clean_process_round_trip` 1 passed, 0 skipped);
+  CLI-4-HR PASS (network denied by the host sandbox); REG-1-HR PASS (trace baseline 1 passed, A16 digests 4 passed,
+  0 skipped); CAP-1b-HR PASS (`test_v3_006_contract.py` with CUDA present: 90 passed, 0 skipped). With the LV note
+  above every row of this plan has a recorded outcome; the only FAIL recorded during S8 is the preserved first OUT-3
+  attempt at 1f371352 (driver path bug, corrected; the rows themselves unchanged). Not a clinical claim.

@@ -524,7 +524,18 @@ changes_required, two important findings, resolved in place (path safety and the
 
 ## Later validation outcome
 
-(empty until graded)
+2026-11-25 (orchestrator, after steps S0–S8; plan `validation/plans/v3-006-acceptance.md`, its dated notes and
+`validation/results/results-format/v3-006/`): every row of the plan has a recorded outcome and every outcome is
+PASS. CI rows: the GitHub CI tests job is green at every head from 38f22ed9 on (the S4 head ae4fe3ec was cancelled at
+the 30-minute limit and repaired by the LS memo; the fixture leaves differ on the hosted runner within the REG-2
+tolerance). LV rows at the clean commit 48b782bf (RUN r0, r1, r3, r4, r5, r6 k = 0 and 1, r7; CLI-5-LV; CLI-6 carbon,
+nuclear, icru90; OUT-3 r6k0 and r6k1). HR rows in the controlled host run RUN-20261125T085537Z-1caf6349 at a79f3333
+(RUN-r2 on warp-cuda, CLI-5 three-way, PROV-7, OUT-2-HR, CLI-4-HR, REG-1-HR, CAP-1b-HR with 90 contract tests and
+0 skips). Recorded failures: the first OUT-3 attempt at 1f371352 (a driver path bug, not a row failure; preserved in
+the evidence README) and, before the freeze, the Codex review rounds listed in the pre-freeze log. Amendments A-1 to
+A-5 were applied prospectively; no tolerance or row definition changed after a result was observed. The persisted
+format, the two verification tiers, the capability contract, the reports and the CLI are implemented as decided;
+the writer deletes nothing (A-5). Not a clinical claim.
 
 ## Amendment A-1 (2026-11-23; after Codex REVIEW-982a8c25 of 9e1eda65): the reader's binding contract, enumerated
 
