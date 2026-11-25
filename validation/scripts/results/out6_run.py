@@ -187,12 +187,11 @@ def _load_doc(bundle: Path) -> dict[str, Any]:
 # run
 
 
-def build_summary(
-    bundle: Path, r: int, k: int, codes: Mapping[str, int], durations: Mapping[str, float]
-) -> dict[str, Any]:
-    from ionmc import results
+def bundle_facts(loaded: Any) -> dict[str, Any]:
+    """Every summary field that is derived from the verified bundle (``results.LoadedResult``).
 
-    loaded = results.load(bundle)  # tier 1: every digest recomputed
+    ``build_summary`` writes these fields and ``summary_binding_failures`` regenerates them from
+    the sibling bundle, so a summary cannot claim more than its bundle holds."""
     doc = loaded.doc
     eff = doc["effective"]
     run = doc["run"]
@@ -205,9 +204,6 @@ def build_summary(
         if _longest_numeric_list(block) > 8:
             raise AssertionError(f"effective.{name} holds a numeric table")
     return {
-        "schema": "ionmc.out6-summary/1",
-        "r_index": r,
-        "k": k,
         "seed": run["seed"],
         "backend": run["backend"],
         "device": run["device"],
@@ -216,16 +212,30 @@ def build_summary(
         "n_histories": run["n_histories"],
         "n_batches": run["n_batches"],
         "valid": doc["valid"],
-        "exit_codes": dict(codes),
-        "durations_s": {n: round(v, 3) for n, v in durations.items()},
         "output_path_persisted": out_path,
-        "result_json_sha256": _sha256_file(bundle / "result.json"),
+        "result_json_sha256": _sha256_file(Path(loaded.path) / "result.json"),
         "files": doc["files"],
         "stopping": stopping,
         "nuclear": nuclear,
         "requested_nuclear_table_id": doc["requested"]["physics"].get("nuclear_table_id"),
         "code": doc["provenance"]["code"],
         "array_content_sha256": {e["name"]: e["content_sha256"] for e in doc["arrays"]},
+    }
+
+
+def build_summary(
+    bundle: Path, r: int, k: int, codes: Mapping[str, int], durations: Mapping[str, float]
+) -> dict[str, Any]:
+    from ionmc import results
+
+    loaded = results.load(bundle)  # tier 1: every digest recomputed
+    return {
+        "schema": "ionmc.out6-summary/1",
+        "r_index": r,
+        "k": k,
+        "exit_codes": dict(codes),
+        "durations_s": {n: round(v, 3) for n, v in durations.items()},
+        **bundle_facts(loaded),
     }
 
 
@@ -361,6 +371,15 @@ def compare_identity_failures(sms: Sequence[Mapping[str, Any]], tier: str) -> li
     return bad
 
 
+def _fact_mismatches(sm: Mapping[str, Any], loaded: Any) -> list[str]:
+    """Every bundle-derived field of the summary that differs from the regenerated value."""
+    return [
+        f"summary {key} differs from the bundle's {key}"
+        for key, value in bundle_facts(loaded).items()
+        if sm.get(key, _MISSING) != value
+    ]
+
+
 def summary_binding_failures(sm: Mapping[str, Any], bundle: Path) -> list[str]:
     """Conditions under which a summary does not describe the verified bundle next to it."""
     from ionmc import results
@@ -375,16 +394,11 @@ def summary_binding_failures(sm: Mapping[str, Any], bundle: Path) -> list[str]:
         loaded = results.load(bundle)  # tier 1: every digest of the bundle is recomputed
     except Exception as exc:  # noqa: BLE001 - any failure of the reader is a violated condition
         return [*bad, f"the bundle does not load: {type(exc).__name__}"]
-    if _sha256_file(bundle / "result.json") != sm.get("result_json_sha256"):
-        bad.append("result_json_sha256 differs from the bundle's result.json")
     doc = loaded.doc
     for field in ("backend", "precision", "seed"):
         if doc["requested"]["run"].get(field) != sm.get(field):
             bad.append(f"summary {field} differs from requested.run.{field} of the bundle")
-        if doc["run"].get(field) != sm.get(field):
-            bad.append(f"summary {field} differs from run.{field} of the bundle")
-    if doc["run"]["device"] != sm.get("device"):
-        bad.append("summary device differs from run.device of the bundle")
+    bad += _fact_mismatches(sm, loaded)
     return bad
 
 
@@ -564,11 +578,28 @@ def prov7_failures(code: Mapping[str, Any], sha: str, tree_oid: str | None) -> l
 
 
 def cmd_prov7(summary: Path, sha: str, tree_oid: str | None, out: Path | None = None) -> Path:
+    """PROV-7 on the code block of the verified sibling bundle; the summary copy must equal it."""
+    from ionmc import results
+
     sm = json.loads(summary.read_text(encoding="utf-8"))
-    bad = prov7_failures(sm["code"], sha, tree_oid)
+    bad: list[str] = []
+    code: Mapping[str, Any] = {}
+    try:
+        loaded = results.load(_bundle_of(summary))
+        code = loaded.doc["provenance"]["code"]
+        if sm.get("code") != code:
+            bad.append("summary code differs from the bundle's provenance.code")
+        bad += prov7_failures(code, sha, tree_oid)
+    except Exception as exc:  # noqa: BLE001 - an unreadable bundle is a FAIL, never a skip
+        bad.append(f"the bundle does not load: {type(exc).__name__}")
     path = out or summary.with_name("prov7.json")
-    _dump(path, {"verdict": "FAIL" if bad else "PASS", "failures": bad})
-    _result("PROV-7", not bad, path)
+    shown = {
+        k: code.get(k) for k in ("source", "status", "git_commit", "git_dirty", "package_tree_oid")
+    }
+    _dump(
+        path,
+        {"verdict": "FAIL" if bad else "PASS", "failures": sorted(set(bad)), "bundle_code": shown},
+    )
     return path
 
 

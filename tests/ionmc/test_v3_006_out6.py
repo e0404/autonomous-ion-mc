@@ -386,3 +386,75 @@ def test_cli5_binds_every_summary_to_its_verified_bundle(
     assert dev["verdict"] == "FAIL" and any("device" in f for f in dev["identity_failures"])
     code = tampered("exit", lambda sm: sm["exit_codes"].update(verify=1))
     assert code["verdict"] == "FAIL" and any("exit code" in f for f in code["identity_failures"])
+
+
+def _edit_file_digest(sm: dict[str, Any]) -> None:
+    sm["files"]["report.md"]["sha256"] = "0" * 64
+
+
+def _edit_array_digest(sm: dict[str, Any]) -> None:
+    name = sorted(sm["array_content_sha256"])[0]
+    sm["array_content_sha256"][name] = "0" * 64
+
+
+def _edit_stopping(sm: dict[str, Any]) -> None:
+    sm["stopping"]["model_id_effective"] = "icru90-water-v1"
+
+
+def _edit_code(sm: dict[str, Any]) -> None:
+    sm["code"]["git_commit"] = "f" * 40
+
+
+@pytest.mark.parametrize(
+    ("field", "edit"),
+    [
+        ("production", lambda sm: sm.update(production=not sm["production"])),
+        ("n_histories", lambda sm: sm.update(n_histories=sm["n_histories"] + 1)),
+        ("n_batches", lambda sm: sm.update(n_batches=sm["n_batches"] + 1)),
+        ("valid", lambda sm: sm.update(valid=not sm["valid"])),
+        ("output_path_persisted", lambda sm: sm.update(output_path_persisted="elsewhere")),
+        ("files", _edit_file_digest),
+        ("array_content_sha256", _edit_array_digest),
+        ("stopping", _edit_stopping),
+        ("requested_nuclear_table_id", lambda sm: sm.update(requested_nuclear_table_id="1" * 64)),
+        ("nuclear", lambda sm: sm.update(nuclear={"table_id": "1" * 64})),
+        ("code", _edit_code),
+    ],
+)
+def test_cli5_fails_on_every_fabricated_bundle_derived_field(
+    field: str,
+    edit: Any,
+    py_run: tuple[Path, Path],
+    r1_run: tuple[Path, Path],
+    tmp_path: Path,
+) -> None:
+    sp = _copy_case(py_run, tmp_path / "case")
+    sm = _summary(sp)
+    edit(sm)
+    sp.write_text(json.dumps(sm), encoding="utf-8")
+    verdict = _compare_verdict(sp, r1_run[1], tmp_path / "c.json")
+    assert verdict["verdict"] == "FAIL"
+    assert any(f"summary {field} differs" in f for f in verdict["identity_failures"]), verdict
+
+
+def test_bundle_facts_are_what_the_summary_holds(py_run: tuple[Path, Path]) -> None:
+    sm = _summary(py_run[1])
+    facts = RUN.bundle_facts(results.load(_bundle_dir(py_run[1])))
+    assert {k: sm[k] for k in facts} == facts
+
+
+def test_prov7_reads_the_bundle_not_the_summary(py_run: tuple[Path, Path], tmp_path: Path) -> None:
+    code = results.load(_bundle_dir(py_run[1])).doc["provenance"]["code"]
+    sha, oid = code["git_commit"], code["package_tree_oid"]
+    if code["source"] == "git" and code["git_dirty"] is False:
+        ok = json.loads(RUN.cmd_prov7(py_run[1], sha, oid, tmp_path / "ok.json").read_text())
+        assert ok["verdict"] == "PASS" and ok["bundle_code"]["git_commit"] == sha
+    sp = _copy_case(py_run, tmp_path / "fab")
+    sm = _summary(sp)
+    sm["code"] = {**sm["code"], "source": "git", "status": "ok", "git_dirty": False,
+                  "git_commit": "e" * 40, "package_tree_oid": "d" * 40}  # fmt: skip
+    sp.write_text(json.dumps(sm), encoding="utf-8")
+    v = json.loads(RUN.cmd_prov7(sp, "e" * 40, "d" * 40, tmp_path / "bad.json").read_text())
+    assert v["verdict"] == "FAIL"  # the fabricated copy would satisfy the expectation
+    assert any("summary code differs" in f for f in v["failures"])
+    assert v["bundle_code"]["git_commit"] == code["git_commit"]  # the bundle's values are shown

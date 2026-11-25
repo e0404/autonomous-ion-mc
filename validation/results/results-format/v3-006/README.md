@@ -2,8 +2,11 @@
 
 Driver: `validation/scripts/results/out6_run.py` (cases in `out6_cases.py`, templates in
 `validation/scripts/results/out6/`). Every file here is a small JSON record of identities, digests, exit codes
-and verdicts; no bundle, array or table value is committed (REG-4). Paths inside the records are relative to the
-run directory; no value of the path set P appears (decision 0045 §2).
+and verdicts; no bundle, array or table value is committed (REG-4). The summaries and verdict files written by the
+driver carry only paths relative to their run directory and no value of the path set P (decision 0045 §2). The one
+exception is the signed host-runner record `hr/host-records/RUN-*.json`: it is the runner's own document, names
+the absolute run, snapshot and output paths of the host (`/home/...`, `/workspace/...`) and is committed unaltered
+because its signature covers those bytes.
 
 ## `lv/` — local-validation tier (this sandbox, `IONMC_LV_TIER=1`, one process, thread limits 1)
 
