@@ -230,6 +230,67 @@ def test_cap3_beamlet_rows_for_every_new_field(gate_open: None) -> None:
     assert got["beamlet-direction"] == ("derived", "normalise-per-beamlet") and sk
 
 
+def _beamlet_cfgs() -> list[Any]:
+    import dataclasses
+
+    bs = (bl(-2.0), bl(0.0), bl(2.0, label="z", weight=1.0))
+    off = cfg(beamlets=bs)
+    return [
+        off,
+        cfg(beamlets=bs, influence=InfluenceOptions("dose")),
+        dataclasses.replace(off, run=dataclasses.replace(off.run, n_histories=None)),
+    ]
+
+
+def test_s1fix5_exactly_one_row_describes_run_n_histories(gate_open: None) -> None:
+    for c in _beamlet_cfgs():
+        derived = c.run.n_histories is None
+        res = contract.reconcile(c, validate(c))
+        rows = [r for r in res if "run.n_histories" in r.requested]
+        assert len(rows) == 1 and rows[0].row == "beamlet-histories"
+        assert rows[0].cls == ("derived" if derived else "equal")
+        assert not any("/n_histories" in r.pointers for r in res if r.row == "run")
+    # a pencil source keeps the V3-006 run row unchanged
+    for pc in fixed.fixed_configs().values():
+        run = next(r for r in contract.reconcile(pc, validate(pc)) if r.row == "run")
+        assert run.requested == contract.ROWS["run"].requested
+        assert run.pointers == contract.ROWS["run"].pointers
+
+
+def test_s1fix5_every_beamlet_request_path_resolves_and_the_report_prints_it(
+    gate_open: None,
+) -> None:
+    from ionmc import report
+
+    for c in _beamlet_cfgs():
+        rq, eff = _rq_eff(c)
+        res = contract.reconcile(c, validate(c))
+        pairs = [(r.row, p) for r in res for p in r.requested]
+        assert len(pairs) == len(set(pairs))  # unique per (row, path)
+        for row, path in pairs:
+            if path.split(".")[:2] == ["physics", "stopping"]:  # inherited V3-006 object form
+                continue
+            cur: Any = rq
+            for part in path.split("."):
+                assert isinstance(cur, dict) and part in cur, (row, path)
+                cur = cur[part]
+        doc = {
+            "requested": rq,
+            "effective": eff,
+            "effective_extra": {
+                "resolutions_status": "ok",
+                "resolutions": [r.to_dict() for r in res],
+            },
+        }
+        text = "\n".join(report._requested_effective(doc))
+        assert "not present" not in text
+        assert all(
+            "not given" not in ln
+            for ln in text.splitlines()
+            if "physics.stopping" not in ln  # inherited V3-006 optional stopping-object form
+        )
+
+
 @pytest.mark.parametrize(
     ("pointer", "value"),
     [

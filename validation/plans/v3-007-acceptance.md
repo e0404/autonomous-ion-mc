@@ -417,6 +417,11 @@ save/load test is written and gated on `BEAMLET_TRANSPORT_AVAILABLE` (S2 unskips
 (`requested.run.n_histories` null or equal to `effective.n_histories`; effective N equals the sum of the persisted
 beamlet table) is enforced by the shared `contract.reconcile` row. Not a clinical claim.
 
+**Clarification note (2026-11-25, S1 fix 5).** The derived-history bundle round-trip test is gated by BOTH
+`BEAMLET_TRANSPORT_AVAILABLE` (S2) and `BEAMLET_PERSISTENCE_AVAILABLE` (S5) and therefore runs from S5 on; S2 adds the
+in-memory `Result`-level check of the derived `beamlet-histories` row instead. For a beamlet set the base `run` row does
+not cover `run.n_histories`; the row `beamlet-histories` is its only reconciliation row. Not a clinical claim.
+
 ## C. Seeds and determinism rules (declared before any run)
 
 - CI tests use fixed small seeds written in the tests (not evidence).

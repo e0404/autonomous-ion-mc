@@ -227,10 +227,11 @@ BEAMLET_ROWS: tuple[Row, ...] = (
     ),
     _r(
         "beamlet-direction",
-        "source.beamlets.direction",
+        "source.beamlets",
         "/unit_direction /unit_direction_status",
         "equal:not-applicable derived:normalise-per-beamlet",
-        "a set has one direction per beamlet (in the digest); the single unit direction is null",
+        "a set has one direction per beamlet (in the digest); the single unit direction is null; "
+        "the request path is the beamlet TABLE (per-beamlet fields are not addressable by a path)",
     ),
     _r(
         "beamlet-histories",
@@ -323,11 +324,20 @@ class _Ctx:
         if got != requested:
             raise _differ(what, requested, got)
 
-    def add(self, row: str, cls: str, rule: str, pointers: Sequence[str], reason: str = "") -> None:
+    def add(
+        self,
+        row: str,
+        cls: str,
+        rule: str,
+        pointers: Sequence[str],
+        reason: str = "",
+        requested: Sequence[str] | None = None,
+    ) -> None:
         r = ROWS[row]
         if (cls, rule) not in r.outcomes:
             raise AssertionError(f"row {row!r} has no outcome {cls}:{rule}")  # a table bug
-        self.out.append(Resolution(row, cls, rule, r.requested, tuple(pointers), reason))
+        req = r.requested if requested is None else tuple(requested)
+        self.out.append(Resolution(row, cls, rule, req, tuple(pointers), reason))
 
 
 def _projectile(rp: Any) -> dict[str, Any]:
@@ -429,8 +439,9 @@ def _row_influence(c: _Ctx, n_beamlets: int) -> None:
     if ri is None:
         if c.need("influence", None, "/influence") is not None:
             raise _differ("influence", None, "an influence block")
-        c.add("influence", UNUSED, "no-influence", [])
-        c.add("influence-group", UNUSED, "no-influence", [])
+        # no influence block was requested: no request path to show (it would print "not given")
+        c.add("influence", UNUSED, "no-influence", [], requested=[])
+        c.add("influence-group", UNUSED, "no-influence", [], requested=[])
         return
     c.equal("influence.grid", ri["grid"], "/influence/grid")
     shape = next((g["shape"] for g in c.rq["scoring"] if g["name"] == ri["grid"]), None)
@@ -636,18 +647,24 @@ def _row_physics(c: _Ctx, z: int) -> None:
 
 def _row_run(c: _Ctx, z: int) -> None:
     rr = c.rq["run"]
+    beamlets = c.rq["source"].get("type") == "beamlets"
     for k in ("backend", "precision", "seed", "n_histories", "n_batches", "cpu_workers"):
         if k == "n_histories" and rr[k] is None:  # derived: row beamlet-histories
-            if c.rq["source"].get("type") != "beamlets":
+            if not beamlets:
                 raise _differ("run.n_histories", None, "an integer (None is for beamlet sets)")
             continue
         c.equal(f"run.{k}", rr[k], f"/{k}")
     c.equal("run.production (rule float32-warp)",
             rr["backend"] != "python" and rr["precision"] == "float32", "/production")  # fmt: skip
     prod = bool(c.eff["production"])
-    c.add(
-        "run", DERIVED if prod else EQUAL, "float32-warp" if prod else "equal", ROWS["run"].pointers
-    )
+    row = ROWS["run"]
+    if beamlets:  # run.n_histories is described by the row beamlet-histories alone
+        req = [p for p in row.requested if p != "run.n_histories"]
+        ptr = [p for p in row.pointers if p != "/n_histories"]
+    else:
+        req, ptr = list(row.requested), list(row.pointers)
+    c.add("run", DERIVED if prod else EQUAL, "float32-warp" if prod else "equal", ptr,
+          requested=req)  # fmt: skip
     user = rr["max_steps"] is not None
     c.equal("run.max_steps_origin", "user" if user else "computed", "/max_steps_origin")
     if user:
