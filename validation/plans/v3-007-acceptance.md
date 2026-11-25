@@ -44,9 +44,13 @@ performance targets.
    n_histories, weight=None, label=None)`; `BeamletSet(projectile, beamlets: tuple[Beamlet, ...])` is a second
    source type accepted by `SimulationConfig.source` (union with `PencilBeamSource`). One projectile per set. `weight`
    (planning weight, primaries) is metadata for `plan_dose`; it **never** changes sampling. Limits (fail closed):
-   1 ≤ J ≤ 4 096 beamlets (ESTIMATE-justified: ≈ 300 B per beamlet inline in `requested` ≈ 1.2 MiB at the limit, inside
-   the 0045 `max_json_bytes` and token budgets; the frozen workload has 100), every `n_histories` ≥ B and a multiple
-   of `n_batches` B, Σ n_j ≤ 2³² (decision 0037), every beamlet inside the projectile's energy domain with the same
+   1 ≤ J ≤ 4 096 beamlets (ESTIMATE-justified: ≤ 400 B per beamlet inline in `requested` incl. a 64-character label
+   ≈ 1.6 MiB at the limit, inside the 0045 `max_json_bytes` and token budgets; the frozen workload has 100),
+   `label` optional, ≤ 64 characters, printable (`str.isprintable()`, no control characters) and unique within the
+   set (A-1 item 3), every `n_histories` ≥ B and a multiple of `n_batches` B, Σ n_j ≤ 2³² (decision 0037),
+   `RunOptions.n_histories` = Σ_j n_j (`validate` refuses a mismatch with `UnsupportedCombinationError` naming both
+   values; TOML: absent → derived, equal → accepted, different → `ConfigError`; A-1 item 1), every beamlet
+   inside the projectile's energy domain with the same
    ±6σ rules as a pencil source, mixed projectiles rejected. The existing `validate` constraints stay (FACT at
    3f3736a6): 1 ≤ N ≤ 2³², B ≥ 2, N % B == 0, accumulators `B·ΣV·8·workers ≤ memory_budget_bytes` (default 2³¹) and
    the per-batch quanta capacity check (`per_batch·e_cap/QUANTUM < MAX_QUANTA`).
@@ -101,7 +105,10 @@ performance targets.
    ordinary grids. **V3-006 row OUT-4's unknown-version control "1.1" moves to "1.2" by a dated note in plan v3-006**
    (intent preserved, not a re-grade).
 9. **CLI.** `ionmc run` with `[source] type = "beamlets"`, inline `[[source.beamlets]]` or `spots = {file, sha256}`
-   (CSV with a fixed header, read by `numpy.loadtxt`, recorded in the `InputManifest` as role `spots`), `[influence]
+   (CSV with a fixed header, read by `numpy.loadtxt` on bytes read once, recorded in the `InputManifest` as role
+   `spots`; bounds before parsing: `lstat` size ≤ 1 MiB, line count ≤ 4 097, sha256 over exactly the bytes read;
+   violation → `ConfigError`, exit 2; A-1 item 3; `[run] n_histories` is optional and derived = Σ n_j, A-1 item 1),
+   `[influence]
    grid, threshold_rel, group_size, persist_batches`. `ionmc report`: beamlet table (id, label, E, position,
    n_histories, nnz, discarded fraction, median relative uncertainty of entries ≥ 50 % of the column maximum) and SVGs
    (composite depth dose; per-beamlet nnz and discarded fraction vs beamlet index). Exit codes unchanged (0045 §7).
@@ -109,7 +116,48 @@ performance targets.
     once; per beamlet only source parameters and accumulator rows change. Across runs: a `Simulation` caches its
     device context; `Simulation.run(beamlets=subset)` re-runs a subset with the **original** offsets (identical
     streams, so columns reproduce bit-identically; results of runs with the same seed are never merged — `merge` is not
-    offered in V3-007).
+    offered in V3-007). **Subset semantics (A-1 item 4):** the result's `requested` is the full configuration plus the
+    requested-only field `run.beamlet_subset` (sorted unique ids; carried into `effective.run.beamlet_subset`);
+    `run.n_histories` = Σ_{j ∈ subset} n_j while `beamlets.offsets` stay the original full-set offsets; composite
+    grids, balances, accounting and statistics are those of the transported subset only (normalised per transported
+    primary); the matrix keeps J columns, untransported ones empty (nnz = 0, `beamlet__transported = False`,
+    per-beamlet balances NaN with mask); `save` persists `influence.subset` with `kind = "influence"`; a subset
+    bundle and a full bundle are never merged.
+
+### Amendments
+
+**Amendment A-1 (2026-11-25, S0, before any code; Codex REVIEW-1652a7c1 on 9805dfdb, changes_required; four
+important findings, all adopted).** No code exists and the plan is bound only by the S0 commit whose review passes,
+so the frozen text above is edited in place; this amendment records what changed and why.
+
+1. **History-count invariant (finding 1).** For a `BeamletSet`, `RunOptions.n_histories` MUST equal Σ_j n_j.
+   `validate` refuses a mismatch (`UnsupportedCombinationError`, message naming both values). In TOML
+   (`ionmc.config/1`) `[run] n_histories` is optional for `type = "beamlets"`: absent → derived = Σ n_j
+   (reconciliation row `derived: sum-of-beamlets`); present and different → `ConfigError` (exit 2); present and equal
+   → `equal`. The persisted `run.n_histories`, capacity checks, composite normalisation and the transport loop
+   therefore all see N = Σ n_j. Rows: BEAM-1, CAP-3, PER-1.
+2. **Complete reader inventory (finding 2).** BEAM-2's static list and the decision's Context gain the readers
+   `config.py:348`, `471–498` (the ion-mapping path; its failure branch at 498 reads the singular
+   `source.kinetic_energy_mev` and MUST be converted to per-beamlet values), `526`, `564`, `588` and `1016`. Rule:
+   every reader, including exceptional/failure paths, is in the list; the test's grep check (`config.source`,
+   `.source.`, `source.kinetic_energy_mev`, `source.unit_direction`, `source.projectile`,
+   `source.energy_sigma_mev`, `source.lateral_sigma_mm`, `source.position_mm`) must find no reader outside the
+   list; a converted failure branch gets a test that provokes it with a BeamletSet (BEAM-1 twin). Rows: BEAM-1,
+   BEAM-2.
+3. **Resource bounds before allocation (finding 3).** `label` is optional, ≤ 64 characters, printable and unique
+   within the set; the per-beamlet JSON size is therefore bounded (ESTIMATE ≤ 400 B incl. a 64-character label →
+   ≤ 1.6 MiB at J = 4 096, inside the 0045 budgets, re-stated). Spot file: before parsing, `ionmc` checks `lstat`
+   size ≤ 1 MiB and, after reading the bytes once, line count ≤ 4 097 (header + J ≤ 4 096) and the sha256 of exactly
+   those bytes against the declared value, then parses the fixed header with `numpy.loadtxt` on the in-memory bytes;
+   any violation → `ConfigError` (exit 2) naming the bound. Rows: BEAM-1, CLI-2, PER-10.
+4. **Subset-run semantics (finding 4).** As stated in §B.10: `run.beamlet_subset` is a requested-only field
+   (reconciliation row `requested-only`); `run.n_histories` = Σ_{j ∈ subset} n_j; offsets stay the original;
+   composite results are those of the transported subset; the matrix keeps J columns with untransported columns
+   empty; `save` persists `influence.subset`, `kind = "influence"`; tier 1 binds Σ_{transported} n_j =
+   `run.n_histories` and "untransported columns are empty"; subset and full bundles are never merged (no merge API).
+   Rows: INF-4, PER-4, CAP-3.
+
+Not a clinical claim.
 
 ## C. Seeds and determinism rules (declared before any run)
 
@@ -169,8 +217,8 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
-| BEAM-1 | Config validation: each fail-closed rule of §B.1 and §B.7 provoked separately | `UnsupportedCombinationError` (or `ConfigError` for TOML) before transport, message names the field; each positive twin passes | CI |
-| BEAM-2 | Source-consumer audit: a test enumerates every reader of `config.source` (static list checked against `grep` of `src/ionmc`, reviewed; FACT at 3f3736a6, complete: `config.py` (max_steps E_hi 755–756; channel compile 807; nuclear bounds 921–943; the decision-0044 stopping-model window check 1035–1064; ion domain 1127–1153; sigma rules and ion mapping 1237–1294 incl. `fdm_domain_status(proj, mats, e0, σ)` at 1287; stopping identity species 594–611; summary 624; `unit_direction=src.unit_direction()` 1351), `reference.py` (projectile 193–260, sampling 840–860), `warp_driver.py` (ctl source fields 121–135, `ctl.dir` at 135), `kernels.py` (source sampling), `results.py` (producible 403; profile axis from `unit_direction` 725 and 1626; binding 1668–1675; stopping-window check on E0 + 6σ 1806; tally E_hi bound 2093), `_result_shapes.py` 335–345, `contract.py` 78–87, 308–320, 701 (`SOURCE_TYPES`), 939, `simulation.py` 736 (`capabilities()["sources"]`), `report.py` 335, `configio.py` 590 and 1162) and asserts for a beamlet set the envelope rules: `max_steps`, channel `E_hi`, nuclear energy bounds, ion mapping domain and energy-sigma rules use min/max over beamlets | every consumer covered; a beamlet with E above the domain is refused although the mean energy is inside | CI |
+| BEAM-1 | Config validation: each fail-closed rule of §B.1 and §B.7 provoked separately | `UnsupportedCombinationError` (or `ConfigError` for TOML) before transport, message names the field; each positive twin passes; includes (A-1) `n_histories` ≠ Σ n_j refused (message names both values), absent TOML value derived, equal value accepted; label of 65 characters / with a control character / duplicate refused; the converted ion-mapping failure branch (`config.py` 498) provoked with a BeamletSet and naming the beamlet | CI |
+| BEAM-2 | Source-consumer audit: a test enumerates every reader of `config.source` (static list checked against `grep` of `src/ionmc`, reviewed; FACT at 3f3736a6, complete after A-1 item 2: `config.py` (348; 471–498 ion-mapping path, its failure branch at 498 converted to per-beamlet values; 526; 564; 588; 1016; max_steps E_hi 755–756; channel compile 807; nuclear bounds 921–943; the decision-0044 stopping-model window check 1035–1064; ion domain 1127–1153; sigma rules and ion mapping 1237–1294 incl. `fdm_domain_status(proj, mats, e0, σ)` at 1287; stopping identity species 594–611; summary 624; `unit_direction=src.unit_direction()` 1351), `reference.py` (projectile 193–260, sampling 840–860), `warp_driver.py` (ctl source fields 121–135, `ctl.dir` at 135), `kernels.py` (source sampling), `results.py` (producible 403; profile axis from `unit_direction` 725 and 1626; binding 1668–1675; stopping-window check on E0 + 6σ 1806; tally E_hi bound 2093), `_result_shapes.py` 335–345, `contract.py` 78–87, 308–320, 701 (`SOURCE_TYPES`), 939, `simulation.py` 736 (`capabilities()["sources"]`), `report.py` 335, `configio.py` 590 and 1162) and asserts for a beamlet set the envelope rules: `max_steps`, channel `E_hi`, nuclear energy bounds, ion mapping domain and energy-sigma rules use min/max over beamlets | every consumer covered; a beamlet with E above the domain is refused although the mean energy is inside; every reader, including exceptional/failure paths, is in the list: a grep check (`config.source`, `.source.`, `source.kinetic_energy_mev`, `source.unit_direction`, `source.projectile`, `source.energy_sigma_mev`, `source.lateral_sigma_mm`, `source.position_mm`) finds no reader outside it | CI |
 | BEAM-3 | Offsets: `s_j`, batch membership and per-batch count n_j/B for unequal n_j | exact | CI |
 | BEAM-4 | Stream disjointness: the (c0, c3) pairs used by source sampling over all beamlets of R-INF are unique and equal `range(Σ n_j)` (instrumented reference run) | exact | CI |
 | BEAM-5 | Source sampling: the sampled energy/position of the first history of every beamlet equals a direct evaluation of the shared source functions with that beamlet's parameters and counter | bitwise (python), float32 class (warp) | CI |
@@ -183,7 +231,7 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 | INF-1 | J = 1 `BeamletSet` vs the equal `PencilBeamSource`, same seed/backend/precision | every grid array, balance and counter **bitwise** equal; influence column (τ = 0) equals the composite grid's nonzero entries bitwise | CI (python, warp-cpu), LV (all), HR (cuda) |
 | INF-2 | **Composite identity**: R-INF with influence vs the same spot list without influence | (a) Σ_j integer accumulators `[B, V]` of the columns equal the composite run's integer accumulators **bitwise**; (b) float64: composite `energy_mev` vs Σ_j (n_j/N)·column energy (τ = 0) within relative 1e-12 per voxel (only float64 summation-order rounding; J ≤ 100 terms); (c) composite grid of the influence run bitwise equal to the composite-only run | CI, LV, HR |
 | INF-3 | Group and chunk invariance: G ∈ {1, 2, J}; CI: J = 4, n_j = 600 (B = 4), `chunk_histories` ∈ {2¹⁰, 2¹¹}, so chunk boundaries fall inside beamlets; LV/HR keep R-INF with `chunk_histories` ∈ {2¹⁰, 2¹⁴} | per-beamlet integer accumulators and balances bitwise equal across all variants | CI (warp-cpu), LV, HR (cuda) |
-| INF-4 | Column independence: `run(beamlets=[2])` and `run(beamlets=[0, 3])` reproduce those columns of the full run | bitwise | CI |
+| INF-4 | Column independence: `run(beamlets=[2])` and `run(beamlets=[0, 3])` reproduce those columns of the full run | bitwise; the reconciliation table of the subset result has exactly one `requested-only` row (`beamlet_subset`), its accounting closes on the transported histories (`run.n_histories` = Σ_{j ∈ subset} n_j), untransported columns are empty (nnz = 0, `beamlet__transported = False`), `save`/`load` round-trips it and `verify` exits 0 (A-1 item 4) | CI |
 | INF-5 | Trajectory parity python vs warp-cpu float64 for the first 3 histories of beamlets 0, 1 and J−1 (across beamlet boundaries) | decision-0037 trajectory class (existing T1 tolerances) | CI |
 | INF-6 | **Negative controls** (patched in the test): (i) `c0` reset per beamlet → BEAM-4 and INF-4 fail; (ii) beamlet id off by one at a boundary, or an accumulator row error with correct source parameters → INF-2(a) still passes; INF-7 fails (BEAM-5 and INF-1 catch only a wrong source assignment; shows INF-2 alone is not sufficient); (iii) accumulator row stride B±1 → INF-2(a) fails | each detected by the named row | CI |
 | INF-7 | **Per-beamlet closure**: Σ_v column_j quanta·Q + outside_j + quantization_j = deposited_j, reduced from the tally rows of h ∈ [s_j, s_j + n_j), for every j; negative controls "accumulator row off by one" and "columns permuted" must FAIL this row | exact (rel 1e-12) | CI, LV, HR |
@@ -212,16 +260,16 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | OUT-0-INF | Clause map: geometry, beamlet mapping (offsets, labels, parameters), units, histories per beamlet, normalisation, threshold, discarded accounting, uncertainty definition → JSON pointer/array | every clause resolved | CI |
-| PER-1 | In-process round trip `load(save(r))` for R-INF (python, warp-cpu f64), τ = 0 and τ = 1e-2, `persist_batches` on/off (off recorded `not-persisted`) | arrays bitwise, JSON equal | CI |
+| PER-1 | In-process round trip `load(save(r))` for R-INF (python, warp-cpu f64), τ = 0 and τ = 1e-2, `persist_batches` on/off (off recorded `not-persisted`); includes a bundle whose `requested.run` carries the derived N = Σ n_j (A-1 item 1) | arrays bitwise, JSON equal | CI |
 | PER-2 | Clean-process round trip (`python -I`) | canonical dump equal | CI; LV/HR on three backends |
 | PER-3 | Version handling: the frozen V3-006 1.0 golden fixture loads unchanged; a 1.1 golden synthetic fixture (KB-scale) loads and regenerates its report byte-identically; "1.2"/"2.0" refused; `kind = "influence"` with schema 1.0 refused | exact | CI |
-| PER-4 | Tier-1 negative controls, one each: indptr non-monotone or ≠ nnz; voxel index ≥ V or unsorted or duplicate; nnz arrays of unequal length; negative std; batch values not reproducing mean/std; discarded accounting inconsistent; beamlet table ≠ `requested`; offsets ≠ cumulative n_j; columns swapped with balances unchanged and digests recomputed (fails through the INF-7 identity); `Σ_j (n_j/N)·column + discarded` ≠ composite in-grid energy (rel 1e-9); influence block missing for `kind = "influence"` | each `ResultFormatError` naming the defect | CI |
+| PER-4 | Tier-1 negative controls, one each: indptr non-monotone or ≠ nnz; voxel index ≥ V or unsorted or duplicate; nnz arrays of unequal length; negative std; batch values not reproducing mean/std; discarded accounting inconsistent; beamlet table ≠ `requested`; offsets ≠ cumulative n_j; columns swapped with balances unchanged and digests recomputed (fails through the INF-7 identity); `Σ_j (n_j/N)·column + discarded` ≠ composite in-grid energy (rel 1e-9); influence block missing for `kind = "influence"`; subset bundle with a non-empty untransported column; Σ_{transported} n_j ≠ `run.n_histories` | each `ResultFormatError` naming the defect | CI |
 | PER-5 | Budgets: a catalogue declaring nnz = 2⁴⁰ or a 3-D batch array beyond `max_array_bytes` refused before allocation (V3-006 OUT-10 method, RSS bound 64 MiB) | exact | CI |
 | PER-6 | Reproduction from the bundle (r = 11): `from_dict(requested)` + seed → every content digest equal | exact | CI (small), LV |
 | PER-7 | Tier 2 `verify_effective` re-derives `effective` for a beamlet bundle | exact | CI (default model), LV |
 | PER-8 | No table values (allowlist extended only by `influence__*`, `beamlet__*`) | exact | CI |
 | PER-9 | Honoured check: influence requested ⇒ influence arrays present; absent request ⇒ none | exact | CI |
-| PER-10 | Bundle at the J limit (J = 4 096, n_j = B = 2, warp-cpu) saves and loads under the default budgets; `requested` + `beamlets` stay within `max_json_bytes` and the token budget | exact | CI |
+| PER-10 | Bundle at the J limit (J = 4 096, n_j = B = 2, warp-cpu) saves and loads under the default budgets; `requested` + `beamlets` stay within `max_json_bytes` and the token budget; the size is computed with 64-character labels at J = 4 096 and asserted within `max_json_bytes` (A-1 item 3) | exact | CI |
 
 **CAP — capability contract**
 
@@ -229,7 +277,7 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 |---|---|---|---|
 | CAP-1 | V3-006 sweep (CAP-1a/1b dimensions) × source kind {pencil, beamlets} × influence {off, on} | declared == enforced; zero third outcomes | CI; LV (tabulated); HR (CUDA) |
 | CAP-2 | Declaration derived (monkeypatched constant changes the `beamlets` entries of `capabilities()["sources"]`; no new top-level key) | exact | CI |
-| CAP-3 | Reconciliation table extended (every new field equal/derived/unused/requested-only; `group_size` None → derived `memory-budget`); zero unlisted differences | exact | CI |
+| CAP-3 | Reconciliation table extended (every new field equal/derived/unused/requested-only; `group_size` None → derived `memory-budget`; `run.n_histories` absent in TOML → derived `sum-of-beamlets`; `run.beamlet_subset` → `requested-only`, carried into `effective.run.beamlet_subset`); zero unlisted differences | exact | CI |
 | CAP-4 | Dispatch: patching the driver to ignore beamlet ids or the threshold makes `Simulation`/`save` raise | exact | CI |
 | CAP-5 | Exit codes through `ionmc check/run` for every §B.7 refusal (4), TOML errors (2) | exact | CI |
 | CAP-6 | warp backends + beamlets + nuclear → exit 4 until V3-005B, message names V3-005B's absence; python + nuclear + beamlets accepted | exact | CI |
@@ -247,7 +295,7 @@ Reference configuration **R-INF** (used where a row says "R-INF"): water box 60�
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
 | CLI-1 | `ionmc run beamlets.toml` (inline) and with a spot file → bundle; `verify` 0; `report --check` 0 | exact | CI |
-| CLI-2 | Spot file: sha256 mismatch → 2; malformed header/row → 2 naming the line; recorded in `InputManifest` role `spots` | exact | CI |
+| CLI-2 | Spot file: sha256 mismatch → 2; malformed header/row → 2 naming the line; recorded in `InputManifest` role `spots`; a file above 1 MiB (sparse file, nothing read) and one above 4 097 lines refused with exit 2 before parsing, naming the bound; the sha256 is computed over the bytes read once (A-1 item 3) | exact | CI |
 | CLI-3 | Report content: beamlet table, threshold line, discarded summary, "Not a clinical claim.", no `\bvalidated\b` in generated text | exact | CI |
 | CLI-4 | Offline host run (r = 10) on warp-cuda; bundle verifies | exact | HR |
 | CLI-5 | r = 0..3 bundles verify and differ only in backend/device/precision fields and array contents | exact | LV, HR |
@@ -318,3 +366,7 @@ None. Cache-backed CAP-1 rows use datasets already cached; no download.
   (6) direction/summary semantics for beamlets (§B.8); (7) envelope rules (§B.1); (8) PERF-1 batch-count scaling and
   the `capabilities()["sources"]` wording of CAP-2; (9) `influence__discarded_var_gy2`. Reviewer's unverified items
   carried into §E.2(i). Not a clinical claim.
+- 2026-11-25 (S0 fix 1, Codex REVIEW-1652a7c1 on 9805dfdb, changes_required; four important findings adopted, see
+  Amendment A-1 after §B): (1) `n_histories` = Σ n_j invariant; (2) complete `config.source` reader inventory incl.
+  the ion-mapping failure branch; (3) label and spot-file bounds before allocation; (4) subset-run semantics. Rows
+  BEAM-1, BEAM-2, CAP-3, CLI-2, INF-4, PER-1, PER-4, PER-10 updated. Not a clinical claim.

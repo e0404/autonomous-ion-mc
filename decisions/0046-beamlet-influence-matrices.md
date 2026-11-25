@@ -2,6 +2,8 @@
 
 - Status: Accepted (frozen with plan `validation/plans/v3-007-acceptance.md` at the S0 commit, 2026-11-25). Later
   changes are dated amendments. Not a clinical claim.
+- Amended 2026-11-25 (S0 fix 1, Codex REVIEW-1652a7c1 on 9805dfdb): (1) `n_histories` = Σ n_j for a `BeamletSet`;
+  (2) reader inventory completed; (3) label and spot-file bounds; (4) subset-run semantics. See plan Amendment A-1.
 - Limits: 1 ≤ J ≤ 4 096 beamlets (ESTIMATE-justified: ≈ 300 B per beamlet inline in `requested` ≈ 1.2 MiB, within the
   0045 `max_json_bytes` and token budgets; the frozen workload has 100). Envelope rules: quanta capacity
   `e_cap = max_j (E_j + 6σ_j)`; `max_steps` from the envelope E_hi; `fdm_domain_status` and the σ ≤ fraction·E0 rule per
@@ -33,7 +35,9 @@ beamlet mapping, units, history and normalisation metadata; V2-CAP forbids influ
   (producible 403; profile axis from `unit_direction` 725 and 1626; binding 1668–1675; stopping-window check on
   E0 + 6σ 1806; tally E_hi bound 2093), `_result_shapes.py` 335–345, `contract.py` 78–87, 308–320, 701
   (`SOURCE_TYPES`), 939, `simulation.py` 736 (`capabilities()["sources"]`), `report.py` 335, `configio.py` 590 and
-  1162.
+  1162. Amended list (REVIEW-1652a7c1): `config.py` also 348, 471–498 (ion-mapping path; its failure branch at 498
+  reads the singular `source.kinetic_energy_mev` and is converted to per-beamlet values), 526, 564, 588 and 1016.
+  Every reader, including exceptional paths, is in the list; the plan's grep check finds none outside it.
 - `run_warp_range(eff, h0, h1, device)` rebuilds kernel handle, uploads tables, geometry and grids, and allocates
   `edep int64[B, ΣV]` on every call; source parameters are scalars in the `ctl` struct; launches chunks of
   `chunk_histories`.
@@ -60,6 +64,11 @@ beamlet mapping, units, history and normalisation metadata; V2-CAP forbids influ
 | (d) mixed projectiles in one set | two table sets/kernels per run; no planning need in M1 — rejected (fail closed) |
 
 Normalisation: columns in MeV and Gy **per primary of beamlet j**; plan dose `D = A·x` with x in primaries.
+
+Amendment (REVIEW-1652a7c1): for a `BeamletSet`, `RunOptions.n_histories` MUST equal Σ_j n_j; `validate` refuses a
+mismatch, and TOML `[run] n_histories` is optional (absent → derived Σ n_j, different → `ConfigError`). `label` is
+optional, ≤ 64 printable characters, unique within the set. A spot file is bounded before parsing (`lstat` size
+≤ 1 MiB, ≤ 4 097 lines, sha256 over the bytes read once; violation → `ConfigError`).
 
 ### 2. Execution and batching
 
@@ -136,6 +145,12 @@ source. Every refusal is `UnsupportedCombinationError` (exit 4) or `ConfigError`
 Within a run everything except source parameters and accumulator rows is built once. Across runs a `Simulation` keeps
 its device context (tables, geometry, grids, kernel, nuclear setup); `Simulation.run(beamlets=subset)` re-runs a
 subset with the original offsets (bit-identical columns). No merge of runs sharing a seed is offered.
+
+Amendment (REVIEW-1652a7c1), subset semantics: the result's `requested` is the full configuration plus the
+requested-only field `run.beamlet_subset`; `run.n_histories` = Σ over the subset while `beamlets.offsets` stay the
+original full-set offsets; composite grids, balances and statistics are those of the transported subset; the matrix
+keeps J columns with untransported ones empty; the saved bundle records `influence.subset`, and subset and full
+bundles are never merged.
 
 ## Rejected alternatives (summary)
 
