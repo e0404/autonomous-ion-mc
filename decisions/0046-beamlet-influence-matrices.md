@@ -2,6 +2,9 @@
 
 - Status: Accepted (frozen with plan `validation/plans/v3-007-acceptance.md` at the S0 commit, 2026-11-25). Later
   changes are dated amendments. Not a clinical claim.
+- Amended 2026-11-25 (S0 fix 5, Codex REVIEW-54588747 on a783ac8a): (1) the memory rule is an accumulator-payload
+  budget (not a process-RSS guarantee); (2) `influence_columns` raises unconditionally on an invalid transport;
+  (3) label grammar `^[A-Za-z0-9_.-]{1,64}$`. See plan Amendment A-5.
 - Amended 2026-11-25 (S0 fix 4, Codex REVIEW-a52098eb on af4aebc6): (1) `influence_columns` fully fail-closed; (2) exact
   backend-aware allocation formula and audit row MEM-1; (3) thresholded composite identity weighted by n_j/N;
   (4) INF-4 at both thresholds; minor: superseded-sentence marking, SPA-3 τ = 0 sentence. See plan Amendment A-4.
@@ -83,7 +86,9 @@ Amendment (REVIEW-1652a7c1): for a `BeamletSet`, `RunOptions.n_histories` MUST e
 mismatch, and TOML `[run] n_histories` is optional (absent → derived Σ n_j, different → `ConfigError`); this is
 the CONFIGURED count and the only history count (A-3: every bundle is a full run; the A-2 transported-count field
 `run.histories_transported` is
-[superseded by A-3]). `label` is optional, ≤ 64 printable characters, unique within the set. A spot file is opened with
+[superseded by A-3]). `label` is optional, matches `^[A-Za-z0-9_.-]{1,64}$` (A-5; no whitespace or
+Markdown/HTML metacharacters, also for the spot-file label column) and is unique within the set. A spot file is
+opened with
 `O_NOFOLLOW | O_RDONLY | O_CLOEXEC` (a symbolic link is refused), `fstat` on the descriptor must report a regular
 file ≤ 1 MiB, exactly `st_size` bytes are read from that descriptor, a second `fstat` on the same descriptor must
 report the same size and inode (else `ConfigError` "spot file changed while being read", A-3), sha256 over those
@@ -102,13 +107,18 @@ bytes, ≤ 4 097 lines (violation → `ConfigError`).
 The kernel change is confined to source sampling (parameters read from arrays indexed by the beamlet id) and the
 accumulator row (`(j − j0)·B + batch`). The beamlet id is `searchsorted(offsets, h, right) − 1` on a device array
 (J ≤ 4 096: ≤ 12 comparisons); the id is range-asserted (0 ≤ j < J) in every backend and can never wrap. G = largest
-group in [1, J] fitting `memory_budget_bytes` with EVERY simultaneous allocation (A-3; exact since A-4 item 2): the
-rule is `allocation_estimate(backend, B, ΣV, chunk, V_inf, G) ≤ memory_budget_bytes`, implemented in S1 and mirroring
-the arrays of each backend at 3f3736a6: warp paths: grid accumulators `B·ΣV·8`, per-chunk tally rows (width
+group in [1, J] fitting `memory_budget_bytes` as an ACCUMULATOR-PAYLOAD budget (A-3; exact since A-4 item 2; narrowed
+by A-5 item 1): the rule is `allocation_estimate(backend, B, ΣV, chunk, V_inf, G) ≤ memory_budget_bytes`,
+implemented in S1 and mirroring the arrays of each backend at 3f3736a6:
+warp paths: grid accumulators `B·ΣV·8`, per-chunk tally rows (width
 `N_FIXED_TALLIES + 2·n_g + channel_columns`) and counter rows (width `len(COUNTER_NAMES)` + `len(ION_COUNTER_NAMES)`
 for ions), device influence accumulators `G·B·V_inf·8` and ONE host dense copy of one group during transfer; python
 reference path: tally and counter rows for the whole range N plus host accumulators `G·B·V_inf·8` (no second copy).
-The per-backend formulas with their symbols are in plan §B.3; the audit row MEM-1 measures the allocations and fails
+The per-backend formulas with their symbols are in plan §B.3. The budget does NOT bound diagnostic arrays, the
+retained CSC/batch output of earlier groups and the assembled `Result` (bounded at `save` by the 0045 budgets),
+Python object overhead or the Warp kernel/module cache; automatic G is a payload rule, not an RSS guarantee. MEM-1
+measures exactly the payload class.
+ the audit row MEM-1 measures the allocations and fails
 an estimate that is below the measured peak or more than a factor 1.5 above it. Pencil configurations keep the
 `validate` rule of 3f3736a6; G = 1 not fitting, an explicit G outside [1, J] or over the
 bound is refused by `validate` before allocation (`UnsupportedCombinationError`); recorded as effective
@@ -192,6 +202,8 @@ V3-011 hooks. Fail closed (A-4 item 1, REVIEW-a52098eb): the API requires a `Bea
 refused for a pencil source, for no `InfluenceOptions` and for ANY requested diagnostic (`requested_trace_count > 0`,
 `track_end_positions`, `escape_records`, every other diagnostic/tally field a `Result` would carry); the test
 enumerates the config dataclass fields at S6 and refuses every field outside the explicit "honoured" allowlist.
+Validity (A-5, REVIEW-54588747): a `ColumnSet` carries the transport counters and is returned only when every
+invalidating counter is zero, else `TransportLimitError` unconditionally; `allow_invalid_result` is a refused field.
 Invalid subsets (empty, duplicate, out of range,
 non-integer) are refused (`UnsupportedCombinationError`). Every bundle is a full run with
 `RunOptions.n_histories` = Σ_{all j} n_j; the fields `run.histories_transported`, `run.beamlet_subset`,
