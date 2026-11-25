@@ -78,7 +78,7 @@ from ionmc.transport.channels import (
     PIECE_COUNT_NAME,
 )
 from ionmc.transport.run import run_transport
-from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, ChannelRaw, RawTransport
+from ionmc.transport.tally import NUCLEAR_TALLY_NAMES, BeamletRaw, ChannelRaw, RawTransport
 
 
 @dataclass(frozen=True)
@@ -334,6 +334,9 @@ class Result:
     transport_report: dict[str, Any] = field(default_factory=dict)
     channel_raw: ChannelRaw | None = None
     lookups: tuple[dict[str, Any], ...] = ()
+    beamlet_raw: BeamletRaw | None = None
+    """Raw per-beamlet balances and influence accumulators of a beamlet run (V3-007 S2; python
+    backend; the CSC conversion and persistence are S4/S5), else None."""
 
     def channel_batches(self, index: int) -> NDArray[np.int64]:
         """Integer per-batch accumulators ``[B, size]`` of channel ``index`` of the compiled plan
@@ -733,7 +736,7 @@ def _capabilities_base() -> dict[str, Any]:
             "delta_electrons": list(DELTA_ELECTRON_MODELS),
         },
         "geometry": ["VoxelGeometry", "BoxPhantom"],
-        "sources": ["PencilBeamSource"],
+        "sources": [t.__name__ for t in contract.SOURCE_TYPES],
         "scoring": [
             "ScoringGrid (energy, dose)",
             "TallyRequest (edep, dose, fluence, LET, lookup averages, fluence spectra; "
@@ -770,13 +773,14 @@ class Simulation:
         self.resolutions: tuple[contract.Resolution, ...] = contract.reconcile(
             config, self.effective, contract.evidence_from_effective(self.effective)
         )
+        self._device_context: dict[str, Any] = {}  # Warp device context, reused across runs
         self._setup_s = time.perf_counter() - t0
 
     def run(self) -> Result:
         """Run the transport and return the result (raises on invalid results unless allowed)."""
         t_start = time.perf_counter()
         eff = self.effective
-        raw = run_transport(eff)
+        raw = run_transport(eff, self._device_context)
         t_transport = time.perf_counter()
         result = _assemble(eff, raw)
         t_end = time.perf_counter()
@@ -859,6 +863,7 @@ def _with_timings(result: Result, timings: dict[str, float]) -> Result:
         transport_report=result.transport_report,
         channel_raw=result.channel_raw,
         lookups=result.lookups,
+        beamlet_raw=result.beamlet_raw,
     )
 
 
@@ -896,8 +901,8 @@ def _grid_quantities(gi: int, eff: EffectiveConfig, raw: RawTransport) -> dict[s
     assert plan is not None and ch is not None
     cfg = eff.requested
     grid = cfg.scoring[gi]
-    run = cfg.run
-    hpb = run.n_histories // run.n_batches
+    run = eff.run
+    hpb = eff.n_histories // run.n_batches
     mass = voxel_mass_g(grid, eff.geometry).reshape(-1)
     vol = float(np.prod(grid.spacing_mm))
     nvox = grid.n_voxels
@@ -1010,8 +1015,8 @@ def _grid_result(
     valid: bool,
     quantities: Mapping[str, QuantityResult] | None = None,
 ) -> GridResult:
-    run = eff.requested.run
-    stats = reduce_batches(batch_sums, run.n_histories // run.n_batches)
+    run = eff.run
+    stats = reduce_batches(batch_sums, eff.n_histories // run.n_batches)
     shape = grid.shape
     mass = voxel_mass_g(grid, eff.geometry)
     flat_mass = mass.reshape(-1)
@@ -1024,7 +1029,7 @@ def _grid_result(
     dose = np.where(flat_mass > 0.0, mean * scale, np.nan)
     dose_std = np.where(flat_mass > 0.0, std * scale, np.nan)
     sparse = defined & (stats.n_nonzero < 0.5 * run.n_batches)
-    per_batch = (batch_sums / float(run.n_histories // run.n_batches)).reshape(
+    per_batch = (batch_sums / float(eff.n_histories // run.n_batches)).reshape(
         (run.n_batches, *shape)
     )
     return GridResult(
@@ -1097,7 +1102,7 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         precision=eff.precision,
         seed=cfg.run.seed,
         rng=dict(eff.rng),
-        n_histories=cfg.run.n_histories,
+        n_histories=eff.n_histories,
         n_batches=cfg.run.n_batches,
         grids=grids,
         energy_balance=balance,
@@ -1108,4 +1113,5 @@ def _assemble(eff: EffectiveConfig, raw: RawTransport) -> Result:
         transport_report=raw.meta,
         channel_raw=raw.channels,
         lookups=lookups,
+        beamlet_raw=raw.beamlets,
     )

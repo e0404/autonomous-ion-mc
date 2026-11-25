@@ -61,6 +61,7 @@ import numpy as np
 
 from ionmc.config import (
     DiagnosticsOptions,
+    InfluenceOptions,
     PhysicsOptions,
     RunOptions,
     SimulationConfig,
@@ -74,7 +75,7 @@ from ionmc.physics import stopping_models
 from ionmc.physics.projectiles import PROJECTILES, Projectile
 from ionmc.physics.stopping_models import spec_sha256
 from ionmc.scoring import ScoringGrid, TallyRequest
-from ionmc.sources import PencilBeamSource
+from ionmc.sources import Beamlet, BeamletSet, PencilBeamSource
 
 SCHEMA = "ionmc.config"
 SCHEMA_VERSION = "1.0"
@@ -225,7 +226,7 @@ RUN_FIELDS: Schema = {
     "backend": (_str, True),
     "precision": (_str, True),
     "seed": (_int, True),
-    "n_histories": (_int, True),
+    "n_histories": (_opt(_int), True),  # null: derived from the beamlets (beamlet sets only)
     "n_batches": (_int, False),
     "cpu_workers": (_int, False),
     "max_steps": (_opt(_int), False),
@@ -247,6 +248,23 @@ SOURCE_FIELDS: Schema = {
     "energy_sigma_mev": (_float, False),
     "lateral_sigma_mm": (_float, False),
 }
+BEAMLET_FIELDS: Schema = {
+    "position_mm": (_triple(_float), True),
+    "direction": (_triple(_float), True),
+    "kinetic_energy_mev": (_float, True),
+    "energy_sigma_mev": (_float, False),
+    "lateral_sigma_mm": (_float, False),
+    "n_histories": (_int, True),
+    "weight": (_opt(_float), False),
+    "label": (_opt(_str), False),
+}
+INFLUENCE_FIELDS: Schema = {
+    "grid": (_str, True),
+    "threshold_rel": (_float, False),
+    "group_size": (_opt(_int), False),
+    "persist_batches": (_bool, False),
+}
+SOURCE_TYPES = ("pencil", "beamlets")
 PROJECTILE_FIELDS: Schema = {
     "name": (_str, True),
     "symbol": (_str, True),
@@ -308,6 +326,7 @@ TOP_KEYS = (
     "diagnostics",
     "tallies",
     "lookups",
+    "influence",
     "output",
 )
 REQUIRED_TOP = ("source", "geometry", "scoring", "physics", "run")
@@ -325,6 +344,9 @@ def _check_schema_coverage() -> None:
         (RunOptions, set(RUN_FIELDS), set()),
         (DiagnosticsOptions, set(DIAGNOSTICS_FIELDS), set()),
         (PencilBeamSource, set(SOURCE_FIELDS), set()),
+        (Beamlet, set(BEAMLET_FIELDS), set()),
+        (InfluenceOptions, set(INFLUENCE_FIELDS), set()),
+        (BeamletSet, {"projectile", "beamlets"}, set()),
         (Projectile, set(PROJECTILE_FIELDS), set()),
         (ScoringGrid, set(SCORING_FIELDS), set()),
         (TallyRequest, set(TALLY_FIELDS), set()),
@@ -356,6 +378,7 @@ def _check_schema_coverage() -> None:
         "diagnostics",
         "tallies",
         "lookups",
+        "influence",
     }
     if top != covered:
         raise AssertionError(
@@ -588,10 +611,17 @@ def to_dict(config: SimulationConfig, *, manifest: InputManifest | None = None) 
             else:
                 geometry[role] = None
     s = config.source
-    source = {k: _ser(getattr(s, k)) for k in SOURCE_FIELDS if k != "projectile"} | {
-        "projectile": _projectile_entry(s.projectile)
-    }
-    return {
+    if isinstance(s, BeamletSet):
+        source: dict[str, Any] = {
+            "type": "beamlets",
+            "projectile": _projectile_entry(s.projectile),
+            "beamlets": [_fields_dict(b, BEAMLET_FIELDS) for b in s.beamlets],
+        }
+    else:
+        source = {k: _ser(getattr(s, k)) for k in SOURCE_FIELDS if k != "projectile"} | {
+            "projectile": _projectile_entry(s.projectile)
+        }
+    out = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "source": source,
@@ -610,6 +640,9 @@ def to_dict(config: SimulationConfig, *, manifest: InputManifest | None = None) 
             for t in config.lookups
         ],
     }
+    if config.influence is not None:  # absent for pencil configurations (byte-identical form)
+        out["influence"] = _fields_dict(config.influence, INFLUENCE_FIELDS)
+    return out
 
 
 def config_sha256(config: SimulationConfig, manifest: InputManifest | None) -> str:
@@ -859,7 +892,8 @@ class OutputOptions:
 
 @dataclass(frozen=True)
 class LoadedConfig:
-    """Result of :func:`load_toml_full`."""
+    """Result of :func:`load_toml_full` (a beamlet file that omits ``[run] n_histories`` loads
+    ``config.run.n_histories = None``: the derivation is part of the configuration value)."""
 
     config: SimulationConfig
     manifest: InputManifest
@@ -1286,6 +1320,51 @@ def _output_from(v: Any, base_dir: Path | None) -> OutputOptions:
     return OutputOptions(path, kw.get("persist_batches", True))
 
 
+def _beamlets_table(tbl: Mapping[str, Any]) -> tuple[Any, list[dict[str, Any]]]:
+    """Strict read of a ``type = "beamlets"`` source table: (projectile, beamlet row tables)."""
+    for k in tbl:
+        if k not in ("type", "projectile", "beamlets"):
+            raise ConfigError(
+                f"source.{k}",
+                "unknown key for type 'beamlets' (valid keys: type, projectile, beamlets)",
+            )
+    if "projectile" not in tbl:
+        raise ConfigError("source.projectile", "required key is missing")
+    if "beamlets" not in tbl:
+        raise ConfigError("source.beamlets", "required key is missing")
+    return tbl["projectile"], _table_list(tbl["beamlets"], "source.beamlets")
+
+
+def _read_beamlet(t: Mapping[str, Any], kp: str) -> dict[str, Any]:
+    if "projectile" in t:
+        raise ConfigError(
+            f"{kp}.projectile",
+            "a beamlet set has one projectile (source.projectile); mixed projectiles are refused",
+        )
+    return _read(t, kp, BEAMLET_FIELDS)
+
+
+def _source_from(v: Any, built: _Built | None = None) -> PencilBeamSource | BeamletSet:
+    tbl = _table(v, "source")
+    kind = tbl.get("type", "pencil")
+    if kind not in SOURCE_TYPES:
+        raise ConfigError("source.type", f"must be one of {SOURCE_TYPES}, got {kind!r}")
+    if kind == "beamlets":
+        proj, rows = _beamlets_table(tbl)
+        projectile = _projectile_from(proj, "source.projectile")
+        beamlets = tuple(
+            _construct(Beamlet, f"source.beamlets[{i}]", _read_beamlet(t, f"source.beamlets[{i}]"))
+            for i, t in enumerate(rows)
+        )
+        made: BeamletSet = _construct(
+            BeamletSet, "source", {"projectile": projectile, "beamlets": beamlets}
+        )
+        return made
+    sk = _read({k: x for k, x in tbl.items() if k != "type"}, "source", SOURCE_FIELDS)
+    sk["projectile"] = _projectile_from(sk["projectile"], "source.projectile")
+    return _construct(PencilBeamSource, "source", sk)  # type: ignore[no-any-return]
+
+
 def _from_dict(
     d: Any,
     manifest: InputManifest | None,
@@ -1312,16 +1391,25 @@ def _from_dict(
         if mat.name in mats:
             raise ConfigError(f"materials[{i}].name", f"duplicate material name {mat.name!r}")
         mats[mat.name] = mat
-    sk = _read(_table(top["source"], "source"), "source", SOURCE_FIELDS)
-    sk["projectile"] = _projectile_from(sk["projectile"], "source.projectile")
-    source = _construct(PencilBeamSource, "source", sk)
+    source = _source_from(top["source"], built)
     geometry = _geometry_from(top["geometry"], mats, manifest, base_dir, built, arrays)
     scoring = tuple(
         _construct(ScoringGrid, f"scoring[{i}]", _read(t, f"scoring[{i}]", SCORING_FIELDS))
         for i, t in enumerate(_table_list(top["scoring"], "scoring"))
     )
     physics = _physics_from(top["physics"])
-    run = _construct(RunOptions, "run", _read(_table(top["run"], "run"), "run", RUN_FIELDS))
+    run_tbl = dict(_table(top["run"], "run"))
+    if isinstance(source, BeamletSet):  # [run] n_histories is optional: derived = sum of n_j
+        total = source.n_histories_total
+        if "n_histories" not in run_tbl:
+            run_tbl["n_histories"] = None  # derived: validate records the sum
+        elif run_tbl["n_histories"] is not None and run_tbl["n_histories"] != total:
+            raise ConfigError(
+                "run.n_histories",
+                f"is {run_tbl['n_histories']!r} but the beamlet n_histories sum to {total}; "
+                "omit it or give the sum",
+            )
+    run = _construct(RunOptions, "run", _read(run_tbl, "run", RUN_FIELDS))
     diagnostics = _construct(
         DiagnosticsOptions,
         "diagnostics",
@@ -1332,6 +1420,13 @@ def _from_dict(
         for i, t in enumerate(_table_list(top.get("tallies", []), "tallies"))
     )
     lookups = _lookups_from(top.get("lookups", []), manifest, base_dir, built)
+    influence = None
+    if "influence" in top:
+        influence = _construct(
+            InfluenceOptions,
+            "influence",
+            _read(_table(top["influence"], "influence"), "influence", INFLUENCE_FIELDS),
+        )
     if "output" in top:
         built.output = _output_from(top["output"], base_dir)
     config = _construct(
@@ -1346,6 +1441,7 @@ def _from_dict(
             "diagnostics": diagnostics,
             "tallies": tallies,
             "lookups": lookups,
+            "influence": influence,
         },
     )
     return config, built
@@ -1431,7 +1527,17 @@ def validate_dict_structure(d: Any) -> None:
             if kw.get("sternheimer") is not None:
                 st = _table(kw["sternheimer"], f"materials[{i}].sternheimer")
                 _read(st, f"materials[{i}].sternheimer", STERNHEIMER_FIELDS)
-    sk = _read(_table(top["source"], "source"), "source", SOURCE_FIELDS)
+    st = _table(top["source"], "source")
+    kind = st.get("type", "pencil")
+    if not isinstance(kind, str) or kind not in SOURCE_TYPES:
+        raise ConfigError("source.type", f"must be one of {SOURCE_TYPES}, got {kind!r}")
+    if kind == "beamlets":
+        proj, rows = _beamlets_table(st)
+        for i, t in enumerate(rows):
+            _read_beamlet(t, f"source.beamlets[{i}]")
+        sk = {"projectile": proj}
+    else:
+        sk = _read({k: x for k, x in st.items() if k != "type"}, "source", SOURCE_FIELDS)
     if not isinstance(sk["projectile"], str):
         _read(_table(sk["projectile"], "source.projectile"), "source.projectile", PROJECTILE_FIELDS)
     g = _table(top["geometry"], "geometry")
@@ -1461,6 +1567,8 @@ def validate_dict_structure(d: Any) -> None:
         _read(t, f"tallies[{i}]", TALLY_FIELDS)
     for i, r in enumerate(_seq(top.get("lookups", []), "lookups")):
         _check_array_record(r, f"lookups[{i}]", True, units=True)
+    if "influence" in top:
+        _read(_table(top["influence"], "influence"), "influence", INFLUENCE_FIELDS)
     if "output" in top:
         _read(_table(top["output"], "output"), "output", OUTPUT_FIELDS)
 

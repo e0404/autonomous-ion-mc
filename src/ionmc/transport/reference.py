@@ -40,9 +40,11 @@ outside grid ``g``).
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 from ionmc._wpfunc import python_twin
 from ionmc.config import (
@@ -65,7 +67,9 @@ from ionmc.rng.philox import (
     key_from_seed,
     u01_py,
 )
+from ionmc.sources import BeamletSet
 from ionmc.species import PSEUDO_BASE, species_of_projectile
+from ionmc.transport.alloc import alloc_zeros, release
 from ionmc.transport.channels import (
     CLASS_LOCAL,
     CLASS_RESIDUAL_FLOOR,
@@ -90,10 +94,14 @@ from ionmc.transport.tally import (
     QUANTUM_SCALE,
     TALLY_NAMES,
     TRACE_COLUMNS,
+    BeamletAccumulation,
+    BeamletBalance,
+    BeamletRaw,
     HistoryDiagnostics,
     PartialTransport,
     RawTransport,
     build_diagnostics,
+    exact_components,
     merge_partials,
     rows_to_partial,
 )
@@ -109,6 +117,7 @@ __all__ = [
     "RawTransport",
     "run_reference",
     "run_reference_range",
+    "sample_source",
 ]
 
 
@@ -134,9 +143,44 @@ def ramp_weight(ta: float, tb: float, s_start: float, s_end: float, s_act: float
     )
 
 
+def sample_source(
+    F: Any,
+    key: tuple[int, int],
+    h: int,
+    position: tuple[float, float, float],
+    direction: tuple[float, float, float],
+    energy_mev: float,
+    energy_sigma_mev: float,
+    lateral_sigma_mm: float,
+) -> tuple[float, tuple[float, float, float]]:
+    """Sample the energy and the position of history ``h`` of one pencil (a pencil beam or one
+    beamlet): source sampling, purpose 1, block 0, counter ``(h, 0, 0, purpose)`` with ``h`` the
+    GLOBAL history index. The normals ``(u0, u1)`` give the lateral offsets along the orthonormal
+    basis of the unit ``direction``, ``(u2, u3)`` the energy offset (the block is always drawn;
+    the values are ignored when the corresponding sigma is zero). The one function every source
+    uses (decision 0046: a beamlet differs from a pencil only in the parameters it reads)."""
+    r, V = float, F.vec3
+    w = draw_block(key, h, 0, 0, PURPOSE_SOURCE)
+    u = [u01_py(x, "float64") for x in w]
+    z1, z2 = F.gauss_pair(r(u[0]), r(u[1]))
+    z3 = F.gauss_one(r(u[2]), r(u[3]))
+    e1v, e2v = F.orthonormal_basis(V(r(direction[0]), r(direction[1]), r(direction[2])))
+    energy = energy_mev
+    if energy_sigma_mev > 0.0:
+        energy = energy + energy_sigma_mev * float(z3)
+    px, py, pz = position
+    if lateral_sigma_mm > 0.0:
+        sg = lateral_sigma_mm
+        zz1, zz2 = float(z1), float(z2)
+        px = px + sg * (zz1 * float(e1v[0]) + zz2 * float(e2v[0]))
+        py = py + sg * (zz1 * float(e1v[1]) + zz2 * float(e2v[1]))
+        pz = pz + sg * (zz1 * float(e1v[2]) + zz2 * float(e2v[2]))
+    return energy, (px, py, pz)
+
+
 def run_reference(eff: EffectiveConfig) -> RawTransport:
     """Transport ``n_histories`` primaries with the Python reference loop (float64)."""
-    n = eff.requested.run.n_histories
+    n = eff.n_histories
     part = run_reference_range(eff, 0, n)
     diag = eff.requested.diagnostics
     raw = merge_partials(
@@ -151,6 +195,7 @@ def run_reference(eff: EffectiveConfig) -> RawTransport:
         [part], diag.track_end_positions, diag.escape_records, diag.trace_histories
     )
     raw.meta = {"workers": 1}
+    raw.beamlets = part.beamlets
     return raw
 
 
@@ -226,7 +271,9 @@ class _Reference:
         self.g_origin = [self.V(*(r(x) for x in g.origin_mm)) for g in self.grids]
         self.g_inv = [self.V(*(r(1.0 / x) for x in g.spacing_mm)) for g in self.grids]
         self.g_spacing = [self.V(*(r(x) for x in g.spacing_mm)) for g in self.grids]
-        self.edep = [np.zeros((self.n_batches, g.n_voxels), dtype=np.int64) for g in self.grids]
+        self.edep: list[NDArray[np.int64]] = [
+            alloc_zeros("grid", (self.n_batches, g.n_voxels), np.int64) for g in self.grids
+        ]
         self.outside = [0.0] * len(self.grids)
         self.quant = [0.0] * len(self.grids)
         self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
@@ -249,6 +296,19 @@ class _Reference:
             self.counters = dict.fromkeys(self.counter_names, 0)
             self.ntallies = dict.fromkeys(NUCLEAR_TALLY_NAMES, 0.0)
         self.e_table_max = float(self.tab.e_max_mev.min())
+        # beamlet set (V3-007): the offsets s_j, the unit directions and the influence accumulators
+        src0 = cfg.source
+        self.beamlet_set: BeamletSet | None = src0 if isinstance(src0, BeamletSet) else None
+        self.offsets_list: list[int] = []
+        self.beamlet_dirs: list[tuple[float, float, float]] = []
+        if self.beamlet_set is not None:
+            self.offsets_list = [int(x) for x in self.beamlet_set.offsets()]
+            self.beamlet_dirs = [b.unit_direction() for b in self.beamlet_set.beamlets]
+        self.infl_grid = -1  # index of the influence grid (-1: no influence)
+        self.infl: NDArray[np.int64] | None = None  # int64 [G B, V_inf], allocated by run_range
+        self.infl_row = 0  # row of the history being transported
+        if cfg.influence is not None:
+            self.infl_grid = [g.name for g in self.grids].index(cfg.influence.grid)
         # scoring channels (decision 0040): None without tallies, then the qualified path is
         # untouched (no step precompute, no extra leg walks, no extra tally columns)
         self.scorer: ReferenceChannelScorer | None = None
@@ -288,6 +348,8 @@ class _Reference:
             n = math.floor(de * QUANTUM_SCALE + 0.5)
             vox = (ix * ny + iy) * nz + iz
             self.edep[g][batch, vox] += n
+            if g == self.infl_grid and self.infl is not None:
+                self.infl[self.infl_row, vox] += n
             self.quant[g] += de - n * QUANTUM_MEV
             return vox
         self.outside[g] += de
@@ -579,11 +641,30 @@ class _Reference:
         self.trace: list[list[float]] = []
         self.h_base = h0
         n_chan_cols = channel_columns(self.eff)
-        counter_rows = np.zeros((n, len(self.counter_names)), dtype=np.int32)
+        counter_rows = alloc_zeros("counter_rows", (n, len(self.counter_names)), np.int32)
         n_nuc_t = len(NUCLEAR_TALLY_NAMES) if self.nuc is not None else 0
-        tally_rows = np.zeros((n, N_FIXED_TALLIES + 2 * n_g + n_chan_cols + n_nuc_t))
+        tally_rows = alloc_zeros(
+            "tally_rows", (n, N_FIXED_TALLIES + 2 * n_g + n_chan_cols + n_nuc_t), np.float64
+        )
         c_chan = N_FIXED_TALLIES + 2 * n_g
+        bs = self.beamlet_set
+        group = 0  # beamlet group being accumulated (influence)
+        group_size = self.eff.influence_group_size or 1
+        accs: list[BeamletAccumulation] = []
+        if bs is not None and self.infl_grid >= 0:
+            if (h0, h1) != (0, self.offsets_list[-1]):
+                raise ValueError("an influence run transports the whole history range")
+            v_inf = self.grids[self.infl_grid].n_voxels
+            self.infl = alloc_zeros("influence", (group_size * self.n_batches, v_inf), np.int64)
         for h in range(h0, h1):
+            j = 0
+            if bs is not None:
+                j = self._beamlet_id(h)
+                if self.infl is not None:
+                    if j // group_size != group:  # groups are consecutive beamlet ranges
+                        self._flush_group(group, group_size, accs)
+                        group = j // group_size
+                    self.infl_row = self._influence_row(j - group * group_size, h % self.n_batches)
             # per-history accumulators: a row depends on this history alone
             self.tallies = dict.fromkeys(TALLY_NAMES, 0.0)
             self.outside = [0.0] * n_g
@@ -595,7 +676,7 @@ class _Reference:
             self.path_exceeded = 0
             if self.scorer is not None:
                 self.scorer.begin_history()
-            self._history(h)
+            self._history(h, j)
             row = h - h0
             tally_rows[row, :N_FIXED_TALLIES] = [self.tallies[k] for k in TALLY_NAMES]
             tally_rows[row, N_FIXED_TALLIES : N_FIXED_TALLIES + n_g] = self.outside
@@ -607,6 +688,13 @@ class _Reference:
             if self.nuc is not None:
                 tally_rows[row, -n_nuc_t:] = [self.ntallies[k] for k in NUCLEAR_TALLY_NAMES]
             counter_rows[row] = [self.counters[k] for k in self.counter_names]
+        beamlets = None
+        if bs is not None:
+            if self.infl is not None:
+                self._flush_group(group, group_size, accs)
+                release("influence", self.infl)
+                self.infl = None
+            beamlets = self._beamlet_raw(h0, h1, tally_rows, counter_rows, accs)
         diagnostics = None
         if self.want_diag:
             tr = np.array(self.trace, dtype=np.float64).reshape(-1, len(TRACE_COLUMNS))
@@ -624,9 +712,86 @@ class _Reference:
             h0, h1, tally_rows, counter_rows, self.edep, diagnostics,
             channel_acc=None if self.scorer is None else self.scorer.acc,
         )  # fmt: skip
+        release("tally_rows", tally_rows)
+        release("counter_rows", counter_rows)
+        part.beamlets = beamlets
         if self.nuc is not None:
             part.meta["nuclear_diagnostics"] = self.nuc_diag
         return part
+
+    # -- beamlets (V3-007) --------------------------------------------------------------------
+    def _beamlet_id(self, h: int) -> int:
+        """``j = searchsorted(s, h, "right") - 1`` on the offsets; range-asserted (never wraps)."""
+        j = bisect_right(self.offsets_list, h) - 1
+        if not 0 <= j < len(self.offsets_list) - 1:
+            raise ValueError(f"history {h} outside the beamlet offsets {self.offsets_list[-1]}")
+        return j
+
+    def _influence_row(self, j_local: int, batch: int) -> int:
+        """Row of the influence accumulators of beamlet ``j_local`` (its index inside the group)
+        and ``batch``: ``j_local * B + batch`` (plan section B.3)."""
+        return j_local * self.n_batches + batch
+
+    def _flush_group(self, group: int, group_size: int, accs: list[BeamletAccumulation]) -> None:
+        """Reduce the accumulators of the finished group to one raw result per beamlet, then zero
+        them (the next group reuses the same rows)."""
+        assert self.infl is not None and self.beamlet_set is not None
+        b = self.n_batches
+        j0 = group * group_size
+        for j in range(j0, min(j0 + group_size, self.beamlet_set.n_beamlets)):
+            local = j - j0
+            accs.append(BeamletAccumulation(j, self.infl[local * b : (local + 1) * b].copy()))
+        self.infl.fill(0)
+
+    def _beamlet_raw(
+        self,
+        h0: int,
+        h1: int,
+        tally_rows: NDArray[np.float64],
+        counter_rows: NDArray[np.int32],
+        accs: list[BeamletAccumulation],
+    ) -> BeamletRaw:
+        """Exact per-beamlet balances from the per-history tally rows of ``[s_j, s_j + n_j)``
+        (the existing exact reduction, so independent of any grouping) and the accumulations."""
+        n_g = len(self.grids)
+        n_nuc_t = len(NUCLEAR_TALLY_NAMES) if self.nuc is not None else 0
+        offs = self.offsets_list
+        in_grid = {
+            a.beamlet_id: sum(int(x) for x in a.batch_quanta.sum(axis=1)) * QUANTUM_MEV
+            for a in accs
+        }
+        balances = []
+        for j in range(len(offs) - 1):
+            lo, hi = max(offs[j], h0), min(offs[j + 1], h1)
+            if lo >= hi:
+                continue
+            blk = slice(lo - h0, hi - h0)
+            tot = [
+                math.fsum(exact_components(tally_rows[blk, c])) for c in range(tally_rows.shape[1])
+            ]
+            tallies = dict(zip(TALLY_NAMES, tot[:N_FIXED_TALLIES], strict=True))
+            if n_nuc_t:
+                tallies.update(zip(NUCLEAR_TALLY_NAMES, tot[len(tot) - n_nuc_t :], strict=True))
+            csum = counter_rows[blk].astype(np.int64).sum(axis=0)
+            balances.append(
+                BeamletBalance(
+                    beamlet_id=j,
+                    n_histories=hi - lo,
+                    tallies=tallies,
+                    outside_mev=tuple(tot[N_FIXED_TALLIES : N_FIXED_TALLIES + n_g]),
+                    quantization_mev=tuple(tot[N_FIXED_TALLIES + n_g : N_FIXED_TALLIES + 2 * n_g]),
+                    counters={k: int(csum[i]) for i, k in enumerate(self.counter_names)},
+                    in_grid_mev=in_grid.get(j),
+                )
+            )
+        inf = self.cfg.influence
+        return BeamletRaw(
+            offsets=np.array(offs, dtype=np.int64),
+            group_size=self.eff.influence_group_size,
+            balances=tuple(balances),
+            accumulations=tuple(accs),
+            influence_grid=None if inf is None else inf.grid,
+        )
 
     def _end(
         self,
@@ -835,31 +1000,39 @@ class _Reference:
             self.tallies["unaccounted"] += miss
 
     # -- one history --------------------------------------------------------------------------
-    def _history(self, h: int) -> None:
-        cfg, F, K, V, r = self.cfg, self.F, self.K, self.V, self.R
-        src = cfg.source
+    def _source_parameters(
+        self, j: int
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float], float, float, float]:
+        """(position, unit direction, mean energy, energy sigma, lateral sigma) of the pencil that
+        samples the histories of beamlet ``j``; a pencil source is the single pencil (``j = 0``)."""
+        src = self.cfg.source
+        if isinstance(src, BeamletSet):
+            b = src.beamlets[j]
+            return (
+                b.position_mm,
+                self.beamlet_dirs[j],
+                b.kinetic_energy_mev,
+                b.energy_sigma_mev,
+                b.lateral_sigma_mm,
+            )
+        return (
+            src.position_mm,
+            self.eff.single_unit_direction(),
+            src.kinetic_energy_mev,
+            src.energy_sigma_mev,
+            src.lateral_sigma_mm,
+        )
+
+    def _history(self, h: int, j: int = 0) -> None:
+        F, K, V, r = self.F, self.K, self.V, self.R
         key = self.key
         nx, ny, nz = self.shape
 
         self.generation = 0
         self._set_species(0)
-        # source sampling (purpose 1)
-        w = draw_block(key, h, 0, 0, PURPOSE_SOURCE)
-        u = [u01_py(x, "float64") for x in w]
-        z1, z2 = F.gauss_pair(r(u[0]), r(u[1]))
-        z3 = F.gauss_one(r(u[2]), r(u[3]))
-        d = self.eff.unit_direction
-        e1v, e2v = F.orthonormal_basis(V(r(d[0]), r(d[1]), r(d[2])))
-        energy = src.kinetic_energy_mev
-        if src.energy_sigma_mev > 0.0:
-            energy = energy + src.energy_sigma_mev * float(z3)
-        px, py, pz = src.position_mm
-        if src.lateral_sigma_mm > 0.0:
-            sg = src.lateral_sigma_mm
-            zz1, zz2 = float(z1), float(z2)
-            px = px + sg * (zz1 * float(e1v[0]) + zz2 * float(e2v[0]))
-            py = py + sg * (zz1 * float(e1v[1]) + zz2 * float(e2v[1]))
-            pz = pz + sg * (zz1 * float(e1v[2]) + zz2 * float(e2v[2]))
+        # source sampling (purpose 1) of the pencil of beamlet j (the pencil itself: j = 0)
+        pos0, d, e_mean, e_sigma, l_sigma = self._source_parameters(j)
+        energy, (px, py, pz) = sample_source(F, key, h, pos0, d, e_mean, e_sigma, l_sigma)
         if self.nuc is not None and energy > NUCLEAR_MAX_ENERGY_MEV:
             # nuclear runs: the cross sections end at 250 MeV and the Gaussian source is unbounded
             # (decision 0041 section 5, amended 2026-10-08), whatever the stopping tables cover;

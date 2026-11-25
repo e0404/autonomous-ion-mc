@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from ionmc import svg
+from ionmc.contract import _ABSENT, request_path_get
 
 Arrays = Mapping[str, "np.ndarray[Any, Any]"]
 Doc = Mapping[str, Any]
@@ -92,12 +93,17 @@ def _table(head: Sequence[str], rows: Sequence[Sequence[Any]]) -> list[str]:
 
 
 def _requested_value(doc: Doc, path: str) -> Any:
-    cur: Any = doc["requested"]
-    for part in path.split("."):
-        if not isinstance(cur, Mapping) or part not in cur:
-            return "not given"
-        cur = cur[part]
-    return cur
+    got = request_path_get(doc["requested"], path)
+    return "not given" if got is _ABSENT else got
+
+
+def _requested_cell(doc: Doc, path: str) -> str:
+    """``path = value``; a ``[*]`` path shows "per beamlet (J values)" and the first value."""
+    v = _requested_value(doc, path)
+    if "[*]" in path and isinstance(v, list):
+        first = _value(v[0]) if v else "-"
+        return f"{path} = per beamlet ({len(v)} values), first {first}"
+    return f"{path} = {_value(v)}"
 
 
 def _effective_value(doc: Doc, pointer: str) -> Any:
@@ -310,7 +316,7 @@ def _requested_effective(doc: Doc) -> list[str]:
     extra = doc["effective_extra"]
     rows = []
     for r in extra["resolutions"]:
-        req = "; ".join(f"{p} = {_value(_requested_value(doc, p))}" for p in r["requested"])
+        req = "; ".join(_requested_cell(doc, p) for p in r["requested"])
         eff = "; ".join(f"{p} = {_value(_effective_value(doc, p))}" for p in r["effective"])
         rows.append((r["row"], r["class"], r["rule"], req or "-", eff or "-", r["reason"] or "-"))
     out = [
@@ -588,8 +594,21 @@ def render_report(doc: Doc, arrays: Arrays) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _refuse_beamlet_doc(doc: Doc) -> None:
+    """Fail-closed gate (V3-007 S1): beamlet-set documents are S5 work."""
+    from ionmc import config as config_mod
+    from ionmc.errors import UnsupportedCombinationError
+
+    src = doc.get("requested", {}).get("source", {}) if isinstance(doc, Mapping) else {}
+    if src.get("type") == "beamlets" and not config_mod.BEAMLET_PERSISTENCE_AVAILABLE:
+        raise UnsupportedCombinationError(
+            "result bundles of a beamlet set are not yet available (V3-007 S5)"
+        )
+
+
 def render_all(doc: Doc, arrays: Arrays) -> dict[str, str]:
     """Every derived file of a bundle: ``report.md`` and ``plots/*.svg``."""
+    _refuse_beamlet_doc(doc)
     return {"report.md": render_report(doc, arrays), **render_plots(doc, arrays)}
 
 

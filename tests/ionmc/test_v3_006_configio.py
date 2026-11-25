@@ -23,6 +23,7 @@ import pytest
 from ionmc import configio
 from ionmc.config import (
     DiagnosticsOptions,
+    InfluenceOptions,
     PhysicsOptions,
     RunOptions,
     SimulationConfig,
@@ -47,7 +48,7 @@ from ionmc.materials import MATERIALS, PMMA, WATER, Material
 from ionmc.physics.projectiles import ALPHA, PROTON, Projectile
 from ionmc.physics.stopping import BetheStoppingSource
 from ionmc.scoring import ScoringGrid, TallyRequest
-from ionmc.sources import PencilBeamSource
+from ionmc.sources import Beamlet, BeamletSet, PencilBeamSource
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data" / "v3_006"
@@ -191,6 +192,25 @@ def _copy_inputs(tmp_path: Path) -> Path:
 
 def _sha(path: Path) -> str:
     return configio.hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+# V3-007 S1 (decision 0046): every field of Beamlet, BeamletSet and InfluenceOptions at a
+# non-default value; RunOptions.n_histories equals the sum of the beamlets' histories (A-1 item 1).
+BEAMLET_INFLUENCE = SimulationConfig(
+    BeamletSet(
+        PROTON,
+        (
+            Beamlet((-2.0, 0.0, -5.0), (0.0, 0.0, 1.0), 90.0, 0.5, 1.0, 40, 1.5, "b0"),
+            Beamlet((2.0, 0.0, -5.0), (0.0, 0.0, 1.0), 110.0, 0.5, 1.0, 40, 0.5, "b1"),
+        ),
+    ),
+    BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 20.0), WATER),
+    (ScoringGrid((-10.0, -10.0, 0.0), (5.0, 5.0, 5.0), (4, 4, 4)),),
+    PhysicsOptions(nuclear=False, stopping_model="bethe-ionmc-v1"),
+    RunOptions(backend="python", precision="float64", seed=5, n_histories=80, n_batches=4),
+    DiagnosticsOptions(),
+    influence=InfluenceOptions("dose", 0.01, 1, False),
+)
 
 
 def _slab_toml(
@@ -347,10 +367,14 @@ def test_cfg1_every_field_of_every_config_dataclass_is_generated_and_round_trips
         CUSTOM_PROJECTILE,
         CUSTOM_MATERIAL_BOX,
         ALPHA_BOX,
+        BEAMLET_INFLUENCE,  # V3-007 S1: BeamletSet, Beamlet, InfluenceOptions
     ]
     expected_classes = {
         "SimulationConfig",
         "PencilBeamSource",
+        "BeamletSet",
+        "Beamlet",
+        "InfluenceOptions",
         "Projectile",
         "VoxelGeometry",
         "BoxPhantom",

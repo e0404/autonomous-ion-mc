@@ -37,7 +37,15 @@ from ionmc.geometry import BoxPhantom, VoxelGeometry
 from ionmc.physics.projectiles import PROTON
 from ionmc.physics.stopping_models import DEFAULT_STOPPING_MODEL_ID, STOPPING_MODELS
 from ionmc.physics.stopping_selection import LS_VARIANT_IDS
-from ionmc.sources import PencilBeamSource
+from ionmc.sources import (
+    UNIT_DIRECTION_STATUS_BEAMLETS,
+    Beamlet,
+    BeamletSet,
+    PencilBeamSource,
+    canonical_table_of,
+    canonical_table_sha256,
+    envelope_of,
+)
 
 EQUAL, DERIVED, UNUSED, REQUESTED_ONLY = "equal", "derived", "unused", "requested-only"
 CLASSES = (EQUAL, DERIVED, UNUSED, REQUESTED_ONLY)
@@ -206,7 +214,56 @@ RECONCILIATION_TABLE: tuple[Row, ...] = (
     _r("tallies", "tallies", "/tallies/channels /tallies/quantities", "equal:in-channel-plan"),
     _r("lookups", "lookups", "/tallies/lookups", "equal:in-channel-plan"),
 )
-ROWS: Mapping[str, Row] = {r.id: r for r in RECONCILIATION_TABLE}
+BEAMLET_ROWS: tuple[Row, ...] = (
+    _r(
+        "beamlet-set",
+        "source.type source.projectile "
+        "source.beamlets[*].position_mm source.beamlets[*].kinetic_energy_mev "
+        "source.beamlets[*].energy_sigma_mev source.beamlets[*].lateral_sigma_mm "
+        "source.beamlets[*].n_histories source.beamlets[*].weight source.beamlets[*].label",
+        "/source/type /source/projectile /source/z /source/a /source/mass_mev /source/n_beamlets "
+        "/source/n_histories_total /source/envelope /source/beamlets_sha256",
+        "equal:equal",
+        "V3-007: a beamlet set replaces the rows source and direction; owns the leaf paths of the "
+        "table except the direction leaves (row beamlet-direction); the canonical-table digest "
+        "(positions, unit directions, energies, spreads, n_histories, weights, labels) is "
+        "recomputed from the requested rows",
+    ),
+    _r(
+        "beamlet-direction",
+        "source.beamlets[*].direction",
+        "/unit_direction /unit_direction_status",
+        "equal:not-applicable derived:normalise-per-beamlet",
+        "a set has one direction per beamlet (in the digest); the single unit direction is null; "
+        "the request path maps over the beamlets ('[*]': one value per beamlet); the other leaves "
+        "of the table are the row beamlet-set (no row claims 'source.beamlets' itself)",
+    ),
+    _r(
+        "beamlet-histories",
+        "run.n_histories",
+        "/n_histories /source/n_histories_total",
+        "equal:sum-equal derived:sum-of-beamlets",
+        "run.n_histories == sum of the beamlet n_histories; derived when requested None",
+    ),
+    _r(
+        "influence",
+        "influence.grid influence.threshold_rel influence.persist_batches",
+        "/influence/grid /influence/n_voxels /influence/threshold_rel /influence/persist_batches",
+        "equal:equal unused:no-influence",
+    ),
+    _r(
+        "influence-group",
+        "influence.group_size",
+        "/influence/group_size /influence/group_size_origin",
+        "equal:equal derived:memory-budget unused:no-influence",
+        "an explicit group size is recorded as requested; None is derived from the memory budget",
+    ),
+)
+"""Rows added by V3-007 for a ``BeamletSet`` request. ``RECONCILIATION_TABLE`` (the pencil table of
+decision 0045) is unchanged; a beamlet request takes the rows of both tuples except ``source`` and
+``direction``."""
+ALL_ROWS: tuple[Row, ...] = (*RECONCILIATION_TABLE, *BEAMLET_ROWS)
+ROWS: Mapping[str, Row] = {r.id: r for r in ALL_ROWS}
 
 
 @dataclass(frozen=True)
@@ -245,6 +302,34 @@ def pointer_get(doc: Any, pointer: str) -> Any:
     return cur
 
 
+def request_path_get(doc: Any, path: str) -> Any:
+    """Value at a dotted request path of nested mappings, or ``_ABSENT``. A ``name[*]`` segment
+    maps over the list ``name``: the result is the list of the per-element values of the
+    remaining path (the SAME resolver is used by the report); a missing field in one element or
+    a non-list raises ``UnsupportedCombinationError`` naming the element."""
+    parts = path.split(".")
+    for i, part in enumerate(parts):
+        star = part.endswith("[*]")
+        key = part[:-3] if star else part
+        if not isinstance(doc, Mapping) or key not in doc:
+            return _ABSENT
+        doc = doc[key]
+        if star:
+            if not isinstance(doc, list | tuple):
+                raise _differ(path, "a list at " + key, doc)
+            rest = ".".join(parts[i + 1 :])
+            if not rest:
+                return list(doc)
+            out = []
+            for j, el in enumerate(doc):
+                v = request_path_get(el, rest)
+                if v is _ABSENT:
+                    raise _differ(f"{path} (element {j})", "a value", v)
+                out.append(v)
+            return out
+    return doc
+
+
 def pointer_resolves(effective: Any, pointer: str) -> bool:
     return pointer_get(effective, pointer) is not _ABSENT
 
@@ -272,11 +357,20 @@ class _Ctx:
         if got != requested:
             raise _differ(what, requested, got)
 
-    def add(self, row: str, cls: str, rule: str, pointers: Sequence[str], reason: str = "") -> None:
+    def add(
+        self,
+        row: str,
+        cls: str,
+        rule: str,
+        pointers: Sequence[str],
+        reason: str = "",
+        requested: Sequence[str] | None = None,
+    ) -> None:
         r = ROWS[row]
         if (cls, rule) not in r.outcomes:
             raise AssertionError(f"row {row!r} has no outcome {cls}:{rule}")  # a table bug
-        self.out.append(Resolution(row, cls, rule, r.requested, tuple(pointers), reason))
+        req = r.requested if requested is None else tuple(requested)
+        self.out.append(Resolution(row, cls, rule, req, tuple(pointers), reason))
 
 
 def _projectile(rp: Any) -> dict[str, Any]:
@@ -318,6 +412,91 @@ def _row_source(c: _Ctx) -> None:
     unit = abs(nrm - 1.0) <= 1e-12
     c.add("direction", EQUAL if unit else DERIVED, "equal" if unit else "normalise",
           ["/unit_direction"])  # fmt: skip
+
+
+def _beamlet_rows_of(rs: Mapping[str, Any]) -> list[Beamlet]:
+    """The ``Beamlet`` objects of a requested beamlet source block (structure errors raise
+    ``UnsupportedCombinationError`` naming the field)."""
+    try:
+        return [
+            Beamlet(
+                tuple(b["position_mm"]),
+                tuple(b["direction"]),
+                b["kinetic_energy_mev"],
+                b["energy_sigma_mev"],
+                b["lateral_sigma_mm"],
+                b["n_histories"],
+                b["weight"],
+                b["label"],
+            )
+            for b in rs["beamlets"]
+        ]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise _differ("source.beamlets", "a list of beamlet records", repr(exc)) from exc
+
+
+def _row_beamlet_source(c: _Ctx, evidence: Mapping[str, Any]) -> None:
+    rs = c.rq["source"]
+    for k, v in _projectile(rs["projectile"]).items():
+        c.equal(f"source.{k}", v, f"/source/{k}")
+    c.equal("source.type", "beamlets", "/source/type")
+    rows = _beamlet_rows_of(rs)
+    if not rows:
+        raise _differ("source.beamlets", "at least one beamlet", "an empty list")
+    c.equal("source.beamlets (count)", len(rows), "/source/n_beamlets")
+    total = sum(b.n_histories for b in rows)
+    c.equal("source.beamlets (sum of n_histories)", total, "/source/n_histories_total")
+    c.equal("source.beamlets (envelope)", envelope_of(rows).to_dict(), "/source/envelope")
+    digest = canonical_table_sha256(canonical_table_of(rows), [b.label for b in rows])
+    c.equal("source.beamlets (canonical-table sha256)", digest, "/source/beamlets_sha256")
+    c.add("beamlet-set", EQUAL, "equal", ROWS["beamlet-set"].pointers)
+    c.equal("unit_direction", None, "/unit_direction")
+    c.equal("unit_direction_status", UNIT_DIRECTION_STATUS_BEAMLETS, "/unit_direction_status")
+    unit = all(abs(sum(x * x for x in b.direction) ** 0.5 - 1.0) <= 1e-12 for b in rows)
+    c.add("beamlet-direction", EQUAL if unit else DERIVED,
+          "not-applicable" if unit else "normalise-per-beamlet",
+          ROWS["beamlet-direction"].pointers)  # fmt: skip
+    if c.eff["n_histories"] != total:
+        raise _differ("run.n_histories (sum of the beamlet n_histories)", total,
+                      c.eff["n_histories"])  # fmt: skip
+    # requested None = "derived from the beamlets"; an explicit value must equal the sum
+    derived = c.rq["run"]["n_histories"] is None
+    c.add("beamlet-histories", DERIVED if derived else EQUAL,
+          "sum-of-beamlets" if derived else "sum-equal",
+          ROWS["beamlet-histories"].pointers)  # fmt: skip
+    _row_influence(c, len(rows))
+
+
+def _row_influence(c: _Ctx, n_beamlets: int) -> None:
+    ri = c.rq.get("influence")
+    if ri is None:
+        if c.need("influence", None, "/influence") is not None:
+            raise _differ("influence", None, "an influence block")
+        # no influence block was requested: no request path to show (it would print "not given")
+        c.add("influence", UNUSED, "no-influence", [], requested=[])
+        c.add("influence-group", UNUSED, "no-influence", [], requested=[])
+        return
+    c.equal("influence.grid", ri["grid"], "/influence/grid")
+    shape = next((g["shape"] for g in c.rq["scoring"] if g["name"] == ri["grid"]), None)
+    if shape is None:
+        raise _differ("influence.grid", ri["grid"], "not a scoring grid")
+    c.equal("influence (grid voxel count)", shape[0] * shape[1] * shape[2], "/influence/n_voxels")
+    c.equal("influence.threshold_rel", ri["threshold_rel"], "/influence/threshold_rel")
+    c.equal("influence.persist_batches", ri["persist_batches"], "/influence/persist_batches")
+    c.add("influence", EQUAL, "equal", ROWS["influence"].pointers[:4])
+    got = c.need("influence.group_size", ri["group_size"], "/influence/group_size")
+    origin = c.need("influence.group_size_origin", ri["group_size"], "/influence/group_size_origin")
+    if ri["group_size"] is None:
+        if origin != "memory-budget" or isinstance(got, bool) or not isinstance(got, int):
+            raise _differ("influence.group_size (rule memory-budget)", "an integer", got)
+        if not 1 <= got <= n_beamlets:
+            raise _differ("influence.group_size (rule memory-budget)", f"in [1, {n_beamlets}]", got)
+        c.add("influence-group", DERIVED, "memory-budget", ROWS["influence-group"].pointers)
+    else:
+        if origin != "requested":
+            raise _differ("influence.group_size_origin", "requested", origin)
+        c.equal("influence.group_size", ri["group_size"], "/influence/group_size")
+        c.add("influence-group", EQUAL, "equal", ROWS["influence-group"].pointers)
 
 
 def _row_geometry(c: _Ctx) -> None:
@@ -501,14 +680,24 @@ def _row_physics(c: _Ctx, z: int) -> None:
 
 def _row_run(c: _Ctx, z: int) -> None:
     rr = c.rq["run"]
+    beamlets = c.rq["source"].get("type") == "beamlets"
     for k in ("backend", "precision", "seed", "n_histories", "n_batches", "cpu_workers"):
+        if k == "n_histories" and rr[k] is None:  # derived: row beamlet-histories
+            if not beamlets:
+                raise _differ("run.n_histories", None, "an integer (None is for beamlet sets)")
+            continue
         c.equal(f"run.{k}", rr[k], f"/{k}")
     c.equal("run.production (rule float32-warp)",
             rr["backend"] != "python" and rr["precision"] == "float32", "/production")  # fmt: skip
     prod = bool(c.eff["production"])
-    c.add(
-        "run", DERIVED if prod else EQUAL, "float32-warp" if prod else "equal", ROWS["run"].pointers
-    )
+    row = ROWS["run"]
+    if beamlets:  # run.n_histories is described by the row beamlet-histories alone
+        req = [p for p in row.requested if p != "run.n_histories"]
+        ptr = [p for p in row.pointers if p != "/n_histories"]
+    else:
+        req, ptr = list(row.requested), list(row.pointers)
+    c.add("run", DERIVED if prod else EQUAL, "float32-warp" if prod else "equal", ptr,
+          requested=req)  # fmt: skip
     user = rr["max_steps"] is not None
     c.equal("run.max_steps_origin", "user" if user else "computed", "/max_steps_origin")
     if user:
@@ -531,7 +720,7 @@ def _row_requests(c: _Ctx) -> None:
                       ("trace_histories", rd["trace_histories"] > 0)):  # fmt: skip
         if bool(ev.get(k)) != want_d:
             raise _differ(f"diagnostics.{k}", want_d, ev.get(k))
-    want_n = requested_trace_count(rd["trace_histories"], c.rq["run"]["n_histories"])
+    want_n = requested_trace_count(rd["trace_histories"], c.eff["n_histories"])
     if ev.get("trace_count") != want_n:  # the exact uncapped count, not its sign
         raise _differ("diagnostics.trace_count", want_n, ev.get("trace_count"))
     c.add("diagnostics", EQUAL, "arrays-present", [])
@@ -581,7 +770,7 @@ def _row_requests(c: _Ctx) -> None:
     if plan.get("quantities") != quantities:
         raise _differ("tallies.quantities (name, kind, channels, units, definition)", quantities,
                       plan.get("quantities"))  # fmt: skip
-    hpb = c.rq["run"]["n_histories"] // c.rq["run"]["n_batches"]
+    hpb = c.eff["n_histories"] // c.rq["run"]["n_batches"]
     sizes = {"n_channels": len(channels), "total_size": total, "n_residual_columns": n_res,
              "histories_per_batch": hpb}  # fmt: skip
     if {k: plan.get(k) for k in sizes} != sizes:
@@ -641,7 +830,7 @@ def evidence_from_effective(effective: _cfg.EffectiveConfig) -> dict[str, Any]:
                         "escape_records": d.escape_records,
                         "trace_histories": d.trace_histories > 0,
                         "trace_count": requested_trace_count(
-                            d.trace_histories, effective.requested.run.n_histories)},
+                            d.trace_histories, effective.n_histories)},
     }  # fmt: skip
 
 
@@ -676,20 +865,25 @@ def reconcile(
                             "trace_histories": requested["diagnostics"]["trace_histories"] > 0,
                             "trace_count": requested_trace_count(
                                 requested["diagnostics"]["trace_histories"],
-                                requested["run"]["n_histories"])},
+                                effective["n_histories"])},
         }  # fmt: skip
     c = _Ctx(requested, effective, evidence)
     try:
         z = int(pointer_get(effective, "/source/z"))
     except (TypeError, ValueError) as exc:
         raise _differ("source.z", requested["source"]["projectile"], _ABSENT) from exc
-    _row_source(c)
+    if requested["source"].get("type") == "beamlets":
+        _row_beamlet_source(c, evidence)
+    else:
+        if "influence" in requested:
+            raise _differ("influence", requested["influence"], "a pencil source (no beamlets)")
+        _row_source(c)
     _row_geometry(c)
     _row_stopping(c, z)
     _row_physics(c, z)
     _row_run(c, z)
     _row_requests(c)
-    order = {r.id: i for i, r in enumerate(RECONCILIATION_TABLE)}
+    order = {r.id: i for i, r in enumerate(ALL_ROWS)}
     return tuple(sorted(c.out, key=lambda r: order[r.row]))
 
 
@@ -698,7 +892,7 @@ def reconcile(
 
 SPECIES = (PROTON, *_cfg.ION_PROJECTILES)
 GEOMETRY_TYPES = (VoxelGeometry, BoxPhantom)
-SOURCE_TYPES = (PencilBeamSource,)
+SOURCE_TYPES = (PencilBeamSource, BeamletSet)
 DOMAIN_CLASSES = ("below", "inside", "upper-edge", "above")
 OK, UNSUPPORTED, UNAVAILABLE = "supported", "UnsupportedCombinationError", "BackendUnavailableError"
 
@@ -768,6 +962,48 @@ def run_combination_status(
     return OK, "supported"
 
 
+def beamlet_combination_status(
+    backend: str, precision: str, nuclear: bool, tallies: bool, trace: bool, workers: int,
+    species: Any = PROTON, influence: bool = False,
+) -> tuple[str, str]:  # fmt: skip
+    """(status, rule) of a ``BeamletSet`` run combination at an in-domain energy: the beamlet
+    predicates of ``validate`` (plan section B.7) in front of those of a pencil run, which hold
+    unchanged for every beamlet (nuclear: python only, V3-005B for the Warp backends)."""
+    if workers > _cfg.BEAMLET_MAX_CPU_WORKERS:
+        return UNSUPPORTED, "beamlet-single-process"
+    if tallies:
+        return UNSUPPORTED, "beamlet-tallies"
+    if influence and trace:
+        return UNSUPPORTED, "influence-diagnostics"
+    if backend not in _cfg.BEAMLET_TRANSPORT_BACKENDS:  # TODO(V3-007 S3): remove with the switch
+        return UNSUPPORTED, "beamlet-transport-not-available"
+    return run_combination_status(backend, precision, nuclear, tallies, trace, workers, species)
+
+
+def declared_beamlets() -> dict[str, Any]:
+    """The ``beamlets`` declaration (V3-007): limits and the beamlet run combinations, derived from
+    the constants and predicates ``validate`` enforces."""
+    combos = []
+    for b, p, n, inf in itertools.product(
+        _cfg.BACKENDS, _cfg.PRECISIONS, (False, True), (False, True)
+    ):
+        status, rule = beamlet_combination_status(b, p, n, False, False, 1, PROTON, inf)
+        combos.append({"backend": b, "precision": p, "nuclear": n, "influence": inf,
+                       "status": status, "rule": rule})  # fmt: skip
+    return {
+        "max_beamlets": _cfg.MAX_BEAMLETS,
+        "max_total_histories": _cfg.MAX_TOTAL_HISTORIES,
+        "label_pattern": _cfg.BEAMLET_LABEL_PATTERN,
+        "max_cpu_workers": _cfg.BEAMLET_MAX_CPU_WORKERS,
+        "influence_threshold_rel_range": list(_cfg.INFLUENCE_THRESHOLD_BOUNDS),
+        "influence_threshold_upper_exclusive": True,
+        "transport_backends": list(_cfg.BEAMLET_TRANSPORT_BACKENDS),
+        "run_combinations": combos,
+        "refused_with_beamlets": ["tallies", "lookups"],
+        "refused_with_influence": ["tallies", "lookups", "diagnostics", "pencil-source"],
+    }
+
+
 def declared_capabilities() -> dict[str, Any]:
     """Structured declaration of what ``validate`` enforces (a section of ``capabilities()``)."""
     models = {}
@@ -810,6 +1046,7 @@ def declared_capabilities() -> dict[str, Any]:
         },
         "geometry_types": [t.__name__ for t in GEOMETRY_TYPES],
         "source_types": [t.__name__ for t in SOURCE_TYPES],
+        "beamlets": declared_beamlets(),
         "informative": {
             "scope": "the combinations above are derived from the constants and predicates of "
             "validate; no claim is made outside the enumerated dimensions",
@@ -836,11 +1073,14 @@ class Matrix:
     workers: tuple[int, ...] = (1,)
     materials: tuple[Any, ...] = ()  # default: water
     nuclear_table_id: str | None = None
+    sources: tuple[str, ...] = ("pencil",)  # V3-007: "pencil" and/or "beamlets"
+    influence: tuple[bool, ...] = (False,)  # V3-007: influence off/on (beamlets only)
 
     def size(self) -> int:
         return (len(self.species) * len(self.domain_classes) * len(self.backends)
                 * len(self.precisions) * len(self.nuclear) * len(self.tallies) * len(self.trace)
-                * len(self.models) * len(self.workers) * max(1, len(self.materials)))  # fmt: skip
+                * len(self.models) * len(self.workers) * max(1, len(self.materials))
+                * len(self.sources) * len(self.influence))  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -864,6 +1104,8 @@ class Outcome:
     rule: str
     actual: str
     verdict: str
+    source: str = "pencil"
+    influence: bool = False
 
 
 def _declare(case: Mapping[str, Any]) -> tuple[str, str]:
@@ -877,9 +1119,17 @@ def _declare(case: Mapping[str, Any]) -> tuple[str, str]:
     if (STOPPING_MODELS[model].kind == "tabulated" and mat is not None
             and mat.name != "water"):  # fmt: skip
         return UNSUPPORTED, "material-not-in-model-domain"
-    status, rule = run_combination_status(case["backend"], case["precision"], case["nuclear"],
-                                          case["tallies"] != "none", case["trace"], case["workers"],
-                                          sp)  # fmt: skip
+    if case.get("source", "pencil") == "beamlets":
+        status, rule = beamlet_combination_status(
+            case["backend"], case["precision"], case["nuclear"], case["tallies"] != "none",
+            case["trace"], case["workers"], sp, case.get("influence", False),
+        )  # fmt: skip
+    elif case.get("influence", False):
+        return UNSUPPORTED, "influence-needs-beamlets"
+    else:
+        status, rule = run_combination_status(case["backend"], case["precision"],
+                                              case["nuclear"], case["tallies"] != "none",
+                                              case["trace"], case["workers"], sp)  # fmt: skip
     if status == UNSUPPORTED:
         return status, rule
     lo, hi = window
@@ -935,8 +1185,20 @@ def build_config(case: Mapping[str, Any]) -> Any:
 
     sp = case["species"]
     mat = case["material"]
+    source: PencilBeamSource | BeamletSet = PencilBeamSource(
+        sp, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), case["energy_mev"]
+    )
+    n_hist = 40
+    if case.get("source", "pencil") == "beamlets":  # two beamlets of the case energy
+        source = BeamletSet(
+            sp,
+            tuple(
+                Beamlet((x, 0.0, -5.0), (0.0, 0.0, 1.0), case["energy_mev"], n_histories=20)
+                for x in (-2.0, 2.0)
+            ),
+        )
     return _cfg.SimulationConfig(
-        PencilBeamSource(sp, (0.0, 0.0, -5.0), (0.0, 0.0, 1.0), case["energy_mev"]),
+        source,
         BoxPhantom((-10.0, -10.0, 0.0), (20.0, 20.0, 20.0), mat if mat is not None else WATER),
         (ScoringGrid((-10.0, -10.0, 0.0), (5.0, 5.0, 5.0), (4, 4, 4)),),
         _cfg.PhysicsOptions(
@@ -946,11 +1208,12 @@ def build_config(case: Mapping[str, Any]) -> Any:
             multiple_scattering=sp.z < 2,  # the ion f_dM mapping domain is outside the dimensions
         ),
         _cfg.RunOptions(
-            case["backend"], case["precision"], 1, 40, n_batches=4, cpu_workers=case["workers"]
+            case["backend"], case["precision"], 1, n_hist, n_batches=4, cpu_workers=case["workers"]
         ),  # fmt: skip
         _cfg.DiagnosticsOptions(trace_histories=1 if case["trace"] else 0),
         tallies=_tally_mode(case["tallies"], sp.name),
         lookups=(_synthetic_lookup(),) if case["tallies"] == "full" else (),
+        influence=_cfg.InfluenceOptions("dose") if case.get("influence", False) else None,
     )
 
 
@@ -961,7 +1224,7 @@ def sweep(matrix: Matrix | None = None) -> list[Outcome]:
     out: list[Outcome] = []
     for sp, model in itertools.product(m.species, m.models):
         window = source_window_total_mev(sp, model) or source_window_total_mev(sp, model, True)
-        for dc, b, p, n, t, tr, w, mat in itertools.product(
+        for dc, b, p, n, t, tr, w, mat, sk, inf in itertools.product(
             m.domain_classes,
             m.backends,
             m.precisions,
@@ -970,12 +1233,15 @@ def sweep(matrix: Matrix | None = None) -> list[Outcome]:
             m.trace,
             m.workers,
             mats,
+            m.sources,
+            m.influence,
         ):
             win = source_window_total_mev(sp, model, n)
             e = energy_for_class(win if win is not None else (window or (4.0, 100.0)), dc)
             case = {"species": sp, "model": model, "energy_mev": e, "backend": b, "precision": p,
                     "nuclear": n, "tallies": t, "trace": tr, "workers": w, "material": mat,
-                    "nuclear_table_id": m.nuclear_table_id}  # fmt: skip
+                    "nuclear_table_id": m.nuclear_table_id, "source": sk,
+                    "influence": inf}  # fmt: skip
             declared, rule = _declare(case)
             needs_table = n and declared == OK and m.nuclear_table_id is None
             try:
@@ -992,7 +1258,7 @@ def sweep(matrix: Matrix | None = None) -> list[Outcome]:
                 actual, verdict = f"third:{type(exc).__name__}", "third"
             out.append(Outcome(sp.name, dc, e, b, p, n, t, tr, model, w,
                                "water" if mat is None else mat.name, declared, rule, actual,
-                               verdict))  # fmt: skip
+                               verdict, sk, inf))  # fmt: skip
     return out
 
 

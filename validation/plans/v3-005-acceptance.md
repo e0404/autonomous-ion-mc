@@ -116,3 +116,8 @@ fresh bases ("the next unused value of 20441004, 20451004, …", each with its 2
 (20700004–20705003; `validation/plans/v3-006-acceptance.md` §C, guard test `tests/ionmc/test_v3_006_seed_families.py`).
 The next V3-005 bases after 20651004 are therefore 20661004, 20671004, 20711004, …; V3-005B declares its bases from
 this corrected sequence. No seed of either family has been drawn under this amendment. Not a clinical claim.
+
+**Dated note (2026-11-25; shared seed-base ledger, V3-007) — three more values reserved by V3-007.** The fresh-base
+sequence also skips 20781004, 20791004 and 20801004, whose windows would overlap the V3-007 family `inf7`
+(20800000–20804999; plan v3-007 §C, guard test `tests/ionmc/test_v3_007_seed_families.py`); V3-005B must restate this
+exclusion when it merges. No seed drawn under this note. Not a clinical claim.

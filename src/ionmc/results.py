@@ -49,6 +49,7 @@ import numpy as np
 
 from ionmc import _result_schema_1_0 as frozen
 from ionmc import _result_shapes as shapes
+from ionmc import config as config_mod
 from ionmc import contract
 from ionmc import provenance as prov
 from ionmc import report as report_mod
@@ -91,6 +92,7 @@ from ionmc.simulation import (
     TransportCounters,
     _channel_sums,
 )
+from ionmc.sources import BeamletSet
 from ionmc.species import producible, species_by_name
 from ionmc.transport.channels import (
     CLASS_LOCAL,
@@ -675,6 +677,15 @@ def _snap_or(result: Result, key: str, fallback: Callable[[], dict[str, Any]]) -
     return copy.deepcopy(dict(snap)) if isinstance(snap, Mapping) else fallback()
 
 
+def _refuse_beamlet_bundle(is_beamlet: bool) -> None:
+    """Fail-closed gate (V3-007 S1): beamlet-set bundles are S5 work (see
+    ``config.BEAMLET_PERSISTENCE_AVAILABLE``)."""
+    if is_beamlet and not config_mod.BEAMLET_PERSISTENCE_AVAILABLE:
+        raise UnsupportedCombinationError(
+            "result bundles of a beamlet set are not yet available (V3-007 S5)"
+        )
+
+
 def build_document(
     result: Result,
     manifest: InputManifest | None,
@@ -683,6 +694,7 @@ def build_document(
     output_path: str,
 ) -> dict[str, Any]:
     """The result.json document without the ``files`` block."""
+    _refuse_beamlet_bundle(isinstance(result.requested_config.source, BeamletSet))
     eff = result.effective_config
     summary = _snapshot(result).get("effective_summary") or eff.summary()
     cfg = result.requested_config
@@ -844,7 +856,7 @@ def _honoured(result: Result, arrays: list[_Arr]) -> None:
     if d.trace_histories != 0:
         ends = [a for a in arrays if a.origin["kind"] == "diagnostic"
                 and a.origin["array"] == "trace_end_history"]  # fmt: skip
-        _honoured_trace_count(d.trace_histories, cfg.run.n_histories,
+        _honoured_trace_count(d.trace_histories, result.effective_config.n_histories,
                               [int(a.data.shape[0]) for a in ends])  # fmt: skip
     nuclear = cfg.physics.nuclear
     if nuclear != isinstance(result.energy_balance, NuclearEnergyBalance):
@@ -895,7 +907,7 @@ def _check_honoured(doc: dict[str, Any]) -> None:
             ends = [int(e["shape"][0]) for e in doc["arrays"]
                     if e["origin"]["kind"] == "diagnostic"
                     and e["origin"]["array"] == "trace_end_history"]  # fmt: skip
-            _honoured_trace_count(d["trace_histories"], rq["run"]["n_histories"], ends)
+            _honoured_trace_count(d["trace_histories"], eff["n_histories"], ends)
     except ResultFormatError as exc:
         raise _fail(str(exc)) from exc
     nuc = bool(rq["physics"]["nuclear"])
@@ -979,6 +991,7 @@ def save(
     deletes nothing: a write that fails after its temporary directory exists leaves it as
     ``<path>.failed-<token>`` and says so in a note of the exception (decision 0045 amendment
     A-5)."""
+    _refuse_beamlet_bundle(isinstance(result.requested_config.source, BeamletSet))
     dest = Path(path)
     parent = dest.parent
     if not parent.is_dir():
@@ -1558,16 +1571,45 @@ def _bind(cond: bool, what: str) -> None:
     _need(cond, f"{what} disagrees with requested")
 
 
+def _bind_histories(rq: dict[str, Any], run: dict[str, Any], eff: dict[str, Any]) -> None:
+    """Bind ``run.n_histories`` and ``effective.n_histories`` to the requested count. A requested
+    ``null`` is the derived representation of decision 0046 (plan v3-007 A-1 item 1: an omitted
+    count of a beamlet set is the sum of the beamlets' histories): it is admissible only for a
+    ``type = "beamlets"`` source, and then ``run`` and ``effective`` must carry the same positive
+    integer equal to the sum of the persisted beamlet table (reconciliation row
+    ``derived:sum-of-beamlets``). Any other ``null`` is refused."""
+    requested = rq["run"]["n_histories"]
+    if requested is None:
+        src = rq.get("source")
+        if not isinstance(src, dict) or src.get("type") != "beamlets":
+            raise _fail("requested.run.n_histories is null but the source is not a beamlet set")
+        rows = src.get("beamlets")
+        if not isinstance(rows, list) or not rows:
+            raise _fail("requested beamlet table is empty")
+        total = 0
+        for row in rows:
+            n = row.get("n_histories") if isinstance(row, dict) else None
+            if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+                raise _fail("requested beamlet n_histories must be a positive integer")
+            total += n
+        _bind(run["n_histories"] == total, "run.n_histories (derived: sum of the beamlet table)")
+        _bind(eff["n_histories"] == total,
+              "effective.n_histories (derived: sum of the beamlet table)")  # fmt: skip
+        return
+    _bind(run["n_histories"] == requested, "run.n_histories")
+    _bind(eff["n_histories"] == requested, "effective.n_histories")
+
+
 def _check_run_binding(doc: dict[str, Any]) -> None:
     """Bind run, provenance and statistics scalars to ``requested`` (the configuration) and to
     ``effective``: a field of ``run`` or ``effective`` that is changed without ``requested`` is
     refused."""
     eff, run, rq = doc["effective"], doc["run"], doc["requested"]
     rrun = rq["run"]
-    for k in ("backend", "precision", "seed", "n_histories", "n_batches", "cpu_workers",
-              "chunk_histories"):  # fmt: skip
+    for k in ("backend", "precision", "seed", "n_batches", "cpu_workers", "chunk_histories"):
         _bind(run[k] == rrun[k], f"run.{k}")
         _bind(eff[k] == rrun[k], f"effective.{k}")
+    _bind_histories(rq, run, eff)
     _need(run["production"] == eff["production"], "run.production disagrees with effective")
     rng = frozen.rng_identity(rrun["precision"])  # the frozen schema-1.0 record (Philox4x32-10)
     _need(run["rng"] == rng and eff["rng"] == rng,

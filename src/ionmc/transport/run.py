@@ -7,6 +7,8 @@ histories over spawned worker processes (:mod:`ionmc.transport.pool`).
 
 from __future__ import annotations
 
+from typing import Any
+
 from ionmc.config import EffectiveConfig
 from ionmc.transport.tally import PartialTransport, RawTransport, build_diagnostics, merge_partials
 
@@ -17,27 +19,31 @@ def channel_columns(eff: EffectiveConfig) -> int:
     return 0 if eff.channels is None else eff.channels.n_residual + 2
 
 
-def run_range(eff: EffectiveConfig, h0: int, h1: int) -> PartialTransport:
-    """Transport histories ``[h0, h1)`` in this process on the backend of ``eff``."""
+def run_range(
+    eff: EffectiveConfig, h0: int, h1: int, cache: dict[str, Any] | None = None
+) -> PartialTransport:
+    """Transport histories ``[h0, h1)`` in this process on the backend of ``eff``; ``cache`` holds
+    the Warp device context across runs of one ``Simulation``."""
     if eff.backend == "python":
         from ionmc.transport.reference import run_reference_range
 
         return run_reference_range(eff, h0, h1)
     from ionmc.transport.warp_driver import device_for_backend, run_warp_range
 
-    return run_warp_range(eff, h0, h1, device_for_backend(eff.backend))
+    return run_warp_range(eff, h0, h1, device_for_backend(eff.backend), cache)
 
 
-def run_transport(eff: EffectiveConfig) -> RawTransport:
-    """Run all histories of ``eff`` and return the reduced raw result."""
-    run = eff.requested.run
-    n = run.n_histories
+def run_transport(eff: EffectiveConfig, cache: dict[str, Any] | None = None) -> RawTransport:
+    """Run all histories of ``eff`` and return the reduced raw result (``cache``: the device
+    context of a ``Simulation``, reused across its runs)."""
+    run = eff.run
+    n = eff.n_histories
     if run.cpu_workers > 1:
         from ionmc.transport.pool import run_pool
 
         parts = run_pool(eff)
     else:
-        parts = [run_range(eff, 0, n)]
+        parts = [run_range(eff, 0, n, cache)]
     diag = eff.requested.diagnostics
     raw = merge_partials(
         parts,
@@ -54,4 +60,5 @@ def run_transport(eff: EffectiveConfig) -> RawTransport:
         "workers": run.cpu_workers,
         "partials": [dict(p.meta) for p in sorted(parts, key=lambda q: q.h0)],
     }
+    raw.beamlets = parts[0].beamlets  # beamlet runs are single-process: one part
     return raw
