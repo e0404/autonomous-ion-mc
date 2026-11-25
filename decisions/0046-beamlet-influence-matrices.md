@@ -2,10 +2,14 @@
 
 - Status: Accepted (frozen with plan `validation/plans/v3-007-acceptance.md` at the S0 commit, 2026-11-25). Later
   changes are dated amendments. Not a clinical claim.
+- Amended 2026-11-25 (S0 fix 3, Codex REVIEW-1d19386a on dd5ad774): (1) subset runs become the diagnostic
+  `Simulation.influence_columns` API (no `Result`, no bundle); (2) fail-closed influence grouping; (3) second `fstat`
+  on the spot file; (4) τ = 0 and zero-deposition columns. See plan Amendment A-3.
 - Amended 2026-11-25 (S0 fix 1, Codex REVIEW-1652a7c1 on 9805dfdb): (1) `n_histories` = Σ n_j for a `BeamletSet`;
   (2) reader inventory completed; (3) label and spot-file bounds; (4) subset-run semantics. See plan Amendment A-1.
 - Amended 2026-11-25 (S0 fix 2, Codex REVIEW-15a83983 on 0901763): (1) configured `n_histories` = Σ_all j n_j versus
-  the persisted `run.histories_transported`; (3) descriptor-bound spot-file read; (4) zero-deposition columns. See
+  the persisted `run.histories_transported` [superseded by A-3];
+  (3) descriptor-bound spot-file read; (4) zero-deposition columns. See
   plan Amendment A-2.
 
 - Limits: 1 ≤ J ≤ 4 096 beamlets (ESTIMATE-justified: ≈ 300 B per beamlet inline in `requested` ≈ 1.2 MiB, within the
@@ -74,12 +78,13 @@ Normalisation: columns in MeV and Gy **per primary of beamlet j**; plan dose `D 
 
 Amendment (REVIEW-1652a7c1): for a `BeamletSet`, `RunOptions.n_histories` MUST equal Σ_j n_j; `validate` refuses a
 mismatch, and TOML `[run] n_histories` is optional (absent → derived Σ n_j, different → `ConfigError`); this is
-the CONFIGURED count and holds also in the `requested` configuration of a subset result, whereas the transported
-count is the separate persisted `run.histories_transported`
-(A-2). `label` is optional, ≤ 64 printable characters, unique within the set. A spot file is opened with
+the CONFIGURED count and the only history count (A-3: every bundle is a full run; the A-2 transported-count field
+`run.histories_transported` is
+[superseded by A-3]). `label` is optional, ≤ 64 printable characters, unique within the set. A spot file is opened with
 `O_NOFOLLOW | O_RDONLY | O_CLOEXEC` (a symbolic link is refused), `fstat` on the descriptor must report a regular
-file ≤ 1 MiB, exactly `st_size` bytes are read from that descriptor, sha256 over those bytes, ≤ 4 097 lines
-(violation → `ConfigError`).
+file ≤ 1 MiB, exactly `st_size` bytes are read from that descriptor, a second `fstat` on the same descriptor must
+report the same size and inode (else `ConfigError` "spot file changed while being read", A-3), sha256 over those
+bytes, ≤ 4 097 lines (violation → `ConfigError`).
 
 ### 2. Execution and batching
 
@@ -94,8 +99,10 @@ file ≤ 1 MiB, exactly `st_size` bytes are read from that descriptor, sha256 ov
 The kernel change is confined to source sampling (parameters read from arrays indexed by the beamlet id) and the
 accumulator row (`(j − j0)·B + batch`). The beamlet id is `searchsorted(offsets, h, right) − 1` on a device array
 (J ≤ 4 096: ≤ 12 comparisons); the id is range-asserted (0 ≤ j < J) in every backend and can never wrap. G = largest
-group fitting `memory_budget_bytes` with the existing accumulators,
-or user-set; recorded as effective (`derived: memory-budget`).
+group in [1, J] fitting `memory_budget_bytes` with EVERY simultaneous accumulator (grid accumulators `B·ΣV·8`, the
+per-history tally rows of one chunk, `G·B·V_inf·8`; A-3); G = 1 not fitting, an explicit G outside [1, J] or over the
+bound is refused by `validate` before allocation (`UnsupportedCombinationError`); recorded as effective
+(`derived: memory-budget`).
 
 ### 3. Influence matrix representation
 
@@ -119,9 +126,11 @@ normalisation-dependent), thresholds on relative uncertainty (selects on noise �
 Batch standard error per entry (decision 0040, hpb_j = n_j/B; every s_j and n_j a multiple of B so each batch has
 exactly n_j/B histories of beamlet j). Beamlets use disjoint counter ranges (0037) and are statistically
 independent; hence `Var(Σ_j x_j d_vj) = Σ_j x_j² σ_vj²` and no cross-beamlet covariance needs persisting.
-Zero-deposition columns (A-2): a transported beamlet without deposit in the influence grid has nnz = 0, no
-threshold applies, its discarded counts, energy, maximum dose and variance are 0 and its discarded fraction is
-undefined (NaN with an explicit mask, decision 0040); such beamlets have no uncertainty entries.
+Zero-deposition columns (A-2, A-3): a beamlet without deposit in the influence grid has nnz = 0, no threshold
+applies, its discarded counts, energy, maximum dose and variance are 0 and its discarded fraction is undefined (NaN
+with an explicit mask, decision 0040) at every τ including 0, while at τ = 0 the fraction is exactly 0 for every
+column with positive in-grid energy; such beamlets have no uncertainty entries and the report distinguishes only
+"defined" from "undefined (no deposition in the influence grid)".
 `plan_uncertainty` excludes entries dropped by a threshold; the persisted
 per-beamlet `influence__discarded_var_gy2` (Σ σ² over dropped entries) quantifies the omission. Batch values
 per entry `[B, nnz]` are persisted by default (O3, tier-1 recomputation), opt-out recorded. Per-beamlet energy
@@ -160,14 +169,15 @@ Within a run everything except source parameters and accumulator rows is built o
 its device context (tables, geometry, grids, kernel, nuclear setup); `Simulation.run(beamlets=subset)` re-runs a
 subset with the original offsets (bit-identical columns). No merge of runs sharing a seed is offered.
 
-Amendment (REVIEW-1652a7c1), subset semantics: the result's `requested` is the full configuration plus the
-requested-only field `run.beamlet_subset`; `run.n_histories` stays the configured Σ_j n_j and
-`run.histories_transported` = Σ over the subset (A-2) while `beamlets.offsets` stay the original full-set offsets;
-invalid subsets (empty, duplicate, out of range,
-non-integer) are refused before transport and `config_sha256` differs between full and subset runs; composite
-grids, balances and statistics are those of the transported subset; the matrix
-keeps J columns with untransported ones empty; the saved bundle records `influence.subset`, and subset and full
-bundles are never merged.
+Amendment (REVIEW-1d19386a, A-3; supersedes the REVIEW-1652a7c1 / REVIEW-15a83983 subset-run semantics): subset
+runs produce no `Result` and no bundle. `Simulation.influence_columns(beamlets)` re-transports exactly the named
+beamlets with the original offsets and returns a `ColumnSet` (CSC columns with batch values, std, nnz, discarded
+accounting, per-beamlet balances, beamlet ids and configured offsets). A `ColumnSet` has no composite grids, no
+statistics block and no traces (`requested_trace_count > 0` refused); `save` refuses it (`TypeError`); it serves
+column-independence checks (INF-4) and the V3-011 hooks. Invalid subsets (empty, duplicate, out of range,
+non-integer) are refused (`UnsupportedCombinationError`). Every bundle is a full run with
+`RunOptions.n_histories` = Σ_{all j} n_j; the fields `run.histories_transported`, `run.beamlet_subset`,
+`influence.subset` and `beamlet__transported` do not exist.
 
 ## Rejected alternatives (summary)
 
