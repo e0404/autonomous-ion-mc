@@ -2415,10 +2415,11 @@ def test_out10_crossed_aspect_ratios_keep_the_mass_intermediates_bounded(
 
 
 def _never_hash(monkeypatch: Any) -> None:
-    def boom(fd: int) -> tuple[str, int]:
-        raise AssertionError("hashed a member before the size checks")
+    def boom(*_a: Any) -> Any:
+        raise AssertionError("read a member before the size checks")
 
-    monkeypatch.setattr(results, "_sha256_fd", boom)
+    monkeypatch.setattr(results, "_sha256_exact", boom)
+    monkeypatch.setattr(results, "_copy_exact", boom)
 
 
 def _grow(path: Path, size: int) -> None:
@@ -2895,14 +2896,72 @@ def test_out10_reader_uses_the_descriptor_it_checked_never_the_name_again(
     os.unlink(bundle / "report.md")
     (bundle.parent / "report.orig").rename(bundle / "report.md")
     load(bundle)
-    # arrays.npz is parsed through the descriptor whose size and hash were checked
-    seen: list[int] = []
+    # arrays.npz is parsed from a PRIVATE unlinked snapshot of exactly the checked size, whose
+    # bytes are the hashed bytes: never from the bundle's inode (REVIEW-5c897f4b)
+    seen: list[tuple[int, int, int]] = []
     real_pre = results._zip_preflight
 
     def spy(fh: Any, size: int, *a: Any) -> None:
-        seen.append(os.fstat(fh.fileno()).st_ino)
+        st = os.fstat(fh.fileno())
+        seen.append((st.st_ino, st.st_nlink, st.st_size))
         real_pre(fh, size, *a)
 
     monkeypatch.setattr(results, "_zip_preflight", spy)
     load(bundle)
-    assert seen == [os.lstat(bundle / "arrays.npz").st_ino]
+    disk = os.lstat(bundle / "arrays.npz")
+    assert len(seen) == 1 and seen[0][0] != disk.st_ino and seen[0][1] == 0
+    assert seen[0][2] == disk.st_size == _doc(bundle)["files"]["arrays.npz"]["size"]
+
+
+def test_out10_reader_snapshots_bounded_bytes_against_in_place_mutation(
+    bundle: Path, monkeypatch: Any
+) -> None:
+    """REVIEW-5c897f4b: an opened inode is mutable. (a) A member that GROWS after its size check
+    is read only up to the checked size: the appended bytes are never read and the load succeeds
+    on the hashed prefix. (b) A member that SHRINKS after its size check fails the load.
+    (c) arrays.npz corrupted on disk after its snapshot was taken is parsed from the private
+    snapshot, not from the mutated inode; the next load of the corrupted file fails."""
+    doc = _doc(bundle)
+    rsize = doc["files"]["report.md"]["size"]
+    original = (bundle / "report.md").read_bytes()
+    real_hash = results._sha256_exact
+    reads: list[int] = []
+    mode = ["grow"]
+
+    def mutate_then_hash(fd: int, size: int) -> str:
+        if os.fstat(fd).st_size == rsize:  # report.md, after its fstat size check
+            with open(bundle / "report.md", "r+b") as fh:  # the same inode, in place
+                if mode[0] == "grow":
+                    fh.seek(0, os.SEEK_END)
+                    fh.write(b"\n" + b"x" * (results.MAX_DERIVED_BYTES + 1))
+                else:
+                    fh.truncate(rsize // 2)
+        reads.append(size)
+        return real_hash(fd, size)
+
+    monkeypatch.setattr(results, "_sha256_exact", mutate_then_hash)
+    loaded = load(bundle)  # (a)
+    assert loaded.doc["schema"] == "ionmc.result" and rsize in reads
+    assert os.lstat(bundle / "report.md").st_size > results.MAX_DERIVED_BYTES
+    assert max(reads) <= max(results.MAX_DERIVED_BYTES, results.MAX_JSON_BYTES)
+    with open(bundle / "report.md", "r+b") as fh:
+        fh.truncate(rsize)  # restore
+    mode[0] = "shrink"
+    with pytest.raises(ResultFormatError, match="shrank"):
+        load(bundle)  # (b)
+    monkeypatch.undo()
+    (bundle / "report.md").write_bytes(original)
+    load(bundle)
+    # (c)
+    real_pre = results._zip_preflight
+
+    def clobber(fh: Any, size: int, *a: Any) -> None:
+        with open(bundle / "arrays.npz", "r+b") as disk:
+            disk.write(b"\0" * 64)  # the same inode, corrupted after the snapshot
+        real_pre(fh, size, *a)
+
+    monkeypatch.setattr(results, "_zip_preflight", clobber)
+    assert load(bundle).doc["schema"] == "ionmc.result"
+    monkeypatch.undo()
+    with pytest.raises(ResultFormatError, match="arrays.npz"):
+        load(bundle)

@@ -2338,8 +2338,8 @@ def _file_name_ok(name: Any) -> bool:
 
 
 def _zip_preflight(fh: Any, size: int, max_entries: int, max_total: int, max_cd: int) -> None:
-    """End-of-central-directory preflight on the OPEN archive (the descriptor whose size and hash
-    were checked), before any ZipFile object exists."""
+    """End-of-central-directory preflight on the private snapshot of the archive (exactly the
+    bytes whose size and hash were checked), before any ZipFile object exists."""
     if size > max_total:
         raise _fail(f"arrays.npz ({size} bytes) exceeds max_total_bytes")
     tail_len = min(size, _EOCD_WINDOW)
@@ -3433,7 +3433,7 @@ def _load(
         rsize = os.fstat(rfd).st_size
         if rsize > max_json_bytes:
             raise _fail("result.json exceeds max_json_bytes")
-        raw = _read_fd(rfd, rsize)
+        raw = _read_exact(rfd, rsize)
         prescan_json(raw, max_json_tokens, max_json_depth)
         try:
             doc = json.loads(
@@ -3502,13 +3502,19 @@ def _load(
                 if size > max_derived_bytes or derived_total > max_derived_bytes:
                     raise _fail(f"file {name!r}: report and plot files exceed max_derived_bytes "
                                 f"({max_derived_bytes} bytes, each and together)")  # fmt: skip
+        # hashes from bounded private snapshots of the checked sizes: the derived files and
+        # result.json as bytes, arrays.npz copied into an unlinked temporary file that is then
+        # the ONLY source of the archive parse (REVIEW-5c897f4b: an opened inode is mutable)
         for name, rec in files.items():
-            sha, size = _sha256_fd(fds[name])
-            if size != rec["size"] or sha != rec["sha256"]:
+            if name == "arrays.npz":
+                continue
+            if _sha256_exact(fds[name], rec["size"]) != rec["sha256"]:
                 raise _fail(f"file {name!r} does not match its recorded sha256 and size")
-        npz_fd = fds["arrays.npz"]
-        npz_size = os.fstat(npz_fd).st_size
-        with os.fdopen(os.dup(npz_fd), "rb") as zfh:
+        npz_rec = files["arrays.npz"]
+        with tempfile.TemporaryFile() as zfh:
+            if _copy_exact(fds["arrays.npz"], npz_rec["size"], zfh) != npz_rec["sha256"]:
+                raise _fail("file 'arrays.npz' does not match its recorded sha256 and size")
+            npz_size = npz_rec["size"]
             _zip_preflight(zfh, npz_size, len(entries), max_total_bytes,
                            max_central_directory_bytes)  # fmt: skip
             by_member = {e["name"] + ".npy": e for e in entries}
@@ -3584,26 +3590,42 @@ def _open_member(dir_fd: int, name: str) -> int:
     return fd
 
 
-def _read_fd(fd: int, size: int) -> bytes:
-    """Exactly the first ``size`` bytes of the open file (a file that grew meanwhile is cut at
-    the size that was checked)."""
+def _read_exact(fd: int, size: int) -> bytes:
+    """Exactly the first ``size`` bytes (the size ``fstat`` reported and the budgets admitted) of
+    the open file as a private, immutable snapshot: a file that grows meanwhile is never read
+    beyond ``size``, a file that shrinks makes the read short and the load fail. Every later
+    hash and parse uses these bytes, not the file (REVIEW-5c897f4b)."""
     os.lseek(fd, 0, os.SEEK_SET)
     chunks: list[bytes] = []
     got = 0
     while got < size:
         chunk = os.read(fd, min(size - got, 1 << 20))
         if not chunk:
-            break
+            raise _fail("a bundle file shrank while it was being read")
         chunks.append(chunk)
         got += len(chunk)
     return b"".join(chunks)
 
 
-def _sha256_fd(fd: int) -> tuple[str, int]:
-    """sha256 and byte count of the open file, read through its descriptor."""
+def _sha256_exact(fd: int, size: int) -> str:
+    """sha256 of exactly the first ``size`` bytes of the open file (see ``_read_exact``)."""
+    return hashlib.sha256(_read_exact(fd, size)).hexdigest()
+
+
+def _copy_exact(fd: int, size: int, dst: Any) -> str:
+    """Copy exactly ``size`` bytes of the open file into the private unlinked temporary file
+    ``dst`` (bounded I/O; nothing beyond the checked size is read) and return the sha256 of
+    the bytes copied; the archive is then parsed from ``dst``, so the hash describes the parsed
+    bytes whatever happens to the bundle file afterwards."""
     os.lseek(fd, 0, os.SEEK_SET)
-    h, n = hashlib.sha256(), 0
-    while chunk := os.read(fd, 1 << 20):
+    h = hashlib.sha256()
+    got = 0
+    while got < size:
+        chunk = os.read(fd, min(size - got, 1 << 20))
+        if not chunk:
+            raise _fail("arrays.npz shrank while it was being read")
         h.update(chunk)
-        n += len(chunk)
-    return h.hexdigest(), n
+        dst.write(chunk)
+        got += len(chunk)
+    dst.flush()
+    return h.hexdigest()
