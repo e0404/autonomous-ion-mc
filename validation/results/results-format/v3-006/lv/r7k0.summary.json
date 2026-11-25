@@ -1,0 +1,171 @@
+{
+ "array_content_sha256": {
+  "geometry__material_index": "e7e10cbf3fd69c45ff3f739c9e3c514e05960d41a7382e2ae9c11afa1e097223",
+  "grid__dose__batch_energy_mev": "c99b3725ec5da7240ef706f3af50a722bf680a0cc4d16d328a2e737fbb424bfb",
+  "grid__dose__defined_mask": "4bccb99e86e210387b388c108f316faced09a13429d43e2f1f26549393c9d84d",
+  "grid__dose__dose_gy": "778bbfe3f9a088886b0be0e39219a6c75788a7a7edddef82f21b68acbcae804a",
+  "grid__dose__dose_std_gy": "e6541b3e15e4c87669c8d819dcec42a0492bc533f18c3c8ea4f2c9817e7125aa",
+  "grid__dose__energy_mev": "7037e09c7c293509554637adc156314cb280d46a46d6027eaad1dead2a651a2a",
+  "grid__dose__energy_std_mev": "4bc8f3c89628e1e8871a9336d2690236651d203866b10b977ad70c0864f7ccc6",
+  "grid__dose__mass_g": "eeb7e40cbeb801d6abeecbedba722597acdef51cdcdd17b63025a753cebd87cb",
+  "grid__dose__n_nonzero_batches": "8d91ec21a653987509fcd7653b4fb29bdf3f0c83e88f8ea5de83b9ddeea2199a",
+  "grid__dose__relative_uncertainty": "a405e0313f4b70456478c27453ede8c201aac3ba88025d2cda6c92344a9eef85",
+  "grid__dose__sparse_mask": "7deb9fc71005f188020096abf07f4f2757d31ebe3f411904c5db87c667be52fa"
+ },
+ "backend": "warp-cpu",
+ "code": {
+  "git_commit": "48b782bfa35eca4cdd9ec7abe6ba42ac0146d118",
+  "git_dirty": false,
+  "ionmc_version": "0.1.0.dev0",
+  "package_tree_oid": "2be42e2a055e45f1988e194b26c313f81fd015f6",
+  "reason": "",
+  "source": "git",
+  "status": "ok"
+ },
+ "device": "cpu",
+ "durations_s": {
+  "report_check": 0.365,
+  "run": 0.565,
+  "verify": 0.365
+ },
+ "exit_codes": {
+  "report_check": 0,
+  "run": 0,
+  "verify": 0
+ },
+ "files": {
+  "arrays.npz": {
+   "sha256": "25f6d0b39b937c0790259adba0ce836fa2c9b5189abd2ec4e85855a53b588e8e",
+   "size": 3150
+  },
+  "plots/dose__dose.svg": {
+   "sha256": "02cf10e60739b23643f0f523e5d6909663c42990a6869710d4bdfc5c87cef62f",
+   "size": 2732
+  },
+  "plots/energy__dose.svg": {
+   "sha256": "8f36c024c0e58157a5876457023fc3912a0fb07cea2f399635f4a0d68d2b7192",
+   "size": 1890
+  },
+  "plots/lateral__dose.svg": {
+   "sha256": "ee108d31a5bf4acbbd858e70d204d51efca910fdbb74fc93b0804179083ddc2c",
+   "size": 1930
+  },
+  "report.md": {
+   "sha256": "91ef015b30796ff72ac160c65585cb014cb7e6eac80599d35096cb90a608fafc",
+   "size": 10424
+  }
+ },
+ "k": 0,
+ "n_batches": 4,
+ "n_histories": 32,
+ "nuclear": null,
+ "output_path_persisted": "r7k0",
+ "precision": "float64",
+ "production": false,
+ "r_index": 7,
+ "requested_nuclear_table_id": null,
+ "result_json_sha256": "b5589975a3d5fb0de1cbb5326cca2d7592d9ce94b2d4d7f6a0a2ae571eec9863",
+ "schema": "ionmc.out6-summary/1",
+ "seed": 20700704,
+ "stopping": {
+  "circular_rows": [
+   "geant4-icru90-stopping-11.4.2",
+   "I2 (ICRU 90 part)",
+   "decision-0038 ICRU 90 comparisons"
+  ],
+  "content_sha256": "11efe1ec7f5ce2c9aa39e4799b6d39fe3d2a4d2c91898d64a6fb0989d6c0f4bb",
+  "data_declared": [
+   {
+    "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+    "dataset_id": "geant4-icru90-stopping-11.4.2",
+    "licence": "Geant4 Software License",
+    "member": null,
+    "member_sha256": null,
+    "parser": "icru90",
+    "use_role": "construction-permitted"
+   }
+  ],
+  "data_used": [
+   {
+    "pin": {
+     "archive_sha256": "afd1479497a605d9675c1fe2a3870ddb3f305110fb2d76e13bb600fa3ab281cd",
+     "dataset_id": "geant4-icru90-stopping-11.4.2",
+     "licence": "Geant4 Software License",
+     "member": null,
+     "member_sha256": null,
+     "parser": "icru90",
+     "use_role": "construction-permitted"
+    },
+    "role_in_this_run": "construction",
+    "table": [
+     "alpha",
+     "water"
+    ]
+   }
+  ],
+  "decision": "0044",
+  "domain": {
+   "e_max_per_u": {
+    "alpha": 250.0,
+    "proton": 500.0
+   },
+   "e_min_per_u": {
+    "alpha": 1.0,
+    "proton": 1.0
+   },
+   "material_rule": "structural liquid water (composition and density, not the name) and requested I = 78 eV (any other requested I fails closed)",
+   "species": [
+    "alpha",
+    "proton"
+   ]
+  },
+  "domain_resolved": {
+   "alpha": {
+    "e_max_per_u": 250.0,
+    "e_min_per_u": 1.0
+   }
+  },
+  "evidence_at_run": [
+   {
+    "graded_at_sha": null,
+    "plan": "validation/plans/v3-013-acceptance.md",
+    "row": null,
+    "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+    "status": "consistency-only"
+   },
+   {
+    "graded_at_sha": "9f1fa8ecae082307776e8001fb0708038a3eef2c",
+    "plan": "validation/plans/v3-013-acceptance.md",
+    "row": "V-C1",
+    "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+    "status": "topas-agreement-shared-lineage:V-C1:PASS"
+   }
+  ],
+  "interpolation": "log-log of S onto 200/decade from 1 MeV/u",
+  "kind": "tabulated",
+  "mcs_proton_path_stopping": "bethe-ionmc-v1",
+  "model_id_effective": "icru90-water-v1",
+  "model_id_requested": "icru90-water-v1",
+  "options": {
+   "arrays": "ICRU 90 liquid water electronic S; alpha energy is total, converted to MeV/u",
+   "class": "Icru90WaterSource",
+   "content_sha256": "e12bdbd66f064d35972df092b332ff5d5d18ed0e21818863a911cf5a6b96442e",
+   "grid": "1 MeV/u to min(e_max_per_u, array end); log grid",
+   "i_value": "78 eV required: any other requested water I fails closed",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "points_per_decade": 200,
+   "source_name": "icru90",
+   "start_range_sha256": "4dcb13f45f4e80ddcda25d36d14b9076a257eb4cb48647ddb0bae7f087d830de"
+  },
+  "range_construction": "exact-loglog-quadrature-v1",
+  "range_start": "icru90-integrated-from-lowest-node-v1",
+  "selected_by": "stopping_model",
+  "spec_sha256": "4bc54369d4de57910b9e34b7835cb7c8a2fd55a2632ec6ed3e275d1e142a7b6e",
+  "species_transported": [
+   "alpha"
+  ],
+  "version": "1"
+ },
+ "valid": true
+}

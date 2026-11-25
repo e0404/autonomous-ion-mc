@@ -1,0 +1,174 @@
+{
+ "array_content_sha256": {
+  "geometry__density_g_cm3": "6c2340c1e807518c5f0abfbcf06d34bd9b4276ce685e28ccf11d27a0e994982d",
+  "geometry__material_index": "4325353b0616090afe5fe3bde6beb2aa971f758f167250fe813a375335b5ea57",
+  "grid__dose__batch_energy_mev": "c047e8561f7da094eb1a4dffbca1124b5077f26ae59dc6b17c424e78e039e9d2",
+  "grid__dose__defined_mask": "7f8262e894bf60c4e106aa122566e2368314a08472dac05b53af635f4d847c47",
+  "grid__dose__dose_gy": "3a2973c753d3773ce726ac6dce08daeecf093272809b06b8168867f2fe2c42ac",
+  "grid__dose__dose_std_gy": "ed33859b1a804d9fdd4216e6f36a036c9770eae42220af5262d7ca871208a6cd",
+  "grid__dose__energy_mev": "bc365ce44ad8ced057af2ba00fc646c2aeae1d02c25a621c27922523d4bf1195",
+  "grid__dose__energy_std_mev": "80447504aa81c1e6a9d21101d82fffb1046df26ec71f0588748a26e971560cd8",
+  "grid__dose__mass_g": "5a714adceca1fb578fc12b4c55e8cc0e6ee2c978855eb252c265dbb419b48e57",
+  "grid__dose__n_nonzero_batches": "4f1b9d64dcc6e43d420cac528b01537785fcb75a372523ef3220151929cac321",
+  "grid__dose__q__edep_excluded_from_l__batch_num": "73a1187da083d9ba0a25b414c42a09d7aa3b6d402db32b4e18e361eb0d7d64e9",
+  "grid__dose__q__edep_excluded_from_l__defined_mask": "0e44b03376e36dd127dd1f69a188f78db8ff8af13fa52b7f6a317d228b30531b",
+  "grid__dose__q__edep_excluded_from_l__mean": "48dbf5cf57126bbf1692a9fae8223cf23faf92d885f25524156f2957f189b38d",
+  "grid__dose__q__edep_excluded_from_l__n_nonzero": "3cae8f3c07134f3346261e913f423369a0ea010e3f918dbe4ce9e39563fb78a2",
+  "grid__dose__q__edep_excluded_from_l__rounding_bound": "c66aa977ac1208d00b4a94af145254e7e84b58c1b7fd405a67cdbe8fe8ad3fb4",
+  "grid__dose__q__edep_excluded_from_l__std": "0022c8277b8ddbb230dc32eb602a0d8028742080257b61846b29c94c198070c2",
+  "grid__dose__q__let__batch_den": "970a16922dab218f8cf75dbadcf7eec5c72bab7fcc2af776ef704b4aaaebf4d1",
+  "grid__dose__q__let__batch_num": "25378898b54c0f06afae8842ab4efac8b1f23103c109607193b055c4651fccc5",
+  "grid__dose__q__let__defined_mask": "7f8262e894bf60c4e106aa122566e2368314a08472dac05b53af635f4d847c47",
+  "grid__dose__q__let__mean": "023e3ba6d6a4faa8f715867c3e55671488dc7aa25ebbc8dd3573d2f96e0fc5bb",
+  "grid__dose__q__let__n_nonzero": "4f1b9d64dcc6e43d420cac528b01537785fcb75a372523ef3220151929cac321",
+  "grid__dose__q__let__rounding_bound": "17c008ba62bc8ac17268bbc7cdb31cc93a212c3c77a48c2ea896a4981ea14e40",
+  "grid__dose__q__let__std": "cfae21e2e2c3c378efa1a329f579c0987e23baace582b7cd82d7ee5e07ac8642",
+  "grid__dose__q__scoring_pieces__batch_num": "c77b64c2933d3ed28bfa3d5c47f277465231ead7ff01e11c4d05bb70fa95ce29",
+  "grid__dose__q__scoring_pieces__defined_mask": "7f8262e894bf60c4e106aa122566e2368314a08472dac05b53af635f4d847c47",
+  "grid__dose__q__scoring_pieces__mean": "87169126834297530b08c1a4cebd3813675508c8b969f06dc01cb893497df717",
+  "grid__dose__q__scoring_pieces__n_nonzero": "4f1b9d64dcc6e43d420cac528b01537785fcb75a372523ef3220151929cac321",
+  "grid__dose__q__scoring_pieces__rounding_bound": "2d6084b29c070f4d2ded2de1503e3fe6942e2ad3745124b4fcff316210a74def",
+  "grid__dose__q__scoring_pieces__std": "7876e21d8ce4e2b7f8183106addd51493ef4fe8607731ee10833ac76a9222ad7",
+  "grid__dose__q__scoring_pieces_local__batch_num": "25d977798e1afb59092d223f84e75a5bc77651d14fb9102f27c474a02cc16f09",
+  "grid__dose__q__scoring_pieces_local__defined_mask": "0e44b03376e36dd127dd1f69a188f78db8ff8af13fa52b7f6a317d228b30531b",
+  "grid__dose__q__scoring_pieces_local__mean": "344028d4e78e4de3a7351cca0721c08a0d0d90042fe88670ff787f932e616518",
+  "grid__dose__q__scoring_pieces_local__n_nonzero": "3cae8f3c07134f3346261e913f423369a0ea010e3f918dbe4ce9e39563fb78a2",
+  "grid__dose__q__scoring_pieces_local__rounding_bound": "b2b673da97a77b44dffe70d61ef0bb978008d059b22b388156aaf93fed6bdbb2",
+  "grid__dose__q__scoring_pieces_local__std": "c9d49adb559320b5f72b29d422ed0522ad52cd9f66129477e3ed1fbc3efe2b6d",
+  "grid__dose__q__weighted__batch_num": "7074bad8887582decac61c62967c05b645deb933aa8726f59c8e58e4424f6e43",
+  "grid__dose__q__weighted__defined_mask": "7f8262e894bf60c4e106aa122566e2368314a08472dac05b53af635f4d847c47",
+  "grid__dose__q__weighted__mean": "c2ab95911a1725a816e3b1c73a60ab509fa569321722e9e57a54885d886b791d",
+  "grid__dose__q__weighted__n_nonzero": "4f1b9d64dcc6e43d420cac528b01537785fcb75a372523ef3220151929cac321",
+  "grid__dose__q__weighted__rounding_bound": "75907008443b057941e0c35b4e3854b789888eea7736939153b717fc5e8140ff",
+  "grid__dose__q__weighted__std": "12f89209d04c7cc547595f19da22a163b6fc43e4cfa299580e99e9a8aaf584b0",
+  "grid__dose__relative_uncertainty": "b93b88525ad4c32ea2cb5cbd64b1ba74027424053bc8a838f43d50a20501b336",
+  "grid__dose__sparse_mask": "4ceed56025083f7a2fcbf1136500da5c6f2428f8a1e4af815638f48e7bae8d9f"
+ },
+ "backend": "warp-cpu",
+ "code": {
+  "git_commit": "48b782bfa35eca4cdd9ec7abe6ba42ac0146d118",
+  "git_dirty": false,
+  "ionmc_version": "0.1.0.dev0",
+  "package_tree_oid": "2be42e2a055e45f1988e194b26c313f81fd015f6",
+  "reason": "",
+  "source": "git",
+  "status": "ok"
+ },
+ "device": "cpu",
+ "durations_s": {
+  "report_check": 0.365,
+  "run": 0.615,
+  "verify": 0.365
+ },
+ "exit_codes": {
+  "report_check": 0,
+  "run": 0,
+  "verify": 0
+ },
+ "files": {
+  "arrays.npz": {
+   "sha256": "cea47edcea4c5efc084a2744a1754a830dd389dfe53244b0723540ec5f8b799a",
+   "size": 10970
+  },
+  "plots/dose__dose.svg": {
+   "sha256": "5475ee22bde8c41914e58110d9ea5c7f8b974ac0b934c7a92abf4a735139324f",
+   "size": 1858
+  },
+  "plots/energy__dose.svg": {
+   "sha256": "c1fa211ae361606dff1d2a4b20f63c4635391d2a397887022c938ec8f13e06ff",
+   "size": 1927
+  },
+  "plots/lateral__dose.svg": {
+   "sha256": "59b4f325611867dc525fed7a409c26270d6c1c4cfed762ddb79da71c36c521f8",
+   "size": 2127
+  },
+  "plots/let__dose__let.svg": {
+   "sha256": "7ad2161da75bb83cf36a89f5f8522b90b8d603d94e3034639bcc938529261e4d",
+   "size": 1911
+  },
+  "report.md": {
+   "sha256": "9f83419dc2325ee554c170bd4e367f27bf55ae0e9e0dbd194c9e0520319ec397",
+   "size": 11233
+  }
+ },
+ "k": 0,
+ "n_batches": 4,
+ "n_histories": 64,
+ "nuclear": null,
+ "output_path_persisted": "r3k0",
+ "precision": "float64",
+ "production": false,
+ "r_index": 3,
+ "requested_nuclear_table_id": null,
+ "result_json_sha256": "0beaf7ff9479d0cd6bc725aeae34d42060b7cd220382e64a53a01f8a69b8558a",
+ "schema": "ionmc.out6-summary/1",
+ "seed": 20700304,
+ "stopping": {
+  "circular_rows": [],
+  "content_sha256": null,
+  "data_declared": [],
+  "data_used": [],
+  "decision": "0044",
+  "domain": {
+   "e_max_per_u": {
+    "alpha": 500.0,
+    "carbon12": 500.0,
+    "deuteron": 500.0,
+    "oxygen16": 500.0,
+    "proton": 500.0
+   },
+   "e_min_per_u": {
+    "alpha": 1.0,
+    "carbon12": 1.0,
+    "deuteron": 1.0,
+    "oxygen16": 1.0,
+    "proton": 1.0
+   },
+   "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+   "species": [
+    "alpha",
+    "carbon12",
+    "deuteron",
+    "oxygen16",
+    "proton"
+   ]
+  },
+  "evidence_at_run": [
+   {
+    "graded_at_sha": null,
+    "plan": "validation/plans/v3-008-acceptance.md",
+    "row": null,
+    "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+    "status": "as-graded:0043"
+   }
+  ],
+  "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+  "kind": "analytic",
+  "model_id_effective": "bethe-ionmc-v1",
+  "model_id_requested": "bethe-ionmc-v1",
+  "options": {
+   "barkas": true,
+   "bloch": true,
+   "class": "BetheStoppingSource",
+   "effective_charge": true,
+   "effective_charge_model": "barkas-125",
+   "i_value": "material",
+   "ls": "off",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "mott": true,
+   "points_per_decade": 200,
+   "shell": true,
+   "source_name": "bethe"
+  },
+  "range_construction": "exact-loglog-quadrature-v1",
+  "range_start": "constant-S approximation a*E_min/S(E_min)",
+  "selected_by": "stopping_model",
+  "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+  "species_transported": [
+   "proton"
+  ],
+  "version": "1"
+ },
+ "valid": true
+}

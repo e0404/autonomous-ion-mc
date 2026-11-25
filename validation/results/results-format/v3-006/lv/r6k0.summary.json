@@ -1,0 +1,138 @@
+{
+ "array_content_sha256": {
+  "geometry__material_index": "e7e10cbf3fd69c45ff3f739c9e3c514e05960d41a7382e2ae9c11afa1e097223",
+  "grid__dose__batch_energy_mev": "5a2c68ea77ee0f5ee23f8a0160926f7d04006b6e6cef08454357a6649b0254d6",
+  "grid__dose__defined_mask": "80cd79325d5360b76e049117424c25507a2d55d32a568a90504ee431f7ece75e",
+  "grid__dose__dose_gy": "82415daa92f04dfffca68f6495e9ff379b0f8ad099cb312403835825544acf9a",
+  "grid__dose__dose_std_gy": "dfd8f3bf77106105eae5b851176d215bc13c187cd9ff7c984eea8995b8948f86",
+  "grid__dose__energy_mev": "5e994ec0c4d0676940936f77405891017e415256258f7fde2fb36ed2e1bc7c7c",
+  "grid__dose__energy_std_mev": "35ac5d0231998a4b32309714f1cc5766a371649982de7fddea31f48928be0a6b",
+  "grid__dose__mass_g": "96681663dc439483b1c2a4dbbd293419c5ae6f668e8b73d1b66feea0588db308",
+  "grid__dose__n_nonzero_batches": "486dce5ba06c56213ac42a51771c7c530272679a049692f0b36f5b5569e3e6ad",
+  "grid__dose__relative_uncertainty": "40cd08513fb22049fb45460ce34ba0befef89974fed6f4335fc201906ae4f91d",
+  "grid__dose__sparse_mask": "b1c74281f4123a09251609c882adca9f5277a75a69053a1c4450d6bdc26cd27d"
+ },
+ "backend": "python",
+ "code": {
+  "git_commit": "48b782bfa35eca4cdd9ec7abe6ba42ac0146d118",
+  "git_dirty": false,
+  "ionmc_version": "0.1.0.dev0",
+  "package_tree_oid": "2be42e2a055e45f1988e194b26c313f81fd015f6",
+  "reason": "",
+  "source": "git",
+  "status": "ok"
+ },
+ "device": "python (float64)",
+ "durations_s": {
+  "report_check": 0.365,
+  "run": 0.816,
+  "verify": 0.365
+ },
+ "exit_codes": {
+  "report_check": 0,
+  "run": 0,
+  "verify": 0
+ },
+ "files": {
+  "arrays.npz": {
+   "sha256": "cf3ad890d6e3536d5aa32d36104f17bff74a1cbe3b8d45c1f59b01e4075eba60",
+   "size": 2987
+  },
+  "plots/dose__dose.svg": {
+   "sha256": "718cf7bd19404bedd6ac0416288bf72aaeb0483c43b143f40c4d79238a7a1591",
+   "size": 2470
+  },
+  "plots/energy__dose.svg": {
+   "sha256": "57a800b46d8e7ce086a96aa61a3c9b902bc8dfc7f12bc7012389032b42a3da14",
+   "size": 1922
+  },
+  "plots/lateral__dose.svg": {
+   "sha256": "8900f1c1fdd180f12cf860e1e8a8e4d864b656dc202bd1ef003b2fbd445f42da",
+   "size": 2442
+  },
+  "report.md": {
+   "sha256": "b09cfc4ef157a55fe0f6c6debfb1ff9f741cf67f5b87fa17e0b34a629455f649",
+   "size": 9641
+  }
+ },
+ "k": 0,
+ "n_batches": 4,
+ "n_histories": 64,
+ "nuclear": null,
+ "output_path_persisted": "r6k0",
+ "precision": "float64",
+ "production": false,
+ "r_index": 6,
+ "requested_nuclear_table_id": null,
+ "result_json_sha256": "ee89652c1f8085d3fd9abf6538879124752b46cdae2b0b5492dbeb79d06d67d4",
+ "schema": "ionmc.out6-summary/1",
+ "seed": 20700604,
+ "stopping": {
+  "circular_rows": [],
+  "content_sha256": null,
+  "data_declared": [],
+  "data_used": [],
+  "decision": "0044",
+  "domain": {
+   "e_max_per_u": {
+    "alpha": 500.0,
+    "carbon12": 500.0,
+    "deuteron": 500.0,
+    "oxygen16": 500.0,
+    "proton": 500.0
+   },
+   "e_min_per_u": {
+    "alpha": 1.0,
+    "carbon12": 1.0,
+    "deuteron": 1.0,
+    "oxygen16": 1.0,
+    "proton": 1.0
+   },
+   "material_rule": "any ionmc.materials material (evidence: liquid water only)",
+   "species": [
+    "alpha",
+    "carbon12",
+    "deuteron",
+    "oxygen16",
+    "proton"
+   ]
+  },
+  "evidence_at_run": [
+   {
+    "graded_at_sha": null,
+    "plan": "validation/plans/v3-008-acceptance.md",
+    "row": null,
+    "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+    "status": "as-graded:0043"
+   }
+  ],
+  "interpolation": "analytic on a log grid; range exact-loglog-quadrature-v1",
+  "kind": "analytic",
+  "model_id_effective": "bethe-ionmc-v1",
+  "model_id_requested": "bethe-ionmc-v1",
+  "options": {
+   "barkas": true,
+   "bloch": true,
+   "class": "BetheStoppingSource",
+   "effective_charge": true,
+   "effective_charge_model": "barkas-125",
+   "i_value": "material",
+   "ls": "off",
+   "ls_effective": "off",
+   "ls_requested": "off",
+   "mott": true,
+   "points_per_decade": 200,
+   "shell": true,
+   "source_name": "bethe"
+  },
+  "range_construction": "exact-loglog-quadrature-v1",
+  "range_start": "constant-S approximation a*E_min/S(E_min)",
+  "selected_by": "stopping_model",
+  "spec_sha256": "3aa2d5b987c77afb228f4c015e579be7c9935fbbf1cfdb6accda44ccd9b9cc26",
+  "species_transported": [
+   "proton"
+  ],
+  "version": "1"
+ },
+ "valid": true
+}

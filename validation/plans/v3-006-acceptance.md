@@ -473,3 +473,12 @@ option explicitly.
   paragraph in `docs/getting-started/index.md`). Row DOC-1 is implemented by `tests/ionmc/test_v3_006_docs.py`,
   which derives its expectations from `ionmc.results`, `ionmc.configio`, `ionmc.contract` and `ionmc.cli`; the
   docs build is run once with `--strict`. No row is marked passed here. Not a clinical claim.
+- 2026-11-25 (S8, LV tier): the `out6` driver (`validation/scripts/results/out6_run.py`, reviewed at 1f371352 and
+  48b782bf) produced the local-validation evidence at the clean commit 48b782bf
+  (`validation/results/results-format/v3-006/lv/`, logged run `20261125T084654Z-out6-lv-evidence-48b782bf`):
+  RUN r0, r1, r3, r4, r5, r6 (k = 0, 1), r7 PASS (OUT-2 LV part, CLI-4 LV part); CLI-5-LV (r0/r1) PASS;
+  CLI-6 carbon, nuclear, icru90 PASS; OUT-3 r6k0 and r6k1 PASS. Preserved failure: the first attempt at 1f371352
+  (logged run `20261125T084343Z-out6-lv-evidence`) reported OUT-3 FAIL for both reproductions because the driver
+  passed the original bundle as a repository-relative path to a child running in the output directory; corrected at
+  48b782bf, no row definition or tolerance changed. HR rows (OUT-2 HR, CLI-4 HR, CLI-5 three-way, PROV-7, REG-1
+  host, CAP-1b HR) follow with the controlled host run. Not a clinical claim.
