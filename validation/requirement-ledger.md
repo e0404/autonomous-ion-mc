@@ -97,6 +97,6 @@ decision 0046) measures them with these rows:
 
 - Sparse representations: SPA-1..SPA-5, INF-2.
 - Batched beamlet execution without re-initialising immutable data: INF-3, REUSE-1, PERF-1.
-- Planning-oriented reuse: REUSE-1, INF-4 (subset runs).
+- Planning-oriented reuse: REUSE-1, INF-4 (diagnostic column API).
 - Planning-aware uncertainty: UNC-1..UNC-4.
 - Batch-based estimation: UNC-1, UNC-2, UNC-3.

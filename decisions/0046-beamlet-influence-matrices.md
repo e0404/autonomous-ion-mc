@@ -2,6 +2,9 @@
 
 - Status: Accepted (frozen with plan `validation/plans/v3-007-acceptance.md` at the S0 commit, 2026-11-25). Later
   changes are dated amendments. Not a clinical claim.
+- Amended 2026-11-25 (S0 fix 4, Codex REVIEW-a52098eb on af4aebc6): (1) `influence_columns` fully fail-closed; (2) exact
+  backend-aware allocation formula and audit row MEM-1; (3) thresholded composite identity weighted by n_j/N;
+  (4) INF-4 at both thresholds; minor: superseded-sentence marking, SPA-3 τ = 0 sentence. See plan Amendment A-4.
 - Amended 2026-11-25 (S0 fix 3, Codex REVIEW-1d19386a on dd5ad774): (1) subset runs become the diagnostic
   `Simulation.influence_columns` API (no `Result`, no bundle); (2) fail-closed influence grouping; (3) second `fstat`
   on the spot file; (4) τ = 0 and zero-deposition columns. See plan Amendment A-3.
@@ -99,8 +102,15 @@ bytes, ≤ 4 097 lines (violation → `ConfigError`).
 The kernel change is confined to source sampling (parameters read from arrays indexed by the beamlet id) and the
 accumulator row (`(j − j0)·B + batch`). The beamlet id is `searchsorted(offsets, h, right) − 1` on a device array
 (J ≤ 4 096: ≤ 12 comparisons); the id is range-asserted (0 ≤ j < J) in every backend and can never wrap. G = largest
-group in [1, J] fitting `memory_budget_bytes` with EVERY simultaneous accumulator (grid accumulators `B·ΣV·8`, the
-per-history tally rows of one chunk, `G·B·V_inf·8`; A-3); G = 1 not fitting, an explicit G outside [1, J] or over the
+group in [1, J] fitting `memory_budget_bytes` with EVERY simultaneous allocation (A-3; exact since A-4 item 2): the
+rule is `allocation_estimate(backend, B, ΣV, chunk, V_inf, G) ≤ memory_budget_bytes`, implemented in S1 and mirroring
+the arrays of each backend at 3f3736a6: warp paths: grid accumulators `B·ΣV·8`, per-chunk tally rows (width
+`N_FIXED_TALLIES + 2·n_g + channel_columns`) and counter rows (width `len(COUNTER_NAMES)` + `len(ION_COUNTER_NAMES)`
+for ions), device influence accumulators `G·B·V_inf·8` and ONE host dense copy of one group during transfer; python
+reference path: tally and counter rows for the whole range N plus host accumulators `G·B·V_inf·8` (no second copy).
+The per-backend formulas with their symbols are in plan §B.3; the audit row MEM-1 measures the allocations and fails
+an estimate that is below the measured peak or more than a factor 1.5 above it. Pencil configurations keep the
+`validate` rule of 3f3736a6; G = 1 not fitting, an explicit G outside [1, J] or over the
 bound is refused by `validate` before allocation (`UnsupportedCombinationError`); recorded as effective
 (`derived: memory-budget`).
 
@@ -118,7 +128,10 @@ bound is refused by `validate` before allocation (`UnsupportedCombinationError`)
 Selected: default `threshold_rel = 0` (lossless: every voxel with a nonzero integer sum). Optional τ ∈ (0, 1) per
 beamlet relative to the column maximum dose; requested and effective, in `config_sha256`, reported; per-beamlet
 discarded energy, fraction, entry count and maximum discarded dose persisted and bound by the reader (dense identity
-`Σ_j (n_j/N)(kept_j + discarded_j) = composite in-grid energy`). Rejected: absolute thresholds (unit- and
+`Σ_j (n_j/N)(kept_j + discarded_j) = composite in-grid energy` (rel 1e-9; `kept_j` = Σ_v column_j energy, discarded
+energy weighted by n_j/N like the kept energy, A-4 item 3. Reader control: τ = 1e-2 with unequal n_j (R-INF,
+n_j ∈ {2 000, 4 000, 2 000, 4 000}), so an implementation that does not weight `discarded_j` by n_j/N fails).
+Rejected: absolute thresholds (unit- and
 normalisation-dependent), thresholds on relative uncertainty (selects on noise ⇒ bias), silent default thresholds.
 
 ### 5. Per-beamlet uncertainty
@@ -167,14 +180,19 @@ source. Every refusal is `UnsupportedCombinationError` (exit 4) or `ConfigError`
 
 Within a run everything except source parameters and accumulator rows is built once. Across runs a `Simulation` keeps
 its device context (tables, geometry, grids, kernel, nuclear setup); `Simulation.run(beamlets=subset)` re-runs a
-subset with the original offsets (bit-identical columns). No merge of runs sharing a seed is offered.
+subset with the original offsets (bit-identical columns) [superseded by A-3: `Simulation.influence_columns`]. No merge
+of runs sharing a seed is offered.
 
 Amendment (REVIEW-1d19386a, A-3; supersedes the REVIEW-1652a7c1 / REVIEW-15a83983 subset-run semantics): subset
 runs produce no `Result` and no bundle. `Simulation.influence_columns(beamlets)` re-transports exactly the named
 beamlets with the original offsets and returns a `ColumnSet` (CSC columns with batch values, std, nnz, discarded
 accounting, per-beamlet balances, beamlet ids and configured offsets). A `ColumnSet` has no composite grids, no
-statistics block and no traces (`requested_trace_count > 0` refused); `save` refuses it (`TypeError`); it serves
-column-independence checks (INF-4) and the V3-011 hooks. Invalid subsets (empty, duplicate, out of range,
+statistics block and no traces; `save` refuses it (`TypeError`); it serves column-independence checks (INF-4) and the
+V3-011 hooks. Fail closed (A-4 item 1, REVIEW-a52098eb): the API requires a `BeamletSet` AND `InfluenceOptions` and is
+refused for a pencil source, for no `InfluenceOptions` and for ANY requested diagnostic (`requested_trace_count > 0`,
+`track_end_positions`, `escape_records`, every other diagnostic/tally field a `Result` would carry); the test
+enumerates the config dataclass fields at S6 and refuses every field outside the explicit "honoured" allowlist.
+Invalid subsets (empty, duplicate, out of range,
 non-integer) are refused (`UnsupportedCombinationError`). Every bundle is a full run with
 `RunOptions.n_histories` = Σ_{all j} n_j; the fields `run.histories_transported`, `run.beamlet_subset`,
 `influence.subset` and `beamlet__transported` do not exist.

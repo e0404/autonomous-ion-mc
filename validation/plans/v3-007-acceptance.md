@@ -24,7 +24,7 @@ conformant qualification (V3-012/V3-014+).
 |---|---|---|---|---|
 | V1-MUST-009 Beamlet-resolved scoring | S-CAP-PLANNING | spot-list source `BeamletSet`; per-history beamlet id derived from the global history index; per-beamlet energy/dose accumulators and per-beamlet energy balance on python / warp-cpu / warp-cuda | BEAM-1..BEAM-6, INF-1..INF-7 PASS (CI + LV); PAR-1..PAR-3 PASS (LV; CUDA rows HR) | qualification; beamlet-resolved LET/lookup channels (declared unsupported, §B.7) |
 | V1-MUST-010 Dose influence matrices | S-CAP-PLANNING | sparse CSC influence matrix (Gy per primary of the beamlet), explicit threshold with per-beamlet discarded accounting; `matvec`, `rmatvec`, `to_dense`, `plan_dose`, `plan_uncertainty` helpers (numpy only) | SPA-1..SPA-5, INF-2, UNC-1..UNC-4, PER-1..PER-10 PASS | qualification; ion nuclear influence (V3-009); warp nuclear influence (V3-005B) |
-| V1-MUST-001 Treatment-planning orientation | S-CAP-PLANNING | batched beamlet execution, device context reused across beamlets and across runs of one `Simulation` | INF-3, REUSE-1, PERF-1 (measurement) | qualification; frozen targets (V3-012) |
+| V1-MUST-001 Treatment-planning orientation | S-CAP-PLANNING | batched beamlet execution, device context reused across beamlets and across runs of one `Simulation` | INF-3, REUSE-1, MEM-1, PERF-1 (measurement) | qualification; frozen targets (V3-012) |
 | V2-OUTPUT (clause "Influence matrices must retain geometry, beamlet mapping, units, history and normalization metadata") | S-PROV-OUTPUT | `ionmc.result` schema 1.1, `kind = "influence"`: beamlet table, history offsets, grid, units, normalisation, threshold, discarded accounting, per-beamlet uncertainty and balance; 1.0 bundles stay readable | PER-1..PER-10, OUT-0-INF clause map PASS (CI; PER-2 LV/HR on three backends) | conformant qualification; then V2-OUTPUT has no open clause of its own beyond qualification |
 | V2-USER (clause "multi-beamlet and influence output") | S-WORKFLOW-USER | TOML `[source] type = "beamlets"` with inline `[[source.beamlets]]` or a spot file `{file, sha256}`, `[influence]`; `ionmc run/check/verify/report` for influence bundles; docs | CLI-1..CLI-5, DOC-1 PASS | clean-install qualification with data acquisition; heavy-ion workflow (V3-009/V3-010) |
 | V2-CAP | S-CAP-CONTRACT | declared == enforced extended by the dimensions source kind {pencil, beamlets} × influence {off, on}; reconciliation rows for every new field; honoured check for influence | CAP-1..CAP-6 PASS (CI; CAP-1-LV/HR for cache-backed models and CUDA) | V3-005B, V3-009 extend the matrix |
@@ -65,8 +65,8 @@ performance targets.
    offsets array; per-beamlet source parameters in arrays (float64 energies/positions, `real` direction as today).
    Accumulators `int64[G·B, V_inf]` for the influence grid, row `(j − j0)·B + batch`; G = beamlet group size,
    with 1 ≤ G ≤ J (an explicit `influence.group_size` outside [1, J] is refused). The memory bound counts EVERY
-   simultaneous accumulator: the existing grid accumulators `B·ΣV·8`, the per-history tally rows of one chunk and
-   `G·B·V_inf·8` (A-3 item 2). Automatic G = the largest value in [1, J] satisfying the bound; if G = 1 does not fit,
+   simultaneous allocation of the backend by the exact formula below (A-3 item 2, made exact by A-4 item 2).
+   Automatic G = the largest value in [1, J] satisfying the bound; if G = 1 does not fit,
    `validate` refuses before any allocation (`UnsupportedCombinationError` naming the budget and the requirement at
    G = 1); an explicit G that exceeds the bound is refused the same way; the effective G is
    recorded. Launch chunks may span beamlets inside a group. Integer
@@ -74,6 +74,49 @@ performance targets.
    each group: one device→host copy, per-beamlet reduction and sparsification on the host, accumulators zeroed. A
    pencil source is the J = 1 case of the same code path (bit identity guarded by REG-1). The beamlet id is
    range-asserted (0 ≤ j < J) in every backend; it can never wrap.
+
+   **Allocation rule (A-4 item 2; FACT: array names read in `transport/warp_driver.py` and `transport/reference.py`
+   at 3f3736a6).** `estimate(backend, B, ΣV, chunk, V_inf, G) ≤ memory_budget_bytes`, where `estimate` is
+   `ionmc.config.allocation_estimate` (implemented in S1) and mirrors the arrays each backend allocates at the same
+   time, plus the influence arrays. Symbols: B = `n_batches`; S = ΣV, the total voxels of all scoring grids
+   (`total_vox`); n_g = number of scoring grids; V_inf = voxels of the influence grid; G = group size; N = Σ_j n_j;
+   chunk = min(`RunOptions.chunk_histories`, max(N, 1)) (`chunk` in `run_warp_range`). Row widths are the named
+   constants and functions of the code, never re-typed numbers (the values at 3f3736a6 are in parentheses).
+   Scope: the rule applies to `BeamletSet` runs (with or without influence; V_inf = 0 and G = 1 without);
+   pencil configurations keep the existing `B·ΣV·8·workers ≤ memory_budget_bytes` check unchanged (REG-2, REG-3):
+
+   - tally-row width W_t, warp: `N_FIXED_TALLIES` (= `len(TALLY_NAMES)`, 6) + 2·n_g + `channel_columns(eff)`
+     (`n_cols` of `run_warp_range`); python: `N_FIXED_TALLIES` + 2·n_g + `channel_columns(eff)` +
+     `len(NUCLEAR_TALLY_NAMES)` (6) when nuclear is on (`tally_rows` of `reference.py`, 580–584);
+   - counter-row width W_c, warp: `len(COUNTER_NAMES)` (9) + `len(ION_COUNTER_NAMES)` (2) for an ion
+     (`counter_names`, `counter_rows` of `run_warp_range`); python: `len(self.counter_names)` of `reference.py`
+     (237–243): `COUNTER_NAMES` + `ION_COUNTER_NAMES` for an ion, `COUNTER_NAMES` + `NUCLEAR_COUNTER_NAMES` (3) when
+     nuclear is on;
+   - F = bytes of every other array the backend holds during the run (geometry `material_index` int32[S_geo] and
+     float64 densities, the uploaded tables, grid descriptors and offset arrays, the per-beamlet parameter and offset
+     arrays, the non-diagnostic dummy `end_state`/`end_code`/`trace_*` arrays); the function sums the `nbytes` of
+     the same arrays, so F follows the code instead of a typed constant.
+
+   Warp paths (cpu and cuda), peak = persistent device arrays + the largest of three phases:
+   `P = 8·B·S` (`edep` int64[B, S]) `+ 8·chunk·W_t` (`tally_rows` float64) `+ 4·chunk·W_c` (`counter_rows` int32)
+   `+ F + 8·G·B·V_inf` (device influence accumulators int64[G·B, V_inf]); chunk phase
+   `X_chunk = 8·chunk·W_c` (`crows.astype(int64)`) plus, on cuda only (`numpy()` is a view on cpu),
+   `8·chunk·W_t + 4·chunk·W_c` (host copies of the rows); group phase `X_group = 8·G·B·V_inf` (ONE simultaneous host
+   dense copy of one group during the device→host transfer); end phase `X_end = 2·8·B·S` (`edep_all` and the
+   `edep_grids` copies). `estimate_warp = P + max(X_chunk, X_group, X_end)`.
+
+   Python reference path (whole range N in one call, existing behaviour, now counted): `estimate_py = 8·B·S`
+   (`self.edep`) `+ 8·N·W_t` (`tally_rows`) `+ 4·N·W_c` (`counter_rows`) `+ 89·N` (`end_pos`, `end_dir`,
+   `end_ctrl_sum` float64[N, 3], `end_energy`, `end_ctrl` float64[N], `end_code` int8[N]: 24 + 24 + 24 + 8 + 8 + 1
+   bytes per history, allocated unconditionally) `+ F + 8·G·B·V_inf` (host accumulators, no second copy)
+   `+ 8·N·W_c` (`counter_rows.astype(int64)` in the reduction). Python lists and float objects of the exact
+   summation (`exact_components`) are not arrays and are not counted; their size is bounded by one column of one
+   chunk or range at a time (S1 states the bound in the docstring and MEM-1 keeps the 1.5 factor honest). For
+   configurations WITHOUT a `BeamletSet` the `validate` rule stays as at 3f3736a6 (`B·ΣV·8·workers`), so REG-1..REG-3
+   are untouched; the formula governs beamlet runs with influence.
+   Group selection: G = the largest value in [1, J] with `estimate ≤ memory_budget_bytes`; G = 1 over budget →
+   refused before allocation, naming the budget and `estimate` at G = 1; an explicit G outside [1, J] or over the
+   budget → refused. Diagnostics are refused with influence (§B.10), so the diagnostic arrays are not in the formula.
 4. **Influence representation.** Canonical CSC by beamlet: `indptr int64[J+1]`, `voxel int64[nnz]` (flat C-order
    index into the influence grid, strictly increasing within a column), `energy_mev`, `energy_std_mev`, `dose_gy`,
    `dose_std_gy` float64[nnz], `n_nonzero_batches int32[nnz]`, batch values `float64[B, nnz]` (persisted by default,
@@ -90,7 +133,10 @@ performance targets.
     > 0 (A-3 item 4: at τ = 0 the fraction is exactly 0 for every column with positive in-grid energy); the report
     distinguishes only "defined" from "undefined (no deposition in the influence grid)" and prints
     that string and "undefined (no entries)" (median relative uncertainty); the
-    per-beamlet energy balance still closes (outside the grid / escaped).
+    per-beamlet energy balance still closes (outside the grid / escaped). **Composite identity under a
+    threshold (A-4 item 3):** `Σ_j (n_j/N)·(kept_j + discarded_j)` = composite in-grid energy (rel 1e-9), with
+    `kept_j` = Σ_v column_j energy and `discarded_j` the per-beamlet discarded energy; per-beamlet quantities are
+    per primary of beamlet j and carry the weight n_j/N only inside this composite sum.
 6. **Per-beamlet uncertainty.** Batch standard error per entry (decision 0040 `reduce_batches`, hpb_j = n_j/B);
    `defined`/`sparse` masks as for grids. Beamlets use disjoint counter ranges and are statistically independent,
    so for plan weights x: `Var(D_v) = Σ_j x_j² σ_vj²` (`plan_uncertainty`); no cross-beamlet covariance is persisted
@@ -112,7 +158,9 @@ performance targets.
    `unit_direction` is null-with-status
    (`not-applicable: beamlets`), a per-beamlet direction array `beamlet__direction` is persisted, and the report's
    profile axis is taken from beamlet 0 and labelled so (every reader of the source, F1 list in BEAM-2, is covered).
-   The reader accepts 1.0 and 1.1; tier-1 binds every new invariant (PER-4). The composite grids of the same run are
+   The reader accepts 1.0 and 1.1; tier-1 binds every new invariant (PER-4), including the thresholded composite
+   identity `Σ_j (n_j/N)·(kept_j + discarded_j)` = composite in-grid energy (A-4 item 3).
+   The composite grids of the same run are
    persisted as
    ordinary grids. **V3-006 row OUT-4's unknown-version control "1.1" moves to "1.2" by a dated note in plan v3-006**
    (intent preserved, not a re-grade).
@@ -143,6 +191,14 @@ performance targets.
     outside [0, J), non-integers) are refused by the API (`UnsupportedCombinationError`). Every bundle is a full run:
     `RunOptions.n_histories` == Σ_{all j} n_j is the only history count, and results of runs with the same seed are
     never merged (`merge` is not offered in V3-007).
+    **`influence_columns` is fully fail-closed (A-4 item 1).** The API requires an effective configuration with a
+    `BeamletSet` AND `InfluenceOptions`. It is refused (`UnsupportedCombinationError`) for a pencil source, for a
+    configuration without `InfluenceOptions`, and for ANY requested diagnostic: `requested_trace_count > 0` (the
+    config field `diagnostics.trace_histories`), `track_end_positions`, `escape_records`, and every other
+    diagnostic or tally request that a `Result` would carry. The test enumerates the diagnostic and tally fields of
+    `RunOptions`/`SimulationConfig` (the `DiagnosticsOptions` dataclass, `tallies`, lookups) from the dataclass
+    fields at the time of S6, so a later-added diagnostic cannot be silently discarded: any field outside the
+    explicit allowlist of "fields `influence_columns` honours" is refused.
 
 ### Amendments
 
@@ -218,7 +274,8 @@ bundle; they become a diagnostic column API.
    beamlets: Sequence[int]) -> ColumnSet` as above; `run.histories_transported`, `run.beamlet_subset`,
    `influence.subset`, `beamlet__transported` and the "untransported columns" notion are removed everywhere. The
    configured invariant `RunOptions.n_histories` == Σ_{all j} n_j is the only history count; every bundle is a full
-   run; the PER-4 identity `Σ_j (n_j/N)·column + discarded = composite in-grid energy` holds with N = Σ_j n_j. Rows:
+   run; the PER-4 identity `Σ_j (n_j/N)·(kept_j + discarded_j) = composite in-grid energy` [corrected by A-4 item 3: the
+   discarded term is weighted by n_j/N] holds with N = Σ_j n_j. Rows:
    INF-4, PER-4, PER-6 (full-run variant only; r = 11, k = 1 released, marked unused), CAP-3 (no `requested-only` row
    for subsets), PER-1, CLI-3, REUSE-1 unchanged.
 2. **Fail-closed influence grouping (finding 4).** §B.3: 1 ≤ G ≤ J; the bound counts every simultaneous accumulator;
@@ -229,6 +286,35 @@ bundle; they become a diagnostic column API.
 4. **τ = 0 and zero-deposition columns (finding 6).** §B.5, SPA-3: at τ = 0 the discarded fraction is exactly 0 for
    every column with positive in-grid energy and UNDEFINED (NaN + mask false) for a column with no in-grid
    deposition, at every τ; R-INF-Z is exercised at τ = 0 AND τ = 0.1 in SPA-3, PER-1, PER-4 and CLI-3.
+
+**Amendment A-4 (2026-11-25, S0, before any code; Codex REVIEW-a52098eb on af4aebc6, changes_required; four
+important and two minor findings, all adopted).** The frozen text is edited in place as for A-1..A-3.
+
+1. **`influence_columns` is fully fail-closed (finding 1).** §B.10: effective configuration with a `BeamletSet` AND
+   `InfluenceOptions` required; refused for a pencil source, for no `InfluenceOptions` and for ANY requested
+   diagnostic (`requested_trace_count > 0`, `track_end_positions`, `escape_records`, every other diagnostic/tally
+   field a `Result` would carry); the test enumerates the dataclass fields at S6 and refuses every field outside the
+   explicit "honoured" allowlist. Row INF-4 gains the capability controls (pencil source, no `InfluenceOptions`, each
+   diagnostic field); the allowlist test fails when a config field is neither honoured nor refused.
+2. **Exact backend-aware allocation formula and an allocation audit (finding 2).** §B.3 gives the per-backend formulas
+   (`allocation_estimate`, S1) with the symbol definitions and the row widths read from the driver constants
+   (`N_FIXED_TALLIES`, `channel_columns`, `COUNTER_NAMES`, `ION_COUNTER_NAMES`, `NUCLEAR_TALLY_NAMES`,
+   `NUCLEAR_COUNTER_NAMES`); warp: device accumulators `G·B·V_inf·8` plus ONE host dense copy of one group, per-chunk
+   tally AND counter rows; python reference path: tally and counter rows for the whole range N plus host accumulators
+   `G·B·V_inf·8`, no second copy. New row MEM-1 (instrumented allocation audit; estimate within a factor 1.5 of the
+   measured peak, a looser estimate is also a fail). BEAM-1 keeps the arithmetic group-selection cases. Steps: S1
+   (function), S2/S3 (audit), S8 (LV warp-cpu, HR warp-cuda). §A evidence column of V1-MUST-001 gains MEM-1.
+3. **Thresholded composite identity (finding 3).** PER-4 (and the tier-1 binding of §B.5/§B.8): `Σ_j (n_j/N)·
+   (kept_j + discarded_j)` = composite in-grid energy (rel 1e-9); the reader control uses τ = 1e-2 AND unequal n_j
+   (R-INF with n_j ∈ {2 000, 4 000, 2 000, 4 000}) so an implementation that does not weight `discarded_j` by n_j/N
+   fails. SPA-3's "dense − kept = discarded per beamlet" is unchanged (per-beamlet quantities need no weight).
+4. **INF-4 at both thresholds, every field (finding 4).** At τ = 0 and τ = 1e-2 every `ColumnSet` field of the named
+   beamlets is bitwise equal to the full run's (INF-4 row).
+5. **Minor (finding 5).** Decision 0046 §8: the `Simulation.run(beamlets=subset)` sentence is marked "[superseded by
+   A-3: `Simulation.influence_columns`]"; the ledger says "INF-4 (diagnostic column API)" instead of "subset runs".
+6. **Minor (finding 6).** SPA-3: "τ = 0 reports exactly 0 for every column with positive in-grid energy; a transported
+   zero-deposition column reports undefined (NaN + mask false) at every τ" — one sentence; no unconditional "exactly
+   0" remains in the row.
 
 Not a clinical claim.
 
@@ -270,14 +356,14 @@ rule; REG-4: no bundle in Git).
 | Step | Content | Rows that must pass at the step's commit |
 |---|---|---|
 | S0 | decision 0046, this plan, seed note in plan v3-005, OUT-4 note in plan v3-006, ledger "in progress" notes; no code | review only |
-| S1 | `Beamlet`, `BeamletSet`, `InfluenceOptions`, `validate` rules, source-consumer audit (every `config.source` reader uses the beamlet envelope or per-beamlet values), summary/reconcile rows | BEAM-1..BEAM-3, CAP-1 (CI part), CAP-2..CAP-4, REG-2, REG-3 |
-| S2 | reference backend: per-history beamlet id, per-beamlet accumulators, per-beamlet balance | BEAM-4..BEAM-6, INF-1, INF-2, INF-6, INF-7 (python) |
-| S3 | Warp driver: device context, offsets/parameter arrays, grouped accumulators, host sparsification | INF-1..INF-5, INF-7 (warp-cpu), REG-1 |
+| S1 | `Beamlet`, `BeamletSet`, `InfluenceOptions`, `validate` rules, `ionmc.config.allocation_estimate` (§B.3, A-4 item 2), source-consumer audit (every `config.source` reader uses the beamlet envelope or per-beamlet values), summary/reconcile rows | BEAM-1..BEAM-3, CAP-1 (CI part), CAP-2..CAP-4, REG-2, REG-3 |
+| S2 | reference backend: per-history beamlet id, per-beamlet accumulators, per-beamlet balance | BEAM-4..BEAM-6, INF-1, INF-2, INF-6, INF-7, MEM-1 (python) |
+| S3 | Warp driver: device context, offsets/parameter arrays, grouped accumulators, host sparsification | INF-1..INF-5, INF-7, MEM-1 (warp-cpu), REG-1 |
 | S4 | `ionmc.influence`: CSC container, threshold accounting, helpers, per-beamlet statistics | SPA-1..SPA-5, UNC-1, UNC-4 |
 | S5 | schema 1.1: writer/reader/tier-1 bindings/tier-2 re-derivation, golden 1.1 fixture, v3-006 OUT-4 control moved | PER-1, PER-3..PER-10, OUT-0-INF, REG-5 |
 | S6 | CLI/TOML/spot file, report rows and SVGs, `Simulation` reuse and the `influence_columns` diagnostic API | CLI-1..CLI-3, REUSE-1 (CI part), INF-4 |
 | S7 | docs (results format 1.1, configuration, CLI, workflow, architecture/transport beamlet section), ledger notes incl. SHOULD coverage section | DOC-1, docs build `--strict` |
-| S8 | LV/HR evidence driver `validation/scripts/influence/inf7_run.py` (pattern of `out6_run.py`), one heavy job at a time | PER-2, PAR-1..PAR-3, UNC-2, UNC-3, CLI-4, CLI-5, CAP-1-LV/HR, REG-1-HR, PERF-1, PERF-2 |
+| S8 | LV/HR evidence driver `validation/scripts/influence/inf7_run.py` (pattern of `out6_run.py`), one heavy job at a time | PER-2, PAR-1..PAR-3, UNC-2, UNC-3, CLI-4, CLI-5, CAP-1-LV/HR, MEM-1 (LV warp-cpu, HR warp-cuda), REG-1-HR, PERF-1, PERF-2 |
 
 ### Discriminating rows (defined before implementation; all gating unless marked *measurement*)
 
@@ -291,7 +377,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 
 | Row | What | Pass iff | Tier |
 |---|---|---|---|
-| BEAM-1 | Config validation: each fail-closed rule of §B.1 and §B.7 provoked separately | `UnsupportedCombinationError` (or `ConfigError` for TOML) before transport, message names the field; each positive twin passes; includes (A-1) `n_histories` ≠ Σ n_j refused (message names both values), absent TOML value derived, equal value accepted; label of 65 characters / with a control character / duplicate refused; the converted ion-mapping failure branch (`config.py` 498) provoked with a BeamletSet and naming the beamlet; (A-3 item 2) explicit `group_size` 0 / J + 1 / over-budget refused; automatic G = 1 over budget refused; a budget that admits exactly G = 2 yields effective group_size 2 (`derived: memory-budget`) | CI |
+| BEAM-1 | Config validation: each fail-closed rule of §B.1 and §B.7 provoked separately | `UnsupportedCombinationError` (or `ConfigError` for TOML) before transport, message names the field; each positive twin passes; includes (A-1) `n_histories` ≠ Σ n_j refused (message names both values), absent TOML value derived, equal value accepted; label of 65 characters / with a control character / duplicate refused; the converted ion-mapping failure branch (`config.py` 498) provoked with a BeamletSet and naming the beamlet; (A-3 item 2) explicit `group_size` 0 / J + 1 / over-budget refused; automatic G = 1 over budget refused; a budget that admits exactly G = 2 yields effective group_size 2 (`derived: memory-budget`), the budget computed from `allocation_estimate` (A-4 item 2) | CI |
 | BEAM-2 | Source-consumer audit: a test enumerates every reader of `config.source` (static list checked against `grep` of `src/ionmc`, reviewed; FACT at 3f3736a6, complete after A-1 item 2: `config.py` (348; 471–498 ion-mapping path, its failure branch at 498 converted to per-beamlet values; 526; 564; 588; 1016; max_steps E_hi 755–756; channel compile 807; nuclear bounds 921–943; the decision-0044 stopping-model window check 1035–1064; ion domain 1127–1153; sigma rules and ion mapping 1237–1294 incl. `fdm_domain_status(proj, mats, e0, σ)` at 1287; stopping identity species 594–611; summary 624; `unit_direction=src.unit_direction()` 1351), `reference.py` (projectile 193–260, sampling 840–860), `warp_driver.py` (ctl source fields 121–135, `ctl.dir` at 135), `kernels.py` (source sampling), `results.py` (producible 403; profile axis from `unit_direction` 725 and 1626; binding 1668–1675; stopping-window check on E0 + 6σ 1806; tally E_hi bound 2093), `_result_shapes.py` 335–345, `contract.py` 78–87, 308–320, 701 (`SOURCE_TYPES`), 939, `simulation.py` 736 (`capabilities()["sources"]`), `report.py` 335, `configio.py` 590; A-2 item 2 additions `config.py` 844, 1163, 1214–1229, `warp_driver.py` 187; `configio.py` 1162 is a lookup-file source, not `SimulationConfig.source`, listed as `not-a-source`) and asserts for a beamlet set the envelope rules: `max_steps`, channel `E_hi`, nuclear energy bounds, ion mapping domain and energy-sigma rules use min/max over beamlets | every consumer covered; a beamlet with E above the domain is refused although the mean energy is inside; exhaustive AST audit (A-2 item 2, replaces the grep rule): a test parses every module of `src/ionmc` with `ast`, follows attribute accesses rooted at `.source` of a config / effective-config value AND every alias binding in the same scope (`src = cfg.source`, `source = eff.source`; tuple/keyword passing is recorded as a reader at the call site) and asserts every (module, line, attribute) is in the static allowlist annotated `envelope` / `per-beamlet` / `refused-in-S1` / `not-a-source` (the allowlist is the inventory); any access outside it fails; the allowlist is re-derived (and the decision's Context updated) whenever S2/S3 add readers; exceptional/failure paths included | CI |
 | BEAM-3 | Offsets: `s_j`, batch membership and per-batch count n_j/B for unequal n_j | exact | CI |
 | BEAM-4 | Stream disjointness: the (c0, c3) pairs used by source sampling over all beamlets of R-INF are unique and equal `range(Σ n_j)` (instrumented reference run) | exact | CI |
@@ -305,7 +391,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 | INF-1 | J = 1 `BeamletSet` vs the equal `PencilBeamSource`, same seed/backend/precision | every grid array, balance and counter **bitwise** equal; influence column (τ = 0) equals the composite grid's nonzero entries bitwise | CI (python, warp-cpu), LV (all), HR (cuda) |
 | INF-2 | **Composite identity**: R-INF with influence vs the same spot list without influence | (a) Σ_j integer accumulators `[B, V]` of the columns equal the composite run's integer accumulators **bitwise**; (b) float64: composite `energy_mev` vs Σ_j (n_j/N)·column energy (τ = 0) within relative 1e-12 per voxel (only float64 summation-order rounding; J ≤ 100 terms); (c) composite grid of the influence run bitwise equal to the composite-only run | CI, LV, HR |
 | INF-3 | Group and chunk invariance: G ∈ {1, 2, J}; CI: J = 4, n_j = 600 (B = 4), `chunk_histories` ∈ {2¹⁰, 2¹¹}, so chunk boundaries fall inside beamlets; LV/HR keep R-INF with `chunk_histories` ∈ {2¹⁰, 2¹⁴} | per-beamlet integer accumulators and balances bitwise equal across all variants | CI (warp-cpu), LV, HR (cuda) |
-| INF-4 | Column independence (A-3 item 1): `influence_columns([2])` and `influence_columns([0, 3])` | columns, batch values, std and per-beamlet balances bitwise equal to those of the full run; invalid subsets (empty, duplicate, out of range, non-integer) refused (`UnsupportedCombinationError`); a trace request refused; `save(ColumnSet)` refused (`TypeError`) | CI |
+| INF-4 | Column independence (A-3 item 1, A-4 items 1 and 4): `influence_columns([2])` and `influence_columns([0, 3])`, each at τ = 0 AND τ = 1e-2 | at both thresholds, for the beamlets named, every `ColumnSet` field — column voxel indices, energy/dose values, std, batch values, nnz, discarded energy / fraction (incl. the undefined mask) / count / max dose / variance, and the per-beamlet balance — is bitwise equal to the full run's; invalid subsets (empty, duplicate, out of range, non-integer) refused (`UnsupportedCombinationError`); `save(ColumnSet)` refused (`TypeError`); **capability controls (A-4 item 1):** pencil source, no `InfluenceOptions` and each diagnostic field (traces, end positions, escape records, every other diagnostic/tally field enumerated from the dataclass) → refused (`UnsupportedCombinationError`); the allowlist test fails when a config field is neither honoured nor refused | CI |
 | INF-5 | Trajectory parity python vs warp-cpu float64 for the first 3 histories of beamlets 0, 1 and J−1 (across beamlet boundaries) | decision-0037 trajectory class (existing T1 tolerances) | CI |
 | INF-6 | **Negative controls** (patched in the test): (i) `c0` reset per beamlet → BEAM-4 and INF-4 fail; (ii) beamlet id off by one at a boundary, or an accumulator row error with correct source parameters → INF-2(a) still passes; INF-7 fails (BEAM-5 and INF-1 catch only a wrong source assignment; shows INF-2 alone is not sufficient); (iii) accumulator row stride B±1 → INF-2(a) fails | each detected by the named row | CI |
 | INF-7 | **Per-beamlet closure**: Σ_v column_j quanta·Q + outside_j + quantization_j = deposited_j, reduced from the tally rows of h ∈ [s_j, s_j + n_j), for every j; negative controls "accumulator row off by one" and "columns permuted" must FAIL this row | exact (rel 1e-12) | CI, LV, HR |
@@ -316,7 +402,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 |---|---|---|---|
 | SPA-1 | τ = 0 round trip dense ↔ CSC (`to_dense`, `from_dense`) | bitwise; nnz = count of nonzero integer accumulators summed over batches | CI |
 | SPA-2 | Canonical form: indptr monotone, voxel strictly increasing per column, dtypes, no explicit zeros at τ = 0 | exact | CI |
-| SPA-3 | Threshold accounting, τ ∈ {1e-4, 1e-2, 0.1}: every kept entry ≥ τ·max_j, every dropped < τ·max_j; dense − kept = discarded per beamlet (energy, rel 1e-12); reported fraction = discarded/in-grid energy; counts exact; τ = 0 reports exactly 0; on R-INF-Z at τ = 0 AND τ = 0.1 the zero-deposition column has fraction undefined (NaN, mask false) and counts 0, while at τ = 0 every column with positive in-grid energy has fraction exactly 0 (A-2 item 4, A-3 item 4) | exact | CI, LV |
+| SPA-3 | Threshold accounting, τ ∈ {1e-4, 1e-2, 0.1}: every kept entry ≥ τ·max_j, every dropped < τ·max_j; dense − kept = discarded per beamlet (energy, rel 1e-12); reported fraction = discarded/in-grid energy; counts exact; τ = 0 reports exactly 0 for every column with positive in-grid energy; a transported zero-deposition column reports undefined (NaN + mask false) at every τ, with counts 0, which R-INF-Z exercises at τ = 0 AND τ = 0.1 (A-2 item 4, A-3 item 4, A-4 item 6); per-beamlet quantities are per primary of beamlet j and need no n_j/N weight | exact | CI, LV |
 | SPA-4 | Helpers: `matvec(w)` vs `to_dense() @ w`, `rmatvec(y)` vs `to_dense().T @ y`, `plan_dose(weights)` | relative 1e-12 | CI |
 | SPA-5 | Threshold is never silent: τ appears in requested/effective/report; changing τ changes `config_sha256`; a bundle whose discarded arrays are removed fails `load` | exact | CI |
 
@@ -337,7 +423,7 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 | PER-1 | In-process round trip `load(save(r))` for R-INF (python, warp-cpu f64), τ = 0 and τ = 1e-2, `persist_batches` on/off (off recorded `not-persisted`); includes a bundle whose `requested.run` carries the derived N = Σ n_j (A-1 item 1) and an R-INF-Z bundle with a zero-deposition column at τ = 0 and τ = 0.1 (A-2 item 4, A-3 item 4) | arrays bitwise, JSON equal | CI |
 | PER-2 | Clean-process round trip (`python -I`) | canonical dump equal | CI; LV/HR on three backends |
 | PER-3 | Version handling: the frozen V3-006 1.0 golden fixture loads unchanged; a 1.1 golden synthetic fixture (KB-scale) loads and regenerates its report byte-identically; "1.2"/"2.0" refused; `kind = "influence"` with schema 1.0 refused | exact | CI |
-| PER-4 | Tier-1 negative controls, one each: indptr non-monotone or ≠ nnz; voxel index ≥ V or unsorted or duplicate; nnz arrays of unequal length; negative std; batch values not reproducing mean/std; discarded accounting inconsistent; beamlet table ≠ `requested`; offsets ≠ cumulative n_j; columns swapped with balances unchanged and digests recomputed (fails through the INF-7 identity); `Σ_j (n_j/N)·column + discarded` ≠ composite in-grid energy (rel 1e-9; N = Σ_j n_j); influence block missing for `kind = "influence"`; zero column with nonzero discarded count or a defined fraction (A-2 item 4; R-INF-Z at τ = 0 and τ = 0.1, A-3 item 4) | each `ResultFormatError` naming the defect | CI |
+| PER-4 | Tier-1 negative controls, one each: indptr non-monotone or ≠ nnz; voxel index ≥ V or unsorted or duplicate; nnz arrays of unequal length; negative std; batch values not reproducing mean/std; discarded accounting inconsistent; beamlet table ≠ `requested`; offsets ≠ cumulative n_j; columns swapped with balances unchanged and digests recomputed (fails through the INF-7 identity); `Σ_j (n_j/N)·(kept_j + discarded_j)` ≠ composite in-grid energy (rel 1e-9; N = Σ_j n_j; `kept_j` = Σ_v column_j energy, `discarded_j` the per-beamlet discarded energy; reader control at τ = 1e-2 with unequal n_j, R-INF with n_j ∈ {2 000, 4 000, 2 000, 4 000}, so an implementation that does not weight `discarded_j` by n_j/N fails; A-4 item 3); influence block missing for `kind = "influence"`; zero column with nonzero discarded count or a defined fraction (A-2 item 4; R-INF-Z at τ = 0 and τ = 0.1, A-3 item 4) | each `ResultFormatError` naming the defect | CI |
 | PER-5 | Budgets: a catalogue declaring nnz = 2⁴⁰ or a 3-D batch array beyond `max_array_bytes` refused before allocation (V3-006 OUT-10 method, RSS bound 64 MiB) | exact | CI |
 | PER-6 | Reproduction from the bundle (r = 11): `from_dict(requested)` + seed → every content digest equal (full run only; k = 1 released, marked unused, A-3 item 1) | exact | CI (small), LV |
 | PER-7 | Tier 2 `verify_effective` re-derives `effective` for a beamlet bundle | exact | CI (default model), LV |
@@ -363,6 +449,12 @@ outside the influence grid (zero-deposition column), used by SPA-3, PER-1, PER-4
 | PAR-1 | python f64 (r = 0, n_j = 2 000) vs warp-cpu f32 (r = 2): per-beamlet in-grid energy, z = Δ/√(σ₁²+σ₂²) | \|z\| ≤ 4 for every beamlet (J = 4) | LV |
 | PAR-2 | warp-cpu f32 vs warp-cuda f32 (r = 2/3): per-beamlet in-grid energy \|z\| ≤ 4 and entry-wise coverage as UNC-2 | both | HR |
 | PAR-3 | warp-cpu f32 vs warp-cuda f32, same seed: per-beamlet integer accumulators | report-only (not gating; float32 device math differs); recorded | HR |
+
+**MEM — allocation audit (A-4 item 2)**
+
+| Row | What | Pass iff | Tier |
+|---|---|---|---|
+| MEM-1 | Instrumented allocation audit: every array allocated by the run (numpy `ndarray.nbytes` of arrays created by the driver and `wp.array` sizes, recorded through a test hook on the allocation helpers) sums, at its peak, to at most `allocation_estimate(...)` (§B.3); for the python path and warp-cpu the peak is measured per chunk; the estimate must not exceed the measured peak by more than a factor 1.5 (an estimate that is too loose is also a fail, recorded) | measured peak ≤ estimate ≤ 1.5 × measured peak, for each of the python, warp-cpu f64 and f32 variants, with and without ions/nuclear where the backend supports them, and for G ∈ {1, 2, J} | CI (python, warp-cpu); LV (warp-cpu); HR (warp-cuda) |
 
 **CLI, reuse, performance, regression, docs**
 
@@ -452,3 +544,8 @@ None. Cache-backed CAP-1 rows use datasets already cached; no download.
   Amendment A-3 after A-2): (1) subset runs become the diagnostic `influence_columns` API (no `Result`, no bundle);
   (2) fail-closed influence grouping; (3) second `fstat` on the spot file; (4) τ = 0 and zero-deposition columns.
   Rows BEAM-1, INF-4, PER-1, PER-4, PER-6, CAP-3, SPA-3, CLI-2, CLI-3 updated. Not a clinical claim.
+- 2026-11-25 (S0 fix 4, Codex REVIEW-a52098eb on af4aebc6, changes_required; four important and two minor findings
+  adopted, see Amendment A-4 after A-3): (1) fully fail-closed `influence_columns`; (2) exact backend-aware allocation
+  formula and the new row MEM-1; (3) thresholded composite identity with the n_j/N weight and the unequal-n_j reader
+  control; (4) INF-4 at both thresholds, every field; (5) superseded-sentence marking in decision 0046 and the ledger
+  wording; (6) SPA-3 τ = 0 sentence. Rows BEAM-1, INF-4, MEM-1, PER-4, SPA-3 updated. Not a clinical claim.
