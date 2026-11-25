@@ -427,7 +427,8 @@ def test_nuclear_effective_config_and_capabilities(make_config: MakeConfig, tid:
 # Re-pinned 2026-11-23 (V3-006 S4): the pin was already stale on v3/develop 95937553 (V3-013 changed
 # the stopping section; digest db8e79c0...) and decision 0045 adds the "declared" and "informative"
 # sections of the capability contract (digest at ae4fe3ec and after: 021c3c3d...).
-CAPABILITIES_SHA256 = "021c3c3d482278fb5b70c13fde0fdf28acb192a777670a318c7d5e145585f856"
+# V3-007 S1 (decision 0046): the beamlet entries of "sources"/"declared" change the digest.
+CAPABILITIES_SHA256 = "2dc1cbbcc8afbadfca61616d4228330fa2b5d68cf17fa85503b23532a70e5670"
 
 
 def test_capacity_bounds_follow_decision_0041_section_5(

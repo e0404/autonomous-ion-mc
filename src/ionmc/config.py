@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
@@ -59,12 +61,21 @@ from ionmc.physics.stopping_selection import (
     select,
 )
 from ionmc.scoring import MAX_SCORING_GRIDS, ScoringGrid, TallyRequest
-from ionmc.sources import PencilBeamSource
+from ionmc.sources import (
+    UNIT_DIRECTION_STATUS_BEAMLETS,
+    BeamletSet,
+    PencilBeamSource,
+)
 from ionmc.species import producible
 from ionmc.transport.channels import ChannelPlan, NuclearCapacity, compile_channels
 from ionmc.transport.tables import TransportTables, material_fingerprint, thaw
 from ionmc.transport.tally import (
+    COUNTER_NAMES,
+    ION_COUNTER_NAMES,
     MAX_QUANTA,
+    N_FIXED_TALLIES,
+    NUCLEAR_COUNTER_NAMES,
+    NUCLEAR_TALLY_NAMES,
     QUANTUM_MEV,
     TRACE_N_CONTINUOUS,
     TRACE_N_DISCRETE,
@@ -98,6 +109,26 @@ CHANNEL_BACKENDS: tuple[str, ...] = ("python", "warp-cpu", "warp-cuda")
 """Backends that implement the scoring channels of decision 0040; a configuration with tallies is
 rejected on every other backend, so a requested tally is never silently ignored."""
 NUCLEAR_MAX_ENERGY_MEV = 250.0
+
+MAX_BEAMLETS = 4096
+"""Largest number J of beamlets of a ``BeamletSet`` (decision 0046; ESTIMATE-justified by the
+size of the persisted request)."""
+MAX_TOTAL_HISTORIES = 2**32
+"""Largest sum of the beamlet ``n_histories`` (decision 0037 counter encoding)."""
+BEAMLET_LABEL_PATTERN = r"^[A-Za-z0-9_.-]{1,64}$"
+"""Grammar of ``Beamlet.label`` (plan amendment A-5 item 3): ASCII letters, digits, ``_``, ``.``,
+``-``, 1 to 64 characters; whitespace, ``<``, ``[``, ``(``, ``|`` and non-ASCII are refused."""
+BEAMLET_MAX_CPU_WORKERS = 1
+"""Beamlet runs are single-process (operator directive): ``cpu_workers`` must not exceed this."""
+INFLUENCE_THRESHOLD_BOUNDS = (0.0, 1.0)
+"""``InfluenceOptions.threshold_rel`` must lie in ``[0, 1)`` (0 is lossless)."""
+BEAMLET_TRANSPORT_AVAILABLE = False
+"""TEMPORARY (V3-007 S1): beamlet transport is implemented in S2 (python) and S3 (Warp). Until the
+S2 commit ``validate`` refuses every ``BeamletSet`` run with "beamlet transport not yet available
+(V3-007 S2)". TODO(V3-007 S2): remove this switch, its rule in ``_check_beamlet_set`` and the
+declaration ``beamlet-transport-not-available`` in ``ionmc.contract``."""
+INFLUENCE_GROUP_ORIGIN_MEMORY = "memory-budget"
+"""Reconciliation rule name of an automatic ``InfluenceOptions.group_size``."""
 
 ION_PROJECTILES = (ALPHA, CARBON12, OXYGEN16)
 """The ions of the electromagnetic ion engine (decision 0043); He-3 and others fail closed."""
@@ -303,10 +334,40 @@ class DiagnosticsOptions:
 
 
 @dataclass(frozen=True)
-class SimulationConfig:
-    """Complete simulation request."""
+class InfluenceOptions:
+    """Dose influence matrix request of a :class:`~ionmc.sources.BeamletSet` run (decision 0046).
 
-    source: PencilBeamSource
+    ``grid`` names one of the configured scoring grids (the influence grid). ``threshold_rel`` is
+    the relative sparsification threshold tau in [0, 1) (0, the default, is lossless).
+    ``group_size`` is the number G of beamlets transported per accumulator group: ``None`` lets
+    ``validate`` derive the largest G in [1, J] that fits ``RunOptions.memory_budget_bytes``
+    (recorded as effective, rule ``memory-budget``); an explicit value must lie in [1, J] and fit.
+    ``persist_batches`` keeps the per-batch values of every stored entry. Construction checks
+    types only; the range rules are fail-closed rules of ``validate``.
+    """
+
+    grid: str
+    threshold_rel: float = 0.0
+    group_size: int | None = None
+    persist_batches: bool = True
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.grid, str) or not self.grid:
+            raise fail("influence.grid must be a non-empty string")
+        real("influence.threshold_rel", self.threshold_rel)
+        if self.group_size is not None:
+            integer("influence.group_size", self.group_size)
+        if not isinstance(self.persist_batches, bool):
+            raise fail("influence.persist_batches must be a bool")
+
+
+@dataclass(frozen=True)
+class SimulationConfig:
+    """Complete simulation request. ``source`` is one :class:`PencilBeamSource` or a
+    :class:`~ionmc.sources.BeamletSet`; ``influence`` (beamlet sets only) requests the dose
+    influence matrix."""
+
+    source: PencilBeamSource | BeamletSet
     geometry: VoxelGeometry | BoxPhantom
     scoring: tuple[ScoringGrid, ...]
     physics: PhysicsOptions
@@ -314,10 +375,13 @@ class SimulationConfig:
     diagnostics: DiagnosticsOptions = DiagnosticsOptions()
     tallies: tuple[TallyRequest, ...] = ()
     lookups: tuple[LookupTable, ...] = ()
+    influence: InfluenceOptions | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.source, PencilBeamSource):
-            raise fail("source must be a PencilBeamSource")
+        if not isinstance(self.source, PencilBeamSource | BeamletSet):
+            raise fail("source must be a PencilBeamSource or a BeamletSet")
+        if self.influence is not None and not isinstance(self.influence, InfluenceOptions):
+            raise fail("influence must be InfluenceOptions or None")
         if not isinstance(self.geometry, VoxelGeometry | BoxPhantom):
             raise fail("geometry must be a VoxelGeometry or BoxPhantom")
         if not isinstance(self.scoring, tuple) or not all(
@@ -347,6 +411,68 @@ def effective_end_of_range_model(config: SimulationConfig) -> str:
     if model == "default":
         return "continuous_residual_v1" if config.source.projectile.z >= 2 else "point_v1"
     return model
+
+
+def _source_members(src: PencilBeamSource | BeamletSet) -> list[tuple[str, float, float]]:
+    """``(where, E0, sigma_E)`` of every energy-distinct member of the source, in source order:
+    the pencil beam itself (``where`` is empty, so the messages of a pencil source keep their
+    text) or one entry per beamlet (``where`` names its index and label). The per-beamlet energy
+    rules of ``validate`` run over this list; the envelope rules use the extremes of it."""
+    if isinstance(src, PencilBeamSource):
+        return [("", src.kinetic_energy_mev, src.energy_sigma_mev)]
+    return [
+        (_beamlet_where(j, b.label), b.kinetic_energy_mev, b.energy_sigma_mev)
+        for j, b in enumerate(src.beamlets)
+    ]
+
+
+def _beamlet_where(j: int, label: str | None) -> str:
+    return f" beamlet {j}" + ("" if label is None else f" ({label!r})")
+
+
+def _source_e_hi(src: PencilBeamSource | BeamletSet) -> float:
+    """``E0 + 6 sigma_E`` of a pencil beam; for a beamlet set the envelope maximum over the
+    beamlets (plan section B.1: ``max_steps``, tally bounds and stopping windows use it)."""
+    if isinstance(src, PencilBeamSource):
+        return src.kinetic_energy_mev + 6.0 * src.energy_sigma_mev
+    return src.envelope().e_hi_mev
+
+
+def _source_description(src: PencilBeamSource | BeamletSet) -> str:
+    """Words naming the source energy in an ion-mapping failure message: ``"<ion> at E0 = ... MeV"``
+    for a pencil beam; for a beamlet set the energy range and the beamlets that bound it."""
+    if isinstance(src, PencilBeamSource):
+        return f"{src.projectile.name} at E0 = {src.kinetic_energy_mev:g} MeV"
+    bl = src.beamlets
+    lo = min(range(len(bl)), key=lambda j: bl[j].e_lo_mev)
+    hi = max(range(len(bl)), key=lambda j: bl[j].e_hi_mev)
+    return (
+        f"{src.projectile.name} beamlet set (lowest energy{_beamlet_where(lo, bl[lo].label)} "
+        f"at E0 = {bl[lo].kinetic_energy_mev:g} MeV, highest energy"
+        f"{_beamlet_where(hi, bl[hi].label)} at E0 = {bl[hi].kinetic_energy_mev:g} MeV)"
+    )
+
+
+def _merge_fdm(statuses: Sequence[FdmDomainStatus]) -> FdmDomainStatus:
+    """Aggregate of the per-beamlet f_dM domain statuses: the largest proton-equivalent energies
+    and ``fdm_extrapolated`` if any beamlet is (every beamlet was checked, fail closed)."""
+    if len(statuses) == 1:
+        return statuses[0]
+    first = statuses[0]
+    nom = [
+        s.p1v1_eq_kinetic_energy_mev for s in statuses if s.p1v1_eq_kinetic_energy_mev is not None
+    ]
+    up = [
+        s.p1v1_eq_kinetic_energy_hi_mev
+        for s in statuses
+        if s.p1v1_eq_kinetic_energy_hi_mev is not None
+    ]
+    return replace(
+        first,
+        fdm_extrapolated=any(s.fdm_extrapolated for s in statuses),
+        p1v1_eq_kinetic_energy_mev=max(nom) if nom else None,
+        p1v1_eq_kinetic_energy_hi_mev=max(up) if up else None,
+    )
 
 
 @dataclass(frozen=True, eq=False)
@@ -495,7 +621,7 @@ def _ion_mapping_data(
             else "the exact-Omega root solve fails at reachable states"
         )
         raise fail(
-            f"{proj.name} at E0 = {config.source.kinetic_energy_mev:g} MeV is unsupported with "
+            f"{_source_description(config.source)} is unsupported with "
             f"multiple scattering in {', '.join(n for n, _c in uncovered)}: the exact-Omega "
             f"mapping is not defined over the reachable states ({reason}; {parts}); runs with "
             "multiple_scattering=False are unaffected"
@@ -533,7 +659,10 @@ def effective_e_cut_mev(config: SimulationConfig) -> float:
 class EffectiveConfig:
     """What will actually run (recorded in every result).
 
-    ``unit_direction`` is the normalised beam direction; ``max_steps`` the per-history step
+    ``unit_direction`` is the normalised beam direction (``None`` for a beamlet set, which has one
+    direction per beamlet, status ``not-applicable: beamlets``); ``influence_group_size`` the
+    effective beamlet group size G of an influence run (``influence_group_origin`` ``"requested"``
+    or ``"memory-budget"``; None otherwise); ``max_steps`` the per-history step
     bound (``max_steps_origin`` is ``"user"`` or ``"computed"``); ``tables`` the transport
     tables; ``scattering_length_g_cm2`` the Gottschalk ``X_S`` of every material;
     ``production`` is True only for float32 Warp backends; ``scoring_pieces`` the bound of the
@@ -543,7 +672,7 @@ class EffectiveConfig:
 
     requested: SimulationConfig
     geometry: VoxelGeometry
-    unit_direction: tuple[float, float, float]
+    unit_direction: tuple[float, float, float] | None
     tables: TransportTables
     max_steps: int
     max_steps_origin: str
@@ -557,6 +686,17 @@ class EffectiveConfig:
     nuclear: NuclearSetup | None = None
     fdm_domain: FdmDomainStatus = PROTON_FDM_STATUS
     ion_mapping: IonMappingData | None = None
+    influence_group_size: int | None = None
+    influence_group_origin: str | None = None
+
+    def single_unit_direction(self) -> tuple[float, float, float]:
+        """The unit direction of a pencil source; a beamlet set has none (use the per-beamlet
+        ``requested.source.unit_directions()``)."""
+        if self.unit_direction is None:
+            raise ValueError(
+                f"a beamlet set has no single direction ({UNIT_DIRECTION_STATUS_BEAMLETS})"
+            )
+        return self.unit_direction
 
     @property
     def is_ion(self) -> bool:
@@ -609,6 +749,20 @@ class EffectiveConfig:
         p = self.requested.physics
         r = self.requested.run
         s = self.requested.source
+        source_block: dict[str, Any]
+        if isinstance(s, BeamletSet):
+            source_block = self._beamlet_source_summary(s)
+        else:
+            source_block = {
+                "projectile": s.projectile.name,
+                "z": s.projectile.z,
+                "a": s.projectile.a,
+                "mass_mev": s.projectile.mass_mev,
+                "position_mm": list(s.position_mm),
+                "kinetic_energy_mev": s.kinetic_energy_mev,
+                "energy_sigma_mev": s.energy_sigma_mev,
+                "lateral_sigma_mm": s.lateral_sigma_mm,
+            }
         out: dict[str, Any] = {
             "backend": self.backend,
             "precision": self.precision,
@@ -621,17 +775,8 @@ class EffectiveConfig:
             "max_steps": self.max_steps,
             "scoring_pieces": self.scoring_pieces,
             "max_steps_origin": self.max_steps_origin,
-            "unit_direction": list(self.unit_direction),
-            "source": {
-                "projectile": s.projectile.name,
-                "z": s.projectile.z,
-                "a": s.projectile.a,
-                "mass_mev": s.projectile.mass_mev,
-                "position_mm": list(s.position_mm),
-                "kinetic_energy_mev": s.kinetic_energy_mev,
-                "energy_sigma_mev": s.energy_sigma_mev,
-                "lateral_sigma_mm": s.lateral_sigma_mm,
-            },
+            "unit_direction": None if self.unit_direction is None else list(self.unit_direction),
+            "source": source_block,
             "physics": {
                 "nuclear": p.nuclear,
                 "straggling": p.straggling,
@@ -695,7 +840,40 @@ class EffectiveConfig:
         if self.nuclear is not None:  # nuclear=False summaries are unchanged
             out["physics"]["e_cut_deuteron_mev"] = p.e_cut_deuteron_mev
             out["nuclear"] = self.nuclear.summary(self.geometry)
+        if isinstance(s, BeamletSet):  # pencil summaries are byte-identical (no new key)
+            out["unit_direction_status"] = UNIT_DIRECTION_STATUS_BEAMLETS
+            out["influence"] = self._influence_summary()
         return out
+
+    def _beamlet_source_summary(self, s: BeamletSet) -> dict[str, Any]:
+        """The ``source`` block of a beamlet set: projectile, J, envelope and the canonical-table
+        digest (the per-beamlet table itself is in the requested configuration)."""
+        return {
+            "type": "beamlets",
+            "projectile": s.projectile.name,
+            "z": s.projectile.z,
+            "a": s.projectile.a,
+            "mass_mev": s.projectile.mass_mev,
+            "n_beamlets": s.n_beamlets,
+            "n_histories_total": s.n_histories_total,
+            "envelope": s.envelope().to_dict(),
+            "beamlets_sha256": s.canonical_sha256(),
+        }
+
+    def _influence_summary(self) -> dict[str, Any] | None:
+        inf = self.requested.influence
+        if inf is None:
+            return None
+        grid = next(g for g in self.requested.scoring if g.name == inf.grid)
+        return {
+            "grid": inf.grid,
+            "n_voxels": grid.n_voxels,
+            "threshold_rel": inf.threshold_rel,
+            "persist_batches": inf.persist_batches,
+            "group_size": self.influence_group_size,
+            "group_size_origin": self.influence_group_origin,
+            "normalisation": "per primary of beamlet j",
+        }
 
 
 def _resolve_geometry(geometry: VoxelGeometry | BoxPhantom) -> VoxelGeometry:
@@ -753,7 +931,7 @@ def _computed_max_steps(
     steps and of range-limited steps, with a safety factor of 4.
     """
     src, ph = config.source, config.physics
-    e_hi = min(src.kinetic_energy_mev + 6.0 * src.energy_sigma_mev, float(tables.e_max_mev.min()))
+    e_hi = min(_source_e_hi(src), float(tables.e_max_mev.min()))
     dens = geometry.densities_g_cm3()
     path_mm = 0.0
     for m in range(len(geometry.materials)):
@@ -940,7 +1118,7 @@ def _nuclear_setup_checks(
     if ph.nuclear_table_id is None:
         raise fail("nuclear=True needs PhysicsOptions.nuclear_table_id (the derived nuclear table)")
     table = NuclearTable.load(None, ph.nuclear_table_id)
-    e_max = src.kinetic_energy_mev + 6.0 * src.energy_sigma_mev
+    e_max = _source_e_hi(src)
     if e_max > NUCLEAR_MAX_ENERGY_MEV:
         raise fail(
             f"nuclear=True supports source energies up to {NUCLEAR_MAX_ENERGY_MEV} MeV "
@@ -1061,7 +1239,7 @@ def _check_stopping_domain(
             ",".join(m.name for m in geometry.materials),
             "source interval [E_cut, E0 + 6 sigma_E]",
             e_cut,
-            src.kinetic_energy_mev + 6.0 * src.energy_sigma_mev,
+            _source_e_hi(src),
         )
     if nuclear is not None:
         d = nuclear.deuteron_tables
@@ -1116,6 +1294,234 @@ def _assert_single_model(
     assert_single_model(sel, groups)
 
 
+# ---------------------------------------------------------------------------------------------
+# beamlet sets and influence options (decision 0046, plan sections B.1, B.3, B.7)
+
+
+def _beamlet_set_checks(config: SimulationConfig) -> None:
+    """Fail-closed rules of a ``BeamletSet`` that need no tables (plan section B.1)."""
+    src, run = config.source, config.run
+    assert isinstance(src, BeamletSet)
+    j_n = src.n_beamlets
+    if not 1 <= j_n <= MAX_BEAMLETS:
+        raise fail(f"the beamlet set needs between 1 and {MAX_BEAMLETS} beamlets, got {j_n}")
+    pattern = re.compile(BEAMLET_LABEL_PATTERN)
+    seen: dict[str, int] = {}
+    for j, b in enumerate(src.beamlets):
+        where = _beamlet_where(j, b.label)
+        if b.label is not None:
+            if pattern.fullmatch(b.label) is None:
+                raise fail(
+                    f"label of{where} does not match {BEAMLET_LABEL_PATTERN} (ASCII letters, "
+                    "digits, '_', '.', '-'; 1 to 64 characters; no whitespace, '<', '[', '(', "
+                    "'|' or non-ASCII)"
+                )
+            if b.label in seen:
+                raise fail(
+                    f"label {b.label!r} of{where} is not unique (also beamlet {seen[b.label]})"
+                )
+            seen[b.label] = j
+        w = b.weight
+        if w is not None and not (
+            isinstance(w, int | float) and not isinstance(w, bool) and math.isfinite(w) and w >= 0.0
+        ):
+            raise fail(f"weight of{where} must be None or a finite number >= 0, got {w!r}")
+        if b.n_histories < run.n_batches or b.n_histories % run.n_batches != 0:
+            raise fail(
+                f"n_histories ({b.n_histories}) of{where} must be at least n_batches "
+                f"({run.n_batches}) and a multiple of it"
+            )
+    total = src.n_histories_total
+    if total > MAX_TOTAL_HISTORIES:
+        raise fail(f"the beamlet n_histories sum to {total}, above the limit {MAX_TOTAL_HISTORIES}")
+    if run.n_histories != total:
+        raise fail(
+            f"run.n_histories ({run.n_histories}) must equal the sum of the beamlet n_histories "
+            f"({total}) of the beamlet set"
+        )
+    if run.cpu_workers > BEAMLET_MAX_CPU_WORKERS:
+        raise fail(
+            f"cpu_workers ({run.cpu_workers}) must be <= {BEAMLET_MAX_CPU_WORKERS} for a beamlet "
+            "set (beamlet runs are single-process)"
+        )
+    if config.tallies or config.lookups:
+        raise fail(
+            "tallies and lookups are not supported with a beamlet set (beamlet-resolved tally "
+            "channels are not implemented; a tally is never silently ignored)"
+        )
+    if not BEAMLET_TRANSPORT_AVAILABLE:  # TODO(V3-007 S2): remove with the switch
+        raise fail("beamlet transport not yet available (V3-007 S2): a BeamletSet cannot be run")
+
+
+def _influence_checks(config: SimulationConfig) -> None:
+    """Fail-closed rules of ``InfluenceOptions`` (plan section B.7); G is checked against the
+    memory budget by :func:`_finish_beamlet_set`."""
+    inf = config.influence
+    if inf is None:
+        return
+    src = config.source
+    if not isinstance(src, BeamletSet):
+        raise fail("influence requires a BeamletSet source (a pencil source has no beamlets)")
+    names = [g.name for g in config.scoring]
+    if inf.grid not in names:
+        raise fail(f"influence.grid {inf.grid!r} is not a scoring grid (grids: {names})")
+    lo, hi = INFLUENCE_THRESHOLD_BOUNDS
+    if not lo <= inf.threshold_rel < hi:
+        raise fail(f"influence.threshold_rel must be in [{lo:g}, {hi:g}), got {inf.threshold_rel}")
+    d = config.diagnostics
+    if d.trace_histories > 0 or d.track_end_positions or d.escape_records:
+        raise fail(
+            "diagnostics (trace_histories, track_end_positions, escape_records) are not "
+            "supported with influence"
+        )
+    if config.tallies or config.lookups:
+        raise fail("tallies and lookups are not supported with influence (beamlet channels)")
+    g = inf.group_size
+    if g is not None and not 1 <= g <= src.n_beamlets:
+        raise fail(
+            f"influence.group_size ({g}) must be in [1, {src.n_beamlets}] (the number of beamlets)"
+        )
+
+
+def _row_widths(eff: EffectiveConfig) -> tuple[int, int, int]:
+    """``(W_t, W_c_warp, W_c_python)``: the per-history tally and counter row widths read from
+    the driver constants (plan section B.3)."""
+    from ionmc.transport.run import channel_columns  # lazy: transport imports this module
+
+    n_g = len(eff.requested.scoring)
+    w_t = N_FIXED_TALLIES + 2 * n_g + channel_columns(eff)
+    w_c = len(COUNTER_NAMES) + (len(ION_COUNTER_NAMES) if eff.is_ion else 0)
+    return w_t, w_c, w_c
+
+
+def allocation_terms(
+    backend: str,
+    n_batches: int,
+    total_voxels: int,
+    n_grids: int,
+    eff: EffectiveConfig,
+    n_histories: int,
+    chunk_histories: int,
+    influence_voxels: int,
+    group_size: int,
+    offsets: Sequence[int],
+) -> dict[str, int]:
+    """The accumulator-payload terms of plan section B.3 in bytes (every key is a class member):
+    ``grid`` 8 B S, ``tally_rows`` 8 L W_t, ``counter_rows`` 4 L W_c, ``influence`` 8 G B V_inf
+    and, on warp-cuda, ``cuda_readback`` = max(8 chunk W_t + 4 chunk W_c, 8 G B V_inf); L is the
+    chunk on the warp backends and N on the python backend."""
+    w_t, w_c, _ = _row_widths(eff)
+    n_g = len(eff.requested.scoring)
+    assert n_g == n_grids
+    if backend == "python":  # python adds the nuclear blocks of a nuclear run
+        if eff.nuclear is not None:
+            w_t += len(NUCLEAR_TALLY_NAMES)
+            w_c += len(NUCLEAR_COUNTER_NAMES)
+    j_n = len(offsets) - 1
+    longest = max(
+        offsets[min((g + 1) * group_size, j_n)] - offsets[g * group_size]
+        for g in range(-(-j_n // group_size))
+    )
+    chunk = min(chunk_histories, longest)
+    rows = n_histories if backend == "python" else chunk
+    out = {
+        "grid": 8 * n_batches * total_voxels,
+        "tally_rows": 8 * rows * w_t,
+        "counter_rows": 4 * rows * w_c,
+        "influence": 8 * group_size * n_batches * influence_voxels,
+    }
+    if backend == "warp-cuda":
+        out["cuda_readback"] = max(8 * chunk * w_t + 4 * chunk * w_c, out["influence"])
+    return out
+
+
+def allocation_estimate(
+    backend: str,
+    n_batches: int,
+    total_voxels: int,
+    n_grids: int,
+    eff: EffectiveConfig,
+    n_histories: int,
+    chunk_histories: int,
+    influence_voxels: int,
+    group_size: int,
+    offsets: Sequence[int],
+) -> int:
+    """Accumulator-payload bytes of a beamlet run for group size ``group_size`` (plan section
+    B.3, the bound ``validate`` compares with ``memory_budget_bytes``)::
+
+        warp-cpu : 8 B S + 8 chunk W_t + 4 chunk W_c + 8 G B V_inf
+        warp-cuda: warp-cpu + max(8 chunk W_t + 4 chunk W_c, 8 G B V_inf)
+        python   : 8 B S + 8 N W_t + 4 N W_c + 8 G B V_inf
+
+    with B = ``n_batches``, S = ``total_voxels``, N = ``n_histories``, V_inf =
+    ``influence_voxels``, chunk = min(``chunk_histories``, longest group range) over the groups
+    ``[g G, (g+1) G)`` of ``offsets`` (int, length J + 1) and the row widths W_t, W_c read from
+    the driver constants (see :func:`allocation_terms`). Not bounded: geometry, tables, parameter
+    arrays, end-state arrays, reduction temporaries, diagnostics, retained output, Python objects.
+    """
+    return sum(
+        allocation_terms(
+            backend,
+            n_batches,
+            total_voxels,
+            n_grids,
+            eff,
+            n_histories,
+            chunk_histories,
+            influence_voxels,
+            group_size,
+            offsets,
+        ).values()
+    )
+
+
+def _finish_beamlet_set(eff: EffectiveConfig) -> EffectiveConfig:
+    """Memory rule of a beamlet run (plan section B.3): refuse before any allocation when even
+    G = 1 exceeds ``memory_budget_bytes``, check an explicit G, derive the largest G in [1, J]
+    otherwise (the estimate is non-decreasing in G)."""
+    cfg = eff.requested
+    src, run, inf = cfg.source, cfg.run, cfg.influence
+    assert isinstance(src, BeamletSet)
+    offsets = [int(x) for x in src.offsets()]
+    j_n = src.n_beamlets
+    total_v = sum(g.n_voxels for g in cfg.scoring)
+    v_inf = 0 if inf is None else next(g for g in cfg.scoring if g.name == inf.grid).n_voxels
+
+    def estimate(g: int) -> int:
+        return allocation_estimate(
+            run.backend, run.n_batches, total_v, len(cfg.scoring), eff, run.n_histories,
+            run.chunk_histories, v_inf, g, offsets,
+        )  # fmt: skip
+
+    budget = run.memory_budget_bytes
+    if estimate(1) > budget:
+        raise fail(
+            f"the accumulator payload at beamlet group size 1 is {estimate(1)} bytes, above the "
+            f"memory budget of {budget} bytes (reduce n_batches, the grids, chunk_histories or "
+            "the influence grid)"
+        )
+    if inf is not None and inf.group_size is not None:
+        if estimate(inf.group_size) > budget:
+            raise fail(
+                f"influence.group_size ({inf.group_size}) needs {estimate(inf.group_size)} bytes "
+                f"of accumulator payload, above the memory budget of {budget} bytes"
+            )
+        return replace(eff, influence_group_size=inf.group_size, influence_group_origin="requested")
+    if inf is None:
+        return eff
+    lo, hi = 1, j_n  # largest g in [1, J] with estimate(g) <= budget; estimate(1) fits
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if estimate(mid) <= budget:
+            lo = mid
+        else:
+            hi = mid - 1
+    return replace(
+        eff, influence_group_size=lo, influence_group_origin=INFLUENCE_GROUP_ORIGIN_MEMORY
+    )
+
+
 def validate(config: SimulationConfig) -> EffectiveConfig:
     """Check every fail-closed rule and return the effective configuration.
 
@@ -1126,6 +1532,10 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
         raise fail("config must be a SimulationConfig")
     src, ph, run = config.source, config.physics, config.run
     geometry = _resolve_geometry(config.geometry)
+    members = _source_members(src)  # per-member energy rules; pencil messages are unchanged
+    _influence_checks(config)
+    if isinstance(src, BeamletSet):
+        _beamlet_set_checks(config)
 
     if src.projectile != PROTON and src.projectile not in ION_PROJECTILES:
         raise fail(
@@ -1146,14 +1556,15 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
                 f"(got e_cut_mev = {ph.e_cut_mev}, the default is 2.0)"
             )
         lo_u, hi_u = ION_DOMAIN_MEV_PER_U[src.projectile.name]
-        e0_u = src.kinetic_energy_mev / src.projectile.a
-        e_hi_u = (src.kinetic_energy_mev + 6.0 * src.energy_sigma_mev) / src.projectile.a
-        if not lo_u <= e0_u <= hi_u or e_hi_u > hi_u:
-            raise fail(
-                f"{src.projectile.name} source energy {e0_u:g} MeV/u (E0 + 6 sigma_E = {e_hi_u:g} "
-                f"MeV/u) is outside the supported domain [{lo_u:g}, {hi_u:g}] MeV/u "
-                "(decision 0043 section 5)"
-            )
+        for where, e0_m, sigma_m in members:
+            e0_u = e0_m / src.projectile.a
+            e_hi_u = (e0_m + 6.0 * sigma_m) / src.projectile.a
+            if not lo_u <= e0_u <= hi_u or e_hi_u > hi_u:
+                raise fail(
+                    f"{src.projectile.name} source{where} energy {e0_u:g} MeV/u (E0 + 6 sigma_E = "
+                    f"{e_hi_u:g} MeV/u) is outside the supported domain [{lo_u:g}, {hi_u:g}] "
+                    "MeV/u (decision 0043 section 5)"
+                )
     e_cut = effective_e_cut_mev(config)
     nuc_table = None
     nuc_rows: tuple[Any, ...] = ()
@@ -1234,19 +1645,19 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             f"the stopping tables start at {e_lo} MeV, above half of the cutoff energy "
             f"({e_cut} MeV); the cutoff energy must be at least twice the table floor"
         )
-    e0 = src.kinetic_energy_mev
-    if not 2.0 * e_cut <= e0 <= e_hi_table:
-        raise fail(
-            f"source energy {e0} MeV outside [2 e_cut, table maximum] = "
-            f"[{2.0 * e_cut}, {e_hi_table}] MeV"
-        )
-    if src.energy_sigma_mev > MAX_ENERGY_SIGMA_FRACTION * e0:
-        raise fail(
-            f"energy_sigma_mev ({src.energy_sigma_mev}) exceeds "
-            f"{MAX_ENERGY_SIGMA_FRACTION} of the source energy"
-        )
+    for where, e0, sigma_e in members:  # the pencil beam, or every beamlet (not the envelope)
+        if not 2.0 * e_cut <= e0 <= e_hi_table:
+            raise fail(
+                f"source{where} energy {e0} MeV outside [2 e_cut, table maximum] = "
+                f"[{2.0 * e_cut}, {e_hi_table}] MeV"
+            )
+        if sigma_e > MAX_ENERGY_SIGMA_FRACTION * e0:
+            raise fail(
+                f"energy_sigma_mev{where} ({sigma_e}) exceeds "
+                f"{MAX_ENERGY_SIGMA_FRACTION} of the source energy"
+            )
 
-    e_hi = min(e0 + 6.0 * src.energy_sigma_mev, e_hi_table)
+    e_hi = min(max(e0 + 6.0 * sigma_e for _w, e0, sigma_e in members), e_hi_table)
     # the energy bound of a history: a nuclear history may deposit more than its initial energy
     # (decision 0041 section 5, amended 2026-10-08): max(E_hi, the table's per-history bound)
     e_cap = e_hi if nuclear is None else max(e_hi, nuclear.history_energy_bound_mev)
@@ -1283,15 +1694,20 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
                 )
             ],
         )
-        fdm_domain = fdm_domain_status(
-            src.projectile,
-            geometry.materials,
-            e0,
-            src.energy_sigma_mev,
-            ion_tables=ion_tables,
+        fdm_domain = _merge_fdm(
+            [  # per beamlet (identical energy and spread pairs once), never on the envelope
+                fdm_domain_status(
+                    src.projectile, geometry.materials, e0, sigma_e, ion_tables=ion_tables
+                )
+                for e0, sigma_e in dict.fromkeys((e0, sg) for _w, e0, sg in members)
+            ]
         )
         ion_mapping = _ion_mapping_data(
-            tables, geometry, config, max(e0 - 6.0 * src.energy_sigma_mev, e_cut), e_hi
+            tables,
+            geometry,
+            config,
+            max(min(e0 - 6.0 * sigma_e for _w, e0, sigma_e in members), e_cut),
+            e_hi,
         )
 
     assert_identity_stable(  # after every table of the run is built (decision 0044 section 2)
@@ -1345,7 +1761,7 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             "available and nothing falls back to another backend"
         )
 
-    return EffectiveConfig(
+    eff = EffectiveConfig(
         requested=config,
         geometry=geometry,
         unit_direction=src.unit_direction(),
@@ -1368,3 +1784,4 @@ def validate(config: SimulationConfig) -> EffectiveConfig:
             "u01": U01_MAPPING[run.precision],
         },
     )
+    return _finish_beamlet_set(eff) if isinstance(src, BeamletSet) else eff

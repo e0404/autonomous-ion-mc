@@ -733,7 +733,7 @@ def _capabilities_base() -> dict[str, Any]:
             "delta_electrons": list(DELTA_ELECTRON_MODELS),
         },
         "geometry": ["VoxelGeometry", "BoxPhantom"],
-        "sources": ["PencilBeamSource"],
+        "sources": [t.__name__ for t in contract.SOURCE_TYPES],
         "scoring": [
             "ScoringGrid (energy, dose)",
             "TallyRequest (edep, dose, fluence, LET, lookup averages, fluence spectra; "

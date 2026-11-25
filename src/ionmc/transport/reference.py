@@ -65,6 +65,7 @@ from ionmc.rng.philox import (
     key_from_seed,
     u01_py,
 )
+from ionmc.sources import PencilBeamSource
 from ionmc.species import PSEUDO_BASE, species_of_projectile
 from ionmc.transport.channels import (
     CLASS_LOCAL,
@@ -838,6 +839,7 @@ class _Reference:
     def _history(self, h: int) -> None:
         cfg, F, K, V, r = self.cfg, self.F, self.K, self.V, self.R
         src = cfg.source
+        assert isinstance(src, PencilBeamSource)  # BeamletSet: V3-007 S2 (refused by validate)
         key = self.key
         nx, ny, nz = self.shape
 
@@ -848,7 +850,7 @@ class _Reference:
         u = [u01_py(x, "float64") for x in w]
         z1, z2 = F.gauss_pair(r(u[0]), r(u[1]))
         z3 = F.gauss_one(r(u[2]), r(u[3]))
-        d = self.eff.unit_direction
+        d = self.eff.single_unit_direction()  # beamlet transport: V3-007 S2
         e1v, e2v = F.orthonormal_basis(V(r(d[0]), r(d[1]), r(d[2])))
         energy = src.kinetic_energy_mev
         if src.energy_sigma_mev > 0.0:

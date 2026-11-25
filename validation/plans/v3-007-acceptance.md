@@ -398,6 +398,13 @@ reduction, before the next readback and before the group copy, and MEM-1 observe
 8·G·B·V_inf)` is exact for an implementation that honours the release rule and a lingering copy fails the audit.
 Not a clinical claim.
 
+**Clarification note (2026-11-25, S1 commit).** Diagnostics (trace histories, track end positions, escape
+records) are refused together with `InfluenceOptions` in every entry point of V3-007 (`validate`, so also `run()`,
+not only `influence_columns`): the §B.3 sentence "Diagnostics are refused with influence (§B.10)" governs; the
+A-5 item 1 mention of diagnostic arrays in the "not bounded" list applies to `BeamletSet` runs WITHOUT influence
+(composite beamlet runs), where diagnostics stay available (INF-5 uses traces on such a run). Implemented in S1 as a
+fail-closed `validate` rule with its BEAM-1 twin; CAP-1 counts the combination as `unsupported`. Not a clinical claim.
+
 ## C. Seeds and determinism rules (declared before any run)
 
 - CI tests use fixed small seeds written in the tests (not evidence).

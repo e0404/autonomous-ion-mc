@@ -20,6 +20,7 @@ import numpy as np
 import warp as wp
 
 from ionmc.config import RESIDUAL_SUBSTEPS, EffectiveConfig
+from ionmc.sources import PencilBeamSource
 from ionmc.species import species_of_projectile
 from ionmc.transport.channel_device import empty_channel_data, make_channel_data
 from ionmc.transport.funcs import BIG_LENGTH_MM
@@ -87,6 +88,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     """Transport the histories ``[h0, h1)`` on ``device`` (see the module docstring)."""
     cfg = eff.requested
     run, src, ph, diag = cfg.run, cfg.source, cfg.physics, cfg.diagnostics
+    assert isinstance(src, PencilBeamSource)  # BeamletSet: V3-007 S3 (refused by validate)
     real = wp.float32 if eff.precision == "float32" else wp.float64
     np_real = np.float32 if eff.precision == "float32" else np.float64
     t_start = time.perf_counter()
@@ -132,7 +134,7 @@ def run_warp_range(eff: EffectiveConfig, h0: int, h1: int, device: str) -> Parti
     ctl.n_sub = RESIDUAL_SUBSTEPS
     ctl.eor = 1 if eff.end_of_range_model == "continuous_residual_v1" else 0
     ctl.pos0 = vec(src.position_mm)
-    ctl.dir = vec(eff.unit_direction)
+    ctl.dir = vec(eff.single_unit_direction())  # beamlet transport: V3-007 S3
     ctl.origin = vec(geo.origin_mm)
     ctl.spacing = vec(geo.spacing_mm)
     ctl.lo = vec(geo.lower_mm)

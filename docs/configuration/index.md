@@ -29,6 +29,7 @@ its cached dataset) and `nuclear_box.toml` (nuclear interactions; needs a built 
 | `diagnostics` | table | no | optional diagnostic records |
 | `tallies` | array of tables | no | extra scored quantities |
 | `lookups` | array of tables | no | user lookup tables |
+| `influence` | table | no | dose influence matrix request of a `[source] type = "beamlets"` run (decision 0046; keys `grid`, `threshold_rel`, `group_size`, `persist_batches`; documented in full by V3-007 step S7) |
 | `output` | table | no | where and what to persist |
 
 No environment variable overrides a physics or run field. Floats must be finite; a boolean is never accepted where a number is expected.
