@@ -535,39 +535,72 @@ def test_beam3_canonical_table_and_hash() -> None:
 
 Event = tuple[str, str, str]
 Coords = dict[Event, list[tuple[int, int]]]
+Key = tuple[str, str]  # (module path relative to src/ionmc, qualified scope name)
+_FUNC = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
-def audit_text(text: str, mod: str = "mod.py") -> Counter[Event]:
-    """Counted multiset of the events of ``audit_coords`` (one count per syntactic occurrence)."""
-    return Counter({k: len(v) for k, v in audit_coords(text, mod).items()})
+class _Package:
+    """Two-phase fixpoint analysis of ``.source`` provenance over a set of modules.
 
+    Phase 1 (``solve``) iterates until nothing new appears: per scope, the root names (``x.source``
+    attribute accesses are roots by syntax; parameter and closure roots are added below), the alias
+    set (``s = <source value>``, tuple unpacking, transitive), then (i) every call site that
+    resolves to a function/method of the package and passes a source value by position or keyword
+    makes the receiving PARAMETER a root of the callee scope, (ii) a nested ``def`` that reads an
+    enclosing source name makes that name a root of the inner scope (closure), (iii) a scope that
+    directly returns a source value (a root, an alias, a parameter root) is marked
+    returns-source, so ``x = f(cfg)`` binds ``x`` as an alias in the caller. Phase 2 (``events``)
+    emits the per-scope events. Resolvable callees: module-level and enclosing-scope functions by
+    name, ``self.m``/``cls.m`` and ``Class.m`` methods, ``Class(...)`` through its ``__init__``,
+    ``from .mod import f`` names (also through ``__init__`` re-exports) and ``mod.f`` on an imported
+    module. Documented limits: ``obj.method(...)`` on a non-self object, inherited methods,
+    dataclass-generated ``__init__``, ``getattr``/dynamic calls, external callees, ``*args``, a
+    source returned inside a container, and shadowing of a root name (over-approximated: a
+    reassigned root name stays a root) are NOT followed; a pass to an unresolvable callee remains a
+    ``<bare>``/``<alias-passed>`` event of the caller, which the allowlist lists as such."""
 
-def audit_coords(text: str, mod: str = "mod.py") -> Coords:
-    """Every (module, scope, event) of a ``.source`` root in ``text``, each mapped to the (line,
-    column) of EVERY syntactic occurrence (the counts are the list lengths; the coordinates are
-    used only in failure messages, never in the keys): the root occurrence itself
-    (``<root>:<expression text>``, stable under line drift), direct attribute reads, reads through
-    aliases bound in the same scope (``src = cfg.source``, tuple unpacking, TRANSITIVE aliases
-    ``src2 = src``; the alias set is a fixpoint) and pass-through of the source or an alias, in any
-    position, by keyword, inside a tuple/list/set/dict literal or a return (``<bare>`` /
-    ``<alias-passed>``)."""
-    events: Coords = {}
+    def __init__(self, texts: dict[str, str]) -> None:
+        self.nodes: dict[Key, list[ast.AST]] = {}
+        self.defs: dict[Key, list[ast.AST]] = {}
+        self.parents: dict[Key, dict[int, ast.AST]] = {}
+        self.binds: dict[Key, list[tuple[ast.AST, ast.AST]]] = {}
+        self.dotted: dict[str, str] = {}
+        self.imports: dict[str, dict[str, tuple[str | None, str]]] = {}
+        self.roots: dict[Key, set[str]] = {}
+        self.labels: dict[Key, set[str]] = {}
+        self.rets: set[Key] = set()
+        self._callee: dict[int, tuple[Key, int] | None] = {}
+        for mod, text in texts.items():
+            parts = list(Path(mod).with_suffix("").parts)
+            self.dotted[".".join(parts[:-1] if parts[-1] == "__init__" else parts)] = mod
+            self._collect(ast.parse(text), mod, [])
+        for (mod, _q), nodes in self.nodes.items():
+            imp = self.imports.setdefault(mod, {})
+            for n in nodes:
+                if isinstance(n, ast.ImportFrom):
+                    tgt = self._absolute(mod, n.level, n.module)
+                    for a in n.names:
+                        imp[a.asname or a.name] = (tgt, a.name)
+        for key, nodes in self.nodes.items():
+            par: dict[int, ast.AST] = {}
+            for n in nodes:
+                for ch in ast.iter_child_nodes(n):
+                    par[id(ch)] = n
+            self.parents[key] = par
+            self.binds[key] = [b for n in nodes for b in self._bindings(n)]
 
-    def add(n: ast.AST, ev: Event) -> None:
-        events.setdefault(ev, []).append((getattr(n, "lineno", 0), getattr(n, "col_offset", 0)))
-
-    def is_src(n: ast.AST) -> bool:
-        return isinstance(n, ast.Attribute) and n.attr == "source"
-
-    def collect(node: ast.AST, qual: list[str], out: dict[str, list[ast.AST]]) -> None:
+    # -- structure -------------------------------------------------------------------------------
+    def _collect(self, node: ast.AST, mod: str, qual: list[str]) -> None:
         for ch in ast.iter_child_nodes(node):
             if isinstance(ch, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-                collect(ch, [*qual, ch.name], out)
+                self.defs.setdefault((mod, ".".join([*qual, ch.name])), []).append(ch)
+                self._collect(ch, mod, [*qual, ch.name])
             else:
-                out.setdefault(".".join(qual) or "<module>", []).append(ch)
-                collect(ch, qual, out)
+                self.nodes.setdefault((mod, ".".join(qual) or "<module>"), []).append(ch)
+                self._collect(ch, mod, qual)
 
-    def bindings(n: ast.AST) -> list[tuple[ast.AST, ast.AST]]:
+    @staticmethod
+    def _bindings(n: ast.AST) -> list[tuple[ast.AST, ast.AST]]:
         """(target, value) element pairs of an assignment (tuple targets paired elementwise)."""
         if not isinstance(n, ast.Assign | ast.AnnAssign | ast.NamedExpr) or n.value is None:
             return []
@@ -580,48 +613,261 @@ def audit_coords(text: str, mod: str = "mod.py") -> Coords:
                 pairs.append((t, n.value))
         return pairs
 
-    scopes: dict[str, list[ast.AST]] = {}
-    collect(ast.parse(text), [], scopes)
-    for q, nodes in scopes.items():
-        alias: set[str] = set()
-        parents: dict[int, ast.AST] = {}
-        for n in nodes:
-            for ch in ast.iter_child_nodes(n):
-                parents[id(ch)] = n
+    @staticmethod
+    def _absolute(mod: str, level: int, module: str | None) -> str | None:
+        if level == 0:
+            if module == "ionmc":
+                return ""
+            return module[len("ionmc.") :] if module and module.startswith("ionmc.") else None
+        base = list(Path(mod).parts[:-1])
+        base = base[: len(base) - (level - 1)] if level > 1 else base
+        return ".".join([*base, *(module.split(".") if module else [])])
+
+    def _is_class(self, key: Key) -> bool:
+        return isinstance(self.defs[key][0], ast.ClassDef)
+
+    def _lookup(self, mod: str, name: str, depth: int = 0) -> tuple[str, Key] | None:
+        if (mod, name) in self.defs:
+            return ("class" if self._is_class((mod, name)) else "func"), (mod, name)
+        if depth > 5 or name not in self.imports.get(mod, {}):
+            return None
+        tgt, orig = self.imports[mod][name]
+        if tgt is None:
+            return None
+        rel = self.dotted.get(tgt)
+        if rel is not None:
+            hit = self._lookup(rel, orig, depth + 1)
+            if hit is not None:
+                return hit
+        sub = self.dotted.get(f"{tgt}.{orig}" if tgt else orig)
+        return ("module", (sub, "")) if sub is not None else None
+
+    def _resolve_name(self, mod: str, q: str, name: str) -> tuple[str, Key] | None:
+        parts = [] if q == "<module>" else q.split(".")
+        for i in range(len(parts), 0, -1):  # enclosing FUNCTION scopes (class bodies are skipped)
+            pre = (mod, ".".join(parts[:i]))
+            k = (mod, f"{pre[1]}.{name}")
+            if pre in self.defs and isinstance(self.defs[pre][0], _FUNC) and k in self.defs:
+                return ("class" if self._is_class(k) else "func"), k
+        return self._lookup(mod, name)
+
+    def _enclosing_class(self, mod: str, q: str) -> str | None:
+        parts = q.split(".")
+        for i in range(len(parts), 0, -1):
+            pre = ".".join(parts[:i])
+            if (mod, pre) in self.defs and self._is_class((mod, pre)):
+                return pre
+        return None
+
+    @staticmethod
+    def _decorated(d: ast.AST, name: str) -> bool:
+        return any(
+            isinstance(x, ast.Name) and x.id == name for x in getattr(d, "decorator_list", [])
+        )
+
+    def callee(self, call: ast.Call, key: Key) -> tuple[Key, int] | None:
+        """Resolve a call to (callee scope, number of leading implicit parameters) or None."""
+        if id(call) not in self._callee:
+            self._callee[id(call)] = self._resolve_call(call, key)
+        return self._callee[id(call)]
+
+    def _method(self, mk: Key, bound: bool) -> tuple[Key, int] | None:
+        if mk not in self.defs or self._is_class(mk):
+            return None
+        d = self.defs[mk][0]
+        if self._decorated(d, "staticmethod"):
+            return mk, 0
+        return mk, 1 if bound or self._decorated(d, "classmethod") else 0
+
+    def _resolve_call(self, call: ast.Call, key: Key) -> tuple[Key, int] | None:
+        mod, q = key
+        f = call.func
+        hit: tuple[str, Key] | None = None
+        if isinstance(f, ast.Name):
+            hit = self._resolve_name(mod, q, f.id)
+            attr = None
+        elif isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+            attr = f.attr
+            if f.value.id in ("self", "cls"):
+                cq = self._enclosing_class(mod, q)
+                return self._method((mod, f"{cq}.{attr}"), True) if cq else None
+            hit = self._resolve_name(mod, q, f.value.id)
+        else:
+            return None
+        if hit is None:
+            return None
+        kind, k = hit
+        if attr is None:
+            if kind == "func":
+                return k, 0
+            ik = (k[0], f"{k[1]}.__init__") if kind == "class" else None
+            return (ik, 1) if ik is not None and ik in self.defs else None
+        if kind == "class":
+            return self._method((k[0], f"{k[1]}.{attr}"), False)
+        if kind == "module" and (k[0], attr) in self.defs:
+            tgt = (k[0], attr)
+            if self._is_class(tgt):
+                ik = (k[0], f"{attr}.__init__")
+                return (ik, 1) if ik in self.defs else None
+            return tgt, 0
+        return None
+
+    # -- provenance --------------------------------------------------------------------------------
+    def srcval(self, n: ast.AST, alias: set[str], key: Key) -> bool:
+        if isinstance(n, ast.Attribute):
+            return n.attr == "source"
+        if isinstance(n, ast.Name):
+            return n.id in alias
+        if isinstance(n, ast.Call):
+            c = self.callee(n, key)
+            return c is not None and c[0] in self.rets
+        return False
+
+    def alias_of(self, key: Key) -> set[str]:
+        alias = set(self.roots.get(key, ()))
         grew = True
-        while grew:  # transitive aliases: src2 = src, s = src2, ...
+        while (
+            grew
+        ):  # transitive aliases: src2 = src, s = src2, x = f(cfg.source) with f returning it
             grew = False
+            for t, v in self.binds[key]:
+                if isinstance(t, ast.Name) and t.id not in alias and self.srcval(v, alias, key):
+                    alias.add(t.id)
+                    grew = True
+        return alias
+
+    def _params(self, d: ast.AST, skip: int) -> tuple[list[str], set[str]]:
+        a = d.args  # type: ignore[attr-defined]
+        pos = [x.arg for x in a.posonlyargs + a.args][skip:]
+        return pos, set(pos) | {x.arg for x in a.kwonlyargs}
+
+    def _add_root(self, key: Key, name: str, label: str) -> bool:
+        grew = label not in self.labels.setdefault(key, set())
+        self.labels[key].add(label)
+        self.roots.setdefault(key, set()).add(name)
+        return grew
+
+    def _pass_edges(self, call: ast.Call, alias: set[str], key: Key) -> list[tuple[Key, str]]:
+        c = self.callee(call, key)
+        if c is None:
+            return []
+        ck, skip = c
+        out: list[tuple[Key, str]] = []
+        for d in self.defs[ck]:
+            if not isinstance(d, _FUNC):
+                continue
+            pos, names = self._params(d, skip)
+            for i, arg in enumerate(call.args):
+                if isinstance(arg, ast.Starred):
+                    break
+                if i < len(pos) and self.srcval(arg, alias, key):
+                    out.append((ck, pos[i]))
+            for kw in call.keywords:
+                if kw.arg in names and self.srcval(kw.value, alias, key):
+                    out.append((ck, str(kw.arg)))
+        return out
+
+    def solve(self) -> None:
+        changed = True
+        while changed:
+            changed = False
+            aliases = {k: self.alias_of(k) for k in self.nodes}
+            for key, nodes in self.nodes.items():
+                mod, q = key
+                al = aliases[key]
+                if key not in self.rets and any(
+                    isinstance(n, ast.Return)
+                    and n.value is not None
+                    and self.srcval(n.value, al, key)
+                    for n in nodes
+                ):
+                    self.rets.add(key)
+                    changed = True
+                for n in nodes:
+                    if isinstance(n, ast.Call):
+                        for ck, p in self._pass_edges(n, al, key):
+                            changed |= self._add_root(ck, p, f"<param>:{ck[1]}.{p}")
+                pk = (mod, q.rpartition(".")[0])
+                if (
+                    "." in q
+                    and pk in aliases
+                    and aliases[pk]
+                    and isinstance(self.defs.get(pk, [None])[0], _FUNC)
+                    and any(isinstance(d, _FUNC) for d in self.defs.get(key, []))
+                ):
+                    local = {n.id for n in nodes if isinstance(n, ast.Name) and not _load(n)}
+                    for d in self.defs[key]:
+                        if isinstance(d, _FUNC):
+                            local |= self._params(d, 0)[1]
+                    for n in nodes:
+                        if (
+                            isinstance(n, ast.Name)
+                            and _load(n)
+                            and n.id in aliases[pk]
+                            and n.id not in local
+                        ):
+                            changed |= self._add_root(key, n.id, f"<closure>:{q}.{n.id}")
+
+    # -- events ------------------------------------------------------------------------------------
+    def events(self) -> Coords:
+        events: Coords = {}
+
+        def add(n: ast.AST, ev: Event) -> None:
+            events.setdefault(ev, []).append((getattr(n, "lineno", 0), getattr(n, "col_offset", 0)))
+
+        for key, nodes in self.nodes.items():
+            mod, q = key
+            alias = self.alias_of(key)
+            parents = self.parents[key]
+            for label in self.labels.get(key, ()):
+                add(self.defs[key][0], (mod, q, label))
             for n in nodes:
-                for t, v in bindings(n):
-                    if (
-                        isinstance(t, ast.Name)
-                        and t.id not in alias
-                        and (is_src(v) or (isinstance(v, ast.Name) and v.id in alias))
-                    ):
-                        alias.add(t.id)
-                        grew = True
-        for n in nodes:
-            par = parents.get(id(n))
-            if isinstance(n, ast.Attribute):
-                if is_src(n.value) or (isinstance(n.value, ast.Name) and n.value.id in alias):
+                par = parents.get(id(n))
+                base = isinstance(par, ast.Attribute) and par.value is n
+                bound = isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n
+                is_src = isinstance(n, ast.Attribute) and n.attr == "source"
+                if isinstance(n, ast.Attribute) and self.srcval(n.value, alias, key):
                     add(n, (mod, q, n.attr))
-            if is_src(n):
-                add(n, (mod, q, f"<root>:{ast.unparse(n)}"))
-            if (
-                is_src(n)
-                and not (isinstance(par, ast.Attribute) and par.value is n)
-                and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
-            ):
-                add(n, (mod, q, "<bare>"))
-            if (
-                isinstance(n, ast.Name)
-                and n.id in alias
-                and isinstance(n.ctx, ast.Load)
-                and not (isinstance(par, ast.Attribute) and par.value is n)
-                and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
-            ):
-                add(n, (mod, q, "<alias-passed>"))
-    return events
+                if is_src:
+                    add(n, (mod, q, f"<root>:{ast.unparse(n)}"))
+                    if not base and not bound:
+                        add(n, (mod, q, "<bare>"))
+                elif (
+                    (isinstance(n, ast.Name) and _load(n) or isinstance(n, ast.Call))
+                    and self.srcval(n, alias, key)
+                    and not base
+                    and not bound
+                ):
+                    add(n, (mod, q, "<alias-passed>"))
+        return events
+
+
+def _load(n: ast.Name) -> bool:
+    return isinstance(n.ctx, ast.Load)
+
+
+def audit_package(texts: dict[str, str]) -> Coords:
+    """Every (module, scope, event) of a ``.source`` root over the modules ``texts`` (relative path
+    -> text), each mapped to the (line, column) of EVERY syntactic occurrence; interprocedural
+    (call parameters, returns, closures) as documented on ``_Package``."""
+    pkg = _Package(texts)
+    pkg.solve()
+    return pkg.events()
+
+
+def audit_text(text: str, mod: str = "mod.py") -> Counter[Event]:
+    """Counted multiset of the events of ``audit_coords`` (one count per syntactic occurrence)."""
+    return Counter({k: len(v) for k, v in audit_coords(text, mod).items()})
+
+
+def audit_coords(text: str, mod: str = "mod.py") -> Coords:
+    """``audit_package`` of a single module: the root occurrence itself (``<root>:<expression
+    text>``, stable under line drift), direct attribute reads, reads through aliases bound in the
+    same scope (``src = cfg.source``, tuple unpacking, TRANSITIVE aliases; the alias set is a
+    fixpoint), pass-through of the source or an alias in any position, by keyword, inside a
+    tuple/list/set/dict literal or a return (``<bare>`` / ``<alias-passed>``), and the events that
+    propagate into callee scopes (``<param>:``), closures (``<closure>:``) and returns."""
+    return audit_package({mod: text})
 
 
 def audit_readers(
@@ -629,15 +875,12 @@ def audit_readers(
 ) -> tuple[Counter[Event], Coords]:
     """Counted inventory and coordinates over every module of ``root`` (``overrides`` replaces the
     analysed text of a module by its relative path: used by the repository-level control)."""
-    counts: Counter[Event] = Counter()
-    coords: Coords = {}
-    for p in sorted(root.rglob("*.py")):
-        rel = str(p.relative_to(root))
-        text = (overrides or {}).get(rel, p.read_text())
-        for k, v in audit_coords(text, rel).items():
-            counts[k] += len(v)
-            coords.setdefault(k, []).extend(v)
-    return counts, coords
+    texts = {
+        str(p.relative_to(root)): (overrides or {}).get(str(p.relative_to(root)), p.read_text())
+        for p in sorted(root.rglob("*.py"))
+    }
+    coords = audit_package(texts)
+    return Counter({k: len(v) for k, v in coords.items()}), coords
 
 
 def inventory_diff(counts: Counter[Event], coords: Coords, allow: dict[Event, int]) -> list[str]:
@@ -801,6 +1044,120 @@ ALLOWLIST: dict[Event, tuple[str, int]] = {
     ("transport/reference.py", "_Reference._history", "<root>:cfg.source"): (S1, 1),
     ("transport/warp_driver.py", "run_warp_range", "<bare>"): (S1, 1),
     ("transport/warp_driver.py", "run_warp_range", "<root>:cfg.source"): (S1, 1),
+    # ---- interprocedural fix 9: parameter / closure / return roots of the callees reached.
+    # Classification: _source_members reads each member (per-beamlet); _source_e_hi,
+    # _source_description and the beamlet summary use the envelope / set-level fields; the
+    # physics/stopping_* scopes receive a STOPPING-model `source` (a table provider), a
+    # false-positive root of the any-`.source` rule: not-a-source.
+    # propagated callee EffectiveConfig._beamlet_source_summary (config.py)
+    (
+        "config.py",
+        "EffectiveConfig._beamlet_source_summary",
+        "<param>:EffectiveConfig._beamlet_source_summary.s",
+    ): (ENV, 1),
+    ("config.py", "EffectiveConfig._beamlet_source_summary", "canonical_sha256"): (ENV, 1),
+    ("config.py", "EffectiveConfig._beamlet_source_summary", "envelope"): (ENV, 1),
+    ("config.py", "EffectiveConfig._beamlet_source_summary", "n_beamlets"): (ENV, 1),
+    ("config.py", "EffectiveConfig._beamlet_source_summary", "n_histories_total"): (ENV, 1),
+    ("config.py", "EffectiveConfig._beamlet_source_summary", "projectile"): (ENV, 4),
+    # propagated callee _source_description (config.py)
+    ("config.py", "_source_description", "<alias-passed>"): (ENV, 1),
+    ("config.py", "_source_description", "<param>:_source_description.src"): (ENV, 1),
+    ("config.py", "_source_description", "beamlets"): (ENV, 1),
+    ("config.py", "_source_description", "kinetic_energy_mev"): (ENV, 1),
+    ("config.py", "_source_description", "projectile"): (ENV, 2),
+    # propagated callee _source_e_hi (config.py)
+    ("config.py", "_source_e_hi", "<alias-passed>"): (ENV, 1),
+    ("config.py", "_source_e_hi", "<param>:_source_e_hi.src"): (ENV, 1),
+    ("config.py", "_source_e_hi", "energy_sigma_mev"): (ENV, 1),
+    ("config.py", "_source_e_hi", "envelope"): (ENV, 1),
+    ("config.py", "_source_e_hi", "kinetic_energy_mev"): (ENV, 1),
+    # propagated callee _source_members (config.py)
+    ("config.py", "_source_members", "<alias-passed>"): (PER, 1),
+    ("config.py", "_source_members", "<param>:_source_members.src"): (PER, 1),
+    ("config.py", "_source_members", "beamlets"): (PER, 1),
+    ("config.py", "_source_members", "energy_sigma_mev"): (PER, 1),
+    ("config.py", "_source_members", "kinetic_energy_mev"): (PER, 1),
+    # propagated callee Icru90WaterSource.instance_spec (physics/stopping_icru90.py)
+    (
+        "physics/stopping_icru90.py",
+        "Icru90WaterSource.instance_spec",
+        "<param>:Icru90WaterSource.instance_spec.self",
+    ): (NOT, 1),
+    ("physics/stopping_icru90.py", "Icru90WaterSource.instance_spec", "alpha"): (NOT, 7),
+    ("physics/stopping_icru90.py", "Icru90WaterSource.instance_spec", "content_sha256"): (NOT, 1),
+    ("physics/stopping_icru90.py", "Icru90WaterSource.instance_spec", "name"): (NOT, 1),
+    ("physics/stopping_icru90.py", "Icru90WaterSource.instance_spec", "proton"): (NOT, 6),
+    ("physics/stopping_icru90.py", "Icru90WaterSource.instance_spec", "start_range_sha256"): (
+        NOT,
+        1,
+    ),
+    # propagated callee _bethe_domain (physics/stopping_models.py)
+    ("physics/stopping_models.py", "_bethe_domain", "<param>:_bethe_domain.source"): (NOT, 1),
+    ("physics/stopping_models.py", "_bethe_domain", "e_max_per_u"): (NOT, 1),
+    ("physics/stopping_models.py", "_bethe_domain", "e_min_per_u"): (NOT, 1),
+    # propagated callee _bethe_exact (physics/stopping_models.py)
+    ("physics/stopping_models.py", "_bethe_exact", "<alias-passed>"): (NOT, 1),
+    ("physics/stopping_models.py", "_bethe_exact", "<param>:_bethe_exact.source"): (NOT, 1),
+    ("physics/stopping_models.py", "_bethe_exact", "options"): (NOT, 2),
+    # propagated callee _bethe_options (physics/stopping_models.py)
+    ("physics/stopping_models.py", "_bethe_options", "<param>:_bethe_options.source"): (NOT, 1),
+    ("physics/stopping_models.py", "_bethe_options", "name"): (NOT, 1),
+    ("physics/stopping_models.py", "_bethe_options", "options"): (NOT, 1),
+    ("physics/stopping_models.py", "_bethe_options", "points_per_decade"): (NOT, 1),
+    # propagated callee _bethe_spec (physics/stopping_models.py)
+    ("physics/stopping_models.py", "_bethe_spec", "<alias-passed>"): (NOT, 2),
+    ("physics/stopping_models.py", "_bethe_spec", "<param>:_bethe_spec.source"): (NOT, 1),
+    # propagated callee _exact_types (physics/stopping_models.py)
+    ("physics/stopping_models.py", "_exact_types", "<alias-passed>"): (NOT, 1),
+    ("physics/stopping_models.py", "_exact_types", "<param>:_exact_types.obj"): (NOT, 1),
+    # propagated callee _icru_arrays_trusted (physics/stopping_models.py)
+    ("physics/stopping_models.py", "_icru_arrays_trusted", "<param>:_icru_arrays_trusted.source"): (
+        NOT,
+        1,
+    ),
+    ("physics/stopping_models.py", "_icru_arrays_trusted", "alpha"): (NOT, 1),
+    ("physics/stopping_models.py", "_icru_arrays_trusted", "proton"): (NOT, 1),
+    # propagated callee _nist_star_instance_spec (physics/stopping_models.py)
+    (
+        "physics/stopping_models.py",
+        "_nist_star_instance_spec",
+        "<param>:_nist_star_instance_spec.source",
+    ): (NOT, 1),
+    ("physics/stopping_models.py", "_nist_star_instance_spec", "e_max_per_u"): (NOT, 1),
+    ("physics/stopping_models.py", "_nist_star_instance_spec", "e_min_per_u"): (NOT, 1),
+    ("physics/stopping_models.py", "_nist_star_instance_spec", "name"): (NOT, 1),
+    ("physics/stopping_models.py", "_nist_star_instance_spec", "points_per_decade"): (NOT, 1),
+    ("physics/stopping_models.py", "_nist_star_instance_spec", "star_table"): (NOT, 2),
+    # propagated callee _pristine (physics/stopping_models.py)
+    ("physics/stopping_models.py", "_pristine", "<alias-passed>"): (NOT, 2),
+    ("physics/stopping_models.py", "_pristine", "<param>:_pristine.obj"): (NOT, 1),
+    # propagated callee _tabulated_exact (physics/stopping_models.py)
+    ("physics/stopping_models.py", "_tabulated_exact", "<alias-passed>"): (NOT, 1),
+    ("physics/stopping_models.py", "_tabulated_exact", "<param>:_tabulated_exact.inner"): (NOT, 1),
+    ("physics/stopping_models.py", "_tabulated_exact", "metadata"): (NOT, 1),
+    # propagated callee spec_of (physics/stopping_models.py)
+    ("physics/stopping_models.py", "spec_of", "<alias-passed>"): (NOT, 21),
+    ("physics/stopping_models.py", "spec_of", "<param>:spec_of.source"): (NOT, 1),
+    ("physics/stopping_models.py", "spec_of", "alpha"): (NOT, 3),
+    ("physics/stopping_models.py", "spec_of", "astar"): (NOT, 3),
+    ("physics/stopping_models.py", "spec_of", "cache_dir"): (NOT, 2),
+    ("physics/stopping_models.py", "spec_of", "instance_spec"): (NOT, 1),
+    ("physics/stopping_models.py", "spec_of", "name"): (NOT, 2),
+    ("physics/stopping_models.py", "spec_of", "proton"): (NOT, 3),
+    ("physics/stopping_models.py", "spec_of", "pstar"): (NOT, 3),
+    # propagated callee NistStarCombinedSource.instance_spec (physics/stopping_nist.py)
+    (
+        "physics/stopping_nist.py",
+        "NistStarCombinedSource.instance_spec",
+        "<param>:NistStarCombinedSource.instance_spec.self",
+    ): (NOT, 1),
+    ("physics/stopping_nist.py", "NistStarCombinedSource.instance_spec", "astar"): (NOT, 6),
+    ("physics/stopping_nist.py", "NistStarCombinedSource.instance_spec", "name"): (NOT, 1),
+    ("physics/stopping_nist.py", "NistStarCombinedSource.instance_spec", "pstar"): (NOT, 5),
+    # propagated callee _observed (physics/stopping_selection.py)
+    ("physics/stopping_selection.py", "_observed", "<alias-passed>"): (NOT, 1),
+    ("physics/stopping_selection.py", "_observed", "<param>:_observed.source"): (NOT, 1),
 }
 SRC = Path(__file__).resolve().parents[2] / "src" / "ionmc"
 
@@ -817,7 +1174,7 @@ def test_beam2_audit_inventory_equals_the_allowlist() -> None:
 
 def test_beam2_inventory_size_is_pinned() -> None:
     """Decision 0046 quotes the inventory size (occurrences counted per key)."""
-    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (113, 164)
+    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (183, 292)
 
 
 def test_beam2_a_duplicate_occurrence_in_the_repository_fails_naming_the_scope() -> None:
@@ -827,7 +1184,7 @@ def test_beam2_a_duplicate_occurrence_in_the_repository_fails_naming_the_scope()
     rel = "config.py"
     text = (SRC / rel).read_text()
     assert "config.source" in text
-    extra = "\n\ndef validate(config):\n    return config.source\n"
+    extra = "\n\ndef validate(config):\n    config.source\n"
     counts0, _ = audit_readers(SRC)
     # a second function body of the same scope name `validate`: the scope key is identical
     counts, coords = audit_readers(SRC, {rel: text + extra})
@@ -981,3 +1338,87 @@ def test_beam2_repeated_occurrences_are_counted_not_collapsed() -> None:
         c, coords, {k: v for k, v in c.items() if k[2] != "<bare>"} | {("mod.py", "f", "<bare>"): 1}
     )
     assert "found 2, allowlisted 1" in msg and "[(2, 12), (3, 12)]" in msg
+
+
+def test_beam2_source_provenance_propagates_through_calls_returns_and_closures() -> None:
+    """Interprocedural negative controls (fix 9) on synthetic text: each form makes the read in the
+    CALLEE / closure / receiving alias an event, so a new singular reader there cannot hide."""
+    # (a) positional pass; the callee read is an event under the callee
+    a = audit_text(
+        "def f(cfg):\n    return consume(cfg.source)\n"
+        "def consume(src):\n    return src.kinetic_energy_mev\n"
+    )
+    assert a[("mod.py", "consume", "kinetic_energy_mev")] == 1
+    assert a[("mod.py", "consume", "<param>:consume.src")] == 1
+    assert a[("mod.py", "f", "<bare>")] == 1
+    # (b) keyword pass, read through the keyword parameter
+    b = audit_text(
+        "def f(cfg):\n    return g(source=cfg.source)\n"
+        "def g(*, source):\n    return source.position_mm\n"
+    )
+    assert b[("mod.py", "g", "position_mm")] == 1 and b[("mod.py", "g", "<param>:g.source")] == 1
+    # (c) method pass through self.<m>; `self` is skipped in the positional mapping
+    c = audit_text(
+        "class K:\n    def f(self, cfg):\n        return self.h(cfg.source)\n"
+        "    def h(self, s):\n        return s.energy_sigma_mev\n"
+    )
+    assert c[("mod.py", "K.h", "energy_sigma_mev")] == 1
+    assert c[("mod.py", "K.h", "<param>:K.h.s")] == 1
+    assert ("mod.py", "K.h", "<param>:K.h.self") not in c
+    # (d) a closure reads an enclosing alias
+    d = audit_text(
+        "def outer(cfg):\n    s = cfg.source\n"
+        "    def inner():\n        return s.position_mm\n    return inner\n"
+    )
+    assert d[("mod.py", "outer.inner", "position_mm")] == 1
+    assert d[("mod.py", "outer.inner", "<closure>:outer.inner.s")] == 1
+    # (e) return propagation: the receiving name is an alias in the caller
+    e = audit_text(
+        "def f(c):\n    return c.source\ndef g(cfg):\n    x = f(cfg)\n    return x.energy\n"
+    )
+    assert e[("mod.py", "g", "energy")] == 1 and e[("mod.py", "f", "<bare>")] == 1
+    # (f) an unresolvable callee stays a bare pass-through of the caller; nothing propagates
+    f = audit_text("def f(cfg):\n    return external(cfg.source)\n")
+    assert set(f) == {("mod.py", "f", "<root>:cfg.source"), ("mod.py", "f", "<bare>")}
+    # a chain: the parameter root propagates onward to a second callee (fixpoint)
+    h = audit_text(
+        "def f(cfg):\n    return p(cfg.source)\ndef p(a):\n    return q(a)\n"
+        "def q(b):\n    return b.weight\n"
+    )
+    assert h[("mod.py", "q", "weight")] == 1 and h[("mod.py", "p", "<alias-passed>")] == 1
+
+
+def test_beam2_provenance_crosses_modules_and_constructors() -> None:
+    """Two-module synthetic package: the callee lives in another module (``from .b import``, a
+    re-export through ``__init__``, ``mod.f`` on an imported module and ``Class(...)`` through its
+    ``__init__``); the callee-side reads are events keyed by the callee module."""
+    pkg = {
+        "a.py": (
+            "from .b import consume\nfrom . import b\nfrom .b import Holder\n"
+            "def run(cfg):\n    consume(cfg.source)\n    b.other(cfg.source)\n"
+            "    return Holder(cfg.source)\n"
+        ),
+        "b.py": (
+            "def consume(src):\n    return src.kinetic_energy_mev\n"
+            "def other(z):\n    return z.position_mm\n"
+            "class Holder:\n    def __init__(self, s):\n        self.e = s.direction\n"
+        ),
+        "sub/__init__.py": "from ..b import consume\n",
+        "sub/c.py": "from . import consume\ndef run(cfg):\n    return consume(cfg.source)\n",
+    }
+    ev = set(audit_package(pkg))
+    assert ("b.py", "consume", "kinetic_energy_mev") in ev
+    assert ("b.py", "other", "position_mm") in ev
+    assert ("b.py", "Holder.__init__", "direction") in ev
+    assert ("b.py", "consume", "<param>:consume.src") in ev
+    assert ("b.py", "Holder.__init__", "<param>:Holder.__init__.s") in ev
+    # nothing of b.py is an event without the caller passing a source
+    assert not any(k[0] == "b.py" for k in audit_package({"b.py": pkg["b.py"]}))
+
+
+def test_beam2_the_audit_runtime_over_the_package_is_small() -> None:
+    import time
+
+    t0 = time.perf_counter()
+    audit_readers(SRC)
+    assert time.perf_counter() - t0 < 5.0
