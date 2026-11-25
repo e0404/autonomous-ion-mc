@@ -12,6 +12,7 @@ import ast
 import copy
 import dataclasses
 import re
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -532,14 +533,28 @@ def test_beam3_canonical_table_and_hash() -> None:
 # through ``to_dict``/``from_dict`` instead.
 
 
-def audit_text(text: str, mod: str = "mod.py") -> set[tuple[str, str, str]]:
-    """Every (module, scope, event) of a ``.source`` root in ``text``: the root occurrence itself
+Event = tuple[str, str, str]
+Coords = dict[Event, list[tuple[int, int]]]
+
+
+def audit_text(text: str, mod: str = "mod.py") -> Counter[Event]:
+    """Counted multiset of the events of ``audit_coords`` (one count per syntactic occurrence)."""
+    return Counter({k: len(v) for k, v in audit_coords(text, mod).items()})
+
+
+def audit_coords(text: str, mod: str = "mod.py") -> Coords:
+    """Every (module, scope, event) of a ``.source`` root in ``text``, each mapped to the (line,
+    column) of EVERY syntactic occurrence (the counts are the list lengths; the coordinates are
+    used only in failure messages, never in the keys): the root occurrence itself
     (``<root>:<expression text>``, stable under line drift), direct attribute reads, reads through
     aliases bound in the same scope (``src = cfg.source``, tuple unpacking, TRANSITIVE aliases
     ``src2 = src``; the alias set is a fixpoint) and pass-through of the source or an alias, in any
     position, by keyword, inside a tuple/list/set/dict literal or a return (``<bare>`` /
     ``<alias-passed>``)."""
-    events: set[tuple[str, str, str]] = set()
+    events: Coords = {}
+
+    def add(n: ast.AST, ev: Event) -> None:
+        events.setdefault(ev, []).append((getattr(n, "lineno", 0), getattr(n, "col_offset", 0)))
 
     def is_src(n: ast.AST) -> bool:
         return isinstance(n, ast.Attribute) and n.attr == "source"
@@ -589,15 +604,15 @@ def audit_text(text: str, mod: str = "mod.py") -> set[tuple[str, str, str]]:
             par = parents.get(id(n))
             if isinstance(n, ast.Attribute):
                 if is_src(n.value) or (isinstance(n.value, ast.Name) and n.value.id in alias):
-                    events.add((mod, q, n.attr))
+                    add(n, (mod, q, n.attr))
             if is_src(n):
-                events.add((mod, q, f"<root>:{ast.unparse(n)}"))
+                add(n, (mod, q, f"<root>:{ast.unparse(n)}"))
             if (
                 is_src(n)
                 and not (isinstance(par, ast.Attribute) and par.value is n)
                 and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
             ):
-                events.add((mod, q, "<bare>"))
+                add(n, (mod, q, "<bare>"))
             if (
                 isinstance(n, ast.Name)
                 and n.id in alias
@@ -605,149 +620,224 @@ def audit_text(text: str, mod: str = "mod.py") -> set[tuple[str, str, str]]:
                 and not (isinstance(par, ast.Attribute) and par.value is n)
                 and not (isinstance(par, ast.Assign | ast.AnnAssign) and par.value is n)
             ):
-                events.add((mod, q, "<alias-passed>"))
+                add(n, (mod, q, "<alias-passed>"))
     return events
 
 
-def audit_readers(root: Path) -> set[tuple[str, str, str]]:
-    """``audit_text`` over every module of ``root``."""
-    out: set[tuple[str, str, str]] = set()
+def audit_readers(
+    root: Path, overrides: dict[str, str] | None = None
+) -> tuple[Counter[Event], Coords]:
+    """Counted inventory and coordinates over every module of ``root`` (``overrides`` replaces the
+    analysed text of a module by its relative path: used by the repository-level control)."""
+    counts: Counter[Event] = Counter()
+    coords: Coords = {}
     for p in sorted(root.rglob("*.py")):
-        out |= audit_text(p.read_text(), str(p.relative_to(root)))
-    return out
+        rel = str(p.relative_to(root))
+        text = (overrides or {}).get(rel, p.read_text())
+        for k, v in audit_coords(text, rel).items():
+            counts[k] += len(v)
+            coords.setdefault(k, []).extend(v)
+    return counts, coords
+
+
+def inventory_diff(counts: Counter[Event], coords: Coords, allow: dict[Event, int]) -> list[str]:
+    """Exact multiset comparison; a mismatch names the key and ALL its occurrence coordinates."""
+    msgs = []
+    for k in sorted(set(counts) | set(allow)):
+        if counts.get(k, 0) != allow.get(k, 0):
+            msgs.append(
+                f"{k}: found {counts.get(k, 0)}, allowlisted {allow.get(k, 0)}; "
+                f"(line, col) occurrences {coords.get(k, [])}"
+            )
+    return msgs
 
 
 ENV, PER, S1, NOT = "envelope", "per-beamlet", "refused-in-S1", "not-a-source"
 _PROJ = "projectile"  # one projectile per set: the same value for pencil and set
-ALLOWLIST: dict[tuple[str, str, str], str] = {
-    ("config.py", "EffectiveConfig.is_ion", _PROJ): ENV,
-    ("config.py", "EffectiveConfig.ls_effective", _PROJ): ENV,
-    ("config.py", "EffectiveConfig.stopping_identity", _PROJ): ENV,
-    ("config.py", "EffectiveConfig.summary", "<alias-passed>"): PER,
-    ("config.py", "EffectiveConfig.summary", "energy_sigma_mev"): PER,  # pencil branch only
-    ("config.py", "EffectiveConfig.summary", "kinetic_energy_mev"): PER,
-    ("config.py", "EffectiveConfig.summary", "lateral_sigma_mm"): PER,
-    ("config.py", "EffectiveConfig.summary", "position_mm"): PER,
-    ("config.py", "EffectiveConfig.summary", _PROJ): ENV,
-    ("config.py", "_beamlet_set_checks", "<alias-passed>"): PER,
-    ("config.py", "_beamlet_set_checks", "beamlets"): PER,
-    ("config.py", "_beamlet_set_checks", "n_beamlets"): PER,
-    ("config.py", "_beamlet_set_checks", "n_histories_total"): PER,
-    ("config.py", "_check_stopping_domain", "<alias-passed>"): ENV,  # _source_e_hi
-    ("config.py", "_check_stopping_domain", _PROJ): ENV,
-    ("config.py", "_compile_tallies", _PROJ): ENV,
-    ("config.py", "_computed_max_steps", "<alias-passed>"): ENV,  # _source_e_hi
-    ("config.py", "_finish_beamlet_set", "<alias-passed>"): PER,
-    ("config.py", "_finish_beamlet_set", "n_beamlets"): PER,
-    ("config.py", "_finish_beamlet_set", "offsets"): PER,
-    ("config.py", "_influence_checks", "<alias-passed>"): PER,
-    ("config.py", "_influence_checks", "n_beamlets"): PER,
-    ("config.py", "_ion_mapping_data", "<bare>"): PER,  # _source_description names the beamlets
-    ("config.py", "_ion_mapping_data", _PROJ): ENV,
-    ("config.py", "_nuclear_setup_checks", "<alias-passed>"): ENV,  # _source_e_hi
-    ("config.py", "_nuclear_tables", _PROJ): ENV,
-    ("config.py", "_water_table", _PROJ): ENV,
-    ("config.py", "effective_e_cut_mev", _PROJ): ENV,
-    ("config.py", "effective_end_of_range_model", _PROJ): ENV,
-    ("config.py", "EffectiveConfig.run", "n_histories_total"): PER,  # derived run.n_histories
-    ("config.py", "EffectiveConfig.run", "<alias-passed>"): PER,
-    ("config.py", "_with_derived_histories", "n_histories_total"): PER,  # run.n_histories None
-    ("config.py", "_with_derived_histories", "<bare>"): PER,
-    ("config.py", "validate", "<alias-passed>"): ENV,  # _source_members / envelope helpers
-    ("config.py", "validate", _PROJ): ENV,
-    ("config.py", "validate", "unit_direction"): PER,  # None with status for a set
-    ("configio.py", "to_dict", "<alias-passed>"): PER,
-    ("configio.py", "to_dict", "beamlets"): PER,
-    ("configio.py", "to_dict", _PROJ): ENV,
-    ("results.py", "_lookup_plan", _PROJ): ENV,
+ALLOWLIST: dict[Event, tuple[str, int]] = {
+    ("config.py", "EffectiveConfig.is_ion", _PROJ): (ENV, 1),
+    ("config.py", "EffectiveConfig.ls_effective", _PROJ): (ENV, 1),
+    ("config.py", "EffectiveConfig.stopping_identity", _PROJ): (ENV, 2),  # 2 occurrences
+    ("config.py", "EffectiveConfig.summary", "<alias-passed>"): (PER, 3),  # 3 occurrences
+    ("config.py", "EffectiveConfig.summary", "energy_sigma_mev"): (PER, 1),  # pencil branch only
+    ("config.py", "EffectiveConfig.summary", "kinetic_energy_mev"): (PER, 1),
+    ("config.py", "EffectiveConfig.summary", "lateral_sigma_mm"): (PER, 1),
+    ("config.py", "EffectiveConfig.summary", "position_mm"): (PER, 1),
+    ("config.py", "EffectiveConfig.summary", _PROJ): (ENV, 4),  # 4 occurrences
+    ("config.py", "_beamlet_set_checks", "<alias-passed>"): (PER, 1),
+    ("config.py", "_beamlet_set_checks", "beamlets"): (PER, 1),
+    ("config.py", "_beamlet_set_checks", "n_beamlets"): (PER, 1),
+    ("config.py", "_beamlet_set_checks", "n_histories_total"): (PER, 1),
+    ("config.py", "_check_stopping_domain", "<alias-passed>"): (ENV, 1),  # _source_e_hi
+    ("config.py", "_check_stopping_domain", _PROJ): (ENV, 1),
+    ("config.py", "_compile_tallies", _PROJ): (ENV, 2),  # 2 occurrences
+    ("config.py", "_computed_max_steps", "<alias-passed>"): (ENV, 1),  # _source_e_hi
+    ("config.py", "_finish_beamlet_set", "<alias-passed>"): (PER, 1),
+    ("config.py", "_finish_beamlet_set", "n_beamlets"): (PER, 1),
+    ("config.py", "_finish_beamlet_set", "offsets"): (PER, 1),
+    ("config.py", "_influence_checks", "<alias-passed>"): (PER, 1),
+    ("config.py", "_influence_checks", "n_beamlets"): (PER, 2),  # 2 occurrences
+    ("config.py", "_ion_mapping_data", "<bare>"): (
+        PER,
+        1,
+    ),  # _source_description names the beamlets
+    ("config.py", "_ion_mapping_data", _PROJ): (ENV, 1),
+    ("config.py", "_nuclear_setup_checks", "<alias-passed>"): (ENV, 1),  # _source_e_hi
+    ("config.py", "_nuclear_tables", _PROJ): (ENV, 1),
+    ("config.py", "_water_table", _PROJ): (ENV, 1),
+    ("config.py", "effective_e_cut_mev", _PROJ): (ENV, 1),
+    ("config.py", "effective_end_of_range_model", _PROJ): (ENV, 1),
+    ("config.py", "EffectiveConfig.run", "n_histories_total"): (PER, 1),  # derived run.n_histories
+    ("config.py", "EffectiveConfig.run", "<alias-passed>"): (PER, 1),
+    ("config.py", "_with_derived_histories", "n_histories_total"): (PER, 1),  # run.n_histories None
+    ("config.py", "_with_derived_histories", "<bare>"): (PER, 1),
+    ("config.py", "validate", "<alias-passed>"): (
+        ENV,
+        3,
+    ),  # 3 occurrences; _source_members / envelope helpers
+    ("config.py", "validate", _PROJ): (ENV, 18),  # 18 occurrences
+    ("config.py", "validate", "unit_direction"): (PER, 1),  # None with status for a set
+    ("configio.py", "to_dict", "<alias-passed>"): (PER, 2),  # 2 occurrences
+    ("configio.py", "to_dict", "beamlets"): (PER, 1),
+    ("configio.py", "to_dict", _PROJ): (ENV, 2),  # 2 occurrences
+    ("results.py", "_lookup_plan", _PROJ): (ENV, 1),
     # V3-007 S1 fix 4: isinstance(result.requested_config.source, BeamletSet) persistence gate
-    ("results.py", "build_document", "<bare>"): S1,  # refused until S5
-    ("results.py", "save", "<bare>"): S1,
-    ("transport/reference.py", "_Reference.__init__", _PROJ): ENV,
-    ("transport/reference.py", "_Reference._history", "<alias-passed>"): S1,  # isinstance guard
-    ("transport/reference.py", "_Reference._history", "energy_sigma_mev"): S1,  # S2
-    ("transport/reference.py", "_Reference._history", "kinetic_energy_mev"): S1,
-    ("transport/reference.py", "_Reference._history", "lateral_sigma_mm"): S1,
-    ("transport/reference.py", "_Reference._history", "position_mm"): S1,
-    ("transport/warp_driver.py", "run_warp_range", "<alias-passed>"): S1,  # isinstance guard
-    ("transport/warp_driver.py", "run_warp_range", "energy_sigma_mev"): S1,  # S3
-    ("transport/warp_driver.py", "run_warp_range", "kinetic_energy_mev"): S1,
-    ("transport/warp_driver.py", "run_warp_range", "lateral_sigma_mm"): S1,
-    ("transport/warp_driver.py", "run_warp_range", "position_mm"): S1,
-    ("transport/warp_driver.py", "run_warp_range", _PROJ): ENV,
+    ("results.py", "build_document", "<bare>"): (S1, 1),  # refused until S5
+    ("results.py", "save", "<bare>"): (S1, 1),
+    ("transport/reference.py", "_Reference.__init__", _PROJ): (ENV, 4),  # 4 occurrences
+    ("transport/reference.py", "_Reference._history", "<alias-passed>"): (
+        S1,
+        1,
+    ),  # isinstance guard
+    ("transport/reference.py", "_Reference._history", "energy_sigma_mev"): (
+        S1,
+        2,
+    ),  # 2 occurrences; S2
+    ("transport/reference.py", "_Reference._history", "kinetic_energy_mev"): (S1, 1),
+    ("transport/reference.py", "_Reference._history", "lateral_sigma_mm"): (S1, 2),  # 2 occurrences
+    ("transport/reference.py", "_Reference._history", "position_mm"): (S1, 1),
+    ("transport/warp_driver.py", "run_warp_range", "<alias-passed>"): (S1, 1),  # isinstance guard
+    ("transport/warp_driver.py", "run_warp_range", "energy_sigma_mev"): (S1, 1),  # S3
+    ("transport/warp_driver.py", "run_warp_range", "kinetic_energy_mev"): (S1, 1),
+    ("transport/warp_driver.py", "run_warp_range", "lateral_sigma_mm"): (S1, 1),
+    ("transport/warp_driver.py", "run_warp_range", "position_mm"): (S1, 1),
+    ("transport/warp_driver.py", "run_warp_range", _PROJ): (ENV, 4),  # 4 occurrences
     # V3-007 S1 fix 7: root occurrences (every `.source` access) and tuple pass-through
-    ("config.py", "EffectiveConfig.is_ion", "<root>:self.requested.source"): ENV,
-    ("config.py", "EffectiveConfig.ls_effective", "<root>:self.requested.source"): ENV,
-    ("config.py", "EffectiveConfig.run", "<root>:self.requested.source"): PER,
-    ("config.py", "EffectiveConfig.stopping_identity", "<root>:self.requested.source"): ENV,
-    ("config.py", "EffectiveConfig.summary", "<root>:self.requested.source"): PER,
-    ("config.py", "PhysicsOptions.stopping_source", "<bare>"): NOT,
-    ("config.py", "PhysicsOptions.stopping_source", "<root>:self.selection.source"): NOT,
-    ("config.py", "SimulationConfig.__post_init__", "<bare>"): ENV,
-    ("config.py", "SimulationConfig.__post_init__", "<root>:self.source"): ENV,
-    ("config.py", "_beamlet_set_checks", "<bare>"): PER,
-    ("config.py", "_beamlet_set_checks", "<root>:config.source"): PER,
-    ("config.py", "_check_stopping_domain", "<root>:config.source"): ENV,
-    ("config.py", "_compile_tallies", "<bare>"): ENV,
-    ("config.py", "_compile_tallies", "<root>:config.source"): ENV,
-    ("config.py", "_computed_max_steps", "<bare>"): ENV,
-    ("config.py", "_computed_max_steps", "<root>:config.source"): ENV,
-    ("config.py", "_finish_beamlet_set", "<bare>"): PER,
-    ("config.py", "_finish_beamlet_set", "<root>:cfg.source"): PER,
-    ("config.py", "_influence_checks", "<root>:config.source"): PER,
-    ("config.py", "_ion_mapping_data", "<root>:config.source"): PER,
-    ("config.py", "_nuclear_setup_checks", "<bare>"): ENV,
-    ("config.py", "_nuclear_setup_checks", "<root>:config.source"): ENV,
-    ("config.py", "_nuclear_tables", "<root>:config.source"): ENV,
-    ("config.py", "_water_table", "<root>:config.source"): ENV,
-    ("config.py", "_with_derived_histories", "<root>:config.source"): PER,
-    ("config.py", "effective_e_cut_mev", "<root>:config.source"): ENV,
-    ("config.py", "effective_end_of_range_model", "<root>:config.source"): ENV,
-    ("config.py", "validate", "<bare>"): ENV,
-    ("config.py", "validate", "<root>:config.source"): ENV,
-    ("configio.py", "InputManifest.__post_init__", "<bare>"): NOT,
-    ("configio.py", "InputManifest.__post_init__", "<root>:self.source"): NOT,
-    ("configio.py", "InputManifest.to_dict", "<bare>"): NOT,
-    ("configio.py", "InputManifest.to_dict", "<root>:self.source"): NOT,
-    ("configio.py", "_material_dict", "<bare>"): NOT,
-    ("configio.py", "_material_dict", "<root>:m.source"): NOT,
-    ("configio.py", "to_dict", "<root>:config.source"): PER,
-    ("lookup.py", "LookupTable.provenance", "<bare>"): NOT,
-    ("lookup.py", "LookupTable.provenance", "<root>:self.source"): NOT,
-    ("materials.py", "Material.with_I", "<bare>"): NOT,
-    ("materials.py", "Material.with_I", "<root>:self.source"): NOT,
-    ("physics/stopping.py", "BetheStoppingSource.table", "<bare>"): NOT,
-    ("physics/stopping.py", "BetheStoppingSource.table", "<root>:material.source"): NOT,
-    ("physics/stopping_selection.py", "assert_identity_stable", "<bare>"): NOT,
-    ("physics/stopping_selection.py", "assert_identity_stable", "<root>:sel.source"): NOT,
-    ("physics/stopping_selection.py", "check_window", "<bare>"): NOT,
-    ("physics/stopping_selection.py", "check_window", "<root>:sel.source"): NOT,
-    ("physics/stopping_selection.py", "identity_block", "<alias-passed>"): NOT,
-    ("physics/stopping_selection.py", "identity_block", "<root>:sel.source"): NOT,
-    ("physics/stopping_tabulated.py", "TabulatedStoppingSource.table", "<bare>"): NOT,
+    ("config.py", "EffectiveConfig.is_ion", "<root>:self.requested.source"): (ENV, 1),
+    ("config.py", "EffectiveConfig.ls_effective", "<root>:self.requested.source"): (ENV, 1),
+    ("config.py", "EffectiveConfig.run", "<root>:self.requested.source"): (PER, 1),
+    ("config.py", "EffectiveConfig.stopping_identity", "<root>:self.requested.source"): (
+        ENV,
+        2,
+    ),  # 2 occurrences
+    ("config.py", "EffectiveConfig.summary", "<root>:self.requested.source"): (PER, 1),
+    ("config.py", "PhysicsOptions.stopping_source", "<bare>"): (NOT, 1),
+    ("config.py", "PhysicsOptions.stopping_source", "<root>:self.selection.source"): (NOT, 1),
+    ("config.py", "SimulationConfig.__post_init__", "<bare>"): (ENV, 1),
+    ("config.py", "SimulationConfig.__post_init__", "<root>:self.source"): (ENV, 1),
+    ("config.py", "_beamlet_set_checks", "<bare>"): (PER, 1),
+    ("config.py", "_beamlet_set_checks", "<root>:config.source"): (PER, 1),
+    ("config.py", "_check_stopping_domain", "<root>:config.source"): (ENV, 1),
+    ("config.py", "_compile_tallies", "<bare>"): (ENV, 1),
+    ("config.py", "_compile_tallies", "<root>:config.source"): (ENV, 1),
+    ("config.py", "_computed_max_steps", "<bare>"): (ENV, 1),
+    ("config.py", "_computed_max_steps", "<root>:config.source"): (ENV, 1),
+    ("config.py", "_finish_beamlet_set", "<bare>"): (PER, 1),
+    ("config.py", "_finish_beamlet_set", "<root>:cfg.source"): (PER, 1),
+    ("config.py", "_influence_checks", "<root>:config.source"): (PER, 1),
+    ("config.py", "_ion_mapping_data", "<root>:config.source"): (PER, 2),  # 2 occurrences
+    ("config.py", "_nuclear_setup_checks", "<bare>"): (ENV, 1),
+    ("config.py", "_nuclear_setup_checks", "<root>:config.source"): (ENV, 1),
+    ("config.py", "_nuclear_tables", "<root>:config.source"): (ENV, 1),
+    ("config.py", "_water_table", "<root>:config.source"): (ENV, 1),
+    ("config.py", "_with_derived_histories", "<root>:config.source"): (PER, 2),  # 2 occurrences
+    ("config.py", "effective_e_cut_mev", "<root>:config.source"): (ENV, 1),
+    ("config.py", "effective_end_of_range_model", "<root>:config.source"): (ENV, 1),
+    ("config.py", "validate", "<bare>"): (ENV, 1),
+    ("config.py", "validate", "<root>:config.source"): (ENV, 1),
+    ("configio.py", "InputManifest.__post_init__", "<bare>"): (NOT, 3),  # 3 occurrences
+    ("configio.py", "InputManifest.__post_init__", "<root>:self.source"): (NOT, 3),  # 3 occurrences
+    ("configio.py", "InputManifest.to_dict", "<bare>"): (NOT, 1),
+    ("configio.py", "InputManifest.to_dict", "<root>:self.source"): (NOT, 1),
+    ("configio.py", "_material_dict", "<bare>"): (NOT, 1),
+    ("configio.py", "_material_dict", "<root>:m.source"): (NOT, 1),
+    ("configio.py", "to_dict", "<root>:config.source"): (PER, 1),
+    ("lookup.py", "LookupTable.provenance", "<bare>"): (NOT, 1),
+    ("lookup.py", "LookupTable.provenance", "<root>:self.source"): (NOT, 1),
+    ("materials.py", "Material.with_I", "<bare>"): (NOT, 1),
+    ("materials.py", "Material.with_I", "<root>:self.source"): (NOT, 1),
+    ("physics/stopping.py", "BetheStoppingSource.table", "<bare>"): (NOT, 1),
+    ("physics/stopping.py", "BetheStoppingSource.table", "<root>:material.source"): (NOT, 1),
+    ("physics/stopping_selection.py", "assert_identity_stable", "<bare>"): (
+        NOT,
+        2,
+    ),  # 2 occurrences
+    ("physics/stopping_selection.py", "assert_identity_stable", "<root>:sel.source"): (
+        NOT,
+        2,
+    ),  # 2 occurrences
+    ("physics/stopping_selection.py", "check_window", "<bare>"): (NOT, 1),
+    ("physics/stopping_selection.py", "check_window", "<root>:sel.source"): (NOT, 1),
+    ("physics/stopping_selection.py", "identity_block", "<alias-passed>"): (
+        NOT,
+        3,
+    ),  # 3 occurrences
+    ("physics/stopping_selection.py", "identity_block", "<root>:sel.source"): (NOT, 1),
+    ("physics/stopping_tabulated.py", "TabulatedStoppingSource.table", "<bare>"): (NOT, 1),
     (
         "physics/stopping_tabulated.py",
         "TabulatedStoppingSource.table",
         "<root>:material.source",
-    ): NOT,
-    ("results.py", "_lookup_plan", "<root>:cfg.source"): ENV,
-    ("results.py", "_material_def", "<bare>"): NOT,
-    ("results.py", "_material_def", "<root>:m.source"): NOT,
-    ("results.py", "build_document", "<root>:result.requested_config.source"): S1,
-    ("results.py", "save", "<root>:result.requested_config.source"): S1,
-    ("transport/reference.py", "_Reference.__init__", "<root>:cfg.source"): ENV,
-    ("transport/reference.py", "_Reference._history", "<root>:cfg.source"): S1,
-    ("transport/warp_driver.py", "run_warp_range", "<bare>"): S1,
-    ("transport/warp_driver.py", "run_warp_range", "<root>:cfg.source"): S1,
+    ): (NOT, 1),
+    ("results.py", "_lookup_plan", "<root>:cfg.source"): (ENV, 1),
+    ("results.py", "_material_def", "<bare>"): (NOT, 1),
+    ("results.py", "_material_def", "<root>:m.source"): (NOT, 1),
+    ("results.py", "build_document", "<root>:result.requested_config.source"): (S1, 1),
+    ("results.py", "save", "<root>:result.requested_config.source"): (S1, 1),
+    ("transport/reference.py", "_Reference.__init__", "<root>:cfg.source"): (
+        ENV,
+        4,
+    ),  # 4 occurrences
+    ("transport/reference.py", "_Reference._history", "<root>:cfg.source"): (S1, 1),
+    ("transport/warp_driver.py", "run_warp_range", "<bare>"): (S1, 1),
+    ("transport/warp_driver.py", "run_warp_range", "<root>:cfg.source"): (S1, 1),
 }
 SRC = Path(__file__).resolve().parents[2] / "src" / "ionmc"
 
 
 def test_beam2_audit_inventory_equals_the_allowlist() -> None:
-    events = audit_readers(SRC)
-    assert events - set(ALLOWLIST) == set(), sorted(events - set(ALLOWLIST))  # unlisted reader
-    assert set(ALLOWLIST) - events == set(), sorted(set(ALLOWLIST) - events)  # stale entry
-    assert set(ALLOWLIST.values()) <= {ENV, PER, S1, NOT}
+    """Exact multiset equality per (module, scope, event): an unlisted key, a stale key or a changed
+    count (a new occurrence of an already-listed key) fails, naming all occurrence coordinates."""
+    counts, coords = audit_readers(SRC)
+    allow = {k: n for k, (_c, n) in ALLOWLIST.items()}
+    assert inventory_diff(counts, coords, allow) == []
+    assert {c for c, _n in ALLOWLIST.values()} <= {ENV, PER, S1, NOT}
+    assert all(n >= 1 for n in allow.values())
+
+
+def test_beam2_inventory_size_is_pinned() -> None:
+    """Decision 0046 quotes the inventory size (occurrences counted per key)."""
+    assert (len(ALLOWLIST), sum(n for _c, n in ALLOWLIST.values())) == (113, 164)
+
+
+def test_beam2_a_duplicate_occurrence_in_the_repository_fails_naming_the_scope() -> None:
+    """Repository-level control: append a duplicate of an already-allowlisted expression to the
+    same scope of one module; the key count rises by one, nothing else changes, and the failure
+    message names the scope and the coordinates of every occurrence of the key."""
+    rel = "config.py"
+    text = (SRC / rel).read_text()
+    assert "config.source" in text
+    extra = "\n\ndef validate(config):\n    return config.source\n"
+    counts0, _ = audit_readers(SRC)
+    # a second function body of the same scope name `validate`: the scope key is identical
+    counts, coords = audit_readers(SRC, {rel: text + extra})
+    allow = {k: n for k, (_c, n) in ALLOWLIST.items()}
+    msgs = inventory_diff(counts, coords, allow)
+    key = (rel, "validate", "<root>:config.source")
+    assert counts[key] == counts0[key] + 1
+    assert len(msgs) == 2  # the root and the bare pass-through of the same scope
+    assert all("validate" in m and "occurrences [(" in m for m in msgs)
+    assert any(str(key) in m for m in msgs)
 
 
 def test_beam2_the_refused_in_s1_readers_cannot_see_a_beamlet_set() -> None:
@@ -756,7 +846,7 @@ def test_beam2_the_refused_in_s1_readers_cannot_see_a_beamlet_set() -> None:
     b = BeamletSet(PROTON, (bl(),))
     for attr in ("kinetic_energy_mev", "energy_sigma_mev", "lateral_sigma_mm", "position_mm"):
         assert not hasattr(b, attr)
-    refused_attrs = {a for (_m, _q, a), v in ALLOWLIST.items() if v == S1}
+    refused_attrs = {a for (_m, _q, a), (v, _n) in ALLOWLIST.items() if v == S1}
     pencil_only = {"kinetic_energy_mev", "energy_sigma_mev", "lateral_sigma_mm", "position_mm"}
     assert {a for a in refused_attrs if not a.startswith("<root>:")} == pencil_only | {
         "<alias-passed>",
@@ -771,8 +861,8 @@ def test_beam2_the_audit_finds_an_unlisted_reader(tmp_path: Path) -> None:
         "def k(self):\n    a, b = self.requested.source, 1\n    return a.position_mm, b\n"
         "def other(x):\n    return x.source.kinetic_energy_mev\n"
     )
-    ev = audit_readers(tmp_path)
-    assert ev == {
+    ev, _ = audit_readers(tmp_path)
+    assert set(ev) == {
         ("mod.py", "f", "<root>:cfg.source"),
         ("mod.py", "f", "kinetic_energy_mev"),
         ("mod.py", "g", "<bare>"),
@@ -831,7 +921,7 @@ def test_beam2_every_source_attribute_access_is_a_candidate_root() -> None:
         },
     }
     for text, want in cases.items():
-        assert audit_text(text) == want, text
+        assert set(audit_text(text)) == want, text
 
 
 def test_beam2_the_analyser_finds_every_root_alias_and_keyword_form() -> None:
@@ -848,7 +938,7 @@ def test_beam2_the_analyser_finds_every_root_alias_and_keyword_form() -> None:
         "def e(self):\n    x, y = self.config.source, 0\n    z = x\n    return g(z), y\n"
         "def n(x, doc):\n    return x.source.kinetic_energy_mev, doc['requested']['source']\n"
     )
-    assert audit_text(text) == {
+    assert set(audit_text(text)) == {
         ("mod.py", "a", "<root>:result.requested_config.source"),
         ("mod.py", "a", "kinetic_energy_mev"),
         ("mod.py", "b", "<root>:cfg.source"),
@@ -868,3 +958,26 @@ def test_beam2_the_analyser_finds_every_root_alias_and_keyword_form() -> None:
         ("mod.py", "n", "<root>:x.source"),  # a non-config `.source` is still a root: the
         ("mod.py", "n", "kinetic_energy_mev"),  # allowlist classifies it not-a-source
     }
+
+
+def test_beam2_repeated_occurrences_are_counted_not_collapsed() -> None:
+    """Synthetic negative controls of the counted multiset: a repeated root read, an alias read
+    through two attributes and a duplicated pass-through each add one count per occurrence."""
+    a = audit_text(
+        "def f(cfg):\n    x = cfg.source.kinetic_energy_mev\n"
+        "    y = cfg.source.kinetic_energy_mev\n"
+    )
+    assert a[("mod.py", "f", "kinetic_energy_mev")] == 2
+    assert a[("mod.py", "f", "<root>:cfg.source")] == 2
+    b = audit_text("def f(cfg):\n    src = cfg.source\n    return src.position_mm, src.energy\n")
+    assert b[("mod.py", "f", "position_mm")] == 1 and b[("mod.py", "f", "energy")] == 1
+    assert b[("mod.py", "f", "<root>:cfg.source")] == 1
+    c = audit_text("def f(cfg):\n    consume(cfg.source)\n    consume(cfg.source)\n")
+    assert c[("mod.py", "f", "<bare>")] == 2 and c[("mod.py", "f", "<root>:cfg.source")] == 2
+    coords = audit_coords("def f(cfg):\n    consume(cfg.source)\n    consume(cfg.source)\n")
+    assert coords[("mod.py", "f", "<bare>")] == [(2, 12), (3, 12)]
+    # the comparison names the key and every coordinate when a count differs from the allowlist
+    (msg,) = inventory_diff(
+        c, coords, {k: v for k, v in c.items() if k[2] != "<bare>"} | {("mod.py", "f", "<bare>"): 1}
+    )
+    assert "found 2, allowlisted 1" in msg and "[(2, 12), (3, 12)]" in msg

@@ -60,6 +60,7 @@ beamlet mapping, units, history and normalisation metadata; V2-CAP forbids influ
   Amended again (REVIEW-15a83983): `config.py` also 844, 1163, 1214–1229 and `warp_driver.py` 187; `configio.py` 1162
   is a lookup-file source, not `SimulationConfig.source` (kept in the audit allowlist as `not-a-source`); the
   inventory is the allowlist of the AST-based audit of plan row BEAM-2 and is re-derived whenever S2/S3 add readers.
+  2026-11-25 (REVIEW-6efc01b9): the audit inventory is a counted multiset per (module, scope, event) with source coordinates in failure messages (occurrences counted per key: 113 keys, 164 occurrences); a new occurrence of an already-listed key fails.
   2026-11-25 (REVIEW-ff3e6af2): the audit analyser now treats every `<config|cfg|requested|requested_config|eff|effective>.source` chain and its transitive same-scope aliases as roots, and the inventory gains the S1 persistence-gate readers `results.py` `build_document` and `save` (`isinstance(result.requested_config.source, BeamletSet)`, annotated refused-in-S1 until S5).
   2026-11-25 (REVIEW-b817f319): the analyser now takes every `.source` attribute access as a candidate root; 39 root occurrences classified (113 allowlist entries including attribute reads, aliases and pass-through), of which 12 not-a-source (24 entries).
   Every reader, including exceptional paths, is in the list; the plan's grep check finds none outside it.
