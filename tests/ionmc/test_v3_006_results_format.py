@@ -2415,10 +2415,10 @@ def test_out10_crossed_aspect_ratios_keep_the_mass_intermediates_bounded(
 
 
 def _never_hash(monkeypatch: Any) -> None:
-    def boom(path: Path) -> tuple[str, int]:
-        raise AssertionError(f"hashed {path.name} before the size checks")
+    def boom(fd: int) -> tuple[str, int]:
+        raise AssertionError("hashed a member before the size checks")
 
-    monkeypatch.setattr(results, "_sha256_path", boom)
+    monkeypatch.setattr(results, "_sha256_fd", boom)
 
 
 def _grow(path: Path, size: int) -> None:
@@ -2855,3 +2855,54 @@ def test_out11_previous_bundle_location_is_reported_truthfully(
     load(aside)  # the previous bundle, intact where the other process put it
     moved = [p for p in tmp_path.iterdir() if p.name.startswith("truthful.previous-")]
     assert len(moved) == 1 and (moved[0] / "keep.txt").read_text(encoding="utf-8") == "stranger"
+
+
+# ---- the reader reads what it checked (REVIEW-a20f2265): one descriptor per member -------------
+
+
+def test_out10_reader_uses_the_descriptor_it_checked_never_the_name_again(
+    bundle: Path, monkeypatch: Any
+) -> None:
+    """Every listed member is opened once (O_NOFOLLOW) and its size, hash and content come from
+    that descriptor: a file swapped at its NAME right after the open is never read. The bundle
+    loads from the objects opened first; a planted large or foreign file at the same names is
+    ignored, and a member replaced by a symbolic link before the open is refused."""
+    real_open = results._open_member
+    big = bundle.parent / "big"
+    with open(big, "wb") as fh:
+        fh.truncate(results.MAX_JSON_BYTES + 1)  # sparse: nothing is written to disk
+    swapped: list[str] = []
+
+    def open_then_swap(dir_fd: int, name: str) -> int:
+        fd = real_open(dir_fd, name)
+        if name == "result.json" and not swapped:
+            swapped.append(name)
+            os.rename(bundle / "result.json", bundle.parent / "result.json.orig")
+            os.rename(big, bundle / "result.json")  # the name now points to an oversized file
+        return fd
+
+    monkeypatch.setattr(results, "_open_member", open_then_swap)
+    loaded = load(bundle)  # the checked descriptor is read, not the swapped name
+    monkeypatch.undo()
+    assert loaded.doc["schema"] == "ionmc.result" and swapped == ["result.json"]
+    os.rename(bundle / "result.json", big)
+    os.rename(bundle.parent / "result.json.orig", bundle / "result.json")
+    # a member replaced by a symbolic link is refused at the open (O_NOFOLLOW), not followed
+    (bundle / "report.md").rename(bundle.parent / "report.orig")
+    os.symlink(bundle.parent / "report.orig", bundle / "report.md")
+    with pytest.raises(ResultFormatError, match="symbolic link"):
+        load(bundle)
+    os.unlink(bundle / "report.md")
+    (bundle.parent / "report.orig").rename(bundle / "report.md")
+    load(bundle)
+    # arrays.npz is parsed through the descriptor whose size and hash were checked
+    seen: list[int] = []
+    real_pre = results._zip_preflight
+
+    def spy(fh: Any, size: int, *a: Any) -> None:
+        seen.append(os.fstat(fh.fileno()).st_ino)
+        real_pre(fh, size, *a)
+
+    monkeypatch.setattr(results, "_zip_preflight", spy)
+    load(bundle)
+    assert seen == [os.lstat(bundle / "arrays.npz").st_ino]

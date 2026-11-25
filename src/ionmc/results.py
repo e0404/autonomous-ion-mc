@@ -2337,54 +2337,36 @@ def _file_name_ok(name: Any) -> bool:
     return isinstance(name, str) and (name in _FIXED_FILES or bool(_PLOT_RE.fullmatch(name)))
 
 
-def _bundle_file(root: Path, name: str) -> Path:
-    if not _file_name_ok(name):
-        raise _fail(f"unsafe file name {name!r} in the files map")
-    p = root / name
-    try:
-        st = os.lstat(p)
-    except OSError as exc:
-        raise _fail(f"file {name!r} listed in the bundle is missing") from exc
-    import stat as _stat
-
-    if not _stat.S_ISREG(st.st_mode):
-        raise _fail(f"{name!r} is not a regular file (symlinks are refused)")
-    real_root = os.path.realpath(root)
-    if os.path.commonpath([real_root, os.path.realpath(p)]) != real_root:
-        raise _fail(f"{name!r} resolves outside the bundle")
-    return p
-
-
-def _zip_preflight(path: Path, max_entries: int, max_total: int, max_cd: int) -> None:
-    size = path.stat().st_size
+def _zip_preflight(fh: Any, size: int, max_entries: int, max_total: int, max_cd: int) -> None:
+    """End-of-central-directory preflight on the OPEN archive (the descriptor whose size and hash
+    were checked), before any ZipFile object exists."""
     if size > max_total:
         raise _fail(f"arrays.npz ({size} bytes) exceeds max_total_bytes")
-    with open(path, "rb") as fh:
-        tail_len = min(size, _EOCD_WINDOW)
-        fh.seek(size - tail_len)
-        tail = fh.read(tail_len)
-        i = tail.rfind(b"PK\x05\x06")
-        if i < 0 or len(tail) - i < 22:
-            raise _fail("arrays.npz has no end-of-central-directory record")
-        _sig, _d, _cd, n_this, n_total, cd_size, cd_off, _cl = struct.unpack(
-            "<4s4H2LH", tail[i : i + 22]
-        )
-        if 0xFFFF in (n_this, n_total) or 0xFFFFFFFF in (cd_size, cd_off):
-            eocd_pos = size - tail_len + i
-            if eocd_pos < 20:
-                raise _fail("arrays.npz: truncated ZIP64 locator")
-            fh.seek(eocd_pos - 20)
-            loc = fh.read(20)
-            if loc[:4] != b"PK\x06\x07":
-                raise _fail("arrays.npz: ZIP64 values without a ZIP64 locator")
-            z64_off = struct.unpack("<4sLQL", loc)[2]
-            if z64_off + 56 > size:
-                raise _fail("arrays.npz: ZIP64 record offset outside the file")
-            fh.seek(z64_off)
-            rec = fh.read(56)
-            if len(rec) < 56 or rec[:4] != b"PK\x06\x06":
-                raise _fail("arrays.npz: malformed ZIP64 end record")
-            n_total, cd_size, cd_off = struct.unpack("<QQQ", rec[32:56])
+    tail_len = min(size, _EOCD_WINDOW)
+    fh.seek(size - tail_len)
+    tail = fh.read(tail_len)
+    i = tail.rfind(b"PK\x05\x06")
+    if i < 0 or len(tail) - i < 22:
+        raise _fail("arrays.npz has no end-of-central-directory record")
+    _sig, _d, _cd, n_this, n_total, cd_size, cd_off, _cl = struct.unpack(
+        "<4s4H2LH", tail[i : i + 22]
+    )
+    if 0xFFFF in (n_this, n_total) or 0xFFFFFFFF in (cd_size, cd_off):
+        eocd_pos = size - tail_len + i
+        if eocd_pos < 20:
+            raise _fail("arrays.npz: truncated ZIP64 locator")
+        fh.seek(eocd_pos - 20)
+        loc = fh.read(20)
+        if loc[:4] != b"PK\x06\x07":
+            raise _fail("arrays.npz: ZIP64 values without a ZIP64 locator")
+        z64_off = struct.unpack("<4sLQL", loc)[2]
+        if z64_off + 56 > size:
+            raise _fail("arrays.npz: ZIP64 record offset outside the file")
+        fh.seek(z64_off)
+        rec = fh.read(56)
+        if len(rec) < 56 or rec[:4] != b"PK\x06\x06":
+            raise _fail("arrays.npz: malformed ZIP64 end record")
+        n_total, cd_size, cd_off = struct.unpack("<QQQ", rec[32:56])
     if n_total > max_entries:
         raise _fail(
             f"arrays.npz declares {n_total} entries, more than the {max_entries} catalogued"
@@ -3441,119 +3423,187 @@ def _load(
     max_derived_bytes: int = MAX_DERIVED_BYTES,
 ) -> LoadedResult:
     root = Path(path)
-    if root.is_symlink() or not root.is_dir():
-        raise _fail("bundle path is not a directory")
-    rj = _bundle_file_json(root)
-    if rj.stat().st_size > max_json_bytes:
-        raise _fail("result.json exceeds max_json_bytes")
-    raw = rj.read_bytes()
-    prescan_json(raw, max_json_tokens, max_json_depth)
+    root_fd = _open_bundle_root(root)
+    held: list[int] = [root_fd]
     try:
-        doc = json.loads(
-            raw.decode("utf-8"),
-            object_pairs_hook=_dup_hook,
-            parse_float=_parse_float,
-            parse_constant=_parse_constant,
-        )
-    except (ValueError, UnicodeDecodeError, RecursionError) as exc:
-        if isinstance(exc, ResultFormatError):
-            raise
-        raise _fail(f"result.json is not valid JSON: {exc}") from exc
-    _check_structure(doc)
-    entries = doc["arrays"]
-    check_allowlist(entries)
-    files = doc["files"]
-    for name in files:
-        if not _file_name_ok(name):
-            raise _fail(f"unsafe file name {name!r} in the files map")
-    import stat as _stat
+        # result.json through its own descriptor: size, bytes and parse of ONE object
+        # (REVIEW-a20f2265: a member is never reopened by name after it was checked)
+        rfd = _open_member(root_fd, "result.json")
+        held.append(rfd)
+        rsize = os.fstat(rfd).st_size
+        if rsize > max_json_bytes:
+            raise _fail("result.json exceeds max_json_bytes")
+        raw = _read_fd(rfd, rsize)
+        prescan_json(raw, max_json_tokens, max_json_depth)
+        try:
+            doc = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=_dup_hook,
+                parse_float=_parse_float,
+                parse_constant=_parse_constant,
+            )
+        except (ValueError, UnicodeDecodeError, RecursionError) as exc:
+            if isinstance(exc, ResultFormatError):
+                raise
+            raise _fail(f"result.json is not valid JSON: {exc}") from exc
+        _check_structure(doc)
+        entries = doc["arrays"]
+        check_allowlist(entries)
+        files = doc["files"]
+        for name in files:
+            if not _file_name_ok(name):
+                raise _fail(f"unsafe file name {name!r} in the files map")
+        import stat as _stat
 
-    for de in os.scandir(root):
-        st = de.stat(follow_symlinks=False)
-        if de.name == "result.json":
-            continue
-        if _stat.S_ISLNK(st.st_mode):
-            raise _fail(f"{de.name!r} is a symbolic link (refused)")
-        if de.name == "plots" and _stat.S_ISDIR(st.st_mode):
-            for pe in os.scandir(root / "plots"):
-                pst = pe.stat(follow_symlinks=False)
-                if _stat.S_ISLNK(pst.st_mode) or not _stat.S_ISREG(pst.st_mode):
-                    raise _fail(f"plots/{pe.name!r} is a symbolic link or not a regular file")
-                if f"plots/{pe.name}" not in files:
-                    raise _fail(f"unexpected entry 'plots/{pe.name}' in the bundle")
-            continue
-        if de.name not in files:
-            raise _fail(f"unexpected entry {de.name!r} in the bundle")
-    for need in _FIXED_FILES:
-        if need not in files:
-            raise _fail(f"files has no entry for {need}")
-    # sizes and budgets first (lstat only), hashes second: no byte of an over-large or mis-sized
-    # file is ever read (REVIEW-92b2e8cf finding 2)
-    paths: dict[str, Path] = {}
-    derived_total = 0
-    for name, rec in files.items():
-        p = paths[name] = _bundle_file(root, name)
-        size = p.lstat().st_size
-        if size != rec["size"]:
-            raise _fail(f"file {name!r} has {size} bytes, its recorded size is {rec['size']}")
-        if name == "arrays.npz":
-            if size > max_total_bytes:
-                raise _fail(f"arrays.npz ({size} bytes) exceeds max_total_bytes")
-        else:
-            derived_total += size
-            if size > max_derived_bytes or derived_total > max_derived_bytes:
-                raise _fail(f"file {name!r}: report and plot files exceed max_derived_bytes "
-                            f"({max_derived_bytes} bytes, each and together)")  # fmt: skip
-    for name, rec in files.items():
-        sha, size = _sha256_path(paths[name])
-        if size != rec["size"] or sha != rec["sha256"]:
-            raise _fail(f"file {name!r} does not match its recorded sha256 and size")
-    npz = root / "arrays.npz"
-    _zip_preflight(npz, len(entries), max_total_bytes, max_central_directory_bytes)
-    by_member = {e["name"] + ".npy": e for e in entries}
-    total = 0
-    sizes = {n: _entry_nbytes(e, max_array_bytes) for n, e in by_member.items()}
-    total = sum(v[2] for v in sizes.values())
-    if total > max_total_bytes:
-        raise _fail("catalogue arrays exceed max_total_bytes")
-    arrays: dict[str, np.ndarray[Any, Any]] = {}
-    try:
-        zf = zipfile.ZipFile(npz)
-    except (zipfile.BadZipFile, OSError) as exc:
-        raise _fail(f"arrays.npz is not a readable zip archive: {exc}") from exc
-    with zf:
-        infos = zf.infolist()
-        names = [i.filename for i in infos]
-        if len(set(names)) != len(names):
-            raise _fail("arrays.npz has duplicate members")
-        for n in names:
-            if not _MEMBER_RE.fullmatch(n) or n not in by_member:
-                raise _fail(f"arrays.npz member {n!r} is not in the catalogue")
-        if set(names) != set(by_member):
-            raise _fail("arrays.npz lacks catalogued members")
-        for info in infos:
-            e = by_member[info.filename]
-            dt, shape, nbytes = sizes[info.filename]
-            a = _read_member(zf, info, e, dt, shape, nbytes)
-            if array_content_sha256(a) != e["content_sha256"]:
-                raise _fail(f"array {e['name']!r}: content_sha256 mismatch")
-            a.flags.writeable = False
-            arrays[e["name"]] = a
+        plots_fd: int | None = None
+        for de in list(os.scandir(root_fd)):
+            st = de.stat(follow_symlinks=False)
+            if de.name == "result.json":
+                continue
+            if _stat.S_ISLNK(st.st_mode):
+                raise _fail(f"{de.name!r} is a symbolic link (refused)")
+            if de.name == "plots" and _stat.S_ISDIR(st.st_mode):
+                plots_fd = _open_subdir(root_fd, "plots")
+                held.append(plots_fd)
+                for pe in list(os.scandir(plots_fd)):
+                    pst = pe.stat(follow_symlinks=False)
+                    if _stat.S_ISLNK(pst.st_mode) or not _stat.S_ISREG(pst.st_mode):
+                        raise _fail(f"plots/{pe.name!r} is a symbolic link or not a regular file")
+                    if f"plots/{pe.name}" not in files:
+                        raise _fail(f"unexpected entry 'plots/{pe.name}' in the bundle")
+                continue
+            if de.name not in files:
+                raise _fail(f"unexpected entry {de.name!r} in the bundle")
+        for need in _FIXED_FILES:
+            if need not in files:
+                raise _fail(f"files has no entry for {need}")
+        # every listed file is opened ONCE (O_NOFOLLOW, relative to the bundle's descriptors);
+        # sizes and budgets come from fstat of that descriptor, the hash from reading it, and
+        # arrays.npz is parsed through the same descriptor (REVIEW-92b2e8cf, REVIEW-a20f2265)
+        fds: dict[str, int] = {}
+        derived_total = 0
+        for name, rec in files.items():
+            if name.startswith("plots/"):
+                if plots_fd is None:
+                    raise _fail(f"file {name!r} listed in the bundle is missing")
+                fd = _open_member(plots_fd, name[len("plots/") :])
+            else:
+                fd = _open_member(root_fd, name)
+            held.append(fd)
+            fds[name] = fd
+            size = os.fstat(fd).st_size
+            if size != rec["size"]:
+                raise _fail(f"file {name!r} has {size} bytes, its recorded size is {rec['size']}")
+            if name == "arrays.npz":
+                if size > max_total_bytes:
+                    raise _fail(f"arrays.npz ({size} bytes) exceeds max_total_bytes")
+            else:
+                derived_total += size
+                if size > max_derived_bytes or derived_total > max_derived_bytes:
+                    raise _fail(f"file {name!r}: report and plot files exceed max_derived_bytes "
+                                f"({max_derived_bytes} bytes, each and together)")  # fmt: skip
+        for name, rec in files.items():
+            sha, size = _sha256_fd(fds[name])
+            if size != rec["size"] or sha != rec["sha256"]:
+                raise _fail(f"file {name!r} does not match its recorded sha256 and size")
+        npz_fd = fds["arrays.npz"]
+        npz_size = os.fstat(npz_fd).st_size
+        with os.fdopen(os.dup(npz_fd), "rb") as zfh:
+            _zip_preflight(zfh, npz_size, len(entries), max_total_bytes,
+                           max_central_directory_bytes)  # fmt: skip
+            by_member = {e["name"] + ".npy": e for e in entries}
+            total = 0
+            sizes = {n: _entry_nbytes(e, max_array_bytes) for n, e in by_member.items()}
+            total = sum(v[2] for v in sizes.values())
+            if total > max_total_bytes:
+                raise _fail("catalogue arrays exceed max_total_bytes")
+            arrays: dict[str, np.ndarray[Any, Any]] = {}
+            try:
+                zfh.seek(0)
+                zf = zipfile.ZipFile(zfh)
+            except (zipfile.BadZipFile, OSError) as exc:
+                raise _fail(f"arrays.npz is not a readable zip archive: {exc}") from exc
+            with zf:
+                infos = zf.infolist()
+                names = [i.filename for i in infos]
+                if len(set(names)) != len(names):
+                    raise _fail("arrays.npz has duplicate members")
+                for n in names:
+                    if not _MEMBER_RE.fullmatch(n) or n not in by_member:
+                        raise _fail(f"arrays.npz member {n!r} is not in the catalogue")
+                if set(names) != set(by_member):
+                    raise _fail("arrays.npz lacks catalogued members")
+                for info in infos:
+                    e = by_member[info.filename]
+                    dt, shape, nbytes = sizes[info.filename]
+                    a = _read_member(zf, info, e, dt, shape, nbytes)
+                    if array_content_sha256(a) != e["content_sha256"]:
+                        raise _fail(f"array {e['name']!r}: content_sha256 mismatch")
+                    a.flags.writeable = False
+                    arrays[e["name"]] = a
+    finally:
+        for fd in reversed(held):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
     _check_invariants(doc, arrays)
     return LoadedResult(root, doc, arrays, "bundle-local", _binding_limits(doc))
 
 
-def _bundle_file_json(root: Path) -> Path:
+def _open_bundle_root(root: Path) -> int:
+    """The bundle directory as a descriptor (never following a symbolic link)."""
+    try:
+        return os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise _fail("bundle path is not a directory") from exc
+
+
+def _open_subdir(dir_fd: int, name: str) -> int:
+    try:
+        return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    except OSError as exc:
+        raise _fail(f"{name!r} is not a directory of the bundle") from exc
+
+
+def _open_member(dir_fd: int, name: str) -> int:
+    """A listed file as a descriptor relative to the bundle directory: ``O_NOFOLLOW`` refuses a
+    symbolic link, ``fstat`` must show a regular file; every later size, hash and parse of
+    that file goes through this descriptor, never through the name again."""
     import stat as _stat
 
-    p = root / "result.json"
     try:
-        st = os.lstat(p)
-    except OSError as exc:
-        raise _fail("result.json is missing") from exc
-    if not _stat.S_ISREG(st.st_mode):
-        raise _fail("result.json is not a regular file")
-    real_root = os.path.realpath(root)
-    if os.path.commonpath([real_root, os.path.realpath(p)]) != real_root:
-        raise _fail("result.json resolves outside the bundle")
-    return p
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dir_fd)
+    except FileNotFoundError as exc:
+        raise _fail(f"file {name!r} listed in the bundle is missing") from exc
+    except OSError as exc:  # ELOOP for a symbolic link, EISDIR, ...
+        raise _fail(f"{name!r} is not a regular file (symlinks are refused)") from exc
+    if not _stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise _fail(f"{name!r} is not a regular file (symlinks are refused)")
+    return fd
+
+
+def _read_fd(fd: int, size: int) -> bytes:
+    """Exactly the first ``size`` bytes of the open file (a file that grew meanwhile is cut at
+    the size that was checked)."""
+    os.lseek(fd, 0, os.SEEK_SET)
+    chunks: list[bytes] = []
+    got = 0
+    while got < size:
+        chunk = os.read(fd, min(size - got, 1 << 20))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        got += len(chunk)
+    return b"".join(chunks)
+
+
+def _sha256_fd(fd: int) -> tuple[str, int]:
+    """sha256 and byte count of the open file, read through its descriptor."""
+    os.lseek(fd, 0, os.SEEK_SET)
+    h, n = hashlib.sha256(), 0
+    while chunk := os.read(fd, 1 << 20):
+        h.update(chunk)
+        n += len(chunk)
+    return h.hexdigest(), n

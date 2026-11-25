@@ -600,6 +600,7 @@ def cmd_prov7(summary: Path, sha: str, tree_oid: str | None, out: Path | None = 
         path,
         {"verdict": "FAIL" if bad else "PASS", "failures": sorted(set(bad)), "bundle_code": shown},
     )
+    _result("PROV-7", not bad, path)  # every check echoes one RESULT line (the host stdout)
     return path
 
 

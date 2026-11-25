@@ -458,3 +458,23 @@ def test_prov7_reads_the_bundle_not_the_summary(py_run: tuple[Path, Path], tmp_p
     assert v["verdict"] == "FAIL"  # the fabricated copy would satisfy the expectation
     assert any("summary code differs" in f for f in v["failures"])
     assert v["bundle_code"]["git_commit"] == code["git_commit"]  # the bundle's values are shown
+
+
+def test_prov7_echoes_one_result_line_for_both_verdicts(
+    py_run: tuple[Path, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REVIEW-a20f2265: the PROV-7 verdict is echoed as a RESULT line on stdout, PASS and FAIL
+    alike (the host stdout is the only channel readable afterwards)."""
+    out, _ = py_run
+    summary = out / f"r0k{K_TEST}.summary.json"
+    sm = json.loads(summary.read_text())
+    code = sm["code"]
+    capsys.readouterr()
+    sha = code.get("git_commit") or "0" * 40
+    oid = code.get("package_tree_oid") or "0" * 40
+    RUN.cmd_prov7(summary, sha, oid, tmp_path / "p1.json")
+    first = capsys.readouterr().out
+    assert first.count("RESULT PROV-7 ") == 1
+    RUN.cmd_prov7(summary, "f" * 40, "e" * 40, tmp_path / "p2.json")
+    second = capsys.readouterr().out
+    assert second.count("RESULT PROV-7 FAIL") == 1
