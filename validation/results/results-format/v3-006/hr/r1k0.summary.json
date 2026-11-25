@@ -14,10 +14,10 @@
  },
  "backend": "warp-cpu",
  "code": {
-  "git_commit": "a79f3333dc9495159e983c99ce6cb9c951b1bdac",
+  "git_commit": "154fc2da1beaca38d7277ba65642dc03f3b355cf",
   "git_dirty": false,
   "ionmc_version": "0.1.0.dev0",
-  "package_tree_oid": "2be42e2a055e45f1988e194b26c313f81fd015f6",
+  "package_tree_oid": "4970c9a4e6899f6e1d73c6a3cfdef8f36c783850",
   "reason": "",
   "source": "git",
   "status": "ok"
@@ -25,7 +25,7 @@
  "device": "cpu",
  "durations_s": {
   "report_check": 0.516,
-  "run": 6.378,
+  "run": 0.917,
   "verify": 0.516
  },
  "exit_codes": {
@@ -51,7 +51,7 @@
    "size": 2228
   },
   "report.md": {
-   "sha256": "58edafa13ba12831d76a4139bd174e5f32d4b71339389c37809ed71c29a1e94d",
+   "sha256": "249e1730f62590027357eb0e0d8d46eb91995815a5ce67b4562f7b872220f697",
    "size": 9632
   }
  },
@@ -64,7 +64,7 @@
  "production": true,
  "r_index": 1,
  "requested_nuclear_table_id": null,
- "result_json_sha256": "e57c2241e25ce141b7c2b3f7395de81f007870d34258eea321f775a521409d21",
+ "result_json_sha256": "20124c49a9c3123ca50f4111a2d14c4f4aa22704eb533995ead4301cc5d1c4e2",
  "schema": "ionmc.out6-summary/1",
  "seed": 20700104,
  "stopping": {

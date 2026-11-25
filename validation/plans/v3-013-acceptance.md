@@ -690,3 +690,14 @@ OPEN. Not a clinical claim."
   the pin with the tree of the recorded derivation commit 53d779ae (c5b33495…) and, when that commit is reachable,
   verifies the constant against `git rev-parse`. The sealed predictions and the evaluation are unchanged. Not a
   clinical claim.
+- 2026-11-25 (orchestrator, post-integration maintenance, recorded by V3-006): V3-006 changes the `src/ionmc` tree
+  (c5b33495… → 4970c9a4…: the LS memo of the Bethe tables, the result writer/reader with its bounded snapshot loader, the contract, the CLI; no spec,
+  hash, registry or table change), so `tests/ionmc/test_steps_v13.py::test_predictions_reproduce_from_the_committed_inputs`
+  failed in the V3-006 local-validation tier at f0665109 (logged run `20261125T090433Z-final-head-fullsuite-f0665109`:
+  the recomputed predictions differ from the committed file in `/src_ionmc_tree` only). Following the closure note of
+  2026-11-23, `vc-predictions.json` was re-derived on the host at the V3-006 commit 154fc2da
+  (RUN-20261125T100705Z-1cae10a5, signed record under `validation/results/results-format/v3-006/hr/host-records/`;
+  sha256 61df725f…, replacing fc255f06…): the tree pin is now 4970c9a4… and every energy, R_def, ΔR_pred, ΔR_pred,D,
+  informativeness flag, spec_sha256, content_sha256 and table identity is unchanged; the derivation-commit constants of
+  the pin test now name 154fc2da / 4970c9a4…. The sealed predictions, the grading of the 18 samples at 9f1fa8ec and the
+  evaluation are unchanged. Not a clinical claim.

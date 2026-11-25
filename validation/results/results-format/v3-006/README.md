@@ -10,9 +10,10 @@ because its signature covers those bytes.
 
 ## `lv/` — local-validation tier (this sandbox, `IONMC_LV_TIER=1`, one process, thread limits 1)
 
-Produced at the clean commit 48b782bf (every summary's `code` block: `source = git`, `git_dirty = false`,
-`git_commit = 48b782bf…`, `package_tree_oid = 2be42e2a…` = `git rev-parse 48b782bf:src/ionmc`) by the logged run
-`20261125T084654Z-out6-lv-evidence-48b782bf` (`telemetry/test-logs`).
+Produced at the clean commit 154fc2da (every summary's `code` block: `source = git`, `git_dirty = false`,
+`git_commit = 154fc2da…`, `package_tree_oid = 4970c9a4…` = `git rev-parse 154fc2da:src/ionmc`) by the logged run
+`20261125T100614Z-out6-lv-evidence-154fc2da` (`telemetry/test-logs`). Earlier sets of the same rows at 48b782bf,
+cebd9109 and 154fc2da (all PASS) were superseded by the reader and driver corrections of the final review rounds.
 
 | file | row(s) | verdict |
 |---|---|---|
@@ -32,7 +33,7 @@ and no row definition changed.
 
 ## `hr/` — host-runner tier (controlled GPU host, read-only snapshot, no network)
 
-Filled by the controlled host run RUN-20261125T085537Z-1caf6349 at the clean commit a79f3333 (signed record in
+Filled by the controlled host run RUN-20261125T100705Z-1cae10a5 at the clean commit 154fc2da (signed record in
 `hr/host-records/`, verified with `validation/scripts/transport/attest_verify.py`): RUN-r2 (warp-cuda, `cuda:0`,
 float32), RUN-r0 and RUN-r1 on the host, CLI-5 (three-way r0/r1/r2) PASS, PROV-7 PASS, OUT-2-HR PASS, CLI-4-HR PASS,
 REG-1-HR PASS and CAP-1b-HR PASS (90 contract tests with CUDA present, 0 skipped). See `hr/README.md`.

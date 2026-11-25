@@ -14,10 +14,10 @@
  },
  "backend": "python",
  "code": {
-  "git_commit": "48b782bfa35eca4cdd9ec7abe6ba42ac0146d118",
+  "git_commit": "154fc2da1beaca38d7277ba65642dc03f3b355cf",
   "git_dirty": false,
   "ionmc_version": "0.1.0.dev0",
-  "package_tree_oid": "2be42e2a055e45f1988e194b26c313f81fd015f6",
+  "package_tree_oid": "4970c9a4e6899f6e1d73c6a3cfdef8f36c783850",
   "reason": "",
   "source": "git",
   "status": "ok"
@@ -25,8 +25,8 @@
  "device": "python (float64)",
  "durations_s": {
   "report_check": 0.366,
-  "run": 0.917,
-  "verify": 0.366
+  "run": 0.918,
+  "verify": 0.367
  },
  "exit_codes": {
   "report_check": 0,
@@ -51,7 +51,7 @@
    "size": 2153
   },
   "report.md": {
-   "sha256": "69adc9423d243d85178bfff83b33d191c77b585a495b633e1125e7c2c1b063eb",
+   "sha256": "9563d614c8d947157928302079cd913a47a850882f56ec60a56885eb51c0db65",
    "size": 10361
   }
  },
@@ -83,7 +83,7 @@
  "production": false,
  "r_index": 5,
  "requested_nuclear_table_id": "00e8031d5f67704f256e904ebab89b0c2a75845bcf1887c29e1518bffaafe5fb",
- "result_json_sha256": "5f6414561ecb43fe1f81e955dd8c51b4c977d09b3da9133c02a2c1874624f994",
+ "result_json_sha256": "7ba991bca73d2cfae1d752c9fb19a8c115fc299a61723b752a9cafb623a833f3",
  "schema": "ionmc.out6-summary/1",
  "seed": 20700504,
  "stopping": {

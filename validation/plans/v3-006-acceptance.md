@@ -491,3 +491,12 @@ option explicitly.
   0 skipped); CAP-1b-HR PASS (`test_v3_006_contract.py` with CUDA present: 90 passed, 0 skipped). With the LV note
   above every row of this plan has a recorded outcome; the only FAIL recorded during S8 is the preserved first OUT-3
   attempt at 1f371352 (driver path bug, corrected; the rows themselves unchanged). Not a clinical claim.
+- 2026-11-25 (S8, regeneration at the final code state): after the final review rounds changed the reader
+  (descriptor-bound tier 1, then bounded private snapshots of every member, REVIEW-5c897f4b) and the driver
+  (summary binding, PROV-7 from the bundle, RESULT echo), the whole S8 evidence was regenerated at the clean commit 154fc2da: LV (logged run `20261125T100614Z-out6-lv-evidence-154fc2da`)
+  RUN r0, r1, r3, r4, r5, r6 (k = 0, 1), r7, CLI-5-LV, CLI-6 carbon/nuclear/icru90, OUT-3 r6k0/r6k1 all PASS; HR
+  (controlled host run RUN-20261125T100705Z-1cae10a5, signed record verified) RUN-r2/r0/r1, CLI-5 three-way, PROV-7
+  (tree oid 4970c9a4 = `git rev-parse 154fc2da:src/ionmc`), OUT-2-HR, CLI-4-HR, REG-1-HR, CAP-1b-HR (90 passed,
+  0 skipped) all PASS. The earlier sets at 48b782bf/a79f3333, cebd9109 and 93f7d68f (all PASS; preserved in the task's
+  validation records) are superseded. The same host run re-derived the V3-013 predictions tree pin (note of
+  2026-11-25 in plan v3-013). Not a clinical claim.

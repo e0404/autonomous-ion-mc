@@ -282,8 +282,8 @@ def test_committed_predictions_are_consistent():
     no_arrays(d)
 
 
-V13_PREDICTIONS_DERIVATION_COMMIT = "53d779ae73d1520080b3350b0b979c32795604af"
-V13_PREDICTIONS_TREE = "c5b33495898cbf45f78c72a3b7e416610d369e83"
+V13_PREDICTIONS_DERIVATION_COMMIT = "154fc2da1beaca38d7277ba65642dc03f3b355cf"
+V13_PREDICTIONS_TREE = "4970c9a4e6899f6e1d73c6a3cfdef8f36c783850"
 
 
 def test_committed_predictions_pin_script_and_tree():
