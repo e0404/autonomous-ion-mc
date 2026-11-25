@@ -317,3 +317,62 @@ def test_host_pytest_rows_require_a_summary_and_zero_skips() -> None:
     assert RUN.parse_pytest_summary("no summary here") is None
     assert not RUN.pytest_ok(0, None) and not RUN.pytest_ok(1, ok)
     assert not RUN.pytest_ok(0, {"passed": 2, "failed": 1}) and not RUN.pytest_ok(0, {"skipped": 1})
+
+
+def test_pytest_children_log_to_out_never_to_their_cwd(tmp_path: Path) -> None:
+    """The real ``_pytest`` path: the child's cwd may be read-only (the host snapshot), so its log
+    lives under ``out`` and the summary is parsed from there."""
+    cwd, out = tmp_path / "ro_like_cwd", tmp_path / "out"
+    cwd.mkdir()
+    out.mkdir()
+    target = str(HERE / "test_v3_006_seed_families.py")
+    code, ok, counts = RUN._pytest([target], "tiny", out, out / "cache", 300.0, repo=cwd)
+    assert code == 0 and ok and counts is not None and counts["passed"] > 0
+    assert not (cwd / "logs").exists() and list(cwd.iterdir()) == []
+    assert (out / "logs" / "pytest-tiny.log").is_file()
+
+
+def _copy_case(src: tuple[Path, Path], dest: Path) -> Path:
+    """A copy of a summary and its bundle under ``dest``; returns the copied summary path."""
+    import shutil
+
+    dest.mkdir()
+    sp = src[1]
+    bundle = _bundle_dir(sp)
+    shutil.copytree(bundle, dest / bundle.name)
+    return Path(shutil.copyfile(sp, dest / sp.name))
+
+
+def _bundle_dir(sp: Path) -> Path:
+    return sp.with_name(sp.name.removesuffix(".summary.json"))
+
+
+def _compare_verdict(a: Path, b: Path, out: Path) -> dict[str, Any]:
+    return json.loads(RUN.cmd_compare([a, b], out, tier="lv").read_text())  # type: ignore[no-any-return]
+
+
+def test_cli5_binds_every_summary_to_its_verified_bundle(
+    py_run: tuple[Path, Path], r1_run: tuple[Path, Path], tmp_path: Path
+) -> None:
+    good = _compare_verdict(py_run[1], r1_run[1], tmp_path / "good.json")
+    assert good["verdict"] == "PASS", good
+
+    def tampered(name: str, edit: Any) -> dict[str, Any]:
+        sp = _copy_case(py_run, tmp_path / name)
+        sm = _summary(sp)
+        edit(sm)
+        sp.write_text(json.dumps(sm), encoding="utf-8")
+        return _compare_verdict(sp, r1_run[1], tmp_path / f"{name}.json")
+
+    fake = tampered("digest", lambda sm: sm.update(result_json_sha256="0" * 64))
+    assert fake["verdict"] == "FAIL" and any(
+        "result_json_sha256" in f for f in fake["identity_failures"]
+    )
+    wrong = tampered("backend", lambda sm: sm.update(backend="warp-cpu"))
+    assert wrong["verdict"] == "FAIL" and any("backend" in f for f in wrong["identity_failures"])
+    seed = tampered("seed", lambda sm: sm.update(seed=1))
+    assert seed["verdict"] == "FAIL" and any("seed" in f for f in seed["identity_failures"])
+    dev = tampered("device", lambda sm: sm.update(device="cuda:0"))
+    assert dev["verdict"] == "FAIL" and any("device" in f for f in dev["identity_failures"])
+    code = tampered("exit", lambda sm: sm["exit_codes"].update(verify=1))
+    assert code["verdict"] == "FAIL" and any("exit code" in f for f in code["identity_failures"])

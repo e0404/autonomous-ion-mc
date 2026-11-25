@@ -78,10 +78,16 @@ def _package_parent() -> str:
 
 
 def _child(
-    argv: Sequence[str], cwd: Path, cache_dir: str | Path, timeout: float, log: str | None = None
+    argv: Sequence[str],
+    cwd: Path,
+    log_dir: Path,
+    cache_dir: str | Path,
+    timeout: float,
+    log: str | None = None,
 ) -> tuple[int, float]:
-    """Run one child to completion (one at a time); its output goes to ``cwd/logs``."""
-    logs = cwd / "logs"
+    """Run one child to completion (one at a time). Its output goes to ``log_dir/logs``, the
+    writable ``--out`` directory, never to ``cwd`` (which may be a read-only snapshot)."""
+    logs = log_dir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     label = re.sub(r"[^\w.-]+", "_", "_".join(str(a) for a in argv[3:6]))[:60]
     t0 = time.monotonic()
@@ -243,13 +249,13 @@ def run_case(
     codes: dict[str, int] = {}
     dur: dict[str, float] = {}
     codes["run"], dur["run"] = _child(
-        [py, "-c", MAIN, "run", cfg, "--out", name], out, cache_dir, timeout
+        [py, "-c", MAIN, "run", cfg, "--out", name], out, out, cache_dir, timeout
     )
     pkg = _package_parent()
     clean = [py, "-I", "-c", CLEAN_MAIN, pkg]
-    codes["verify"], dur["verify"] = _child([*clean, "verify", name], out, cache_dir, timeout)
+    codes["verify"], dur["verify"] = _child([*clean, "verify", name], out, out, cache_dir, timeout)
     codes["report_check"], dur["report_check"] = _child(
-        [*clean, "report", name, "--check"], out, cache_dir, timeout
+        [*clean, "report", name, "--check"], out, out, cache_dir, timeout
     )
     summary = build_summary(out / name, r, k, codes, dur)
     text = json.dumps(summary, indent=1, sort_keys=True) + "\n"
@@ -355,10 +361,45 @@ def compare_identity_failures(sms: Sequence[Mapping[str, Any]], tier: str) -> li
     return bad
 
 
+def summary_binding_failures(sm: Mapping[str, Any], bundle: Path) -> list[str]:
+    """Conditions under which a summary does not describe the verified bundle next to it."""
+    from ionmc import results
+
+    bad: list[str] = []
+    codes = sm.get("exit_codes")
+    if not isinstance(codes, Mapping) or set(codes) != {"run", "verify", "report_check"}:
+        bad.append("exit_codes are missing or incomplete")
+    elif any(c != 0 for c in codes.values()):
+        bad.append(f"an exit code is not 0: {dict(codes)}")
+    try:
+        loaded = results.load(bundle)  # tier 1: every digest of the bundle is recomputed
+    except Exception as exc:  # noqa: BLE001 - any failure of the reader is a violated condition
+        return [*bad, f"the bundle does not load: {type(exc).__name__}"]
+    if _sha256_file(bundle / "result.json") != sm.get("result_json_sha256"):
+        bad.append("result_json_sha256 differs from the bundle's result.json")
+    doc = loaded.doc
+    for field in ("backend", "precision", "seed"):
+        if doc["requested"]["run"].get(field) != sm.get(field):
+            bad.append(f"summary {field} differs from requested.run.{field} of the bundle")
+        if doc["run"].get(field) != sm.get(field):
+            bad.append(f"summary {field} differs from run.{field} of the bundle")
+    if doc["run"]["device"] != sm.get("device"):
+        bad.append("summary device differs from run.device of the bundle")
+    return bad
+
+
 def cmd_compare(summaries: Sequence[Path], out: Path | None = None, tier: str = "hr") -> Path:
     sms = [json.loads(s.read_text(encoding="utf-8")) for s in summaries]
     ident = compare_identity_failures(sms, tier)
-    docs = [_load_doc(_bundle_of(s)) for s in summaries]
+    docs: list[dict[str, Any]] = []
+    for s, sm in zip(summaries, sms, strict=True):
+        bound = summary_binding_failures(sm, _bundle_of(s))
+        ident += [f"{s.name}: {f}" for f in bound]
+        docs.append(
+            {}
+            if bound and not (_bundle_of(s) / "result.json").is_file()
+            else _load_doc(_bundle_of(s))
+        )
     seeds = [(sm["r_index"], sm["k"], sm["seed"]) for sm in sms]
     if ident:
         verdict: dict[str, Any] = {"verdict": "FAIL", "identity_failures": ident}
@@ -484,7 +525,7 @@ def cmd_reproduce(bundle: Path, out: Path, cache_dir: Path, timeout: float = 180
     code, dur = _child(
         [sys.executable, str(Path(__file__).resolve()), "_reproduce-child", "--bundle", str(bundle),
          "--out", name, "--cache-dir", str(cache_dir)],
-        out, cache_dir, timeout,
+        out, out, cache_dir, timeout,
     )  # fmt: skip
     verdict: dict[str, Any] = {"child_exit_code": code, "method": "configio.from_dict + API"}
     if code == 0:
@@ -557,12 +598,17 @@ def pytest_ok(code: int, counts: dict[str, int] | None) -> bool:
 
 
 def _pytest(
-    targets: Sequence[str], label: str, out: Path, cache_dir: Path, timeout: float
+    targets: Sequence[str],
+    label: str,
+    out: Path,
+    cache_dir: Path,
+    timeout: float,
+    repo: Path = HERE.parents[2],
 ) -> tuple[int, bool, dict[str, int] | None]:
     log = f"pytest-{re.sub(r'[^A-Za-z0-9]+', '_', label)}.log"
     code, _dur = _child(
         [sys.executable, "-m", "pytest", *targets, "-p", "no:cacheprovider", "-rs", "-q"],
-        HERE.parents[2], cache_dir, timeout, log,
+        repo, out, cache_dir, timeout, log,
     )  # fmt: skip
     try:
         text = (out / "logs" / log).read_text(encoding="utf-8", errors="replace")
